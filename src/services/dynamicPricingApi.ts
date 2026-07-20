@@ -80,20 +80,7 @@ export type PortfolioListingDto = {
     available: boolean;
   }>;
   airroiCalendarDaysCount?: number;
-  pilotConfig?: {
-    enabled: boolean;
-    applyPrice?: boolean;
-    applyMinStay?: boolean;
-    modeEnabled: boolean;
-    mode: string;
-    activeModeId?: string;
-    modes?: PricingModeDefinitionDto[];
-    floorNormal: number;
-    ceiling: number;
-    minStayDelta: number;
-    minStayPlancher: number;
-    eventsCount: number;
-  } | null;
+  pilotConfig?: PilotPricingConfigDto | null;
   perfMeta?: {
     source: 'airroi_snapshot' | 'estimate';
     snapshotAt: string | null;
@@ -405,9 +392,13 @@ export interface PilotPricingConfigDto {
   eventsEnabled?: boolean;
   events: PilotPricingEventDto[];
   fxUsdMad?: number;
-  /** Refresh bi-hebdo automatique de l’estimation prix de marché (lun + jeu). */
+  /** Refresh auto estimation marché (lun + jeu). */
   autoSnapshotEnabled?: boolean;
   lastAutoSnapshotAt?: string;
+  /** Refresh auto comparables (lundi 04:00 UTC). */
+  autoCompsEnabled?: boolean;
+  lastCompsAt?: string;
+  lastAutoCompsAt?: string;
   lastAppliedAt?: string;
   lastPreviewAt?: string;
 }

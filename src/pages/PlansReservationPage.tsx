@@ -79,8 +79,12 @@ export default function PlansReservationPage() {
     filters: [],
     search: '',
     sort: 'arrival_asc',
+    listingId: '',
+    page: 1,
   });
   const [searchInput, setSearchInput] = useState('');
+  const [listHasMore, setListHasMore] = useState(false);
+  const [listingOptions, setListingOptions] = useState<{ id: string; name: string }[]>([]);
 
   const listingNamesRef = useRef<Record<string, string>>({});
   const hasLoadedRef = useRef(false);
@@ -94,6 +98,7 @@ export default function PlansReservationPage() {
       names: Record<string, string>,
       ownerCache: UiPlanListOrderCache,
       ownerId?: string,
+      opts?: { keepArchived?: boolean },
     ) => {
       setPlanLoadingId(reservationId);
       try {
@@ -109,7 +114,7 @@ export default function PlansReservationPage() {
           return;
         }
         const planDoc = raw as FulltaskPlanDoc;
-        if (planDoc.status === 'annule' || planDoc.status === 'archive') {
+        if (planDoc.status === 'annule') {
           setReservations((prev) => prev.filter((r) => r.id !== reservationId));
           setPlans((prev) => {
             const next = { ...prev };
@@ -122,6 +127,12 @@ export default function PlansReservationPage() {
             return next;
           });
           return;
+        }
+        if (
+          (planDoc.status === 'archive' || planDoc.status === 'archived') &&
+          !opts?.keepArchived
+        ) {
+          setReservations((prev) => prev.filter((r) => r.id !== reservationId));
         }
         if (ownerKeys.length > 0) {
           setOrderByOwner((prev) => ({ ...prev, ...mergedCache }));
@@ -162,21 +173,22 @@ export default function PlansReservationPage() {
                 .map(([id]) => id)
             : undefined;
 
-        const hasQuery = query.filters.length > 0 || Boolean(appliedSearch);
+        const includeArchived = query.filters.includes('archived');
         const ownerScope = requestOwnerId || undefined;
-        const [plansRes, totalRes, staffRes, listingRows] = await Promise.all([
+        const page = Math.max(1, query.page ?? 1);
+        const [plansRes, staffRes, listingRows] = await Promise.all([
           fulltaskApi.listPlansSummary({
-            limit: 300,
+            limit: 100,
+            page,
             filters: query.filters.length ? query.filters.join(',') : undefined,
             search: appliedSearch || undefined,
             listingIds: listingIdsForSearch?.length ? listingIdsForSearch.join(',') : undefined,
+            listingId: query.listingId?.trim() || undefined,
             sort: query.sort,
             includeReservationId: selectedId || undefined,
             ownerId: ownerScope,
+            includeArchived: includeArchived || undefined,
           }),
-          hasQuery
-            ? fulltaskApi.listPlansSummary({ limit: 300, ownerId: ownerScope })
-            : Promise.resolve(null),
           fulltaskApi.listStaff(),
           (tasksService as { getListings: () => Promise<{ _id: string; name: string }[]> }).getListings(),
         ]);
@@ -184,14 +196,24 @@ export default function PlansReservationPage() {
         if (seq !== listSeqRef.current) return {};
 
         const namesMap: Record<string, string> = {};
+        const options: { id: string; name: string }[] = [];
         for (const l of listingRows || []) {
-          if (l._id) namesMap[l._id] = l.name || 'Logement';
+          if (l._id) {
+            namesMap[l._id] = l.name || 'Logement';
+            options.push({ id: l._id, name: l.name || 'Logement' });
+          }
         }
+        options.sort((a, b) => a.name.localeCompare(b.name));
         listingNamesRef.current = namesMap;
+        setListingOptions(options);
 
         const summaries: PlanListSummaryDoc[] = [];
         const plansPayload = plansRes?.data ?? plansRes;
         if (Array.isArray(plansPayload)) summaries.push(...(plansPayload as PlanListSummaryDoc[]));
+
+        const meta = plansRes?.meta as
+          | { total?: number; hasMore?: boolean; serverFiltered?: boolean; page?: number; limit?: number }
+          | undefined;
 
         const names: Record<string, string> = {};
         const staffList = staffRes?.data ?? staffRes?.staff ?? staffRes;
@@ -207,31 +229,22 @@ export default function PlansReservationPage() {
         const byId: Record<string, PlanListSummaryDoc> = {};
         let viewResa: Reservation[] = [];
         for (const s of summaries) {
-          if (!s.reservationId || s.status === 'annule' || s.status === 'archive') continue;
+          if (!s.reservationId || s.status === 'annule') continue;
+          const isArchived = s.status === 'archive' || s.status === 'archived' || Boolean(s.archived);
+          if (isArchived && !includeArchived) continue;
           byId[s.reservationId] = s;
           viewResa.push(buildReservationViewFromSummary(s, namesMap[s.listingId] || 'Logement'));
         }
 
-        // L’API distante (dev.sojori.com) ignore encore filters/search tant que srv-fulltask
-        // n’est pas déployé — on envoie les query params mais on applique aussi côté client
-        // (idempotent quand le serveur filtre déjà correctement).
-        viewResa = applyPlanListQuery(viewResa, query, selectedId);
+        // Fallback client si API distante n’a pas encore pagination/filtres (meta.total absent).
+        if (!meta || typeof meta.total !== 'number') {
+          viewResa = applyPlanListQuery(viewResa, query, selectedId);
+        }
 
         setSummariesById(byId);
         setReservations(viewResa);
-
-        if (!hasQuery) {
-          setTotalCount(viewResa.length);
-        } else if (totalRes) {
-          const totalPayload = totalRes?.data ?? totalRes;
-          if (Array.isArray(totalPayload)) {
-            setTotalCount(
-              (totalPayload as PlanListSummaryDoc[]).filter(
-                (s) => s.reservationId && s.status !== 'annule' && s.status !== 'archive',
-              ).length,
-            );
-          }
-        }
+        setTotalCount(typeof meta?.total === 'number' ? meta.total : viewResa.length);
+        setListHasMore(Boolean(meta?.hasMore));
 
         hasLoadedRef.current = true;
         return byId;
@@ -267,22 +280,26 @@ export default function PlansReservationPage() {
     const summary = summariesById[selectedId];
     let cancelled = false;
     (async () => {
-      await loadPlanDetail(selectedId, staffNames, orderByOwner, summary?.ownerId);
+      await loadPlanDetail(selectedId, staffNames, orderByOwner, summary?.ownerId, {
+        keepArchived: listQuery.filters.includes('archived'),
+      });
       if (cancelled) return;
     })();
     return () => {
       cancelled = true;
     };
-  }, [selectedId, plans, planLoadingId, staffNames, orderByOwner, summariesById, loadPlanDetail]);
+  }, [selectedId, plans, planLoadingId, staffNames, orderByOwner, summariesById, loadPlanDetail, listQuery.filters]);
 
   const handleSelect = useCallback(
     async (id: string) => {
       setSearchParams({ reservationId: id });
       if (plans[id]) return;
       const summary = summariesById[id];
-      await loadPlanDetail(id, staffNames, orderByOwner, summary?.ownerId);
+      await loadPlanDetail(id, staffNames, orderByOwner, summary?.ownerId, {
+        keepArchived: listQuery.filters.includes('archived'),
+      });
     },
-    [setSearchParams, plans, staffNames, orderByOwner, summariesById, loadPlanDetail],
+    [setSearchParams, plans, staffNames, orderByOwner, summariesById, loadPlanDetail, listQuery.filters],
   );
 
   const applyPlanDoc = useCallback(
@@ -310,20 +327,25 @@ export default function PlansReservationPage() {
   const handlePlanRefetch = useCallback(async () => {
     const byId = await loadList(listQuery, { silent: true });
     if (selectedId) {
-      await loadPlanDetail(selectedId, staffNames, orderByOwner, byId[selectedId]?.ownerId);
+      await loadPlanDetail(selectedId, staffNames, orderByOwner, byId[selectedId]?.ownerId, {
+        keepArchived: listQuery.filters.includes('archived'),
+      });
     }
   }, [loadList, listQuery, selectedId, staffNames, orderByOwner, loadPlanDetail]);
 
   const handleSearchSubmit = useCallback(() => {
-    setListQuery((prev) => ({ ...prev, search: searchInput.trim() }));
+    setListQuery((prev) => ({ ...prev, search: searchInput.trim(), page: 1 }));
   }, [searchInput]);
 
   const handleClearFilters = useCallback(() => {
     setSearchInput('');
-    setListQuery({ filters: [], search: '', sort: 'arrival_asc' });
+    setListQuery({ filters: [], search: '', sort: 'arrival_asc', listingId: '', page: 1 });
   }, []);
 
-  const hasActiveQuery = listQuery.filters.length > 0 || Boolean(listQuery.search.trim());
+  const hasActiveQuery =
+    listQuery.filters.length > 0 ||
+    Boolean(listQuery.search.trim()) ||
+    Boolean(listQuery.listingId?.trim());
   const showPlanLayout =
     !loading && !error && (totalCount > 0 || reservations.length > 0 || hasActiveQuery);
 
@@ -395,11 +417,15 @@ export default function PlansReservationPage() {
           listQuery={listQuery}
           searchInput={searchInput}
           listRefreshing={listRefreshing}
-          onFiltersChange={(filters) => setListQuery((prev) => ({ ...prev, filters }))}
-          onSortChange={(sort) => setListQuery((prev) => ({ ...prev, sort }))}
+          listingOptions={listingOptions}
+          listHasMore={listHasMore}
+          onFiltersChange={(filters) => setListQuery((prev) => ({ ...prev, filters, page: 1 }))}
+          onSortChange={(sort) => setListQuery((prev) => ({ ...prev, sort, page: 1 }))}
           onSearchInputChange={setSearchInput}
           onSearchSubmit={handleSearchSubmit}
           onClearFilters={handleClearFilters}
+          onListingIdChange={(listingId) => setListQuery((prev) => ({ ...prev, listingId, page: 1 }))}
+          onPageChange={(page) => setListQuery((prev) => ({ ...prev, page }))}
         />
       )}
     </DashboardWrapper>

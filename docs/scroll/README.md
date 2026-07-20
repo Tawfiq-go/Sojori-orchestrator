@@ -59,6 +59,9 @@ Ces classes forcent une scrollbar visible (`scrollbar-width: thin`, couleurs Soj
 | Nouvelle réservation | `src/components/modals/CreateReservationModal.tsx` | `create-reservation-form-scroll`, `create-reservation-summary-scroll` |
 | Upload images (listing) | `src/components/listing/upload/UploadDialog.tsx` | `upload-images-modal-scroll` |
 | Message orchestration (Email/OTA) | `src/features/taskHub/staff-design/MessageBodyModal.tsx` | `orch-message-vars-scroll` |
+| Mise à jour calendrier (pricing) | `src/features/dynamic-pricing/bien/CalendarUpdateModal.tsx` | `calendar-update-modal-scroll` |
+| Modifier inventaire (calendrier V3) | `src/components/calendar-v3/UpdateInventoryModal.jsx` | `calendar-update-inventory-scroll` |
+| Audit disponibilité (calendrier V3) | `src/components/calendar-v3/AuditBlockedDaysModal.jsx` | `calendar-audit-modal-scroll` |
 
 ### Cas particulier : modale hors layout (portal)
 

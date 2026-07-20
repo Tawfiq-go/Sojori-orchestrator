@@ -3,6 +3,9 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
+import { useAuth } from '../hooks/useAuth';
+import { usePmSimulation } from '../context/PmSimulationContext';
+import { hasAdminAccess } from '../utils/rbac.utils';
 import {
   BienView,
   DynamicPricingAirroiModal,
@@ -17,7 +20,6 @@ import DynamicPricingBreadcrumb, {
   bienHref,
   portfolioHref,
 } from '../features/dynamic-pricing/DynamicPricingBreadcrumb';
-import { buildListingDataCoverage } from '../features/dynamic-pricing/bienDataCoverage';
 import { listingMatchesCityScope, normalizeCityKey } from '../features/dynamic-pricing/cityScope';
 import { applyPilotPricing, type PilotPricingConfigDto } from '../services/dynamicPricingApi';
 
@@ -37,6 +39,9 @@ export function DynamicPricingPage() {
   }, [searchParams]);
 
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
+  const { user } = useAuth();
+  const { isActive: simulationActive } = usePmSimulation();
+  const isPlatformAdmin = hasAdminAccess(user?.role) && !simulationActive;
 
   const portfolio = usePortfolio(requestOwnerId || undefined, cityScope, {
     enabled: scopeFetchReady,
@@ -102,34 +107,6 @@ export function DynamicPricingPage() {
 
   const patchPilotConfig = portfolio.patchListingPilot;
 
-  const listingCanEstimate = Boolean(
-    bienDetail?.listingEstimateInputs &&
-      ((bienDetail.listingEstimateInputs.lat != null &&
-        bienDetail.listingEstimateInputs.lng != null) ||
-        bienDetail.listingEstimateInputs.addressLine) &&
-      bienDetail.listingEstimateInputs.bedrooms > 0 &&
-      bienDetail.listingEstimateInputs.baths > 0 &&
-      bienDetail.listingEstimateInputs.guests > 0,
-  );
-
-  const listingFieldCoverage =
-    isBienPage && bienDetail
-      ? buildListingDataCoverage({
-          listingHasAirbnb: bienDetail.listingHasAirbnb,
-          hasAirroiSnapshot: Boolean(bienDetail.row?.hasAirroiSnapshot),
-          hasRevenueEstimate: Boolean(bienDetail.view?.provenance.hasRevenueEstimate),
-          hasTtm: bienDetail.hasTtm ?? false,
-          hasL90d: bienDetail.hasL90d ?? false,
-          hasMarketProd: bienDetail.hasMarketProd ?? false,
-          hasCalendarProd: bienDetail.view?.hasCalendarProd ?? false,
-          airroiCompsCount:
-            bienDetail.row?.airroiCompsCount ?? bienDetail.row?.airroiComps?.length ?? 0,
-          airroiCalendarDaysCount:
-            bienDetail.row?.airroiCalendarDaysCount ?? bienDetail.row?.airroiCalendarDays?.length ?? 0,
-          marketCityLabel: bienCityLabel,
-        })
-      : undefined;
-
   const portfolioAirroiModal = (
     <DynamicPricingAirroiModal
       scope="portfolio"
@@ -145,64 +122,6 @@ export function DynamicPricingPage() {
     />
   );
 
-  const bienAirroiModal = bienDetail ? (
-    <DynamicPricingAirroiModal
-      scope="listing"
-      activeCityScope={bienCityLabel}
-      listingName={
-        bienDetail.view?.listing.name ?? bienDetail.row?.listing.name ?? 'Ce bien'
-      }
-      listingHasAirbnb={bienDetail.listingHasAirbnb}
-      listingCanEstimate={listingCanEstimate}
-      hasRevenueEstimate={Boolean(bienDetail.view?.provenance.hasRevenueEstimate)}
-      estimatePayloadHint={
-        bienDetail.listingEstimateInputs
-          ? {
-              locationLabel:
-                bienDetail.listingEstimateInputs.lat != null &&
-                bienDetail.listingEstimateInputs.lng != null
-                  ? `${bienDetail.listingEstimateInputs.lat.toFixed(5)}, ${bienDetail.listingEstimateInputs.lng.toFixed(5)}`
-                  : (bienDetail.listingEstimateInputs.addressLine ?? '—'),
-              bedrooms: bienDetail.listingEstimateInputs.bedrooms,
-              baths: bienDetail.listingEstimateInputs.baths,
-              guests: bienDetail.listingEstimateInputs.guests,
-              usesGps:
-                bienDetail.listingEstimateInputs.lat != null &&
-                bienDetail.listingEstimateInputs.lng != null,
-            }
-          : null
-      }
-      estimateSummaryHint={
-        bienDetail.row?.estimateSummary?.adrP50Mad
-          ? {
-              adrP50Mad: bienDetail.row.estimateSummary.adrP50Mad,
-              revenueP50Mad: bienDetail.row.estimateSummary.revenueP50Mad,
-              occupancyP50: bienDetail.row.estimateSummary.occupancyP50,
-            }
-          : null
-      }
-      sojoriListingsCount={1}
-      withAirbnbCount={bienDetail.listingHasAirbnb ? 1 : 0}
-      withAirroiSnapshotCount={bienDetail.row?.hasAirroiSnapshot ? 1 : 0}
-      marketCacheLabel={
-        bienDetail.marketFetchedAt && bienCityLabel
-          ? `cache marché ${bienCityLabel} · ${new Date(bienDetail.marketFetchedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}`
-          : null
-      }
-      fieldCoverage={listingFieldCoverage}
-      airroiCompsCount={
-        bienDetail.row?.airroiCompsCount ?? bienDetail.row?.airroiComps?.length ?? 0
-      }
-      loadingPortfolio={bienDetail.loading}
-      onReloadPortfolio={() => bienDetail.refetch()}
-      onRefreshListingPerformance={async () => undefined}
-      onRefreshThisListingPerformance={() => bienDetail.refreshAirroi()}
-      onRefreshListingEstimate={() => bienDetail.refreshAirroiPart('estimate')}
-      onRefreshAirroiMarket={(city) => portfolio.refreshMarket(city)}
-      onRecomputePricing={() => bienDetail.applyToOps()}
-    />
-  ) : null;
-
   return (
     <DashboardWrapper breadcrumb={[]} hidePageHeader>
       <Box
@@ -215,7 +134,7 @@ export function DynamicPricingPage() {
       >
         <DynamicPricingShell
           hideTitle
-          dataActions={isBienPage ? bienAirroiModal : portfolioAirroiModal}
+          dataActions={isBienPage ? null : portfolioAirroiModal}
         >
           {listingId && bienDetail?.error && !bienDetail.loading ? (
             <Box sx={{ p: 3, maxWidth: 720, mx: 'auto' }}>
@@ -244,20 +163,30 @@ export function DynamicPricingPage() {
                         onClick: () => navigate(portfolioHref(bienCityLabel)),
                       }]
                     : []),
-                  { label: bienDetail.view.listing.name },
+                  ...(isPlatformAdmin
+                    ? [{ label: bienDetail.view.listing.name }]
+                    : []),
                 ]}
               />
               <BienExpressBar
                 view={bienDetail.view}
+                isPlatformAdmin={isPlatformAdmin}
                 hasMarketData={Boolean(
                   bienDetail.row?.hasRevenueEstimate || bienDetail.row?.hasAirroiSnapshot,
                 )}
+                listingHasAirbnb={bienDetail.listingHasAirbnb}
                 snapshotAt={bienDetail.row?.airroiSnapshotAt ?? null}
                 onFetchMarket={() => bienDetail.refreshAirroiPart('estimate')}
+                onFetchComps={() => bienDetail.refreshAirroiPart('comparables')}
+                onFetchPerformance={
+                  isPlatformAdmin ? () => bienDetail.refreshAirroi() : undefined
+                }
                 advancedOpen={bienAdvancedOpen}
                 onToggleAdvanced={toggleBienAdvanced}
               />
-              {bienAdvancedOpen ? <BienView {...bienDetail.view} /> : null}
+              {bienAdvancedOpen ? (
+                <BienView {...bienDetail.view} isPlatformAdmin={isPlatformAdmin} />
+              ) : null}
             </>
           ) : portfolio.fetchFailed && !portfolio.loading ? (
             <Box sx={{ px: { xs: 2, md: 3 }, py: 4, maxWidth: 720, mx: 'auto' }}>

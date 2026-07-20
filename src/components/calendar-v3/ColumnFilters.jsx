@@ -4,7 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { T, ALL_COLUMNS, sortCalendarColumns, sortAllColumnsForPicker, CALENDAR_PRIMARY_ROW_COLUMNS } from './_shared';
+import { T, ALL_COLUMNS, sortCalendarColumns, sortAllColumnsForPicker, CALENDAR_DEFAULT_COLUMNS } from './_shared';
 
 export default function ColumnFilters({
   selectedColumns = [],
@@ -82,7 +82,7 @@ export default function ColumnFilters({
     let next = selectedColumns.includes(id)
       ? selectedColumns.filter((x) => x !== id)
       : sortCalendarColumns([...selectedColumns, id]);
-    if (next.length === 0) next = [...CALENDAR_PRIMARY_ROW_COLUMNS];
+    if (next.length === 0) next = [...CALENDAR_DEFAULT_COLUMNS];
     onChange?.(next);
   };
 
@@ -194,7 +194,7 @@ export default function ColumnFilters({
           >
             <button
               type="button"
-              onClick={() => onChange?.([...CALENDAR_PRIMARY_ROW_COLUMNS])}
+              onClick={() => onChange?.([...CALENDAR_DEFAULT_COLUMNS])}
               style={{
                 color: T.text2,
                 fontWeight: 600,
@@ -204,7 +204,7 @@ export default function ColumnFilters({
                 border: 0,
               }}
             >
-              Par défaut (prix + dispo)
+              Par défaut (prix · dyn. · min stay)
             </button>
             <span style={{ fontFamily: '"Geist Mono", monospace' }}>
               {selectedColumns.length} / {ALL_COLUMNS.length}

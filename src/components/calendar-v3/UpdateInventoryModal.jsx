@@ -5,6 +5,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useMemo, useEffect } from 'react';
 import { ModalPortal } from '../ModalPortal';
+import { ModalScrollColumn } from '../common/ModalScrollColumn';
 import { T, toIso, parseIsoLocal, daysBetweenIsoInclusive, resolvePriceMode, resolveSelectionCurrency } from './_shared';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -327,7 +328,12 @@ export default function UpdateInventoryModal({
         </div>
 
         {/* Content */}
-        <div style={{ padding: '18px 24px', overflowY: 'auto', overflowX: 'hidden', flex: 1, minWidth: 0 }}>
+        <ModalScrollColumn
+          active={open}
+          className="calendar-update-inventory-scroll"
+          wrapperSx={{ flex: 1, minHeight: 0 }}
+          innerSx={{ px: '24px', py: '18px' }}
+        >
           {error && (
             <div style={{
               padding: '10px 12px', background: T.errorTint, border: `1px solid ${T.error}40`,
@@ -559,7 +565,7 @@ export default function UpdateInventoryModal({
               </ul>
             </>
           )}
-        </div>
+        </ModalScrollColumn>
 
         {/* Footer */}
         <div style={{

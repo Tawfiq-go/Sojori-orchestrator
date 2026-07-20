@@ -102,6 +102,18 @@ export async function getListingImportOnboarding(
   return res.data?.data ?? { active: false };
 }
 
+/** Admin only — active le mode import (pas de retag auto des résas). */
+export async function activateListingImportOnboarding(
+  listingId: string,
+  opts?: { ruPropertyId?: number; correlationId?: string },
+): Promise<ListingImportOnboardingState> {
+  const res = await apiClient.post(
+    `${LISTING_API_BASE_URL}/listings/${listingId}/import-onboarding/activate`,
+    opts ?? {},
+  );
+  return res.data?.data ?? { active: true };
+}
+
 export async function finishListingImportOnboarding(listingId: string): Promise<ListingImportOnboardingState> {
   const res = await apiClient.post(
     `${LISTING_API_BASE_URL}/listings/${listingId}/import-onboarding/finish`,

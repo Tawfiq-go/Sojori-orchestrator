@@ -7,7 +7,7 @@ import {
   T, ALL_COLUMNS, priceOf, cellKey, genDays, isArchiveDay, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
   hasInventoryData, resolveInventoryCellState, formatInventoryRateLabel, OUT_OF_WINDOW_CELL_BG,
   resolvePriceMode, PRICE_MODE_LABEL,
-  calendarPrimaryColumns, calendarDetailColumns,
+  calendarPrimaryColumns, calendarCollapseColumns,
 } from './_shared';
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
@@ -42,23 +42,39 @@ export default function MultiView({
   const bodyRef = useRef(null);
   const syncing = useRef(false);
 
-  /* ─── Expand/collapse par listing ─── */
+  /* ─── Expand/collapse par listing — fermé par défaut ─── */
   const [expanded, setExpanded] = useState({});
-  const toggleListing = (id) => setExpanded(p => ({ ...p, [id]: !p[id] }));
+  const toggleListing = (id) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
 
-  /* ─── Sélection Excel ─── */
+  /* ─── Sélection Excel vs clic détail tarif ─── */
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
   const [selectedCells, setSelectedCells] = useState([]);
   const [currentHoverCell, setCurrentHoverCell] = useState(null);
+  const [activeTip, setActiveTip] = useState(null);
+  const dragMovedRef = useRef(false);
+  const dragStartPosRef = useRef(null);
+  const tipAnchorElRef = useRef(null);
+  const selectedCellsRef = useRef([]);
+  selectedCellsRef.current = selectedCells;
 
   const selectedSet = useMemo(() => new Set(selectedCells.map(cellKey)), [selectedCells]);
   const isSelected = useCallback((c) => selectedSet.has(cellKey(c)), [selectedSet]);
 
-  const onMouseDown = (cell) => {
+  const onPriceClick = useCallback((cell, e) => {
+    e?.stopPropagation?.();
+    if (e?.currentTarget) tipAnchorElRef.current = e.currentTarget;
+    setActiveTip((prev) => (prev && cellKey(prev) === cellKey(cell) ? null : cell));
+  }, []);
+
+  const onMouseDown = (cell, e) => {
     const inv = inventoriesByListing[cell.listingId]?.[cell.dateStr];
     const st = resolveInventoryCellState(cell.dateStr, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
     if (st !== 'data') return;
+    setActiveTip(null);
+    dragMovedRef.current = false;
+    dragStartPosRef.current = e ? { x: e.clientX, y: e.clientY } : null;
+    if (e?.currentTarget) tipAnchorElRef.current = e.currentTarget;
     setIsDragging(true);
     setDragStart(cell);
     setCurrentHoverCell(cell);
@@ -69,6 +85,7 @@ export default function MultiView({
     if (dragStart.listingId !== cell.listingId ||
         dragStart.roomTypeId !== cell.roomTypeId ||
         dragStart.column !== cell.column) return;
+    if (cell.dateStr !== dragStart.dateStr) dragMovedRef.current = true;
     setCurrentHoverCell(cell);
     const allIso = days.map(d => d.iso);
     const a = allIso.indexOf(dragStart.dateStr);
@@ -76,21 +93,50 @@ export default function MultiView({
     const [from, to] = a < b ? [a, b] : [b, a];
     setSelectedCells(allIso.slice(from, to + 1).map(iso => ({ ...cell, dateStr: iso })));
   };
-  const onMouseUp = useCallback(() => {
+  const onMouseUp = useCallback((e) => {
     if (!isDragging) return;
+    if (dragStartPosRef.current && e?.clientX != null) {
+      const dx = e.clientX - dragStartPosRef.current.x;
+      const dy = e.clientY - dragStartPosRef.current.y;
+      if (Math.hypot(dx, dy) > 5) dragMovedRef.current = true;
+    }
+    const cells = selectedCellsRef.current;
     setIsDragging(false);
     setDragStart(null);
     setCurrentHoverCell(null);
-    if (selectedCells.length > 0) onCellsSelected?.(selectedCells);
-  }, [isDragging, selectedCells, onCellsSelected]);
+    dragStartPosRef.current = null;
+    setSelectedCells([]);
+
+    if (cells.length === 0) return;
+
+    onCellsSelected?.(cells);
+  }, [isDragging, onCellsSelected]);
 
   useEffect(() => {
-    const onUp = () => onMouseUp();
-    const onKey = (e) => { if (e.key === 'Escape') { setSelectedCells([]); setIsDragging(false); setDragStart(null); setCurrentHoverCell(null); } };
+    const onUp = (e) => onMouseUp(e);
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setSelectedCells([]);
+        setIsDragging(false);
+        setDragStart(null);
+        setCurrentHoverCell(null);
+        setActiveTip(null);
+      }
+    };
     document.addEventListener('mouseup', onUp);
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mouseup', onUp); document.removeEventListener('keydown', onKey); };
   }, [onMouseUp]);
+
+  useEffect(() => {
+    if (!activeTip) return undefined;
+    const close = (ev) => {
+      if (tipAnchorElRef.current?.contains(ev.target)) return;
+      setActiveTip(null);
+    };
+    document.addEventListener('click', close, true);
+    return () => document.removeEventListener('click', close, true);
+  }, [activeTip]);
 
   /* ─── Auto-scroll pendant le drag ─── */
   useEffect(() => {
@@ -263,11 +309,28 @@ export default function MultiView({
               isSelected={isSelected}
               onMouseDown={onMouseDown}
               onMouseEnter={onMouseEnter}
+              onPriceClick={onPriceClick}
               onReservationClick={handleReservationDayClick}
+              activeTip={activeTip}
             />
           ))}
         </div>
       </div>
+
+      {activeTip && (() => {
+        const inv = inventoriesByListing[activeTip.listingId]?.[activeTip.dateStr];
+        const listing = listings.find((l) => String(l._id) === String(activeTip.listingId));
+        if (!inv || !listing || !hasInventoryData(inv)) return null;
+        return (
+          <TooltipBreakdown
+            open
+            anchorRef={tipAnchorElRef}
+            inv={inv}
+            dateStr={activeTip.dateStr}
+            currency={listing.currencyCode || listing.currency || 'MAD'}
+          />
+        );
+      })()}
 
       {popover && (
         <PopoverReservations
@@ -321,10 +384,13 @@ const DayHeader = memo(function DayHeader({ day, loading }) {
 });
 
 /* ─── Colonne listing (sticky) — ne dépend pas des dates ─── */
-const ListingLabel = memo(function ListingLabel({ listing, expanded, showChevron, onToggle, avgPrice }) {
+const ListingLabel = memo(function ListingLabel({
+  listing, expanded, showChevron, onToggle, avgPrice,
+}) {
+  const isSingle = listing.propertyUnit === 'Single';
   return (
     <div
-      onClick={onToggle}
+      onClick={showChevron ? onToggle : undefined}
       style={{
         padding: '6px 12px',
         display: 'flex',
@@ -377,7 +443,7 @@ const ListingLabel = memo(function ListingLabel({ listing, expanded, showChevron
         >
           {listing.name}
         </span>
-        {avgPrice > 0 && (
+        {avgPrice > 0 ? (
           <span
             style={{
               fontSize: 10,
@@ -390,7 +456,11 @@ const ListingLabel = memo(function ListingLabel({ listing, expanded, showChevron
           >
             Moy: {avgPrice} {listing.currencyCode || listing.currency || 'MAD'}
           </span>
-        )}
+        ) : isSingle ? (
+          <span style={{ fontSize: 9.5, color: T.text4, marginTop: 2, display: 'block' }}>
+            Tarif · Dispo
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -398,11 +468,11 @@ const ListingLabel = memo(function ListingLabel({ listing, expanded, showChevron
 
 /* ─── Ligne d'un listing (prix + dispo sur une ligne, détail en collapse) ─── */
 function ListingRow({
-  listing, inventories, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onReservationClick,
+  listing, inventories, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onPriceClick, onReservationClick, activeTip,
 }) {
   const primaryCols = calendarPrimaryColumns(selectedColumns);
-  const detailColumns = calendarDetailColumns(selectedColumns);
-  const showChevron = detailColumns.length > 0;
+  const collapseColumns = calendarCollapseColumns(selectedColumns);
+  const showChevron = collapseColumns.length > 0;
   const showDispo = primaryCols.includes('availableRoom');
   const showRate = primaryCols.includes('rate');
   const getInv = (dateStr) => inventories[dateStr];
@@ -463,6 +533,11 @@ function ListingRow({
 
         {days.map(d => {
           const inv = getInv(d.iso);
+          const roomTypeId = listing.roomTypeId || 'default';
+          const cellState = resolveInventoryCellState(d.iso, inv, {
+            futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS,
+          });
+          const draggable = cellState === 'data';
           return (
             <PrimaryInventoryCell
               key={d.iso}
@@ -471,13 +546,25 @@ function ListingRow({
               listing={listing}
               showRate={showRate}
               showDispo={showDispo}
+              isSelected={isSelected}
+              onMouseDown={onMouseDown}
+              onMouseEnter={onMouseEnter}
+              onPriceClick={onPriceClick}
+              listingId={listing._id}
+              roomTypeId={roomTypeId}
+              draggable={draggable}
+              tipOpen={
+                activeTip?.listingId === listing._id &&
+                activeTip?.dateStr === d.iso &&
+                activeTip?.column === 'rate'
+              }
             />
           );
         })}
       </div>
 
-      {/* Lignes sélection Excel — collapse (comme avant : pas la ligne résumé) */}
-      {expanded && detailColumns.map(colId => {
+      {/* Lignes sélection Excel — collapse (colonnes hors ligne principale) */}
+      {expanded && collapseColumns.map(colId => {
         const col = ALL_COLUMNS.find(c => c.id === colId);
         if (!col) return null;
         return (
@@ -499,7 +586,6 @@ function ListingRow({
               boxShadow: '2px 0 4px rgba(0,0,0,0.04)',
             }}>
               {col.short}
-              {col.hasTooltip && <span style={{ fontSize: 11, color: T.ai, cursor: 'help' }} title="Tooltip breakdown au hover">ⓘ</span>}
               {colId === 'availableRoom' && (
                 <button
                   type="button"
@@ -532,8 +618,15 @@ function ListingRow({
                 <CollapseCell
                   key={d.iso} col={col} day={d} inv={inv} listing={listing}
                   selected={sel} draggable={draggable}
-                  onMouseDown={draggable && cellState === 'data' ? () => onMouseDown(cellMeta) : undefined}
+                  onMouseDown={draggable && cellState === 'data' ? (e) => onMouseDown(cellMeta, e) : undefined}
                   onMouseEnter={draggable ? () => onMouseEnter(cellMeta) : undefined}
+                  onPriceClick={onPriceClick}
+                  tipOpen={
+                    colId === 'rate' &&
+                    activeTip?.listingId === listing._id &&
+                    activeTip?.dateStr === d.iso &&
+                    activeTip?.column === 'rate'
+                  }
                   onReservationClick={(rect) => {
                     if (colId === 'reservations' && (inv.reservations?.length ?? 0) >= 1) {
                       onReservationClick(rect, d.iso, inv.reservations);
@@ -606,9 +699,11 @@ function blockedNoResaInfo(inv) {
   };
 }
 
-/* ─── Ligne principale : résumé tarif + dispo — hover = découpage prix (même si bloqué) ─── */
-function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
-  const [showTip, setShowTip] = useState(false);
+/* ─── Ligne principale : bandeau Excel (gauche) · prix clic détail (droite) ─── */
+function PrimaryInventoryCell({
+  day, inv, listing, showRate, showDispo, isSelected, onMouseDown, onMouseEnter, onPriceClick,
+  listingId, roomTypeId, draggable, tipOpen,
+}) {
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
   const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
@@ -621,6 +716,8 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
   const isWeekend = day.isWeekend;
   const mode = resolvePriceMode(inv);
   const modeColor = mode === 'manual' ? T.warning : mode === 'dynamic' ? T.ai : T.text;
+  const canInteract = draggable && !archived;
+  const canPriceClick = canInteract && showRate && hasInventoryData(inv) && !noData;
 
   let background = T.bg1;
   if (state === 'out_of_window') background = OUT_OF_WINDOW_CELL_BG;
@@ -636,23 +733,36 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
   const dispoVal = inv?.stopSell ? '🚫' : (inv?.availableRoom != null ? inv.availableRoom : dash);
   const blockInfo = state === 'data' ? blockedNoResaInfo(inv) : null;
   const dispoColor = inv?.stopSell ? T.error : (blockInfo?.kind === 'channel' ? T.warning : T.text2);
-  const canHoverPrice = showRate && hasInventoryData(inv) && !noData;
+
+  const rateMeta = { listingId, roomTypeId, dateStr: day.iso, column: 'rate' };
+  const dispoMeta = { listingId, roomTypeId, dateStr: day.iso, column: 'availableRoom' };
+  const excelMeta = showRate ? rateMeta : dispoMeta;
+  const excelSelected = isSelected?.(excelMeta);
+  const anySelected = excelSelected || isSelected?.(showRate ? dispoMeta : rateMeta);
+
+  const bindExcel = (meta) => ({
+    onMouseDown: canInteract ? (e) => { e.stopPropagation(); onMouseDown?.(meta, e); } : undefined,
+    onMouseEnter: canInteract ? () => onMouseEnter?.(meta) : undefined,
+  });
+
+  const hasExcelZone = showRate || showDispo;
+  const hasPriceZone = showRate;
 
   return (
     <div
       ref={ref}
-      onMouseEnter={() => { if (canHoverPrice) setShowTip(true); }}
-      onMouseLeave={() => setShowTip(false)}
       style={{
         borderRight: `1px solid ${T.border}`,
-        display: 'flex', flexDirection: 'row',
-        alignItems: 'center', justifyContent: 'center',
-        gap: showRate && showDispo ? 6 : 0,
-        padding: '2px 4px', minHeight: 30, position: 'relative',
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        padding: '2px 2px',
+        minHeight: 30,
+        position: 'relative',
         fontFamily: '"Geist Mono", monospace',
-        background,
-        cursor: canHoverPrice ? 'help' : (blockInfo ? 'help' : 'default'),
+        background: anySelected ? T.primaryTint3 : background,
         userSelect: 'none',
+        gap: 1,
       }}
     >
       {blockInfo && (
@@ -661,58 +771,103 @@ function PrimaryInventoryCell({ day, inv, listing, showRate, showDispo }) {
           title={blockInfo.label}
           style={{
             position: 'absolute', top: 3, left: 3, width: 5, height: 5,
-            borderRadius: '50%', background: blockInfo.color, lineHeight: 1,
+            borderRadius: '50%', background: blockInfo.color, lineHeight: 1, zIndex: 2,
           }}
         />
       )}
-      {isDynamic && state === 'data' && showRate && (
-        <span style={{ position: 'absolute', top: 2, right: 3, fontSize: 8, color: T.ai, lineHeight: 1 }}>⚡</span>
-      )}
-      {showRate && (
-        <span
+
+      {/* Bandeau Excel (sans icône) */}
+      {hasExcelZone && hasPriceZone && (
+        <div
+          {...bindExcel(excelMeta)}
+          aria-hidden
           style={{
-            fontSize: state === 'data' ? 12 : 11,
-            fontWeight: 700,
-            color: archived ? ARCHIVE_CELL_TEXT : noData ? T.text4 : isDynamic ? T.ai : modeColor,
-            letterSpacing: '-0.01em',
-            whiteSpace: 'nowrap',
+            flex: '0 0 6px',
+            minHeight: 26,
+            borderRadius: '4px 0 0 4px',
+            cursor: archived ? 'not-allowed' : canInteract ? 'cell' : 'default',
+            boxShadow: excelSelected ? `inset 0 0 0 2px ${T.primary}` : 'none',
+            background: excelSelected ? T.primaryTint3 : 'rgba(20,17,10,0.06)',
+          }}
+        />
+      )}
+
+      {/* Dispo seule — cellule Excel pleine largeur */}
+      {hasExcelZone && !hasPriceZone && (
+        <div
+          {...bindExcel(excelMeta)}
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 26,
+            borderRadius: 4,
+            cursor: archived ? 'not-allowed' : canInteract ? 'cell' : 'default',
+            boxShadow: excelSelected ? `inset 0 0 0 2px ${T.primary}` : 'none',
+            background: excelSelected ? T.primaryTint3 : 'transparent',
           }}
         >
-          {rate.main}
-          {rate.showCurrency && (
-            <span style={{ fontSize: 8, color: T.text3, fontWeight: 600, marginLeft: 2 }}>{currency}</span>
+          {showDispo && (
+            <span style={{ fontSize: 10, fontWeight: 700, color: dispoColor, whiteSpace: 'nowrap' }}>
+              {dispoVal}
+            </span>
           )}
-        </span>
+        </div>
       )}
-      {showRate && showDispo && (
-        <span style={{ color: T.text4, fontSize: 9, fontWeight: 600 }}>·</span>
-      )}
-      {showDispo && (
-        <span
+
+      {/* Prix + dispo — clic détail sur le tarif */}
+      {hasPriceZone && (
+        <div
+          onClick={canPriceClick ? (e) => onPriceClick?.(rateMeta, e) : undefined}
           style={{
-            fontSize: 10, fontWeight: 700, color: dispoColor,
-            whiteSpace: 'nowrap',
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 4,
+            minWidth: 0,
+            minHeight: 26,
+            borderRadius: 4,
+            cursor: canPriceClick ? 'pointer' : archived ? 'not-allowed' : 'default',
+            boxShadow: tipOpen ? `inset 0 0 0 2px ${T.primary}` : 'none',
+            background: tipOpen ? T.primaryTint : 'transparent',
+            position: 'relative',
           }}
         >
-          {dispoVal}
-        </span>
-      )}
-      {canHoverPrice && showTip && (
-        <TooltipBreakdown
-          open={showTip}
-          anchorRef={ref}
-          inv={inv}
-          dateStr={day.iso}
-          currency={currency}
-        />
+          {isDynamic && state === 'data' && (
+            <span style={{ position: 'absolute', top: 1, right: 2, fontSize: 8, color: T.ai, lineHeight: 1 }}>⚡</span>
+          )}
+          <span
+            style={{
+              fontSize: state === 'data' ? 12 : 11,
+              fontWeight: 700,
+              color: archived ? ARCHIVE_CELL_TEXT : noData ? T.text4 : isDynamic ? T.ai : modeColor,
+              letterSpacing: '-0.01em',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {rate.main}
+            {rate.showCurrency && (
+              <span style={{ fontSize: 8, color: T.text3, fontWeight: 600, marginLeft: 2 }}>{currency}</span>
+            )}
+          </span>
+          {showDispo && (
+            <>
+              <span style={{ color: T.text4, fontSize: 9, fontWeight: 600 }}>·</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: dispoColor, whiteSpace: 'nowrap' }}>
+                {dispoVal}
+              </span>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-/* ─── Collapse cell (Excel selection + tooltip + popover) ─── */
-function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown, onMouseEnter, onReservationClick }) {
-  const [showTip, setShowTip] = useState(false);
+/* ─── Collapse cell — tarif : + Excel · prix clic ; autres : cellule Excel ─── */
+function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown, onMouseEnter, onReservationClick, tipOpen, onPriceClick }) {
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
 
@@ -763,7 +918,14 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
       : <span style={{ color: T.text4 }}>{rate.main}</span>;
   } else if (col.id === 'basePrice') content = inv.basePrice ?? dash;
   else if (col.id === 'manualPrice') content = inv.manualPrice ?? dash;
-  else if (col.id === 'dynamicPrice') content = inv.calculatedPrice ?? dash;
+  else if (col.id === 'dynamicPrice') {
+    const isDyn = resolvePriceMode(inv) === 'dynamic';
+    content = (
+      <span style={{ color: isDyn ? T.ai : T.text3, fontSize: 11, fontWeight: 700 }}>
+        {isDyn ? 'Oui' : 'Non'}
+      </span>
+    );
+  }
   else if (col.id === 'priceMode') {
     const mode = resolvePriceMode(inv);
     const color = mode === 'manual' ? T.warning : mode === 'dynamic' ? T.ai : T.text3;
@@ -810,37 +972,84 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
     }
   }
 
-  const showRateTooltip = col.id === 'rate';
+  const canInteract = draggable && !archived;
+  const isRateSplit = col.id === 'rate' && hasInventoryData(inv) && !noData && !archived;
+  const rateMeta = {
+    listingId: listing._id,
+    roomTypeId: listing.roomTypeId || 'default',
+    dateStr: day.iso,
+    column: 'rate',
+  };
+  const canPriceClick = isRateSplit && onPriceClick;
+
+  if (isRateSplit) {
+    return (
+      <div
+        ref={ref}
+        style={{
+          borderRight: `1px solid ${T.border}`,
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'stretch',
+          gap: 1,
+          padding: '2px 2px',
+          minHeight: 27,
+          position: 'relative',
+          fontFamily: '"Geist Mono", monospace',
+          fontSize: 12,
+          fontWeight: 600,
+          background: selected ? T.primaryTint3 : background,
+          color: selected ? T.primaryDeep : T.text,
+        }}
+      >
+        <div
+          onMouseDown={canInteract ? onMouseDown : undefined}
+          onMouseEnter={canInteract ? onMouseEnter : undefined}
+          aria-hidden
+          style={{
+            flex: '0 0 6px',
+            cursor: canInteract ? 'cell' : 'not-allowed',
+            boxShadow: selected ? `inset 0 0 0 2px ${T.primary}` : 'none',
+            background: selected ? T.primaryTint3 : 'rgba(20,17,10,0.06)',
+            borderRadius: '4px 0 0 4px',
+          }}
+        />
+        <div
+          onClick={canPriceClick ? (e) => onPriceClick(rateMeta, e) : undefined}
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: canPriceClick ? 'pointer' : 'default',
+            boxShadow: tipOpen ? `inset 0 0 0 2px ${T.primary}` : 'none',
+            background: tipOpen ? T.primaryTint : 'transparent',
+            borderRadius: 4,
+          }}
+        >
+          {content}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={ref}
       onMouseDown={onMouseDown}
-      onMouseEnter={() => {
-        if (showRateTooltip) setShowTip(true);
-        onMouseEnter?.();
-      }}
-      onMouseLeave={() => setShowTip(false)}
+      onMouseEnter={onMouseEnter}
       style={{
         borderRight: `1px solid ${T.border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        gap: 4,
         padding: '3px 4px', minHeight: 27, position: 'relative',
         fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 600,
-        cursor: archived ? 'not-allowed' : draggable ? 'cell' : (showRateTooltip ? 'help' : 'default'),
-        background,
-        boxShadow: selected ? `inset 0 0 0 2px ${T.primary}` : 'none',
+        cursor: archived ? 'not-allowed' : draggable ? 'cell' : 'default',
+        background: tipOpen ? T.primaryTint : background,
+        boxShadow: selected || tipOpen ? `inset 0 0 0 2px ${T.primary}` : 'none',
         color: selected ? T.primaryDeep : T.text,
         transition: 'background 0.1s',
       }}>
       {content}
-      {showRateTooltip && showTip && hasInventoryData(inv) && (
-        <TooltipBreakdown
-          open={showTip}
-          anchorRef={ref}
-          inv={inv}
-          dateStr={day.iso}
-          currency={currency}
-        />
-      )}
     </div>
   );
 }

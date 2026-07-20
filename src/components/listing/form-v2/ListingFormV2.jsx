@@ -13,6 +13,7 @@ import { isPersistedListingId } from '../../../utils/listingId';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../../hooks/useAuth';
 import { hasAdminAccess } from '../../../utils/rbac.utils';
+import { usePmSimulation } from '../../../context/PmSimulationContext';
 
 import { GeneralTab, LocationTab }                          from './tabs/GeneralLocationTabs';
 import { PhotosTabReal }                                    from './tabs/PhotosTabReal';
@@ -37,7 +38,9 @@ export default function ListingFormV2({
   roomTypeConfigs = [],
 }) {
   const { user } = useAuth();
+  const { isActive: simulationActive } = usePmSimulation();
   const isAdmin = hasAdminAccess(user?.role);
+  const showListingActiveToggle = isAdmin && !simulationActive;
   const [values, setValues] = useState(initialValues);
   const [publishLoading, setPublishLoading] = useState(false);
   const [importOnboardingActive, setImportOnboardingActive] = useState(
@@ -235,6 +238,11 @@ export default function ListingFormV2({
       propertyUnit={values.propertyUnit === 'Multi' ? 'Multi' : 'Single'}
       lastSavedAt={values.updatedAt}
       lastPublishedAt={values.otaChannelsSnapshot?.updatedAt}
+      showListingActiveToggle={showListingActiveToggle}
+      listingActive={values.active !== false}
+      onListingActiveChange={(nextActive) =>
+        setValues((prev) => ({ ...prev, active: nextActive }))
+      }
       onSave={() => onSave?.(values)}
       onPublish={handlePublish}
       publishLoading={publishLoading}

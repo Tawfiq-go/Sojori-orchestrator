@@ -24,6 +24,7 @@ import MarrakechMap from './bien/MarrakechMap';
 import type { CompMapPin } from './bien/MarrakechMap';
 import CompsTable from './bien/CompsTable';
 import type { CompRow } from './bien/CompsTable';
+import MarketDataFetchExplain from './bien/MarketDataFetchExplain';
 import JustificationModalG7 from './JustificationModalG7';
 import EventEditorModal from './bien/EventEditorModal';
 import DynamicPriceScopeModal from './bien/DynamicPriceScopeModal';
@@ -44,6 +45,8 @@ export type BienViewProvenance = {
 };
 
 export interface BienViewProps {
+  /** Admin plateforme : TTM Airbnb, calendrier brut, refresh complet. */
+  isPlatformAdmin?: boolean;
   listing: Listing;
   provenance: BienViewProvenance;
   hasTtm: boolean;
@@ -191,6 +194,7 @@ export interface BienViewProps {
 
 export default function BienView(props: BienViewProps) {
   const {
+    isPlatformAdmin = false,
     listing, provenance, hasTtm, hasL90d, hasPotentialProd, hasMarketProd, hasCalendarProd,
     calendarFromAirroi, calendarFromCache, calendarUsesPilotPreview, calendarHasEventOverlay,
     calendarWindowMode, calendarPricingSource, eventsCount, calendarAirroiError, airroiCalendarDaysCount,
@@ -263,131 +267,134 @@ export default function BienView(props: BienViewProps) {
   return (
     <Box sx={{ ...DP_LAYOUT_SX }}>
       <style>{KEYFRAMES}</style>
-      {/* ── Bandeau sticky ── */}
-      <Box sx={{
-        position: 'sticky', top: 0, zIndex: 30,
-        bgcolor: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(16px) saturate(180%)',
-        borderBottom: `1px solid ${T.border}`,
-        px: 0,
-        py: 1.75,
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'flex-start',
-        gap: { xs: 1.5, md: 2 },
-      }}>
-        <Box sx={{
-          width: 64, height: 64, borderRadius: 1.625,
-          background: 'linear-gradient(135deg, #fde68a, #d97706)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30,
-          flexShrink: 0, boxShadow: '0 6px 16px rgba(217,119,6,0.25)',
-        }}>🏠</Box>
-        <Box sx={{ flex: '1 1 220px', minWidth: 0 }}>
-          <Typography
-            sx={{
-              fontSize: { xs: 16, md: 18 },
-              fontWeight: 800,
-              letterSpacing: '-0.025em',
-              lineHeight: 1.25,
-              wordBreak: 'break-word',
-            }}
-          >
-            {listing.name}
-          </Typography>
-          <Stack
-            direction="row"
-            sx={{ alignItems: 'center', gap: 0.75,  fontSize: 12, color: T.text3, mt: 0.25, flexWrap: 'wrap' }}
-          >
-            📍{' '}
-            {[listing.district, listing.city].filter((x) => x && x !== '—').join(', ') ||
-              listing.city ||
-              '—'}
-            {listing.airroiZone && (
-              <Box component="span" sx={{
-                fontFamily: '"Geist Mono", monospace', bgcolor: T.bg2,
-                px: 0.875, py: 0.125, borderRadius: 0.625,
-                fontSize: 10.5, fontWeight: 600, color: T.text2,
-                display: 'inline-flex', alignItems: 'center', gap: 0.5,
-              }}>
-                Zone marché : {listing.airroiZone} <Box component="b" sx={{ color: T.success }}>✓</Box>
-              </Box>
-            )}
-          </Stack>
-          <Stack direction="row" sx={{ gap: 1.5, 
-            mt: 0.625, fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace',
+      {isPlatformAdmin ? (
+        <>
+          {/* ── Bandeau sticky (admin) ── */}
+          <Box sx={{
+            position: 'sticky', top: 0, zIndex: 30,
+            bgcolor: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(16px) saturate(180%)',
+            borderBottom: `1px solid ${T.border}`,
+            px: 0,
+            py: 1.75,
+            display: 'flex',
             flexWrap: 'wrap',
+            alignItems: 'flex-start',
+            gap: { xs: 1.5, md: 2 },
           }}>
-            <span>🛏 {listing.bedrooms} chambres</span>
-            <span>👥 {listing.maxGuests} voyageurs max</span>
-            {listing.personCapacityPricing != null &&
-            listing.personCapacityPricing > 0 &&
-            listing.personCapacityPricing !== listing.maxGuests ? (
-              <span title="Capacité tarifaire de base (hors estimation marché)">
-                (tarif base {listing.personCapacityPricing} pers.)
-              </span>
-            ) : null}
-            {listing.airroiApiProfile ? (
-              <Box
-                component="span"
-                title="Profil utilisé pour l’estimation Sojori et les comparables (sans adresse ni GPS)"
-                sx={{ color: T.text2, fontWeight: 600 }}
+            <Box sx={{
+              width: 64, height: 64, borderRadius: 1.625,
+              background: 'linear-gradient(135deg, #fde68a, #d97706)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30,
+              flexShrink: 0, boxShadow: '0 6px 16px rgba(217,119,6,0.25)',
+            }}>🏠</Box>
+            <Box sx={{ flex: '1 1 220px', minWidth: 0 }}>
+              <Typography
+                sx={{
+                  fontSize: { xs: 16, md: 18 },
+                  fontWeight: 800,
+                  letterSpacing: '-0.025em',
+                  lineHeight: 1.25,
+                  wordBreak: 'break-word',
+                }}
               >
-                {listing.airroiApiProfile}
-              </Box>
-            ) : null}
-            {listing.amenities.slice(0, 3).map((a, i) => <span key={i}>{a}</span>)}
-          </Stack>
-        </Box>
-        {/* Pilotage ON/OFF + one-shot : barre Express en haut de page. Ici : périmètre sync. */}
-        <Box sx={{
-          flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 1, p: '6px 12px',
-          border: `1px solid ${aiEnabled ? T.gold : T.border}`, borderRadius: 1.5,
-          bgcolor: aiEnabled ? T.goldTint : T.bg2,
-        }}>
-          <Typography sx={{ fontSize: 11.5, fontWeight: 800, color: aiEnabled ? T.goldDeep : T.text3 }}>
-            {aiEnabled ? 'Pilote actif' : 'Pilote inactif'}
-          </Typography>
-          <SyncScopeChip label="Prix" active={applyPrice} />
-          <SyncScopeChip label="Min stay" active={applyMinStay} />
-          {onEditSyncScope ? (
-            <Typography
-              component="span"
-              onClick={() => onEditSyncScope()}
-              sx={{ cursor: 'pointer', fontSize: 10.5, color: T.goldDeep, fontWeight: 700, textDecoration: 'underline' }}
-            >
-              Modifier
-            </Typography>
-          ) : null}
-        </Box>
-        <Box sx={{
-          flex: '0 0 auto',
-          fontSize: 10.5, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
-          background: 'linear-gradient(135deg, #1a1408, #332b1c)', color: T.gold,
-          px: 1.375, py: 0.625, borderRadius: '99px', letterSpacing: '0.04em',
-        }}>★ SOJORI PRO</Box>
-      </Box>
-      <Box sx={{ ...DP_LAYOUT_SX, pb: 1.5 }}>
-        <SectionSourceBar
-          compact
-          items={[
-            { kind: 'prod', label: 'PROD', tooltip: 'srv-listing + canaux' },
-            {
-              kind: provenance.hasAirroiSnapshot ? 'prod' : 'empty',
-              label: provenance.hasAirroiSnapshot ? 'Zone OK' : 'VIDE',
-            },
-          ]}
-          snapshotAt={provenance.snapshotAt}
-          snapshotLabel={
-            provenance.hasRevenueEstimate ? 'Estimation Sojori' : 'Données marché'
-          }
-        />
-      </Box>
+                {listing.name}
+              </Typography>
+              <Stack
+                direction="row"
+                sx={{ alignItems: 'center', gap: 0.75,  fontSize: 12, color: T.text3, mt: 0.25, flexWrap: 'wrap' }}
+              >
+                📍{' '}
+                {[listing.district, listing.city].filter((x) => x && x !== '—').join(', ') ||
+                  listing.city ||
+                  '—'}
+                {listing.airroiZone && (
+                  <Box component="span" sx={{
+                    fontFamily: '"Geist Mono", monospace', bgcolor: T.bg2,
+                    px: 0.875, py: 0.125, borderRadius: 0.625,
+                    fontSize: 10.5, fontWeight: 600, color: T.text2,
+                    display: 'inline-flex', alignItems: 'center', gap: 0.5,
+                  }}>
+                    Zone marché : {listing.airroiZone} <Box component="b" sx={{ color: T.success }}>✓</Box>
+                  </Box>
+                )}
+              </Stack>
+              <Stack direction="row" sx={{ gap: 1.5, 
+                mt: 0.625, fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace',
+                flexWrap: 'wrap',
+              }}>
+                <span>🛏 {listing.bedrooms} chambres</span>
+                <span>👥 {listing.maxGuests} voyageurs max</span>
+                {listing.personCapacityPricing != null &&
+                listing.personCapacityPricing > 0 &&
+                listing.personCapacityPricing !== listing.maxGuests ? (
+                  <span title="Capacité tarifaire de base (hors estimation marché)">
+                    (tarif base {listing.personCapacityPricing} pers.)
+                  </span>
+                ) : null}
+                {listing.airroiApiProfile ? (
+                  <Box
+                    component="span"
+                    title="Profil utilisé pour l’estimation Sojori et les comparables (sans adresse ni GPS)"
+                    sx={{ color: T.text2, fontWeight: 600 }}
+                  >
+                    {listing.airroiApiProfile}
+                  </Box>
+                ) : null}
+                {listing.amenities.slice(0, 3).map((a, i) => <span key={i}>{a}</span>)}
+              </Stack>
+            </Box>
+            <Box sx={{
+              flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 1, p: '6px 12px',
+              border: `1px solid ${aiEnabled ? T.gold : T.border}`, borderRadius: 1.5,
+              bgcolor: aiEnabled ? T.goldTint : T.bg2,
+            }}>
+              <Typography sx={{ fontSize: 11.5, fontWeight: 800, color: aiEnabled ? T.goldDeep : T.text3 }}>
+                {aiEnabled ? 'Pilote actif' : 'Pilote inactif'}
+              </Typography>
+              <SyncScopeChip label="Prix" active={applyPrice} />
+              <SyncScopeChip label="Min stay" active={applyMinStay} />
+              {onEditSyncScope ? (
+                <Typography
+                  component="span"
+                  onClick={() => onEditSyncScope()}
+                  sx={{ cursor: 'pointer', fontSize: 10.5, color: T.goldDeep, fontWeight: 700, textDecoration: 'underline' }}
+                >
+                  Modifier
+                </Typography>
+              ) : null}
+            </Box>
+            <Box sx={{
+              flex: '0 0 auto',
+              fontSize: 10.5, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
+              background: 'linear-gradient(135deg, #1a1408, #332b1c)', color: T.gold,
+              px: 1.375, py: 0.625, borderRadius: '99px', letterSpacing: '0.04em',
+            }}>★ SOJORI PRO</Box>
+          </Box>
+          <Box sx={{ ...DP_LAYOUT_SX, pb: 1.5 }}>
+            <SectionSourceBar
+              compact
+              items={[
+                { kind: 'prod', label: 'PROD', tooltip: 'srv-listing + canaux' },
+                {
+                  kind: provenance.hasAirroiSnapshot ? 'prod' : 'empty',
+                  label: provenance.hasAirroiSnapshot ? 'Zone OK' : 'VIDE',
+                },
+              ]}
+              snapshotAt={provenance.snapshotAt}
+              snapshotLabel={
+                provenance.hasRevenueEstimate ? 'Estimation Sojori' : 'Données marché'
+              }
+            />
+          </Box>
+        </>
+      ) : null}
 
       {/* ── Onglets vue avancée ── */}
       <Box sx={{ ...DP_LAYOUT_SX, pb: 1.5 }}>
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
           {([
             ['reglages', '⚙️ Réglages pricing'],
-            ['bien', '🏡 Bien & comps'],
+            ['bien', '📊 Analyse et concurrences'],
           ] as const).map(([key, label]) => (
             <Box
               key={key}
@@ -410,23 +417,21 @@ export default function BienView(props: BienViewProps) {
         </Stack>
       </Box>
 
-      {/* ── Bien & comps : potentiel · calendrier · carte · concurrents ── */}
+      {/* ── Analyse et concurrences ── */}
       {advTab === 'bien' ? (<>
+      <MarketDataFetchExplain isPlatformAdmin={isPlatformAdmin} />
       <Section
         num="02"
         title="Le potentiel de votre bien"
         sub={`District · ${listing.district} · ${listing.city}`}
         sources={[
-          { kind: hasTtm ? 'prod' : 'empty', label: hasTtm ? 'TTM PROD' : 'TTM VIDE' },
-          { kind: hasL90d ? 'prod' : 'empty', label: hasL90d ? 'L90D PROD' : 'L90D VIDE' },
-          {
-            kind: hasPotentialProd ? 'prod' : 'empty',
-            label: hasPotentialProd
-              ? provenance.hasRevenueEstimate
-                ? 'Estimation Sojori'
-                : 'Potentiel comps'
-              : 'Potentiel VIDE',
-          },
+          { kind: hasPotentialProd ? 'prod' : 'empty', label: hasPotentialProd ? 'Estimation Sojori' : 'Potentiel VIDE' },
+          ...(isPlatformAdmin
+            ? [
+                { kind: hasTtm ? 'prod' : 'empty', label: hasTtm ? 'TTM PROD' : 'TTM VIDE' } as const,
+                { kind: hasL90d ? 'prod' : 'empty', label: hasL90d ? 'L90D PROD' : 'L90D VIDE' } as const,
+              ]
+            : []),
         ]}
         snapshotAt={provenance.snapshotAt}
         snapshotLabel={
@@ -436,8 +441,8 @@ export default function BienView(props: BienViewProps) {
       >
         <StatsCards
           hasPotentialProd={hasPotentialProd}
-          hasTtm={hasTtm}
-          hasL90d={hasL90d}
+          hasTtm={isPlatformAdmin && hasTtm}
+          hasL90d={isPlatformAdmin && hasL90d}
           potentialAnnual={performance.potentialAnnual}
           potentialUsd={performance.potentialUsd}
           performance={performance.ttm}
@@ -457,9 +462,9 @@ export default function BienView(props: BienViewProps) {
               lineHeight: 1.5,
             }}
           >
-            <b>Estimation Sojori seule</b> — pas encore de performances annonce / comparables sur ce listing (
-            <code style={{ fontSize: 11 }}>{listing._id}</code>). Modal ⟳ →{' '}
-            <b>Performances annonce</b> + comparables pour enrichir cette vue.
+            <b>Estimation Sojori seule</b> — pas encore de comparables sur ce listing (
+            <code style={{ fontSize: 11 }}>{listing._id}</code>). Bandeau →{' '}
+            <b>Actualiser concurrence</b> (~0,10 $, ~25 annonces voisines).
           </Box>
         ) : null}
       </Section>
@@ -470,24 +475,34 @@ export default function BienView(props: BienViewProps) {
       {advTab === 'reglages' ? (<>
       <Section
         num="03"
-        title="Configurez votre pricing"
+        title={isPlatformAdmin ? 'Configurez votre pricing' : 'Réglages pricing'}
         sub={
           configSaveStatus === 'saving'
-            ? 'Enregistrement automatique…'
+            ? 'Enregistrement…'
             : configSaveStatus === 'saved'
-              ? 'Recette enregistrée (auto-save ~1s)'
+              ? 'Enregistré'
               : configSaveStatus === 'error'
-                ? 'Erreur enregistrement — réessayez ou activez Sojori AI'
-                : '7 blocs : base · bornes · mode · occupation · last-min · trous · events'
+                ? 'Erreur — réessayez'
+                : isPlatformAdmin
+                  ? '7 blocs : base · bornes · mode · occupation · last-min · trous · events'
+                  : 'Bornes, mode, occupation, événements'
         }
-        sources={[
-          { kind: floor > 0 ? 'prod' : 'empty', label: 'Bornes' },
-          { kind: occupancyBandsEnabled ? 'prod' : 'empty', label: 'Occupation' },
-          { kind: lastMinuteEnabled ? 'prod' : 'empty', label: 'Last-min' },
-          { kind: eventsEnabled && events.length > 0 ? 'prod' : 'empty', label: events.length ? `${events.length} event(s)` : 'Événements' },
-        ]}
+        sources={
+          isPlatformAdmin
+            ? [
+                { kind: floor > 0 ? 'prod' : 'empty', label: 'Bornes' },
+                { kind: occupancyBandsEnabled ? 'prod' : 'empty', label: 'Occupation' },
+                { kind: lastMinuteEnabled ? 'prod' : 'empty', label: 'Last-min' },
+                {
+                  kind: eventsEnabled && events.length > 0 ? 'prod' : 'empty',
+                  label: events.length ? `${events.length} event(s)` : 'Événements',
+                },
+              ]
+            : undefined
+        }
       >
         <PricingControls
+          compactGuide={!isPlatformAdmin}
           floor={floor} ceiling={ceiling}
           floorRange={[0, 20_000]} ceilingRange={[0, 20_000]}
           recoFloor={market.recoBounds?.floor ?? 0} recoCeiling={market.recoBounds?.ceiling ?? 0}
@@ -740,7 +755,7 @@ export default function BienView(props: BienViewProps) {
 
       {/* ── Comps listing (pas les tendances ville — celles-ci sont sur le portefeuille) ── */}
       {advTab === 'bien' ? (<>
-      {(hasCompsMarket || (selfVsComps && (selfVsComps.adrDeltaPct != null || selfVsComps.occDeltaPts != null))) ? (
+      {(hasCompsMarket || (isPlatformAdmin && selfVsComps && (selfVsComps.adrDeltaPct != null || selfVsComps.occDeltaPts != null))) ? (
       <Section
         num="05"
         title="Votre bien vs concurrents"
@@ -802,7 +817,7 @@ export default function BienView(props: BienViewProps) {
             : { kind: 'empty', label: 'VIDE' },
         ]}
       >
-        <CompsTable rows={compRows} />
+        <CompsTable rows={compRows.filter((r) => isPlatformAdmin || !r.isSelf)} showFullDetail />
       </Section>
       </>) : null}
 

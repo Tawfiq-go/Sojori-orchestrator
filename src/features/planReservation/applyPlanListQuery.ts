@@ -51,8 +51,12 @@ export function applyPlanListQuery(
         rank(a.status) - rank(b.status) ||
         new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime(),
     );
-  } else if (query.sort === 'recent') {
+  } else if (query.sort === 'recent' || query.sort === 'checkin_desc') {
     list.sort((a, b) => new Date(b.checkIn).getTime() - new Date(a.checkIn).getTime());
+  } else if (query.sort === 'checkout_asc') {
+    list.sort((a, b) => new Date(a.checkOut).getTime() - new Date(b.checkOut).getTime());
+  } else if (query.sort === 'checkout_desc') {
+    list.sort((a, b) => new Date(b.checkOut).getTime() - new Date(a.checkOut).getTime());
   } else if (query.sort === 'by_listing') {
     list.sort(
       (a, b) =>

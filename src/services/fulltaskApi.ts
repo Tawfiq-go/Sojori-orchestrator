@@ -423,9 +423,11 @@ export async function listPlans(params: Record<string, unknown> = {}) {
 /** Sidebar plans : métadonnées uniquement (pas sequences/messages). */
 export type ListPlansSummaryParams = {
   limit?: number;
+  page?: number;
   filters?: string;
   search?: string;
   listingIds?: string;
+  listingId?: string;
   sort?: string;
   includeReservationId?: string;
   ownerId?: string;

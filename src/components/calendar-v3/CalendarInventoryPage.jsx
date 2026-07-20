@@ -86,7 +86,12 @@ export default function CalendarInventoryPage({
     setViewState(viewFromUrl);
   }, [viewFromUrl]);
 
-  const [selectedColumns, setSelectedColumns] = useState(['availableRoom', 'rate']);
+  const [selectedColumns, setSelectedColumns] = useState([
+    'availableRoom',
+    'rate',
+    'dynamicPrice',
+    'minStay',
+  ]);
   const [pivotDate, setPivotDate] = useState(() => startOfDay(startDate));
   const [modalCells, setModalCells] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -410,7 +415,11 @@ export default function CalendarInventoryPage({
         <MultiView
           startDate={windowStart}
           daysCount={MULTI_VISIBLE_DAYS}
-          listingCatalog={listings}
+          listingCatalog={
+            selectedListingId
+              ? listings.filter((l) => String(l._id) === String(selectedListingId))
+              : listings
+          }
           inventoriesByListing={inventoriesByListing}
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
