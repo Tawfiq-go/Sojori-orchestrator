@@ -508,34 +508,20 @@ export default function BienView(props: BienViewProps) {
 
       </>) : null}
 
-      {/* ── Réglages pricing ── */}
+      {/* ── Réglages pricing (sans en-tête : gain vertical, statut de save seul) ── */}
       {advTab === 'reglages' ? (<>
-      <Section
-        num="03"
-        title={isPlatformAdmin ? 'Configurez votre pricing' : 'Réglages pricing'}
-        sub={
-          configSaveStatus === 'saving'
-            ? 'Enregistrement…'
-            : configSaveStatus === 'saved'
-              ? 'Enregistré'
-              : configSaveStatus === 'error'
-                ? 'Erreur — réessayez'
-                : 'Base · fourchette · positionnement + ajustements automatiques'
-        }
-        sources={
-          isPlatformAdmin
-            ? [
-                { kind: floor > 0 ? 'prod' : 'empty', label: 'Bornes' },
-                { kind: occupancyBandsEnabled ? 'prod' : 'empty', label: 'Occupation' },
-                { kind: lastMinuteEnabled ? 'prod' : 'empty', label: 'Last-min' },
-                {
-                  kind: eventsEnabled && events.length > 0 ? 'prod' : 'empty',
-                  label: events.length ? `${events.length} event(s)` : 'Événements',
-                },
-              ]
-            : undefined
-        }
-      >
+      <Box sx={{ position: 'relative' }}>
+        {configSaveStatus !== 'idle' ? (
+          <Typography
+            sx={{
+              position: 'absolute', top: -4, right: 0, zIndex: 1,
+              fontSize: 11, fontWeight: 700, fontFamily: '"Geist Mono", monospace',
+              color: configSaveStatus === 'error' ? T.error : configSaveStatus === 'saving' ? T.text3 : T.success,
+            }}
+          >
+            {configSaveStatus === 'saving' ? 'Enregistrement…' : configSaveStatus === 'saved' ? '✓ Enregistré' : 'Erreur — réessayez'}
+          </Typography>
+        ) : null}
         <PricingControls
           compactGuide={!isPlatformAdmin}
           floor={floor} ceiling={ceiling}
@@ -589,7 +575,7 @@ export default function BienView(props: BienViewProps) {
           onDeleteEvent={onDeleteEvent}           onAcceptSuggestion={onAcceptSuggestion}
           boundsContextHint={boundsContextHint}
         />
-      </Section>
+      </Box>
 
       {/* ── Règles par période (style Hostaway) ── */}
       <Section

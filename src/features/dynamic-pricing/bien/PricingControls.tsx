@@ -424,15 +424,7 @@ export default function PricingControls(props: PricingControlsProps) {
 
   const presets = pricingModes.filter((m) => m.kind === 'preset' && m.enabled);
   const customs = pricingModes.filter((m) => m.kind === 'custom');
-  const activeMode = pricingModes.find((m) => m.id === activeModeId);
   const activeCustom = customs.find((m) => m.id === activeModeId);
-
-  /* Résumé vivant */
-  const activeAdjustments: string[] = [];
-  if (occupancyBandsEnabled) activeAdjustments.push('le remplissage');
-  if (lastMinuteEnabled) activeAdjustments.push('la dernière minute');
-  if (gapBlockEnabled) activeAdjustments.push('les trous entre réservations');
-  const eventsActiveCount = eventsEnabled ? events.length : 0;
 
   const cardSx = {
     bgcolor: T.bg1,
@@ -444,50 +436,6 @@ export default function PricingControls(props: PricingControlsProps) {
 
   return (
     <Stack spacing={1.75} sx={DP_LAYOUT_SX}>
-      {/* ═══ Résumé vivant ═══ */}
-      <Box
-        sx={{
-          ...cardSx,
-          border: `1.5px solid ${T.goldDeep}`,
-          background: `linear-gradient(135deg, ${T.goldTint}, ${T.bg1} 60%)`,
-        }}
-      >
-        <Typography sx={{ ...lblSx, color: T.goldDeep, mb: 0.75 }}>Votre stratégie aujourd'hui</Typography>
-        <Typography sx={{ fontSize: 15, lineHeight: 1.55, '& b': { color: T.goldDeep } }}>
-          {pricingBaseSource === 'manual_base' ? (
-            <>Base fixe de <b>{fmt(manualBasePriceMad)} MAD</b></>
-          ) : (
-            <>Prix de <b>marché</b></>
-          )}
-          {modeEnabled && activeMode ? (
-            <> en position <b>{activeMode.label} ×{activeMode.multiplier}</b></>
-          ) : null}
-          , toujours entre <b>{fmt(floor)}</b> et <b>{fmt(ceiling)} MAD</b>.{' '}
-          {activeAdjustments.length > 0
-            ? <>Sojori ajuste ensuite automatiquement selon {activeAdjustments.join(', ')}.</>
-            : <>Aucun ajustement automatique actif.</>}
-          {eventsActiveCount > 0 ? (
-            <> <b>{eventsActiveCount} événement{eventsActiveCount > 1 ? 's' : ''}</b> à prix prioritaire.</>
-          ) : null}
-        </Typography>
-        {estimatedRevenue !== undefined ? (
-          <Stack
-            direction="row"
-            sx={{
-              alignItems: 'center', gap: 1, mt: 1.25, p: '7px 12px',
-              bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.25,
-              fontFamily: MONO, fontSize: 11.5, color: T.text2, width: 'fit-content', flexWrap: 'wrap',
-            }}
-          >
-            <span>Revenu annuel estimé →</span>
-            <Box component="b" sx={{ color: T.goldDeep, fontSize: 14, fontWeight: 800 }}>
-              {fmt(estimatedRevenue)} MAD
-            </Box>
-            {estimatedRevenueLiftPct !== undefined ? <span>· +{estimatedRevenueLiftPct} %</span> : null}
-          </Stack>
-        ) : null}
-      </Box>
-
       {/* ═══ L'essentiel ═══ */}
       <Stack direction="row" sx={{ alignItems: 'baseline', gap: 1, mt: 0.5 }}>
         <Typography sx={{ fontSize: 13, fontWeight: 800 }}>L'essentiel</Typography>
