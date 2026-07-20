@@ -248,9 +248,12 @@ export default function ChatbotWhitelistView() {
     }
 
     if (requestId !== enrichRequestIdRef.current) return;
-    setMenuByListing((prev) => ({ ...prev, ...nextMenus }));
-    setSnapshotMissingByListing((prev) => ({ ...prev, ...nextMissing }));
-    setGuestCtxByResa((prev) => ({ ...prev, ...nextCtx }));
+    const hasMenus = Object.keys(nextMenus).length > 0;
+    const hasMissing = Object.keys(nextMissing).length > 0;
+    const hasCtx = Object.keys(nextCtx).length > 0;
+    if (hasMenus) setMenuByListing((prev) => ({ ...prev, ...nextMenus }));
+    if (hasMissing) setSnapshotMissingByListing((prev) => ({ ...prev, ...nextMissing }));
+    if (hasCtx) setGuestCtxByResa((prev) => ({ ...prev, ...nextCtx }));
   }, []);
 
   const filtered = useMemo(
@@ -263,7 +266,10 @@ export default function ChatbotWhitelistView() {
     [filtered, sortField, sortDir],
   );
 
-  const paged = sorted.slice(page * limit, (page + 1) * limit);
+  const paged = useMemo(
+    () => sorted.slice(page * limit, (page + 1) * limit),
+    [sorted, page, limit],
+  );
   const pagedReservationIdsKey = useMemo(
     () => paged.map((r) => r.reservationId).join('|'),
     [paged],
@@ -361,7 +367,7 @@ export default function ChatbotWhitelistView() {
     })();
   }, [enrichVisiblePage, limit, page, quickFilter, search, sortField, sortDir, requestOwnerId]);
 
-  /** Changement page / filtres : attendre config WA + guest context puis réafficher */
+  /** Changement page / filtres / recherche : enrichir la page visible (deps = pageViewKey stable). */
   useEffect(() => {
     if (!tableReady) return;
     if (skipNextPageEnrichRef.current) {
@@ -382,7 +388,10 @@ export default function ChatbotWhitelistView() {
     return () => {
       cancelled = true;
     };
-  }, [tableReady, pageViewKey, enrichVisiblePage, paged]);
+    // paged volontairement hors deps : identité nouveau tableau à chaque render sinon → boucle infinie.
+    // pageViewKey change uniquement quand le contenu / filtres / page changent vraiment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- voir ci-dessus
+  }, [tableReady, pageViewKey, enrichVisiblePage]);
 
   const waInterpretByResa = useMemo(() => {
     const out: Record<string, { options: MenuOptionInterpretation[]; hasConfig: boolean }> = {};

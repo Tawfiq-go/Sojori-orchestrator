@@ -17,7 +17,7 @@ const STAFF_PILL_LABEL_OVERRIDES: Partial<Record<FulltaskTaskTypeId, string>> = 
   arrival_declare: 'Déclarer arrivée',
   departure_declare: 'Déclarer départ',
   registration: 'Enregistrement',
-  checkout_cleaning: 'Ménage checkout',
+  checkout_cleaning: 'Ménage Sojori',
 };
 
 export const STAFF_TASK_PILLS = FULLTASK_TASK_TYPES.map((key) => ({
