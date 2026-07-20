@@ -697,16 +697,18 @@ function SideLink({ item, active, sub, disabled, notificationCount = 0, onClick 
 
 /** Raccourcis header owner — l'essentiel du quotidien (la sidebar garde le reste). */
 const OWNER_QUICK_ACTIONS = [
+  // Ordre = priorité ops (urgent → secondaire)
   { emoji: '➕', label: 'Nouvelle résa', to: '/reservations?action=new' },
   { emoji: '📋', label: 'Réservations', to: '/reservations' },
+  { emoji: '🏨', label: 'Messages OTA', to: '/communications?section=guest&tab=ota' },
+  { emoji: '💬', label: 'WhatsApp', to: '/communications?section=guest&tab=whatsapp' },
   { emoji: '📅', label: 'Calendrier', to: '/calendar?view=multi' },
   { emoji: '✅', label: 'Tâches', to: '/tasks' },
-  { emoji: '👷', label: 'Staff', to: '/tasks/team' },
-  { emoji: '💬', label: 'WhatsApp', to: '/communications?section=guest&tab=whatsapp' },
-  { emoji: '🏨', label: 'Messages OTA', to: '/communications?section=guest&tab=ota' },
   { emoji: '🎛', label: 'Plans d’orchestration', to: '/orchestration/plans' },
+  { emoji: '📈', label: 'Prix dynamique', to: '/dynamic-pricing/portefeuille' },
   { emoji: '☀️', label: 'Plan de journée', to: '/orchestration/day-plan' },
   { emoji: '🏠', label: 'Annonces', to: '/listings' },
+  { emoji: '👷', label: 'Staff', to: '/tasks/team' },
   { emoji: '⭐', label: 'Avis voyageurs', to: '/communications?section=guest&tab=reviews' },
 ];
 
@@ -718,7 +720,9 @@ function OwnerQuickActions({ user }) {
     <Stack direction="row" spacing={0.25} sx={{
       alignItems: 'center', flexShrink: 0,
       display: { xs: 'none', md: 'flex' },
-      borderRight: `1px solid ${t.borderStrong || t.border}`, mr: 2.5, pr: 2,
+      borderRight: `1px solid ${t.borderStrong || t.border}`,
+      mr: 4,
+      pr: 3,
     }}>
       {OWNER_QUICK_ACTIONS.map((a) => (
         <Tooltip key={a.to} title={a.label}>
@@ -780,20 +784,22 @@ export function TopBar({
 
       {adminScopeInTopBar ? <AdminBusinessScopeTopFilter /> : null}
 
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto' }}>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto', gap: 0.5 }}>
         <OwnerQuickActions user={user} />
-        <AdminSessionTopBarButton />
-        <NotificationBell />
-        <Tooltip title="Aide">
-          <IconButton sx={iconBtnSx} aria-label="Aide">
-            <HelpOutlineOutlined sx={{ fontSize: 20 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Paramètres">
-          <IconButton sx={iconBtnSx} aria-label="Paramètres">
-            <SettingsOutlined sx={{ fontSize: 20 }} />
-          </IconButton>
-        </Tooltip>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', pl: 0.5 }}>
+          <AdminSessionTopBarButton />
+          <NotificationBell />
+          <Tooltip title="Aide">
+            <IconButton sx={iconBtnSx} aria-label="Aide">
+              <HelpOutlineOutlined sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Paramètres">
+            <IconButton sx={iconBtnSx} aria-label="Paramètres">
+              <SettingsOutlined sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Tooltip>
+        </Stack>
       </Stack>
     </Box>
   );
