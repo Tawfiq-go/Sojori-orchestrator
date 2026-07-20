@@ -483,9 +483,7 @@ export default function BienView(props: BienViewProps) {
               ? 'Enregistré'
               : configSaveStatus === 'error'
                 ? 'Erreur — réessayez'
-                : isPlatformAdmin
-                  ? '7 blocs : base · bornes · mode · occupation · last-min · trous · events'
-                  : 'Bornes, mode, occupation, événements'
+                : 'Base · fourchette · positionnement + ajustements automatiques'
         }
         sources={
           isPlatformAdmin
