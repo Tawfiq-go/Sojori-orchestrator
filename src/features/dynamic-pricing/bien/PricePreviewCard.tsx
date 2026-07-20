@@ -23,11 +23,12 @@ const PERIODS = [
   { key: '365', label: '12 mois', days: 365 },
 ] as const;
 
-type RowStatus = 'reserved' | 'blocked' | 'free';
+type RowStatus = 'reserved' | 'blocked' | 'manual' | 'free';
 
 function rowStatus(row: ApplyPreviewDiffRowDto): RowStatus {
   if (row.alert === 'reserved') return 'reserved';
   if (row.alert === 'blocked') return 'blocked';
+  if (row.alert === 'manual') return 'manual';
   return 'free';
 }
 
@@ -336,20 +337,19 @@ export default function PricePreviewCard({
                               {rule.emoji ?? '🗓'} {rule.name}
                             </Box>
                           ) : null}
-                          {st === 'blocked' && r.skipReason === 'manual' ? (
-                            <Box component="span" sx={{ fontSize: 10, color: T.text4, ml: 0.75, fontWeight: 400 }}>manuel</Box>
-                          ) : null}
                         </Box>
                         <Box component="td" sx={{ ...cellSx, textAlign: 'center' }}>
                           <Box
                             component="span"
                             sx={{
                               fontSize: 10, fontWeight: 800, borderRadius: 999, px: 1.125, py: 0.25, fontFamily: MONO, whiteSpace: 'nowrap',
-                              bgcolor: st === 'reserved' ? T.success : st === 'blocked' ? T.bg3 : T.goldTint2,
-                              color: st === 'reserved' ? '#fff' : st === 'blocked' ? T.text3 : T.goldDeep,
+                              bgcolor:
+                                st === 'reserved' ? T.success : st === 'blocked' ? T.bg3 : st === 'manual' ? T.infoTint : T.goldTint2,
+                              color:
+                                st === 'reserved' ? '#fff' : st === 'blocked' ? T.text3 : st === 'manual' ? T.info : T.goldDeep,
                             }}
                           >
-                            {st === 'reserved' ? 'RÉSERVÉ' : st === 'blocked' ? 'BLOQUÉ ⚠' : 'LIBRE'}
+                            {st === 'reserved' ? 'RÉSERVÉ' : st === 'blocked' ? 'BLOQUÉ ⚠' : st === 'manual' ? 'PRIX MANUEL' : 'LIBRE'}
                           </Box>
                         </Box>
                         <Box component="td" sx={cellSx}>{r.airroiMad != null ? fmt(r.airroiMad) : '—'}</Box>
@@ -369,7 +369,7 @@ export default function PricePreviewCard({
                                     : T.text4,
                           }}
                         >
-                          {st === 'reserved' ? 'figé' : st === 'blocked' ? 'non poussé' : delta == null ? '—' : `${delta > 0 ? '+' : ''}${fmt(delta)}`}
+                          {st === 'reserved' ? 'figé' : st === 'blocked' ? 'non poussé' : st === 'manual' ? 'manuel' : delta == null ? '—' : `${delta > 0 ? '+' : ''}${fmt(delta)}`}
                         </Box>
                       </Box>
                     </React.Fragment>
