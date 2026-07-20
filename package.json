@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:3001": "VITE_DEV_PORT=3001 VITE_HMR_PORT=3003 vite",
+    "dev:3001:daemon": "./scripts/dev-owner-3001.sh start",
+    "dev:3001:stop": "./scripts/dev-owner-3001.sh stop",
     "dev:5001": "VITE_DEV_PORT=5001 VITE_HMR_PORT=5002 vite",
     "start": "VITE_DEV_PORT=5001 VITE_HMR_PORT=5002 vite",
     "start:owner": "VITE_DEV_PORT=3001 VITE_HMR_PORT=3003 vite",

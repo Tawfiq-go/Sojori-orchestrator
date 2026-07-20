@@ -555,6 +555,8 @@ export interface PlanListSummaryDoc {
   checkOut?: string | Date;
   atSojori?: boolean;
   channelName?: string;
+  archived?: boolean;
+  archivedAt?: string | Date | null;
 }
 
 export function deriveReservationStatusFromSummary(
@@ -564,7 +566,7 @@ export function deriveReservationStatusFromSummary(
   now = new Date(),
 ): PlanStatus {
   if (planStatus === 'annule' || planStatus === 'bloque') return 'blocked';
-  if (planStatus === 'termine') return 'done';
+  if (planStatus === 'termine' || planStatus === 'completed') return 'done';
   if (checkOut && checkOut < now) return 'done';
   if (checkIn && checkIn > now) return 'future';
   if (checkIn && checkOut && checkIn <= now && checkOut >= now) return 'now';

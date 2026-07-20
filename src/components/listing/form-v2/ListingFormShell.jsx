@@ -11,6 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Stack, Typography, Button } from '@mui/material';
 import { LISTING_LAYOUT } from '../../../constants/listingLayout';
 import { V3 } from '../../../features/orchestrationListingV3/theme';
+import ListingFormHeaderActions from '../ListingFormHeaderActions';
 
 const V3_ORCH_MIN_H = V3.embedViewportH;
 
@@ -252,6 +253,9 @@ export default function ListingFormShell({
   lastSavedAt,                // date dernière sauvegarde (updatedAt listing)
   lastPublishedAt,            // date dernière publication vers OTA (otaChannelsSnapshot.updatedAt)
   propertyUnit = 'Single',    // Single | Multi — sidebar Multi anti-redondance (Infos / Photos / Pricing)
+  showListingActiveToggle = false,
+  listingActive = true,
+  onListingActiveChange,
 }) {
   const resolvedLockLevel = lockLevel
     ? normalizeListingFormLevel(lockLevel, { forceConfig: lockLevel === 'config' || lockLevel === 'config-new' })
@@ -505,6 +509,12 @@ export default function ListingFormShell({
               </>
             ) : null}
           </Box>
+          <ListingFormHeaderActions
+            listingId={listing?.id}
+            showListingActiveToggle={showListingActiveToggle}
+            listingActive={listingActive}
+            onListingActiveChange={onListingActiveChange}
+          />
         </Box>
         </Box>
 

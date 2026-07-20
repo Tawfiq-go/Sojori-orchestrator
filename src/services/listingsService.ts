@@ -1592,10 +1592,10 @@ export const listingsService = {
   async updateListingQuickEdit(
     listingId: string,
     payload: {
-      name: string;
-      active: boolean;
-      rentalUnitedIds: string[];
-      roomTypes: Array<{ _id: string; rentalUnitedId: string }>;
+      name?: string;
+      active?: boolean;
+      rentalUnitedIds?: string[];
+      roomTypes?: Array<{ _id: string; rentalUnitedId: string }>;
     },
   ): Promise<{
     success: boolean;

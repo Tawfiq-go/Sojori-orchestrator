@@ -3,6 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
 import { ModalPortal } from '../ModalPortal';
+import { ModalScrollColumn } from '../common/ModalScrollColumn';
 import { T } from './_shared';
 import { CLASSIFICATION_LABEL, CLASSIFICATION_TONE, formatBlockedDayRange } from './auditBlockedDays';
 
@@ -77,7 +78,12 @@ export default function AuditBlockedDaysModal({
           </div>
 
           {/* Body */}
-          <div style={{ padding: '16px 22px 22px', overflowY: 'auto' }}>
+          <ModalScrollColumn
+            active={open}
+            className="calendar-audit-modal-scroll"
+            wrapperSx={{ flex: 1, minHeight: 0 }}
+            innerSx={{ px: '22px', py: '16px', pb: '22px' }}
+          >
             {loading && (
               <div style={{ padding: '24px 0', fontSize: 13, color: T.text3, textAlign: 'center' }}>
                 Analyse des 365 prochains jours…
@@ -169,7 +175,7 @@ export default function AuditBlockedDaysModal({
                 </tbody>
               </table>
             )}
-          </div>
+          </ModalScrollColumn>
         </div>
       </div>
     </ModalPortal>

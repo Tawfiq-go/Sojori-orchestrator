@@ -303,13 +303,38 @@ export interface ReservationPlan {
 }
 
 /* ─── Filter & sort ─── */
-export type ResaFilterKey = 'in_progress' | 'blocked' | 'today' | 'next7d' | 'done';
-export type ResaSortKey = 'arrival_asc' | 'urgency' | 'recent' | 'by_listing';
+export type ResaFilterKey =
+  | 'in_progress'
+  | 'blocked'
+  | 'today'
+  | 'next7d'
+  | 'done'
+  | 'registration_done'
+  | 'registration_pending'
+  | 'arrival_time_set'
+  | 'arrival_time_pending'
+  | 'archived';
+
+export type ResaSortKey =
+  | 'arrival_asc'
+  | 'urgency'
+  | 'recent'
+  | 'by_listing'
+  | 'checkin_asc'
+  | 'checkin_desc'
+  | 'checkout_asc'
+  | 'checkout_desc'
+  | 'created_asc'
+  | 'created_desc';
 
 export interface PlanListQuery {
   filters: ResaFilterKey[];
   search: string;
   sort: ResaSortKey;
+  /** Filtre exact listing (backend). */
+  listingId?: string;
+  /** Pagination backend (1-based), page size 100. */
+  page?: number;
 }
 
 export interface ReservationGroup {

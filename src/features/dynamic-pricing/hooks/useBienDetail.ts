@@ -167,14 +167,21 @@ function buildCompRowFromAirroi(
     isSelf: false,
     name: c.name,
     airbnbListingId: c.airbnbListingId ?? null,
-    photoGradient: (thumb % 6) + 1 as 1 | 2 | 3 | 4 | 5 | 6,
+    photoGradient: ((thumb % 5) + 1) as 1 | 2 | 3 | 4 | 5,
     distanceMeters,
     rating: c.rating,
     reviews: c.reviews,
     bedrooms: c.bedrooms,
+    beds: c.beds ?? null,
+    baths: c.baths ?? null,
+    guests: c.guests ?? null,
+    superhost: c.superhost ?? null,
     adrTtm: c.adrTtmMad,
     occupancyTtm: c.occupancyTtm,
     revenueTtm: c.revenueTtmMad,
+    revparTtm: c.revparTtmMad ?? null,
+    locality: c.locality ?? null,
+    district: c.district ?? null,
   };
 }
 

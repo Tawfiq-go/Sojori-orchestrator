@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import ReservationsSidebar from './ReservationsSidebar';
 import PlanDetail from './PlanDetail';
+import PlansFilterToolbar from './PlansFilterToolbar';
 import type { Reservation, ReservationPlan, PlanListQuery, ResaFilterKey, ResaSortKey } from './types';
 import './planReservation.css';
 
@@ -22,11 +23,15 @@ interface Props {
   listQuery: PlanListQuery;
   searchInput: string;
   listRefreshing?: boolean;
+  listingOptions?: { id: string; name: string }[];
+  listHasMore?: boolean;
   onFiltersChange: (filters: ResaFilterKey[]) => void;
   onSortChange: (sort: ResaSortKey) => void;
   onSearchInputChange: (value: string) => void;
   onSearchSubmit: () => void;
   onClearFilters: () => void;
+  onListingIdChange?: (listingId: string) => void;
+  onPageChange?: (page: number) => void;
 }
 
 export default function PlanReservationPage({
@@ -44,11 +49,15 @@ export default function PlanReservationPage({
   listQuery,
   searchInput,
   listRefreshing = false,
+  listingOptions = [],
+  listHasMore = false,
   onFiltersChange,
   onSortChange,
   onSearchInputChange,
   onSearchSubmit,
   onClearFilters,
+  onListingIdChange,
+  onPageChange,
 }: Props) {
   const [activeId, setActiveId] = useState<string | null>(initialId ?? null);
 
@@ -67,60 +76,77 @@ export default function PlanReservationPage({
 
   return (
     <div className="so-plan-res">
-      <div className="app">
-        <ReservationsSidebar
-          reservations={reservations}
-          totalCount={totalCount}
-          activeId={activeId}
-          onSelect={handleSelect}
-          listTitle={listTitle}
+      <div className="plans-shell">
+        <PlansFilterToolbar
           filters={listQuery.filters}
           sort={listQuery.sort}
-          searchInput={searchInput}
-          appliedSearch={listQuery.search}
-          listRefreshing={listRefreshing}
+          listingId={listQuery.listingId || ''}
+          listingOptions={listingOptions}
           onFiltersChange={onFiltersChange}
           onSortChange={onSortChange}
-          onSearchInputChange={onSearchInputChange}
-          onSearchSubmit={onSearchSubmit}
+          onListingIdChange={onListingIdChange}
           onClearFilters={onClearFilters}
         />
-        {activeResa && activePlan ? (
-          <PlanDetail
-            reservation={activeResa}
-            plan={activePlan}
-            showAdminConfigSource={showAdminConfigSource}
-            ownerDisplayName={
-              activePlan.ownerId && resolveOwnerDisplayName
-                ? resolveOwnerDisplayName(activePlan.ownerId)
-                : undefined
+        <div className="app">
+          <ReservationsSidebar
+            reservations={reservations}
+            totalCount={totalCount}
+            activeId={activeId}
+            onSelect={handleSelect}
+            listTitle={listTitle}
+            searchInput={searchInput}
+            appliedSearch={listQuery.search}
+            listRefreshing={listRefreshing}
+            page={listQuery.page ?? 1}
+            pageSize={100}
+            hasMore={listHasMore}
+            hasActiveQuery={
+              listQuery.filters.length > 0 ||
+              Boolean(listQuery.search.trim()) ||
+              Boolean(listQuery.listingId?.trim())
             }
-            onPlanUpdated={onPlanUpdated}
-            onPlanRefetch={onPlanRefetch}
+            onSearchInputChange={onSearchInputChange}
+            onSearchSubmit={onSearchSubmit}
+            onClearFilters={onClearFilters}
+            onPageChange={onPageChange}
           />
-        ) : (
-          <div
-            className="wrap"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--t3)',
-              padding: 24,
-              textAlign: 'center',
-            }}
-          >
-            {loadingDetail
-              ? 'Chargement du plan…'
-              : activeResa && !activePlan
-                ? 'Plan introuvable ou erreur de chargement.'
-                : initialId && !activeResa
-                  ? showAdminConfigSource
-                    ? "Aucun plan pour cette réservation — vérifiez l'URL ou créez le plan via orchestration."
-                    : 'Aucun plan pour cette réservation.'
-                  : 'Sélectionnez un plan dans la liste.'}
-          </div>
-        )}
+          {activeResa && activePlan ? (
+            <PlanDetail
+              reservation={activeResa}
+              plan={activePlan}
+              showAdminConfigSource={showAdminConfigSource}
+              ownerDisplayName={
+                activePlan.ownerId && resolveOwnerDisplayName
+                  ? resolveOwnerDisplayName(activePlan.ownerId)
+                  : undefined
+              }
+              onPlanUpdated={onPlanUpdated}
+              onPlanRefetch={onPlanRefetch}
+            />
+          ) : (
+            <div
+              className="wrap"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--t3)',
+                padding: 24,
+                textAlign: 'center',
+              }}
+            >
+              {loadingDetail
+                ? 'Chargement du plan…'
+                : activeResa && !activePlan
+                  ? 'Plan introuvable ou erreur de chargement.'
+                  : initialId && !activeResa
+                    ? showAdminConfigSource
+                      ? "Aucun plan pour cette réservation — vérifiez l'URL ou créez le plan via orchestration."
+                      : 'Aucun plan pour cette réservation.'
+                    : 'Sélectionnez un plan dans la liste.'}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

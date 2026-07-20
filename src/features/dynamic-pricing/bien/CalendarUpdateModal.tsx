@@ -13,6 +13,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { ModalScrollColumn } from '../../../components/common/ModalScrollColumn';
 import { T } from '../_tokens';
 import type { ApplyNarrativeDto, PilotApplyReportDto } from '../../../services/dynamicPricingApi';
 
@@ -180,6 +181,72 @@ function RecapCollapse({
   );
 }
 
+function gapsRecapSummary(report: PilotApplyReportDto): string {
+  if (report.gapBlockEnabled === false) return 'Désactivé (§06)';
+  const adj = report.daysGapMinStayAdjusted ?? 0;
+  const sig = report.daysGapSignaled ?? 0;
+  if (adj > 0) return `${adj} j · ${report.gapsFilled} plage(s)`;
+  if (sig > 0) return `${sig} trou(x) 1 n — signalé(s)`;
+  return 'Aucun trou court détecté';
+}
+
+function GapApplyDetails({ report }: { report: PilotApplyReportDto }) {
+  if (report.gapBlockEnabled === false) {
+    return (
+      <Typography sx={{ fontSize: 11.5, color: T.text2, lineHeight: 1.45 }}>
+        Combler les trous est <b>désactivé</b> dans vos réglages (§06 Trous MS).
+      </Typography>
+    );
+  }
+  return (
+    <>
+      <ReportRow
+        label="Min stay abaissé (trous)"
+        value={
+          (report.daysGapMinStayAdjusted ?? 0) > 0
+            ? `${report.daysGapMinStayAdjusted} j · ${report.gapsFilled} plage(s)`
+            : '0'
+        }
+        highlight={(report.daysGapMinStayAdjusted ?? 0) > 0}
+      />
+      {(report.daysGapMinStayReleased ?? 0) > 0 ? (
+        <ReportRow
+          label="Min stay restauré"
+          value={`${report.daysGapMinStayReleased} j`}
+          highlight
+        />
+      ) : null}
+      {report.gapsFilled > 0 && report.gapRanges?.length ? (
+        <Box sx={{ mt: 1 }}>
+          <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text2, mb: 0.5 }}>
+            Plages ajustées
+          </Typography>
+          {report.gapRanges.map((g) => (
+            <Typography
+              key={`${g.startDate}-${g.endDate}`}
+              sx={{ fontSize: 11, color: T.text2, fontFamily: '"Geist Mono", monospace', lineHeight: 1.55 }}
+            >
+              {g.startDate} → {g.endDate} · {g.nights} n. libres → min stay{' '}
+              <b>{g.suggestedMinStay ?? g.nights}</b>
+              {g.minNightsRequired ? ` (était ${g.minNightsRequired})` : ''}
+            </Typography>
+          ))}
+        </Box>
+      ) : null}
+      {(report.daysGapSignaled ?? 0) > 0 ? (
+        <Typography sx={{ fontSize: 11, color: T.text2, mt: 0.75 }}>
+          {report.daysGapSignaled} nuit(s) trou d’1 n — signalées (pas de baisse auto).
+        </Typography>
+      ) : null}
+      {(report.daysGapMinStayAdjusted ?? 0) === 0 && (report.daysGapSignaled ?? 0) === 0 ? (
+        <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.5, lineHeight: 1.45 }}>
+          Aucun trou court entre deux réservations sur les 12 prochains mois (ou trou déjà ≥ min stay).
+        </Typography>
+      ) : null}
+    </>
+  );
+}
+
 function NarrativeRecap({
   narrative,
   report,
@@ -250,7 +317,7 @@ function NarrativeRecap({
           summary={`${narrative.mode.label} (×${narrative.mode.multiplier})`}
         />
 
-        <RecapCollapse n={3} title="Occupation restante (par mois)" summary={occSummary} defaultOpen>
+        <RecapCollapse n={3} title="Occupation restante (par mois)" summary={occSummary}>
           <Stack sx={{ pt: 1, gap: 0.25 }}>
             {narrative.occupancyMonths.length === 0 ? (
               <Typography sx={{ fontSize: 11.5, color: T.text3 }}>Aucun mois dans la grille.</Typography>
@@ -311,16 +378,27 @@ function NarrativeRecap({
           </Stack>
         </RecapCollapse>
 
+        <RecapCollapse
+          n={6}
+          title="Trous entre résas (§06)"
+          summary={gapsRecapSummary(report)}
+          defaultOpen={(report.daysGapMinStayAdjusted ?? 0) > 0}
+        >
+          <Box sx={{ pt: 1 }}>
+            <GapApplyDetails report={report} />
+          </Box>
+        </RecapCollapse>
+
         {narrative.eventsCount > 0 ? (
           <RecapCollapse
-            n={6}
+            n={7}
             title="Events"
             summary={`${narrative.eventsCount} event(s) configuré(s)`}
           />
         ) : null}
 
         <RecapCollapse
-          n={narrative.eventsCount > 0 ? 7 : 6}
+          n={narrative.eventsCount > 0 ? 8 : 7}
           title="Résultat grille"
           summary={`ADR ${report.avgPriceMad.toLocaleString('fr-FR')} MAD · ${report.daysAtFloor} j au plancher`}
         >
@@ -409,18 +487,43 @@ export default function CalendarUpdateModal({
       }}
       maxWidth="sm"
       fullWidth
+      disableScrollLock
       slotProps={{
-        paper: { sx: { borderRadius: 2, maxHeight: '90vh' } },
+        paper: {
+          sx: {
+            borderRadius: 2,
+            height: 'min(84vh, 720px)',
+            maxHeight: 'calc(100vh - 32px) !important',
+            overflow: 'hidden !important',
+            display: 'flex !important',
+            flexDirection: 'column !important',
+            m: '16px auto',
+          },
+        },
       }}
     >
-      <Stack direction="row" sx={{ alignItems: 'center', p: 2, borderBottom: `1px solid ${T.border}` }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr auto',
+          height: '100%',
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
+      <Stack direction="row" sx={{ alignItems: 'center', p: 2, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
         <Typography sx={{ fontWeight: 800, flex: 1 }}>Mise à jour calendrier</Typography>
         {phase !== 'running' ? (
           <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
         ) : null}
       </Stack>
 
-      <Box sx={{ p: 2.5, overflowY: 'auto', maxHeight: 'calc(90vh - 140px)' }}>
+      <ModalScrollColumn
+        active={open}
+        className="calendar-update-modal-scroll"
+        wrapperSx={{ minHeight: 0 }}
+        innerSx={{ p: 2.5 }}
+      >
         <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 0.5 }}>{listingName}</Typography>
 
         {phase === 'confirm' && (
@@ -483,19 +586,23 @@ export default function CalendarUpdateModal({
           const updated =
             report.daysCalendarDatesUpdated ?? report.daysChanged ?? 0;
           const sent = report.daysPayloadPriceDays ?? report.daysPricePushed ?? 0;
-          const alreadyAligned = updated === 0 && sent > 0;
+          const gridUnchanged = updated === 0 && sent > 0;
           return (
           <>
             <Stack direction="row" sx={{ gap: 1, alignItems: 'center', mb: 0.5 }}>
               <CheckCircleIcon sx={{ color: T.success, fontSize: 24 }} />
               <Typography sx={{ fontSize: 14, fontWeight: 800, color: T.success }}>
-                {alreadyAligned ? 'Calendrier déjà à jour' : 'Calendrier mis à jour'}
+                {gridUnchanged && !report.ruPublishQueued
+                  ? 'Calendrier déjà à jour'
+                  : 'Calendrier mis à jour'}
               </Typography>
             </Stack>
             <Typography sx={{ fontSize: 12, color: T.text2, mb: 1.5, lineHeight: 1.45 }}>
-              {alreadyAligned
-                ? `Les ${sent} nuits du pilote sont déjà en place — aucun nouveau prix à écrire, pas de republication canaux.`
-                : `${updated} nuit${updated > 1 ? 's' : ''} avec un prix (ou min stay) différent ont été écrites.`}
+              {gridUnchanged
+                ? report.ruPublishQueued
+                  ? `Prix déjà en place sur ${sent} nuits — republication Airbnb / Booking lancée sur la plage calendrier.`
+                  : `Les ${sent} nuits du pilote sont déjà en place dans Sojori.`
+                : `${updated} nuit${updated > 1 ? 's' : ''} avec un prix ou min stay modifié${report.ruPublishQueued ? ' · canaux en file' : ''}.`}
             </Typography>
             <Box sx={{ p: 1.5, borderRadius: 1.25, bgcolor: T.goldTint, border: `1px solid ${T.gold}`, mb: 1.5 }}>
               <ReportRow
@@ -505,18 +612,13 @@ export default function CalendarUpdateModal({
               <ReportRow
                 label="Nuits réellement modifiées"
                 value={`${updated} j`}
-                highlight
+                highlight={updated > 0}
               />
-              {!alreadyAligned ? (
-                <ReportRow
-                  label="Publication canaux"
-                  value={report.ruPublishQueued ? 'En file ✓' : '—'}
-                />
-              ) : (
-                <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.75, lineHeight: 1.45 }}>
-                  Airbnb / Booking ne sont rappelés que si un prix change vraiment.
-                </Typography>
-              )}
+              <ReportRow
+                label="Publication canaux"
+                value={report.ruPublishQueued ? 'En file ✓' : '—'}
+                highlight={report.ruPublishQueued}
+              />
               {(report.daysSkippedReserved ?? 0) > 0 && (
                 <ReportRow
                   label="Nuits réservées (protégées)"
@@ -524,55 +626,20 @@ export default function CalendarUpdateModal({
                 />
               )}
             </Box>
-            {!alreadyAligned ? (
             <Box
               sx={{
                 p: 1.5,
                 mb: 1.5,
                 borderRadius: 1.25,
-                bgcolor: report.gapsFilled > 0 ? T.warningTint : T.successTint,
-                border: `1px solid ${report.gapsFilled > 0 ? T.warning : T.success}`,
+                bgcolor: (report.daysGapMinStayAdjusted ?? 0) > 0 ? T.warningTint : T.bg2,
+                border: `1px solid ${(report.daysGapMinStayAdjusted ?? 0) > 0 ? T.warning : T.border}`,
               }}
             >
-              <ReportRow
-                label="Trous — min stay abaissé"
-                value={
-                  (report.daysGapMinStayAdjusted ?? 0) > 0
-                    ? `${report.daysGapMinStayAdjusted} j · ${report.gapsFilled} plage(s)`
-                    : '0'
-                }
-                highlight={(report.daysGapMinStayAdjusted ?? 0) > 0}
-              />
-              {(report.daysGapMinStayReleased ?? 0) > 0 && (
-                <ReportRow
-                  label="Trous libérés (min stay restauré)"
-                  value={`${report.daysGapMinStayReleased} j`}
-                  highlight
-                />
-              )}
-              {report.gapsFilled > 0 && report.gapRanges?.length ? (
-                <Box sx={{ mt: 1 }}>
-                  <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.warning, mb: 0.5 }}>
-                    Min stay temporaire :
-                  </Typography>
-                  {report.gapRanges.map((g) => (
-                    <Typography
-                      key={`${g.startDate}-${g.endDate}`}
-                      sx={{ fontSize: 11, color: T.text2, fontFamily: '"Geist Mono", monospace' }}
-                    >
-                      {g.startDate} → {g.endDate} : {g.nights} n. libres → min stay{' '}
-                      <b>{g.suggestedMinStay ?? g.nights}</b>
-                    </Typography>
-                  ))}
-                </Box>
-              ) : null}
-              {(report.daysGapMinStayAdjusted ?? 0) === 0 && (report.daysGapSignaled ?? 0) === 0 && (
-                <Typography sx={{ fontSize: 11, color: T.success, fontWeight: 600, mt: 0.5 }}>
-                  Aucun trou court entre deux réservations.
-                </Typography>
-              )}
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.text2, mb: 0.75 }}>
+                Trous entre réservations · {gapsRecapSummary(report)}
+              </Typography>
+              <GapApplyDetails report={report} />
             </Box>
-            ) : null}
             <Typography sx={{ fontSize: 10.5, fontWeight: 800, color: T.text3, textTransform: 'uppercase', mb: 0.75 }}>
               Ce qui s’est passé
             </Typography>
@@ -600,9 +667,9 @@ export default function CalendarUpdateModal({
           </>
           );
         })()}
-      </Box>
+      </ModalScrollColumn>
 
-      <Stack direction="row" sx={{ justifyContent: 'flex-end', gap: 1, p: 2, borderTop: `1px solid ${T.border}` }}>
+      <Stack direction="row" sx={{ justifyContent: 'flex-end', gap: 1, p: 2, borderTop: `1px solid ${T.border}`, flexShrink: 0 }}>
         {phase === 'confirm' && (
           <>
             <Button onClick={onClose} sx={{ textTransform: 'none' }}>Annuler</Button>
@@ -632,6 +699,7 @@ export default function CalendarUpdateModal({
           </Button>
         )}
       </Stack>
+      </Box>
     </Dialog>
   );
 }

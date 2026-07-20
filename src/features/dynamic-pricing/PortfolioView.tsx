@@ -34,6 +34,19 @@ import {
   rowMatchesTableTab,
   type DataGapReason,
 } from './listingFilters';
+import {
+  estimationPipelineMeta,
+  compsPipelineMeta,
+  pilotBaseDisplay,
+  pilotEventsDisplay,
+  pilotGapBlockDisplay,
+  pilotLastMinuteDisplay,
+  pilotModeDisplay,
+  pilotOccEstimateDisplay,
+  pilotOccupancyBandsDisplay,
+  pilotScopeDisplay,
+} from './pilotPortfolioHelpers';
+import { PILOT_PORTFOLIO_COLUMNS } from './pilotPortfolioColumns';
 
 export type PortfolioTableTab = 'operational' | 'audit' | 'todo';
 
@@ -452,17 +465,17 @@ function PortfolioTable({
   onPatchPilotConfig?: (listingId: string, partial: Partial<PilotPricingConfigDto>) => Promise<void>;
 }) {
   const bulkSelectEnabled = Boolean(cityScope);
-  const [showAllSnapshotKpis, setShowAllSnapshotKpis] = useState(false);
+  const [showAirbnbData, setShowAirbnbData] = useState(false);
   const snapshotCols = useMemo(
-    () => getOperationalSnapshotColumns(showAllSnapshotKpis),
-    [showAllSnapshotKpis],
+    () => (showAirbnbData ? getOperationalSnapshotColumns(false) : []),
+    [showAirbnbData],
   );
   const tabNote =
     tableTab === 'audit'
-      ? 'Colonnes brutes estimation marché'
+      ? 'Colonnes brutes estimation marché (snapshot AirROI)'
       : tableTab === 'todo'
         ? 'Annonce ou estimation manquante'
-        : 'Statut par bien';
+        : 'Réglages pilote §02–§07 · activer « Data Airbnb » pour KPIs snapshot · onglet Audit pour le brut complet';
 
   return (
     <Box sx={{
@@ -544,11 +557,11 @@ function PortfolioTable({
           </FilterChip>
           {tableTab === 'operational' ? (
             <FilterChip
-              on={showAllSnapshotKpis}
-              onClick={() => setShowAllSnapshotKpis((v) => !v)}
+              on={showAirbnbData}
+              onClick={() => setShowAirbnbData((v) => !v)}
               activeVariant="gold"
             >
-              Plus de colonnes
+              + Data Airbnb
             </FilterChip>
           ) : null}
           <FilterChip
@@ -622,54 +635,48 @@ function PortfolioTable({
                 ) : null}
                 <Box component="th" sx={tableHeadSx(T.text3)}>Bien</Box>
                 <Box component="th" sx={tableHeadSx(T.text3)}>Statut</Box>
-                <Box component="th" sx={tableHeadSx(T.text3)}>Canal</Box>
                 <SnapshotHeaderCell
-                  label="Estimation"
-                  hintTitle="Estimation prix de marché"
-                  hintBody="Date de la dernière estimation prix de marché pour ce bien."
+                  label="Airbnb"
+                  hintTitle="Canal Airbnb"
+                  hintBody="Lien channel manager Sojori ↔ annonce Airbnb. Survol « Airbnb OK » pour voir l’identifiant technique (listing ID)."
                 />
                 <SnapshotHeaderCell
-                  label="Calendrier"
-                  hintTitle="Calendrier · mise à jour"
-                  hintBody="Dernière application des prix au calendrier Sojori (manuelle ou nocturne)."
+                  label="MAJ estim."
+                  hintTitle="Dernière estimation marché"
+                  hintBody="Date du dernier snapshot / estimate AirROI (prix de marché, comparables, revenue estimate)."
                 />
                 <SnapshotHeaderCell
-                  label="Publié OTA"
-                  hintTitle="Canaux · publication"
-                  hintBody="Dernier envoi réussi du calendrier vers les canaux (Airbnb, Booking…)."
+                  label="MAJ conc."
+                  hintTitle="Dernière concurrence"
+                  hintBody="Date du dernier GET /listings/comparables (~25 annonces). Cron lundi 04:00 UTC si AUTO concurrence activé."
                 />
+                <SnapshotHeaderCell
+                  label="MAJ cal."
+                  hintTitle="Dernière mise à jour calendrier"
+                  hintBody="Apply pilote → calendrier Sojori + publication OTA. ⚠ si plus vieille que l’estimation."
+                />
+                <SnapshotHeaderCell
+                  label="Sojori AI"
+                  hintTitle="Sync automatique"
+                  hintBody="ON = cron + refresh snapshot marché. OFF = réglages visibles, pas de sync auto."
+                />
+                {PILOT_PORTFOLIO_COLUMNS.map((col) => (
+                  <SnapshotHeaderCell
+                    key={col.id}
+                    label={col.label}
+                    hintTitle={col.hintTitle}
+                    hintBody={col.hintBody}
+                    gold
+                  />
+                ))}
                 {snapshotCols.map((col) => (
                   <SnapshotHeaderCell
                     key={col.id}
                     label={col.label}
                     hintTitle={col.hintTitle ?? col.label}
-                    hintBody={col.hintBody ?? 'Champ brut du snapshot marché (USD sauf occupation en %).'}
-                    gold
+                    hintBody={col.hintBody ?? 'Snapshot marché AirROI (brut).'}
                   />
                 ))}
-                <SnapshotHeaderCell
-                  label="Prix min"
-                  hintTitle="Prix plancher pilote"
-                  hintBody="floorNormal · même champ que §03 fiche bien. Éditable ici."
-                  gold
-                />
-                <SnapshotHeaderCell
-                  label="Prix max"
-                  hintTitle="Prix plafond pilote"
-                  hintBody="ceiling · envoyé au mixEngine et au calendrier après Apply."
-                  gold
-                />
-                <SnapshotHeaderCell
-                  label="Min stay"
-                  hintTitle="Séjour minimum"
-                  hintBody="minStayPlancher (+ delta en fiche). Base marché par jour non désactivable."
-                  gold
-                />
-                <SnapshotHeaderCell
-                  label="Sojori AI"
-                  hintTitle="Sync automatique"
-                  hintBody="ON = cron + refresh snapshot marché. OFF = tout reste visible, pas de sync auto."
-                />
               </Box>
             </Box>
             <Box component="tbody">
@@ -893,12 +900,7 @@ function PortfolioOperationalRow({
   // Fraîcheur pipeline : une étape plus vieille que la précédente = à re-propager
   const snapT = row.airroiSnapshotAt ? new Date(row.airroiSnapshotAt).getTime() : 0;
   const calT = row.calendarAppliedAt ? new Date(row.calendarAppliedAt).getTime() : 0;
-  const otaT = row.otaPushedAt ? new Date(row.otaPushedAt).getTime() : 0;
   const calStale = snapT > 0 && calT > 0 && calT < snapT;
-  // OTA « en retard » seulement si le dernier apply a réellement modifié des jours :
-  // un apply à 0 changement ne publie rien (rien à envoyer), OTA reste en phase.
-  const otaStale =
-    calT > 0 && otaT > 0 && otaT < calT && (row.lastApplyDaysChanged ?? 1) > 0;
 
   return (
     <Box component="tr" sx={{
@@ -923,22 +925,32 @@ function PortfolioOperationalRow({
       <Box component="td" sx={tableCellSx}>
         <AirbnbConnectCell listing={row.listing} />
       </Box>
-      <RawCell value={snapLabel} muted={!row.hasAirroiSnapshot} />
-      <RawCell
+      <PipelineDateCell
+        value={snapLabel}
+        muted={!row.hasAirroiSnapshot && !row.hasRevenueEstimate}
+        sub={estimationPipelineMeta(row)}
+      />
+      <PipelineDateCell
+        value={fmtPipelineDate(row.pilotConfig?.lastCompsAt ?? null)}
+        muted={!row.pilotConfig?.lastCompsAt}
+        sub={compsPipelineMeta(row)}
+      />
+      <PipelineDateCell
         value={fmtPipelineDate(row.calendarAppliedAt) + (calStale ? ' ⚠' : '')}
         muted={!row.calendarAppliedAt}
+        warn={calStale}
+        sub={calStale ? 'Estim. plus récente' : undefined}
       />
-      <RawCell
-        value={fmtPipelineDate(row.otaPushedAt) + (otaStale ? ' ⚠' : '')}
-        muted={!row.otaPushedAt}
-      />
-      {snapshotCols.map((col) => {
-        if (!col.field) return null;
-        const v = formatAirroiRawValue(col.field, row.airroiRaw);
-        return (
-          <RawCell key={col.id} value={v} highlight={!row.hasAirroiSnapshot} />
-        );
-      })}
+      <Box component="td" sx={rawCellTdSx()}>
+        <AiSyncToggle
+          enabled={row.aiEnabled}
+          disabled={!onPatchPilotConfig}
+          applyMinStay={row.pilotConfig?.applyMinStay !== false}
+          onToggle={(v) => void onPatchPilotConfig?.(row.listing._id, { enabled: v })}
+        />
+      </Box>
+      <PilotScopeCell row={row} />
+      <PilotTextCell {...pilotBaseDisplay(row)} />
       <PilotNumberCell
         listingId={row.listing._id}
         value={row.pilotConfig?.floorNormal ?? row.bounds?.floor ?? 900}
@@ -951,6 +963,11 @@ function PortfolioOperationalRow({
         disabled={!onPatchPilotConfig}
         onCommit={(v) => onPatchPilotConfig?.(row.listing._id, { ceiling: v })}
       />
+      <PilotModeCell row={row} />
+      <RawCell value={pilotOccEstimateDisplay(row)} muted={!row.estimateSummary?.occupancyP50} />
+      <PilotRuleCell {...pilotOccupancyBandsDisplay(row)} />
+      <PilotRuleCell {...pilotLastMinuteDisplay(row)} />
+      <PilotRuleCell {...pilotGapBlockDisplay(row)} />
       <PilotNumberCell
         listingId={row.listing._id}
         value={row.pilotConfig?.minStayPlancher ?? 1}
@@ -959,17 +976,17 @@ function PortfolioOperationalRow({
         max={14}
         compact
         inactive={row.aiEnabled && row.pilotConfig?.applyMinStay === false}
-        inactiveHint="Min stay non sync"
+        inactiveHint="MS non sync"
         onCommit={(v) => onPatchPilotConfig?.(row.listing._id, { minStayPlancher: v })}
       />
-      <Box component="td" sx={rawCellTdSx()}>
-        <AiSyncToggle
-          enabled={row.aiEnabled}
-          disabled={!onPatchPilotConfig}
-          applyMinStay={row.pilotConfig?.applyMinStay !== false}
-          onToggle={(v) => void onPatchPilotConfig?.(row.listing._id, { enabled: v })}
-        />
-      </Box>
+      <PilotEventsCell row={row} />
+      {snapshotCols.map((col) => {
+        if (!col.field) return null;
+        const v = formatAirroiRawValue(col.field, row.airroiRaw);
+        return (
+          <RawCell key={col.id} value={v} highlight={!row.hasAirroiSnapshot} />
+        );
+      })}
     </Box>
   );
 }
@@ -1218,31 +1235,153 @@ function RawCell({ value, muted, highlight }: { value: string; muted?: boolean; 
   );
 }
 
+function PipelineDateCell({
+  value,
+  muted,
+  warn,
+  sub,
+}: {
+  value: string;
+  muted?: boolean;
+  warn?: boolean;
+  sub?: string | null;
+}) {
+  return (
+    <Box component="td" sx={{
+      ...tableCellSx,
+      minWidth: 108,
+      verticalAlign: 'top',
+    }}>
+      <Box sx={{
+        ...rawMonoCellSx,
+        color: warn ? T.warning : muted ? T.text3 : T.text,
+        fontWeight: warn ? 800 : 600,
+      }}>
+        {value}
+      </Box>
+      {sub ? (
+        <Box sx={{ fontSize: 9, color: T.text4, fontWeight: 700, mt: 0.25, lineHeight: 1.2 }}>
+          {sub}
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+function PilotModeCell({ row }: { row: PortfolioRow }) {
+  const { kind, label, multiplier } = pilotModeDisplay(row);
+  return (
+    <Box component="td" sx={{ ...tableCellSx, minWidth: 88 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+        <ModeChip kind={kind}>{label}</ModeChip>
+        {multiplier !== '—' ? (
+          <Box sx={{ ...rawMonoCellSx, fontSize: 9.5, color: T.text3 }}>{multiplier}</Box>
+        ) : null}
+      </Stack>
+    </Box>
+  );
+}
+
+function PilotTextCell({ label, detail }: { label: string; detail?: string }) {
+  return (
+    <Box component="td" sx={tableCellSx}>
+      <Box sx={{ fontSize: 11, fontWeight: 700, color: T.text, whiteSpace: 'nowrap' }}>{label}</Box>
+      {detail ? (
+        <Box sx={{ ...rawMonoCellSx, fontSize: 9.5, color: T.text3, mt: 0.25 }}>{detail}</Box>
+      ) : null}
+    </Box>
+  );
+}
+
+function PilotScopeCell({ row }: { row: PortfolioRow }) {
+  const { label, muted } = pilotScopeDisplay(row);
+  return (
+    <Box component="td" sx={tableCellSx}>
+      <Box sx={{
+        fontSize: 10.5,
+        fontWeight: 800,
+        fontFamily: '"Geist Mono", monospace',
+        color: muted ? T.text4 : row.aiEnabled ? T.success : T.text3,
+        whiteSpace: 'nowrap',
+      }}>
+        {label}
+      </Box>
+    </Box>
+  );
+}
+
+function PilotRuleCell({ enabled, summary }: { enabled: boolean; summary: string }) {
+  return (
+    <Box component="td" sx={{ ...tableCellSx, minWidth: 108, maxWidth: 160 }}>
+      <Box sx={{
+        ...rawMonoCellSx,
+        fontSize: 9.5,
+        lineHeight: 1.35,
+        color: enabled ? T.text : T.text4,
+        fontWeight: enabled ? 700 : 800,
+        whiteSpace: 'normal',
+        wordBreak: 'break-word',
+      }}>
+        {summary}
+      </Box>
+    </Box>
+  );
+}
+
+function PilotEventsCell({ row }: { row: PortfolioRow }) {
+  const { label, active } = pilotEventsDisplay(row);
+  return (
+    <Box component="td" sx={tableCellSx}>
+      <Box sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 22,
+        px: 0.75,
+        py: 0.25,
+        borderRadius: 999,
+        fontFamily: '"Geist Mono", monospace',
+        fontSize: 10,
+        fontWeight: 800,
+        bgcolor: active ? T.successTint : T.bg3,
+        color: active ? T.success : T.text3,
+      }}>
+        {label}
+      </Box>
+    </Box>
+  );
+}
+
 function AirbnbConnectCell({ listing }: { listing: Listing }) {
   const connected = Boolean(listing.airbnbConnected && listing.airbnbListingId);
   const url = listing.airbnbPublicUrl;
   const status = listing.airbnbStatus;
   const markup = listing.airbnbMarkup;
+  const airbnbId = listing.airbnbListingId;
+  const idHint = airbnbId
+    ? `Identifiant annonce Airbnb (channel manager) : ${airbnbId}`
+    : undefined;
   return (
-    <Stack sx={{ gap: 0.375, minWidth: 88 }}>
-      <Box sx={{
-        display: 'inline-flex', alignItems: 'center', gap: 0.5,
-        fontSize: 11, fontWeight: 800,
-        color: connected ? T.success : T.text4,
-      }}>
-        <Box component="span" sx={{
-          width: 7, height: 7, borderRadius: '50%',
-          bgcolor: connected ? T.success : T.text4,
-        }} />
-        {connected ? 'Connecté' : 'Non connecté'}
-      </Box>
-      {connected && listing.airbnbListingId && (
-        <Box sx={{ fontSize: 9.5, fontFamily: '"Geist Mono", monospace', color: T.text3, fontWeight: 600 }}>
-          {listing.airbnbListingId}
+    <Stack sx={{ gap: 0.375, minWidth: 72, maxWidth: 120 }}>
+      <Tooltip title={idHint ?? 'Annonce non liée à un canal'} arrow placement="top">
+        <Box sx={{
+          display: 'inline-flex', alignItems: 'center', gap: 0.5,
+          fontSize: 11, fontWeight: 800,
+          color: connected ? T.success : T.text4,
+          cursor: idHint ? 'help' : 'default',
+          width: 'fit-content',
+        }}>
+          <Box component="span" sx={{
+            width: 7, height: 7, borderRadius: '50%',
+            bgcolor: connected ? T.success : T.text4,
+          }} />
+          {connected ? 'Airbnb OK' : 'Hors canal'}
         </Box>
-      )}
+      </Tooltip>
       {connected && status && (
-        <Box sx={{ fontSize: 9.5, color: T.text3 }}>{status}{markup != null ? ` · ${markup}%` : ''}</Box>
+        <Box sx={{ fontSize: 9.5, color: T.text3, lineHeight: 1.25 }}>
+          {status}{markup != null ? ` · ${markup}%` : ''}
+        </Box>
       )}
       {connected && url && (
         <Box component="a" href={url} target="_blank" rel="noopener noreferrer"

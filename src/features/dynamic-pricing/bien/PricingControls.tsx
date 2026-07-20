@@ -108,6 +108,8 @@ export interface PricingControlsProps {
   hasBoundsProd?: boolean;
   /** Comps vs estimate — évite la confusion 500–800 MAD */
   boundsContextHint?: string;
+  /** Owner/PM : masquer la bannière cascade pédagogique */
+  compactGuide?: boolean;
 }
 
 const PRESET_META: Record<
@@ -335,6 +337,7 @@ export default function PricingControls(props: PricingControlsProps) {
     onActiveModeChange, onAddCustomMode, onUpdateCustomMode, onDeleteCustomMode,
     onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
     estimatedRevenue, estimatedRevenueLiftPct, boundsContextHint,
+    compactGuide = false,
   } = props;
 
   const sortedModes = [...pricingModes]
@@ -370,7 +373,8 @@ export default function PricingControls(props: PricingControlsProps) {
         ...DP_LAYOUT_SX,
       }}
     >
-      {/* Bannière */}
+      {/* Bannière pédagogique (admin) */}
+      {!compactGuide ? (
       <Box
         sx={{
           gridColumn: { md: '1 / -1' },
@@ -464,6 +468,7 @@ export default function PricingControls(props: PricingControlsProps) {
           ))}
         </Stack>
       </Box>
+      ) : null}
 
       {/* ① Base */}
       <Box sx={{ gridColumn: { md: '1 / -1' } }}>

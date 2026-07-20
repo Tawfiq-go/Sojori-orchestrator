@@ -17,20 +17,28 @@ export interface CompRow {
   id: string;
   isSelf?: boolean;
   name: string;
-  /** ID annonce Airbnb (lien externe si présent) */
   airbnbListingId?: string | null;
   photoGradient?: 1 | 2 | 3 | 4 | 5;
-  distanceMeters: number | null;       // null si self
+  distanceMeters: number | null;
   rating: number;
   reviews: number;
   bedrooms: number;
+  beds?: number | null;
+  baths?: number | null;
+  guests?: number | null;
+  superhost?: boolean | null;
   adrTtm: number;
-  occupancyTtm: number;                 // 0-1
+  occupancyTtm: number;
   revenueTtm: number;
+  revparTtm?: number | null;
+  locality?: string | null;
+  district?: string | null;
 }
 
 export interface CompsTableProps {
   rows: CompRow[];
+  /** Colonnes détaillées (quartier, lits, voyageurs, RevPAR…). */
+  showFullDetail?: boolean;
 }
 
 const GRADIENTS = {
@@ -43,7 +51,7 @@ const GRADIENTS = {
 
 type SortKey = 'distance' | 'rating' | 'adr' | 'occupancy' | 'revenue';
 
-export default function CompsTable({ rows }: CompsTableProps) {
+export default function CompsTable({ rows, showFullDetail = false }: CompsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('distance');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -92,10 +100,20 @@ export default function CompsTable({ rows }: CompsTableProps) {
               <Th>Nom</Th>
               <Th sortable active={sortKey === 'distance'} dir={sortDir} onClick={() => toggleSort('distance')}>Distance</Th>
               <Th sortable active={sortKey === 'rating'} dir={sortDir} onClick={() => toggleSort('rating')}>Note</Th>
-              <Th>Chambres</Th>
+              <Th>Ch.</Th>
+              {showFullDetail ? (
+                <>
+                  <Th>Lits</Th>
+                  <Th>Sdb</Th>
+                  <Th>Voyageurs</Th>
+                  <Th>Quartier</Th>
+                  <Th>Superhost</Th>
+                </>
+              ) : null}
               <Th sortable active={sortKey === 'adr'} dir={sortDir} onClick={() => toggleSort('adr')}>ADR TTM</Th>
-              <Th sortable active={sortKey === 'occupancy'} dir={sortDir} onClick={() => toggleSort('occupancy')}>Occupation</Th>
-              <Th sortable active={sortKey === 'revenue'} dir={sortDir} onClick={() => toggleSort('revenue')}>Revenu TTM</Th>
+              <Th sortable active={sortKey === 'occupancy'} dir={sortDir} onClick={() => toggleSort('occupancy')}>Occ.</Th>
+              {showFullDetail ? <Th>RevPAR</Th> : null}
+              <Th sortable active={sortKey === 'revenue'} dir={sortDir} onClick={() => toggleSort('revenue')}>Rev. TTM</Th>
             </Box>
           </Box>
           <Box component="tbody">
@@ -168,8 +186,20 @@ export default function CompsTable({ rows }: CompsTableProps) {
                   </Stack>
                 </Td>
                 <Td mono>{row.bedrooms}</Td>
+                {showFullDetail ? (
+                  <>
+                    <Td mono>{row.beds ?? '—'}</Td>
+                    <Td mono>{row.baths ?? '—'}</Td>
+                    <Td mono>{row.guests ?? '—'}</Td>
+                    <Td>{row.district ?? row.locality ?? '—'}</Td>
+                    <Td mono>{row.superhost == null ? '—' : row.superhost ? 'oui' : 'non'}</Td>
+                  </>
+                ) : null}
                 <Td mono>{row.adrTtm.toLocaleString('fr-FR')}<Unit>MAD</Unit></Td>
                 <Td mono colorIf={row.isSelf ? T.error : undefined}>{Math.round(row.occupancyTtm * 100)}%</Td>
+                {showFullDetail ? (
+                  <Td mono>{row.revparTtm != null ? `${row.revparTtm.toLocaleString('fr-FR')} MAD` : '—'}</Td>
+                ) : null}
                 <Td mono colorIf={row.isSelf ? T.error : undefined}>{row.revenueTtm.toLocaleString('fr-FR')}<Unit>MAD</Unit></Td>
               </Box>
             ))}

@@ -23,9 +23,14 @@ export function nextUtcRun(
   return new Date(from.getTime() + 7 * 24 * 60 * 60 * 1000);
 }
 
-/** Snapshot marché listing : lun + jeu 03:30 UTC (aligné CRON_AUTO_SNAPSHOT). */
+/** Snapshot estimation : lun + jeu 03:30 UTC. */
 export function nextMarketSnapshotRun(from?: Date): Date {
   return nextUtcRun(3, 30, [1, 4], from);
+}
+
+/** Comparables : lundi 04:00 UTC. */
+export function nextCompsRun(from?: Date): Date {
+  return nextUtcRun(4, 0, [1], from);
 }
 
 /** Propagation calendrier + canaux : tous les jours 04:30 UTC. */

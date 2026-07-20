@@ -347,6 +347,9 @@ a:hover {
 .create-reservation-summary-scroll,
 .upload-images-modal-scroll,
 .orch-message-vars-scroll,
+.calendar-update-modal-scroll,
+.calendar-update-inventory-scroll,
+.calendar-audit-modal-scroll,
 .ota-inbox-threads-scroll,
 .ota-inbox-advanced-scroll {
   overflow-y: scroll !important;
@@ -362,6 +365,9 @@ a:hover {
 .create-reservation-summary-scroll::-webkit-scrollbar,
 .upload-images-modal-scroll::-webkit-scrollbar,
 .orch-message-vars-scroll::-webkit-scrollbar,
+.calendar-update-modal-scroll::-webkit-scrollbar,
+.calendar-update-inventory-scroll::-webkit-scrollbar,
+.calendar-audit-modal-scroll::-webkit-scrollbar,
 .ota-inbox-threads-scroll::-webkit-scrollbar,
 .ota-inbox-advanced-scroll::-webkit-scrollbar {
   width: 10px !important;
@@ -372,6 +378,9 @@ a:hover {
 .create-reservation-summary-scroll::-webkit-scrollbar-track,
 .upload-images-modal-scroll::-webkit-scrollbar-track,
 .orch-message-vars-scroll::-webkit-scrollbar-track,
+.calendar-update-modal-scroll::-webkit-scrollbar-track,
+.calendar-update-inventory-scroll::-webkit-scrollbar-track,
+.calendar-audit-modal-scroll::-webkit-scrollbar-track,
 .ota-inbox-threads-scroll::-webkit-scrollbar-track,
 .ota-inbox-advanced-scroll::-webkit-scrollbar-track {
   background: #f0eee8 !important;
@@ -382,6 +391,9 @@ a:hover {
 .create-reservation-summary-scroll::-webkit-scrollbar-thumb,
 .upload-images-modal-scroll::-webkit-scrollbar-thumb,
 .orch-message-vars-scroll::-webkit-scrollbar-thumb,
+.calendar-update-modal-scroll::-webkit-scrollbar-thumb,
+.calendar-update-inventory-scroll::-webkit-scrollbar-thumb,
+.calendar-audit-modal-scroll::-webkit-scrollbar-thumb,
 .ota-inbox-threads-scroll::-webkit-scrollbar-thumb,
 .ota-inbox-advanced-scroll::-webkit-scrollbar-thumb {
   background: #e6b022 !important;

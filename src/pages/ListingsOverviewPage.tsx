@@ -27,6 +27,8 @@ import { listingsService } from '../services/listingsService';
 import { ImportAirbnbModalContainer } from '../components/listing/import-airbnb';
 import { useAuth } from '../hooks/useAuth';
 import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
+import { usePmSimulation } from '../context/PmSimulationContext';
+import { hasAdminAccess } from '../utils/rbac.utils';
 import type { ListingStatus, ListingsStats, ListingSummary } from '../types/listings.types';
 import { ListingQuickEditDialog } from '../components/listing/ListingQuickEditDialog';
 import CatalogueAnnoncesTabs from '../components/catalogue/CatalogueAnnoncesTabs';
@@ -109,11 +111,12 @@ function initialStats(): ListingsStats {
 export function ListingsOverviewPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isActive: simulationActive } = usePmSimulation();
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const isAdmin = isAdminRole(user?.role);
   const canCreate = canCreateListing(user?.role);
-  /** Toujours afficher sur la liste — l’API quick-edit applique les droits côté srv-listing. */
-  const showQuickEdit = true;
+  /** Quick edit (RU IDs, nom…) — admin plateforme hors simulation PM uniquement. */
+  const showQuickEdit = hasAdminAccess(user?.role) && !simulationActive;
   const [searchParams, setSearchParams] = useSearchParams();
   const [listings, setListings] = useState<ListingSummary[]>([]);
   const [stats, setStats] = useState<ListingsStats>(initialStats);

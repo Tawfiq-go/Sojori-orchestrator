@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { planCodeDisplay, reservationRefDisplay } from './buildPlanViewModel';
-import type { Reservation, ResaFilterKey, ResaSortKey, ReservationGroup } from './types';
+import type { Reservation, ReservationGroup } from './types';
 
 interface Props {
   reservations: Reservation[];
@@ -8,32 +8,18 @@ interface Props {
   activeId: string | null;
   onSelect: (id: string) => void;
   listTitle?: string;
-  filters: ResaFilterKey[];
-  sort: ResaSortKey;
   searchInput: string;
   appliedSearch: string;
   listRefreshing?: boolean;
-  onFiltersChange: (filters: ResaFilterKey[]) => void;
-  onSortChange: (sort: ResaSortKey) => void;
+  page?: number;
+  pageSize?: number;
+  hasMore?: boolean;
+  hasActiveQuery?: boolean;
   onSearchInputChange: (value: string) => void;
   onSearchSubmit: () => void;
   onClearFilters: () => void;
+  onPageChange?: (page: number) => void;
 }
-
-const FILTERS: { id: ResaFilterKey; label: string; icon: string }[] = [
-  { id: 'in_progress', label: 'En cours', icon: '⚡' },
-  { id: 'blocked', label: 'Bloquées', icon: '🚨' },
-  { id: 'today', label: "Aujourd'hui", icon: '📅' },
-  { id: 'next7d', label: 'À venir', icon: '7j' },
-  { id: 'done', label: 'Terminées', icon: '✓' },
-];
-
-const SORT_OPTIONS: { id: ResaSortKey; label: string }[] = [
-  { id: 'arrival_asc', label: 'Arrivée la plus proche' },
-  { id: 'urgency', label: "Urgence · bloquées d'abord" },
-  { id: 'recent', label: 'Plus récente' },
-  { id: 'by_listing', label: 'Par listing' },
-];
 
 export default function ReservationsSidebar({
   reservations,
@@ -41,22 +27,18 @@ export default function ReservationsSidebar({
   activeId,
   onSelect,
   listTitle = 'Plans',
-  filters,
-  sort,
   searchInput,
   appliedSearch,
   listRefreshing = false,
-  onFiltersChange,
-  onSortChange,
+  page = 1,
+  pageSize = 100,
+  hasMore = false,
+  hasActiveQuery = false,
   onSearchInputChange,
   onSearchSubmit,
   onClearFilters,
+  onPageChange,
 }: Props) {
-  const toggleFilter = (k: ResaFilterKey) => {
-    const next = filters.includes(k) ? filters.filter((f) => f !== k) : [...filters, k];
-    onFiltersChange(next);
-  };
-
   const groups = useMemo<ReservationGroup[]>(() => {
     return [
       { label: 'Attention requise', icon: '🚨', reservations: reservations.filter((r) => r.status === 'blocked') },
@@ -71,7 +53,8 @@ export default function ReservationsSidebar({
   }, [reservations]);
 
   const totalShown = groups.reduce((sum, g) => sum + g.reservations.length, 0);
-  const hasActiveQuery = filters.length > 0 || Boolean(appliedSearch.trim());
+  const queryActive = hasActiveQuery || Boolean(appliedSearch.trim());
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
 
   return (
     <aside className="sidebar">
@@ -98,42 +81,15 @@ export default function ReservationsSidebar({
         </button>
       </div>
 
-      <div className="sb-filters">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            className={`sb-chip${filters.includes(f.id) ? ' on' : ''}`}
-            onClick={() => toggleFilter(f.id)}
-          >
-            {f.icon} {f.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="sb-sort">
-        <span className="lbl">TRI</span>
-        <select
-          value={sort}
-          onChange={(e) => onSortChange(e.target.value as ResaSortKey)}
-        >
-          {SORT_OPTIONS.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
       <div className={`sb-list${listRefreshing ? ' sb-list--refreshing' : ''}`}>
-        {totalShown === 0 && hasActiveQuery ? (
+        {totalShown === 0 && queryActive ? (
           <div className="sb-empty">
             <p>Aucun plan ne correspond aux filtres.</p>
             <button type="button" className="sb-chip on" onClick={onClearFilters}>
               Réinitialiser
             </button>
           </div>
-        ) : totalShown === 0 && !hasActiveQuery ? (
+        ) : totalShown === 0 && !queryActive ? (
           <div className="sb-empty">
             <p>Aucun plan.</p>
           </div>
@@ -156,6 +112,29 @@ export default function ReservationsSidebar({
           📊 {totalShown} sur {totalCount} plan{totalCount > 1 ? 's' : ''}
           {listRefreshing ? ' · …' : ''}
         </span>
+        {onPageChange && totalCount > pageSize ? (
+          <div className="sb-pager">
+            <button
+              type="button"
+              className="sb-chip"
+              disabled={page <= 1 || listRefreshing}
+              onClick={() => onPageChange(page - 1)}
+            >
+              ←
+            </button>
+            <span className="sb-pager-lbl">
+              {page}/{totalPages}
+            </span>
+            <button
+              type="button"
+              className="sb-chip"
+              disabled={(!hasMore && page >= totalPages) || listRefreshing}
+              onClick={() => onPageChange(page + 1)}
+            >
+              →
+            </button>
+          </div>
+        ) : null}
       </div>
     </aside>
   );

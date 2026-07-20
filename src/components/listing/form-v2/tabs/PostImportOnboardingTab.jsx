@@ -434,7 +434,8 @@ export function PostImportOnboardingTab({ listingId, onFinished }) {
 
   useEffect(() => {
     void loadListingConfig();
-    void loadRows();
+    // Liste seule — pas de sync/retag auto (prod : retag Import uniquement via « Sync après import »).
+    void loadRows(false);
   }, [loadListingConfig, loadRows]);
 
   useEffect(() => {
@@ -498,21 +499,6 @@ export function PostImportOnboardingTab({ listingId, onFinished }) {
 
   return (
     <Stack spacing={2.5}>
-      <Alert
-        severity="info"
-        sx={{
-          borderRadius: 1.5,
-          bgcolor: T.infoTint,
-          color: T.text,
-          border: `1px solid rgba(6,115,179,0.15)`,
-          '& .MuiAlert-icon': { color: T.info },
-        }}
-      >
-        Réservations importées <strong>silencieuses</strong>. Dépliez une ligne pour ajuster services
-        et messages, puis <strong>Lancer</strong>. Le message bienvenue part <strong>+1h</strong> après
-        lancement (ancre = maintenant) — envoi par le cron horaire, pas marqué « sauté ».
-      </Alert>
-
       <Paper
         variant="outlined"
         sx={{
@@ -585,10 +571,11 @@ export function PostImportOnboardingTab({ listingId, onFinished }) {
               variant="outlined"
               disabled={rowsLoading || calendarSyncing}
               onClick={() => loadRows(true)}
+              title="Récupère les résas sans tag Import → pending, puis aligne le calendrier. Action manuelle uniquement."
               sx={{ textTransform: 'none', fontWeight: 600, fontSize: 12 }}
             >
               {calendarSyncing ? <CircularProgress size={14} sx={{ mr: 0.75 }} /> : null}
-              Sync calendrier
+              Sync après import
             </Button>
             <Button
               variant="contained"
