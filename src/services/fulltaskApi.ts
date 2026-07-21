@@ -561,9 +561,25 @@ export type DayPlanResponse = {
   steps: DayPlanStep[];
 };
 
-export async function getDayPlan(date?: string): Promise<DayPlanResponse> {
-  const { data } = await apiClient.get(`${BASE}/plans/day-plan`, { params: date ? { date } : {} });
+export async function getDayPlan(date?: string, ownerId?: string | null): Promise<DayPlanResponse> {
+  const { data } = await apiClient.get(`${BASE}/plans/day-plan`, {
+    params: { ...(date ? { date } : {}), ...(ownerId ? { ownerId } : {}) },
+  });
   return data as DayPlanResponse;
+}
+
+/** Copilot IA du Cockpit — question libre sur le plan de journée (scopé owner côté backend). */
+export async function askDayPlanCopilot(
+  question: string,
+  date?: string,
+  ownerId?: string | null,
+): Promise<{ success: boolean; answer?: string; error?: string }> {
+  const { data } = await apiClient.post(`${BASE}/plans/copilot`, {
+    question,
+    ...(date ? { date } : {}),
+    ...(ownerId ? { ownerId } : {}),
+  });
+  return data as { success: boolean; answer?: string; error?: string };
 }
 
 export type DayPlanWeekDay = {
