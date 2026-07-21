@@ -19,6 +19,7 @@ import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerCon
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import { useFulltaskConfigOwner } from '../hooks/useFulltaskConfigOwner';
 import { useAuth } from '../hooks/useAuth';
+import { usePmSimulation } from '../context/PmSimulationContext';
 import { ORCHESTRATION_ADMIN_OWNER_ID, isOrchestrationAdminOwnerRow } from '../constants/orchestrationAdmin';
 import type { OrchestrationConfigLoadMeta } from '../services/fulltaskApi';
 import { getOwnerListLabel } from '../utils/ownerDisplay.utils';
@@ -37,10 +38,11 @@ function parseOrchestrationSubTab(raw: string | null): OrchestrationSubTab {
 function TasksOrchestrationFulltaskPageInner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+  const { isActive: simulationActive } = usePmSimulation();
   const subTab = parseOrchestrationSubTab(searchParams.get('tab'));
   const showWhatsAppConfigTab = useMemo(
-    () => isPlatformAdminRole(normalizeUserRole(user?.role)),
-    [user?.role],
+    () => isPlatformAdminRole(normalizeUserRole(user?.role)) && !simulationActive,
+    [user?.role, simulationActive],
   );
 
   useEffect(() => {

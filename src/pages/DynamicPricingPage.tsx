@@ -45,7 +45,7 @@ export function DynamicPricingPage() {
   const portfolio = usePortfolio(requestOwnerId || undefined, cityScope, {
     enabled: scopeFetchReady,
   });
-  const bienDetail = useBienDetail(listingId);
+  const bienDetail = useBienDetail(listingId, requestOwnerId || undefined);
   // Express d'abord : l'étude de marché complète est repliée par défaut.
   const [bienAdvancedOpen, setBienAdvancedOpen] = useState<boolean>(
     () => localStorage.getItem('dp-bien-advanced') === '1',
