@@ -107,6 +107,18 @@ function DashboardPageContent() {
     prevSimulatedOwnerRef.current = simulatedOwnerId;
   }, [simulatedOwnerId, showOwnerFilter, resetAdminScope]);
   const [period, setPeriod] = useState<DashboardPeriod>('Mois');
+  /** Mois calendaire choisi (YYYY-MM) — '' = mois en cours. */
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const monthOptions = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      return { key, label: label.charAt(0).toUpperCase() + label.slice(1) };
+    });
+  }, []);
+  const cachePeriodKey = selectedMonth ? `${period}:${selectedMonth}` : period;
   const [properties, setProperties] = useState<DashboardPropertyOption[]>([]);
   const [listingFilterOptions, setListingFilterOptions] = useState<DashboardPropertyOption[]>([]);
   const [listingsLoading, setListingsLoading] = useState(false);
@@ -179,7 +191,7 @@ function DashboardPageContent() {
       const skipSessionCache = refreshKey > 0 || dashboardDataRevision > 0;
       const cacheEntry = skipSessionCache
         ? null
-        : readDashboardSnapshotCacheEntry(period, selectedPropertyIds, requestOwnerId, {
+        : readDashboardSnapshotCacheEntry(cachePeriodKey, selectedPropertyIds, requestOwnerId, {
             includePartial: true,
           });
       const cached = cacheEntry?.snapshot ?? null;
@@ -241,6 +253,7 @@ function DashboardPageContent() {
         setListingsLoading(true);
         const fastQueryBase = {
           period,
+          month: selectedMonth || undefined,
           listingIds: selectedPropertyIds,
           ownerId: requestOwnerId,
           signal: abort.signal,
@@ -325,7 +338,7 @@ function DashboardPageContent() {
           setProperties(loaded.properties.length > 0 ? loaded.properties : dirListings);
           setDashboardReady(true);
           setError(null);
-          writeDashboardSnapshotCache(period, selectedPropertyIds, loaded, requestOwnerId, false);
+          writeDashboardSnapshotCache(cachePeriodKey, selectedPropertyIds, loaded, requestOwnerId, false);
 
           logDashboard('DashboardPage — KPIs affichés (mode fast)', {
             listingIdsHintCount: listingIdsHint.length,
@@ -346,7 +359,7 @@ function DashboardPageContent() {
                 if (cancelled || !merged) return;
                 loaded = merged;
                 setSnapshot(merged);
-                writeDashboardSnapshotCache(period, selectedPropertyIds, merged, requestOwnerId);
+                writeDashboardSnapshotCache(cachePeriodKey, selectedPropertyIds, merged, requestOwnerId);
                 logDashboard('DashboardPage — graphiques fusionnés', {
                   occupancyByProperty: merged.occupancyByProperty.length,
                   sourceDistribution: merged.sourceDistribution.length,
@@ -383,7 +396,7 @@ function DashboardPageContent() {
         setProperties(loaded.properties);
         setError(null);
         setDashboardReady(true);
-        writeDashboardSnapshotCache(period, selectedPropertyIds, loaded, requestOwnerId);
+        writeDashboardSnapshotCache(cachePeriodKey, selectedPropertyIds, loaded, requestOwnerId);
         logDashboard('DashboardPage données prêtes (snapshot full)', {
           properties: loaded.properties.length,
           occupancyByProperty: loaded.occupancyByProperty.length,
@@ -425,7 +438,7 @@ function DashboardPageContent() {
       cancelled = true;
       abort.abort();
     };
-  }, [period, refreshKey, dashboardDataRevision, selectedPropertyIds, authLoading, isAuthenticated, requestOwnerId, ownerScopeUnset, adminScopeMode]);
+  }, [period, selectedMonth, refreshKey, dashboardDataRevision, selectedPropertyIds, authLoading, isAuthenticated, requestOwnerId, ownerScopeUnset, adminScopeMode]);
 
   /** Noms réels des biens — jamais d'ID tronqué (« Listing …d294ee ») face au client. */
   const listingNameById = useMemo(() => {
@@ -511,7 +524,7 @@ function DashboardPageContent() {
     <DashboardWrapper hidePageHeader disableScopeGate>
       <PageHeader
         title="Dashboard principal"
-        count={ownerScopeUnset ? '—' : dashboardReady ? period : 'Chargement…'}
+        count={ownerScopeUnset ? '—' : dashboardReady ? (selectedMonth ? (monthOptions.find((m) => m.key === selectedMonth)?.label ?? selectedMonth) : period) : 'Chargement…'}
       >
         <Button sx={btnGhostSx} disabled={ownerScopeUnset} onClick={() => setRefreshKey((value) => value + 1)}>
           Actualiser
@@ -602,9 +615,20 @@ function DashboardPageContent() {
             key={item}
             label={item}
             active={period === item}
-            onClick={() => setPeriod(item)}
+            onClick={() => {
+              setPeriod(item);
+              setSelectedMonth('');
+            }}
           />
         ))}
+        <MonthPickerChip
+          options={monthOptions}
+          value={selectedMonth}
+          onChange={(key) => {
+            setSelectedMonth(key);
+            if (key) setPeriod('Mois');
+          }}
+        />
         <ListingCheckboxFilter
           listings={listingOptions}
           selectedIds={selectedPropertyIds}
@@ -929,6 +953,46 @@ function DashboardPageContent() {
         </>
       )}
     </DashboardWrapper>
+  );
+}
+
+function MonthPickerChip({
+  options,
+  value,
+  onChange,
+}: {
+  options: Array<{ key: string; label: string }>;
+  value: string;
+  onChange: (key: string) => void;
+}) {
+  return (
+    <Box
+      component="select"
+      value={value}
+      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
+      aria-label="Choisir un mois"
+      sx={{
+        border: '1.5px solid',
+        borderColor: value ? '#F4CF5E' : 'rgba(20,17,10,0.14)',
+        bgcolor: value ? 'rgba(244,207,94,0.14)' : '#fff',
+        color: value ? '#c79b22' : 'inherit',
+        borderRadius: '99px',
+        px: 1.75,
+        py: 0.75,
+        fontSize: 12.5,
+        fontWeight: 700,
+        fontFamily: 'inherit',
+        cursor: 'pointer',
+        appearance: 'none',
+      }}
+    >
+      <option value="">📅 Choisir un mois…</option>
+      {options.map((m) => (
+        <option key={m.key} value={m.key}>
+          {m.label}
+        </option>
+      ))}
+    </Box>
   );
 }
 

@@ -117,6 +117,8 @@ function pickDefinedKpis(
 
 export interface DashboardV1Query {
   period: DashboardPeriod;
+  /** Mois calendaire choisi (YYYY-MM) — remplace la fenêtre de period. */
+  month?: string;
   listingIds?: string[];
   /** IDs du core — débloque revenue-per-l-and-r si listing-directory timeout. */
   listingIdsHint?: string[];
@@ -152,8 +154,12 @@ function snapshotParams(
   ownerId?: string | null,
   listingIdsHint?: string[],
   mode?: DashboardV1Query['mode'],
+  month?: string,
 ) {
   const params: Record<string, string | string[]> = { period };
+  if (month) {
+    params.month = month;
+  }
   if (listingIds.length > 0) {
     params.listingIds = listingIds;
   }
@@ -398,12 +404,12 @@ export async function fetchDashboardListingDirectory(
 
 /** Premier paint — KPI + listes (~6s max côté serveur). */
 export async function fetchDashboardV1Core(query: DashboardV1Query): Promise<DashboardSnapshot> {
-  const { period, listingIds = [], ownerId, signal } = query;
+  const { period, month, listingIds = [], ownerId, signal } = query;
   const t0 = performance.now();
   logDashboard('fetchDashboardV1Core start', { period, listingIds, ownerId });
 
   const url = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/dashboard/v1/snapshot`;
-  const params = snapshotParams(period, listingIds, ownerId);
+  const params = snapshotParams(period, listingIds, ownerId, undefined, undefined, month);
   const response = await apiClient.get(url, {
     params,
     signal,
@@ -439,12 +445,12 @@ export async function fetchDashboardV1Core(query: DashboardV1Query): Promise<Das
 export async function fetchDashboardV1Extras(
   query: DashboardV1Query,
 ): Promise<Partial<DashboardSnapshot> & { kpis?: Partial<DashboardKpis> }> {
-  const { period, listingIds = [], listingIdsHint = [], ownerId, signal } = query;
+  const { period, month, listingIds = [], listingIdsHint = [], ownerId, signal } = query;
   const t0 = performance.now();
   logDashboard('fetchDashboardV1Extras start', { period, listingIds, listingIdsHint, ownerId });
 
   const url = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/dashboard/v1/snapshot/extras`;
-  const params = snapshotParams(period, listingIds, ownerId, listingIdsHint);
+  const params = snapshotParams(period, listingIds, ownerId, listingIdsHint, undefined, month);
   const response = await apiClient.get(url, {
     params,
     signal,
@@ -537,7 +543,7 @@ export async function applyDashboardExtrasProgressively(
 
 /** Snapshot complet — une requête, agrégation serveur (remplace core + extras). */
 export async function fetchDashboardV1Full(query: DashboardV1Query): Promise<DashboardSnapshot> {
-  const { period, listingIds = [], listingIdsHint = [], ownerId, mode = 'complete', signal } = query;
+  const { period, month, listingIds = [], listingIdsHint = [], ownerId, mode = 'complete', signal } = query;
   const t0 = performance.now();
   logDashboard(`fetchDashboardV1Full start (${mode})`, {
     period,
@@ -548,7 +554,7 @@ export async function fetchDashboardV1Full(query: DashboardV1Query): Promise<Das
   });
 
   const url = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/dashboard/v1/snapshot/full`;
-  const params = snapshotParams(period, listingIds, ownerId, listingIdsHint, mode);
+  const params = snapshotParams(period, listingIds, ownerId, listingIdsHint, mode, month);
   const timeout = mode === 'fast' ? 25_000 : mode === 'charts' ? 20_000 : 60_000;
   const response = await apiClient.get(url, {
     params,
