@@ -77,7 +77,7 @@ export default function OrchestrationOpsCards({ ownerId }: { ownerId?: string })
   const load = useCallback(async () => {
     const params = ownerId ? { ownerId } : {};
     void apiClient
-      .get<{ success: boolean; data: DayHealth }>(`${MICROSERVICE_BASE_URL.SRV_FULLTASK}/orchestration/day-health`, { params })
+      .get<{ success: boolean; data: DayHealth }>(`${MICROSERVICE_BASE_URL.SRV_TASK}/orchestration/day-health`, { params })
       .then((r) => setHealth(r.data?.data ?? null))
       .catch(() => setHealth(null));
     void apiClient
@@ -92,7 +92,7 @@ export default function OrchestrationOpsCards({ ownerId }: { ownerId?: string })
     const key = `${planId}:${template}`;
     setRearmed((s) => ({ ...s, [key]: 'busy' }));
     try {
-      await apiClient.post(`${MICROSERVICE_BASE_URL.SRV_FULLTASK}/orchestration/messages/rearm`, { planId, template });
+      await apiClient.post(`${MICROSERVICE_BASE_URL.SRV_TASK}/orchestration/messages/rearm`, { planId, template });
       setRearmed((s) => ({ ...s, [key]: 'done' }));
     } catch {
       setRearmed((s) => ({ ...s, [key]: 'error' }));
