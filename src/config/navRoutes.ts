@@ -21,6 +21,8 @@ export const NAV_TO_ROUTE: Record<string, string> = {
 
   // Orchestration — URLs canoniques /orchestration/* (alignées menu)
   orchestration: '/orchestration/plans',
+  'orch/focus': '/orchestration/focus',
+  'orchestration/focus': '/orchestration/focus',
   'orch/plans': '/orchestration/plans',
   'orch/ops': '/orchestration/ops',
   'orch/day-plan': '/orchestration/day-plan',
