@@ -549,12 +549,16 @@ function checkDetail(s: DayPlanStep): string {
   if (s.state === 'done') return s.time ? `fait · ${s.time}` : 'fait';
   /* Règle métier : le ménage démarre à l'heure de départ client. */
   if (s.kind === 'cleaning') {
-    const when = s.hourUnknown || !s.time ? 'au départ client' : `prévu ${s.time}`;
+    const when =
+      s.hourUnknown || !s.time
+        ? `au départ client${s.estimatedTime ? ` ≈ ${s.estimatedTime}` : ''}`
+        : `prévu ${s.time}`;
     return s.staffName ? when : `non assigné · ${when}`;
   }
   if (s.hourUnknown || (!s.time && (s.kind === 'departure' || s.kind === 'arrival'))) {
+    const est = s.estimatedTime ? `défaut ≈ ${s.estimatedTime}` : 'non choisie';
     const relance = s.nextRelanceAt ? ` · relance ${fmtTime(s.nextRelanceAt)}` : '';
-    return `non choisie — défaut${relance}`;
+    return `${est}${relance}`;
   }
   if (s.registrationPending) return 'enregistrement en attente';
   return s.time ? `prévu ${s.time}` : 'en attente';
@@ -596,9 +600,15 @@ function FlightRow({
   const gapPct = seg(endM, arrM) * 100;
 
   const status = chain.status;
-  /* Heures non choisies : la marge est calculée sur des défauts — pas une vraie alerte. */
+  /* Heures non choisies : marge estimée sur les défauts (départ 11:00 / arrivée 15:00). */
   const statusChip = chain.hoursUnknown
-    ? { cls: 'tight', txt: '⏳ heures à confirmer' }
+    ? {
+        cls: chain.slackMinutes < 0 ? 'broken' : 'tight',
+        txt:
+          chain.slackMinutes < 0
+            ? `⏳ dépassement est. ${fmtDuration(chain.slackMinutes)} · à confirmer`
+            : `⏳ marge est. ${fmtDuration(chain.slackMinutes)} · à confirmer`,
+      }
     : status === 'broken'
       ? { cls: 'broken', txt: `⚠ ${fmtDuration(chain.slackMinutes)} de dépassement` }
       : status === 'tight'
@@ -620,7 +630,13 @@ function FlightRow({
 
       <div className="ck-strip">
         <div className="ck-node">
-          <span className="ck-node-time">{fmtTime(departure?.time)}</span>
+          <span className="ck-node-time">
+            {departure?.time
+              ? fmtTime(departure.time)
+              : departure?.estimatedTime
+                ? `≈ ${departure.estimatedTime}`
+                : '—:—'}
+          </span>
           <span className={`ck-node-dot dep ${departure?.state === 'done' ? 'done' : ''}`} />
           <span className="ck-node-label">🛫 {chain.departingGuestName || 'Départ'}</span>
         </div>
@@ -630,7 +646,7 @@ function FlightRow({
           <span className="ck-seg-label">
             🧹 {cleaning?.staffName || <em>à assigner</em>}
             {chain.hoursUnknown
-              ? ` · au départ client (${fmtDuration(chain.cleaningDurationMinutes)})`
+              ? ` · au départ client · ≈ fin ${fmtTime(chain.expectedCleaningEnd)}`
               : ` · fin ${fmtTime(chain.expectedCleaningEnd)}`}
           </span>
         </div>
@@ -640,7 +656,13 @@ function FlightRow({
         </div>
 
         <div className="ck-node">
-          <span className="ck-node-time">{fmtTime(arrival?.time)}</span>
+          <span className="ck-node-time">
+            {arrival?.time
+              ? fmtTime(arrival.time)
+              : arrival?.estimatedTime
+                ? `≈ ${arrival.estimatedTime}`
+                : '—:—'}
+          </span>
           <span className={`ck-node-dot arr ${arrival?.state === 'done' ? 'done' : ''}`} />
           <span className="ck-node-label">🛬 {chain.arrivingGuestName || 'Arrivée'}</span>
         </div>

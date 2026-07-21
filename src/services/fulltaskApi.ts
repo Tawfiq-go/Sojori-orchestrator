@@ -516,6 +516,8 @@ export type DayPlanStep = {
   staffName?: string | null;
   registrationPending?: boolean;
   state: 'done' | 'pending' | 'attention';
+  /** Heure par défaut estimée ('HH:mm' — départ 11:00 / arrivée 15:00) quand hourUnknown. */
+  estimatedTime?: string;
   /** Prochaine relance client planifiée (ISO) — quand l'heure n'est pas encore choisie. */
   nextRelanceAt?: string;
   auto: boolean;
