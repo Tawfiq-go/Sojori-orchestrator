@@ -657,6 +657,8 @@ export type ApplyPreviewDiffAppliedDto = {
   clamp?: 'floor' | 'ceiling';
   gapMinStay?: { from: number; to: number };
   gapSignaled?: boolean;
+  /** Base fixe client utilisée (MAD) au lieu de l'estimation marché. */
+  baseFixeMad?: number;
 };
 
 export type ApplyPreviewDiffRowDto = {

@@ -129,7 +129,7 @@ export default function PricePreviewCard({
   const maxPrice = React.useMemo(
     () =>
       rows.reduce(
-        (m, r) => Math.max(m, r.g7ProposedMad ?? 0, r.calendarCurrentMad ?? 0),
+        (m, r) => Math.max(m, r.g7ProposedMad ?? 0, r.calendarCurrentMad ?? 0, r.airroiMad ?? 0),
         0,
       ) || 1,
     [rows],
@@ -248,8 +248,10 @@ export default function PricePreviewCard({
                 const st = rowStatus(r);
                 const sojori = r.g7ProposedMad ?? 0;
                 const cal = r.calendarCurrentMad ?? 0;
+                const marche = r.airroiMad ?? 0;
                 const hSojori = sojori > 0 ? Math.max(14, Math.round((sojori / maxPrice) * 100)) : 0;
                 const hCal = cal > 0 ? Math.max(4, Math.round((cal / maxPrice) * 100)) : 0;
+                const hMarche = marche > 0 ? Math.max(10, Math.round((marche / maxPrice) * 100)) : 0;
                 const rule = ruleForDate(r.date);
                 const title =
                   `${dayLabelFr(r.date)} · ` +
@@ -257,7 +259,7 @@ export default function PricePreviewCard({
                     ? `réservé${cal ? ` · vendu ${fmt(cal)} MAD` : ''}`
                     : st === 'blocked'
                       ? 'bloqué sans résa'
-                      : `Sojori ${fmt(sojori)} MAD${cal ? ` · calendrier ${fmt(cal)} MAD` : ''}`) +
+                      : `marché ${fmt(marche)} → Sojori ${fmt(sojori)} MAD${cal ? ` · calendrier ${fmt(cal)} MAD` : ''}`) +
                   (rule ? ` · ${rule.emoji ?? '🗓'} ${rule.name}` : '');
                 const d = new Date(r.date);
                 const dayNum = d.getDate();
@@ -270,10 +272,23 @@ export default function PricePreviewCard({
                 return (
                   <Box key={r.date} title={title} sx={{ flex: compactBars ? '0 0 14px' : 1, minWidth: compactBars ? 14 : 8, display: 'flex', flexDirection: 'column' }}>
                   <Box sx={{ height: 74, position: 'relative', borderLeft: isMonthStart && i > 0 ? `1.5px solid ${T.borderStrong}` : 'none' }}>
-                    {/* Barre prix Sojori */}
+                    {/* Fond : prix marché (estimation) */}
+                    {st === 'free' && hMarche > 0 ? (
+                      <Box
+                        sx={{
+                          position: 'absolute', left: 0, right: 0, bottom: 0,
+                          height: `${hMarche}%`, borderRadius: '3px 3px 0 0',
+                          bgcolor: T.infoTint, border: `1px solid rgba(6,115,179,0.22)`, borderBottom: 'none',
+                        }}
+                      />
+                    ) : null}
+                    {/* Barre prix Sojori (au premier plan, plus étroite) */}
                     <Box
                       sx={{
-                        position: 'absolute', left: 0, right: 0, bottom: 0,
+                        position: 'absolute',
+                        left: st === 'free' ? '18%' : 0,
+                        right: st === 'free' ? '18%' : 0,
+                        bottom: 0,
                         height: `${st === 'blocked' ? 26 : hSojori}%`,
                         borderRadius: '3px 3px 0 0',
                         background:
@@ -281,18 +296,19 @@ export default function PricePreviewCard({
                             ? T.success
                             : st === 'blocked'
                               ? 'transparent'
-                              : `linear-gradient(180deg, ${T.gold}, ${T.goldSoft})`,
+                              : `linear-gradient(180deg, ${T.gold}, ${T.goldDeep})`,
                         opacity: st === 'reserved' ? 0.65 : 1,
                         border: st === 'blocked' ? `1.5px dashed ${T.borderStrong}` : 'none',
                         borderBottom: 'none',
+                        zIndex: 1,
                       }}
                     />
                     {/* Trait prix calendrier actuel */}
                     {st === 'free' && hCal > 0 ? (
                       <Box
                         sx={{
-                          position: 'absolute', left: '8%', right: '8%', bottom: `${hCal}%`,
-                          height: 2, borderRadius: 1, bgcolor: T.text2, zIndex: 1,
+                          position: 'absolute', left: '6%', right: '6%', bottom: `${hCal}%`,
+                          height: 2, borderRadius: 1, bgcolor: T.text, zIndex: 2,
                         }}
                       />
                     ) : null}
@@ -319,8 +335,12 @@ export default function PricePreviewCard({
           </Box>
           <Stack direction="row" sx={{ gap: 2.25, mt: 1.25, flexWrap: 'wrap', alignItems: 'center' }}>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', background: `linear-gradient(180deg, ${T.gold}, ${T.goldSoft})`, mr: 0.625, verticalAlign: '-1px' }} />
-              barre = prix Sojori
+              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', bgcolor: T.infoTint, border: '1px solid rgba(6,115,179,0.35)', mr: 0.625, verticalAlign: '-1px' }} />
+              fond bleu = prix marché
+            </Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', background: `linear-gradient(180deg, ${T.gold}, ${T.goldDeep})`, mr: 0.625, verticalAlign: '-1px' }} />
+              barre or = prix Sojori (après réglages)
             </Typography>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
               <Box component="span" sx={{ display: 'inline-block', width: 12, height: 2, borderRadius: 1, bgcolor: T.text2, mr: 0.625, verticalAlign: '2px' }} />
@@ -390,6 +410,11 @@ export default function PricePreviewCard({
                           {rule ? (
                             <Box component="span" sx={{ fontSize: 9.5, borderRadius: 999, px: 0.875, py: 0.125, bgcolor: T.warningTint, color: T.warning, ml: 0.75, fontFamily: MONO, whiteSpace: 'nowrap' }}>
                               {rule.emoji ?? '🗓'} {rule.name}
+                            </Box>
+                          ) : null}
+                          {r.applied?.baseFixeMad != null ? (
+                            <Box component="span" title={`Base du calcul : votre prix fixe ${fmt(r.applied.baseFixeMad)} MAD (pas l'estimation marché)`} sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: T.bg3, color: T.text2 }}>
+                              🎯 base {fmt(r.applied.baseFixeMad)}
                             </Box>
                           ) : null}
                           {r.applied?.occupancyPct != null ? (
