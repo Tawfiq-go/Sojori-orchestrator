@@ -2,9 +2,10 @@
 // BienView.tsx — Vue bien-par-bien (7 sections)
 // Tous les composants sont importés depuis ./bien/*
 // ════════════════════════════════════════════════════════════════════
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Stack, Typography, Button } from '@mui/material';
 import { T, KEYFRAMES, DP_LAYOUT_SX } from './_tokens';
+import { BIEN_STICKY_FILTER_TOP_OFFSET } from './bien/BienPageStickyFilters';
 import type { Listing, BienDetailPerformance, MarketData, CompListing, PriceFactor } from './_tokens';
 
 import StatsCards from './bien/StatsCards';
@@ -33,6 +34,7 @@ import CalendarUpdateModal from './bien/CalendarUpdateModal';
 import type { PilotApplyReportDto } from '../../services/dynamicPricingApi';
 import PeriodRulesCard from './bien/PeriodRulesCard';
 import PricePreviewCard from './bien/PricePreviewCard';
+import { usePricePreviewSelectionOptional } from './bien/pricePreviewSelectionContext';
 import { SectionSourceBar, type DataSourceItem } from './DataSourceBadges';
 import DataEmptyPlaceholder from './DataEmptyPlaceholder';
 import { normalizeCityKey } from './cityScope';
@@ -250,12 +252,23 @@ export default function BienView(props: BienViewProps) {
 
   const [calendarUpdateOpen, setCalendarUpdateOpen] = useState(false);
   const [compareComp, setCompareComp] = useState<CompRow | null>(null);
+  const previewSelection = usePricePreviewSelectionOptional();
   // Onglets de la vue avancée : potentiel+calendrier · réglages · marché
   const [advTab, setAdvTab] = useState<'reglages' | 'bien'>('reglages');
   const modeLabel =
     activeModeLabel ??
     pricingModes.find((m) => m.id === activeModeId)?.label ??
     mode;
+
+  useEffect(() => {
+    if (!previewSelection) return;
+    previewSelection.setListingId(listing._id);
+    previewSelection.setOnPreviewReload(onPreviewDiffReload ?? null);
+    return () => {
+      previewSelection.setListingId(null);
+      previewSelection.setOnPreviewReload(null);
+    };
+  }, [listing._id, onPreviewDiffReload, previewSelection]);
 
   const cityLabel = normalizeCityKey(listing.city);
 
@@ -292,7 +305,7 @@ export default function BienView(props: BienViewProps) {
         <>
           {/* ── Bandeau sticky (admin) ── */}
           <Box sx={{
-            position: 'sticky', top: 0, zIndex: 30,
+            position: 'sticky', top: BIEN_STICKY_FILTER_TOP_OFFSET, zIndex: 30,
             bgcolor: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(16px) saturate(180%)',
             borderBottom: `1px solid ${T.border}`,
             px: 0,
@@ -415,7 +428,7 @@ export default function BienView(props: BienViewProps) {
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
           {([
             ['reglages', '⚙️ Réglages pricing'],
-            ['bien', '📊 Analyse et concurrences'],
+            ['bien', isPlatformAdmin ? '📊 Analyse et concurrences' : '📊 Analyse'],
           ] as const).map(([key, label]) => (
             <Box
               key={key}
@@ -485,8 +498,9 @@ export default function BienView(props: BienViewProps) {
           potentialHint={potentialHint}
           ttmHint={ttmHint}
           pacingHint={pacingHint}
+          ownerMode={!isPlatformAdmin}
         />
-        {provenance.hasRevenueEstimate && !hasCompsProd ? (
+        {isPlatformAdmin && provenance.hasRevenueEstimate && !hasCompsProd ? (
           <Box
             sx={{
               mt: 2,
@@ -607,21 +621,6 @@ export default function BienView(props: BienViewProps) {
           error={previewDiffError}
           onReload={onPreviewDiffReload}
           events={events}
-          onApply={
-            applyPrice
-              ? () => {
-                  if (onRunCalendarUpdate) {
-                    setCalendarUpdateOpen(true);
-                  } else {
-                    void onApplyToOps();
-                  }
-                }
-              : undefined
-          }
-          canApply={
-            applyPrice && Boolean(provenance.hasRevenueEstimate || provenance.hasAirroiSnapshot)
-          }
-          applyLoading={pilotApplyLoading}
         />
       </Section>
 
@@ -784,8 +783,8 @@ export default function BienView(props: BienViewProps) {
 
       </>) : null}
 
-      {/* ── Comps listing (pas les tendances ville — celles-ci sont sur le portefeuille) ── */}
-      {advTab === 'bien' ? (<>
+      {/* ── Comps listing (admin) ── */}
+      {advTab === 'bien' && isPlatformAdmin ? (<>
       {(hasCompsMarket || (isPlatformAdmin && selfVsComps && (selfVsComps.adrDeltaPct != null || selfVsComps.occDeltaPts != null))) ? (
       <Section
         num="05"
@@ -922,7 +921,7 @@ export default function BienView(props: BienViewProps) {
         finalMinStay={g7FinalMinStay}
         marketMinNights={g7MarketMinNights}
         loading={g7Loading}
-        comps={g7CompsDay}
+        comps={isPlatformAdmin ? g7CompsDay : []}
         total={g7Day?.recommendedPrice || 0}
         onClose={() => setG7Day(null)}
         onApply={() => setG7Day(null)}

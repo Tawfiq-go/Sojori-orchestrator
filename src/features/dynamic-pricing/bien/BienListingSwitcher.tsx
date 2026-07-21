@@ -40,7 +40,7 @@ export interface BienListingSwitcherProps {
   currentListingId: string;
   cityScope: string | null;
   loading?: boolean;
-  onSelect: (listingId: string, cityKey: string | null) => void;
+  onSelect: (listingId: string) => void;
 }
 
 export default function BienListingSwitcher({
@@ -89,7 +89,7 @@ export default function BienListingSwitcher({
         disabled={loading || options.length === 0}
         onChange={(_, v) => {
           if (!v || v.id === currentListingId) return;
-          onSelect(v.id, v.city !== '—' ? v.city : cityScope);
+          onSelect(v.id);
         }}
         getOptionLabel={(o) => o.name}
         isOptionEqualToValue={(a, b) => a.id === b.id}
@@ -114,7 +114,7 @@ export default function BienListingSwitcher({
         renderOption={(props, option) => {
           const { key, ...rest } = props as typeof props & { key: string };
           const meta = [
-            option.city !== '—' && !cityScope ? option.city : null,
+            option.city !== '—' ? option.city : null,
             option.district,
             option.bedrooms ? `${option.bedrooms} ch.` : null,
           ]

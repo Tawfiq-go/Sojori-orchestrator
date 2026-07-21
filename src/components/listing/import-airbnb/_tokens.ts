@@ -75,7 +75,8 @@ export type StepKey =
   | 'pull_spec' | 'pull_prices' | 'pull_calendar' | 'pull_external'
   | 'build_payload' | 'reupload_images' | 'create_listing'
   | 'wait_inventory' | 'apply_inventory' | 'check'
-  | 'post_import_sync' | 'apply_orchestration';
+  | 'post_import_sync' | 'apply_orchestration'
+  | 'init_pricing_pilot' | 'fetch_market_estimate' | 'fetch_market_comps';
 
 export type StepStatus = 'pending' | 'running' | 'done' | 'error';
 
@@ -112,6 +113,7 @@ export const STEPS_ORDER: StepKey[] = [
   'build_payload', 'reupload_images', 'create_listing',
   'wait_inventory', 'apply_inventory',
   'post_import_sync', 'apply_orchestration', 'check',
+  'init_pricing_pilot', 'fetch_market_estimate', 'fetch_market_comps',
 ];
 
 export const STEPS_LABELS: Record<StepKey, { label: string; sub: string }> = {
@@ -135,6 +137,18 @@ export const STEPS_LABELS: Record<StepKey, { label: string; sub: string }> = {
   apply_orchestration: {
     label: 'Configuration orchestration',
     sub: 'Template propriétaire · capacités, messages plan, concierge (filtré par la ville Sojori choisie).',
+  },
+  init_pricing_pilot: {
+    label: 'Pricing pilote',
+    sub: 'Estimation + concurrence auto activées · sync calendrier désactivée.',
+  },
+  fetch_market_estimate: {
+    label: 'Estimation marché',
+    sub: 'Récupération du prix estimé Sojori pour la fiche dynamic pricing.',
+  },
+  fetch_market_comps: {
+    label: 'Concurrence',
+    sub: 'Récupération des comparables directs (carte + tableau pricing).',
   },
 };
 

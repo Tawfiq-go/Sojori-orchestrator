@@ -2071,8 +2071,6 @@ export default function OrchestrationOverviewPanel({
             kind="manage"
             title={group.label}
             subtitle={`${group.rows.length} flow${group.rows.length > 1 ? 's' : ''}`}
-            enabled
-            onEnabledChange={() => {}}
             open={openGroups.has(group.id)}
             onOpenChange={() => toggleGroup(group.id)}
             badge={
@@ -2326,8 +2324,6 @@ export default function OrchestrationOverviewPanel({
           kind="client"
           title="Messages planifiés"
           subtitle="Envois automatiques (hors menu)"
-          enabled
-          onEnabledChange={() => {}}
           open={openGroups.has('messages')}
           onOpenChange={() => toggleGroup('messages')}
           badge={

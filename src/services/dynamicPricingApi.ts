@@ -669,6 +669,8 @@ export type ApplyPreviewDiffRowDto = {
   baseImportMad: number | null;
   deltaMad: number | null;
   alert: ApplyPreviewDiffAlertDto;
+  /** Prix calendrier manuel (applyManual), même si jour réservé ou bloqué. */
+  applyManual?: boolean;
   pushToCalendar: boolean;
   skipReason?: string;
   applied?: ApplyPreviewDiffAppliedDto;

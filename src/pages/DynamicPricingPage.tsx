@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import { useAuth } from '../hooks/useAuth';
@@ -12,18 +12,15 @@ import {
   DynamicPricingShell,
   PortfolioView,
   T,
-  DP_LAYOUT_SX,
 } from '../features/dynamic-pricing';
 import { useBienDetail } from '../features/dynamic-pricing/hooks/useBienDetail';
 import BienExpressBar from '../features/dynamic-pricing/bien/BienExpressBar';
-import BienListingSwitcher from '../features/dynamic-pricing/bien/BienListingSwitcher';
+import BienPageStickyFilters from '../features/dynamic-pricing/bien/BienPageStickyFilters';
+import { PricePreviewSelectionProvider } from '../features/dynamic-pricing/bien/pricePreviewSelectionContext';
 import { usePortfolio } from '../features/dynamic-pricing/hooks/usePortfolio';
-import DynamicPricingBreadcrumb, {
-  bienHref,
-  portfolioHref,
-} from '../features/dynamic-pricing/DynamicPricingBreadcrumb';
+import { bienHref, portfolioHref } from '../features/dynamic-pricing/DynamicPricingBreadcrumb';
 import { listingMatchesCityScope, normalizeCityKey } from '../features/dynamic-pricing/cityScope';
-import { applyPilotPricing, type PilotPricingConfigDto } from '../services/dynamicPricingApi';
+import { applyPilotPricing } from '../services/dynamicPricingApi';
 
 /**
  * Dynamic Pricing — portefeuille (tableau brut) + fiche bien (dashboard design Claude).
@@ -88,15 +85,7 @@ export function DynamicPricingPage() {
     return cityScope;
   }, [bienDetail?.row?.listing.city, cityScope]);
 
-  /** Fiche bien : URL et portefeuille alignés sur la ville du listing */
-  useEffect(() => {
-    if (!listingId || !bienDetail?.row?.listing.city) return;
-    const key = normalizeCityKey(bienDetail.row.listing.city);
-    if (key === '—' || key === cityScope) return;
-    const next = new URLSearchParams(searchParams);
-    next.set('city', encodeURIComponent(key));
-    setSearchParams(next, { replace: true });
-  }, [listingId, bienDetail?.row?.listing.city, cityScope, searchParams, setSearchParams]);
+  /** Fiche bien : pas de synchro auto ville URL — filtre manuel (Toutes villes / ville). */
 
   const setCityScope = (scope: string | null) => {
     const next = new URLSearchParams(searchParams);
@@ -155,38 +144,18 @@ export function DynamicPricingPage() {
               <Typography sx={{ color: T.text2 }}>Chargement du bien…</Typography>
             </Box>
           ) : listingId && bienDetail?.view ? (
-            <>
-              <Stack
-                direction={{ xs: 'column', md: 'row' }}
-                sx={{
-                  ...DP_LAYOUT_SX,
-                  pt: 1,
-                  pb: 0.5,
-                  alignItems: { xs: 'stretch', md: 'flex-start' },
-                  justifyContent: 'space-between',
-                  gap: 1,
-                }}
-              >
-                <DynamicPricingBreadcrumb
-                  embedded
-                  crumbs={[
-                    { label: 'Pricing', onClick: () => navigate(portfolioHref(cityScope)) },
-                    ...(bienCityLabel
-                      ? [{
-                          label: bienCityLabel,
-                          onClick: () => navigate(portfolioHref(bienCityLabel)),
-                        }]
-                      : []),
-                  ]}
-                />
-                <BienListingSwitcher
-                  rows={portfolio.rows}
-                  currentListingId={listingId}
-                  cityScope={cityScope}
-                  loading={portfolio.loading}
-                  onSelect={(id, city) => navigate(bienHref(id, city ?? cityScope))}
-                />
-              </Stack>
+            <PricePreviewSelectionProvider>
+              <BienPageStickyFilters
+                rows={portfolio.rows}
+                cityScope={cityScope}
+                onCityScopeChange={setCityScope}
+                currentListingId={listingId}
+                loading={portfolio.loading}
+                onSelectListing={(id) => navigate(bienHref(id, cityScope))}
+                onNavigatePortfolio={() => navigate(portfolioHref(cityScope))}
+                onNavigateCityPortfolio={(city) => navigate(portfolioHref(city))}
+                bienCityLabel={bienCityLabel}
+              />
               <BienExpressBar
                 view={bienDetail.view}
                 isPlatformAdmin={isPlatformAdmin}
@@ -206,7 +175,7 @@ export function DynamicPricingPage() {
               {bienAdvancedOpen ? (
                 <BienView {...bienDetail.view} isPlatformAdmin={isPlatformAdmin} />
               ) : null}
-            </>
+            </PricePreviewSelectionProvider>
           ) : portfolio.fetchFailed && !portfolio.loading ? (
             <Box sx={{ px: { xs: 2, md: 3 }, py: 4, maxWidth: 720, mx: 'auto' }}>
               <Typography sx={{ fontSize: 18, fontWeight: 800, color: T.error, mb: 1 }}>
