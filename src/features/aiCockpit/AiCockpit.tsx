@@ -194,6 +194,8 @@ export default function AiCockpit() {
   const [typed, setTyped] = useState('');
   const [assignCtx, setAssignCtx] = useState<{ reservationId: string; taskId: string } | null>(null);
   const [slotCtx, setSlotCtx] = useState<{ reservationId: string; taskId: string; taskType: string } | null>(null);
+  /** Étape dont on inspecte les relances (panneau détail + actions). */
+  const [relanceStep, setRelanceStep] = useState<DayPlanStep | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
 
   const isToday = date === toIso(new Date());
@@ -459,6 +461,8 @@ export default function AiCockpit() {
             index={i}
             targeted={targets.has(f.chain.id)}
             onAction={runAction}
+            planDate={date}
+            onOpenRelances={setRelanceStep}
           />
         ))}
 
@@ -494,6 +498,22 @@ export default function AiCockpit() {
         )}
       </div>
 
+      {relanceStep && (
+        <RelancesPanel
+          step={relanceStep}
+          planDate={date}
+          onClose={() => setRelanceStep(null)}
+          onAction={(s, a) => {
+            setRelanceStep(null);
+            runAction(s, a);
+          }}
+          onReload={() => {
+            setRelanceStep(null);
+            void load();
+          }}
+        />
+      )}
+
       {assignCtx && (
         <PlanManualAssignModal
           open
@@ -513,6 +533,105 @@ export default function AiCockpit() {
           onSubmitted={() => { setSlotCtx(null); void load(); }}
         />
       )}
+    </div>
+  );
+}
+
+/* ─── Panneau relances : historique complet + actions ─── */
+
+const RELANCE_STATUS: Record<string, { ico: string; label: string; cls: string }> = {
+  fait: { ico: '✓', label: 'envoyée', cls: 'done' },
+  en_attente: { ico: '→', label: 'planifiée', cls: 'todo' },
+  en_cours: { ico: '…', label: 'en cours', cls: 'todo' },
+  saute: { ico: '⏭', label: 'sautée', cls: 'skip' },
+  echec: { ico: '✗', label: 'échec', cls: 'fail' },
+};
+
+function RelancesPanel({
+  step,
+  planDate,
+  onClose,
+  onAction,
+  onReload,
+}: {
+  step: DayPlanStep;
+  planDate: string;
+  onClose: () => void;
+  onAction: (s: DayPlanStep, a: DayPlanAction) => void;
+  onReload: () => void;
+}) {
+  const [sending, setSending] = useState(false);
+  const relances = step.relances ?? [];
+  const nextPending = relances.find((r) => r.status === 'en_attente');
+
+  const sendNow = async () => {
+    if (!nextPending || !step.chooseTaskId || sending) return;
+    setSending(true);
+    try {
+      await fulltaskApi.sendPlanRelance(step.reservationId, step.chooseTaskId, nextPending.index);
+      toast.success(`Relance « ${nextPending.label} » envoyée`);
+      onReload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Échec envoi de la relance');
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="ck-relpop-backdrop" onClick={onClose} role="presentation">
+      <div className="ck-relpop" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Relances">
+        <div className="ck-relpop-hdr">
+          <span>🔔 Relances · {checkLabel(step)}</span>
+          <button type="button" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+
+        <div className="ck-relpop-list">
+          {relances.length === 0 && (
+            <div className="ck-relpop-empty">Aucune relance planifiée pour cette étape.</div>
+          )}
+          {relances.map((r) => {
+            const st = RELANCE_STATUS[r.status] ?? RELANCE_STATUS.en_attente;
+            return (
+              <div key={r.index} className={`ck-relpop-item ${st.cls}`}>
+                <span className="ck-relpop-ico" aria-hidden>{st.ico}</span>
+                <span className="ck-relpop-lbl">{r.label}</span>
+                <span className="ck-relpop-when">
+                  {st.label} {fmtWhen(r.status === 'fait' && r.sentAt ? r.sentAt : r.scheduledAt, planDate)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="ck-relpop-actions">
+          {nextPending && step.chooseTaskId && (
+            <button type="button" className="primary" disabled={sending} onClick={() => void sendNow()}>
+              {sending ? 'Envoi…' : '📨 Relancer maintenant'}
+            </button>
+          )}
+          {step.chooseTaskId && (
+            <button
+              type="button"
+              onClick={() =>
+                onAction(step, { type: 'force_slot', label: 'Fixer une heure', taskId: step.chooseTaskId })
+              }
+            >
+              🕐 Fixer une heure
+            </button>
+          )}
+          {step.guestPhone && (
+            <button
+              type="button"
+              onClick={() => onAction(step, { type: 'call', label: 'Appeler', phone: step.guestPhone })}
+            >
+              📞 Appeler
+            </button>
+          )}
+          <button type="button" onClick={() => onAction(step, { type: 'plan', label: 'Voir le plan' })}>
+            Voir le plan
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -545,7 +664,17 @@ function checkLabel(s: DayPlanStep): string {
   return `${first || s.kind}${s.guestName ? ` · ${s.guestName}` : ''}`;
 }
 
-function checkDetail(s: DayPlanStep): string {
+/** « 11:00 » si le jour du plan, sinon « 24/07 11:00 » — plus jamais d'heure sans jour ambigu. */
+function fmtWhen(iso: string, planDate?: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  const z = (n: number) => String(n).padStart(2, '0');
+  const dayKey = `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
+  const hm = `${z(d.getHours())}:${z(d.getMinutes())}`;
+  return planDate && dayKey === planDate ? hm : `${z(d.getDate())}/${z(d.getMonth() + 1)} ${hm}`;
+}
+
+function checkDetail(s: DayPlanStep, planDate?: string): string {
   if (s.state === 'done') return s.time ? `fait · ${s.time}` : 'fait';
   /* Règle métier : le ménage démarre à l'heure de départ client. */
   if (s.kind === 'cleaning') {
@@ -557,7 +686,7 @@ function checkDetail(s: DayPlanStep): string {
   }
   if (s.hourUnknown || (!s.time && (s.kind === 'departure' || s.kind === 'arrival'))) {
     const est = s.estimatedTime ? `défaut ≈ ${s.estimatedTime}` : 'non choisie';
-    const relance = s.nextRelanceAt ? ` · relance ${fmtTime(s.nextRelanceAt)}` : '';
+    const relance = s.nextRelanceAt ? ` · relance ${fmtWhen(s.nextRelanceAt, planDate)}` : '';
     return `${est}${relance}`;
   }
   if (s.registrationPending) return 'enregistrement en attente';
@@ -569,11 +698,15 @@ function FlightRow({
   index,
   targeted,
   onAction,
+  planDate,
+  onOpenRelances,
 }: {
   flight: Flight;
   index: number;
   targeted: boolean;
   onAction: (step: DayPlanStep, action: DayPlanAction) => void;
+  planDate: string;
+  onOpenRelances: (step: DayPlanStep) => void;
 }) {
   const { chain, departure, cleaning, arrival, attentionStep, checkSteps } = flight;
 
@@ -674,16 +807,30 @@ function FlightRow({
           {orderedChecks.map((s) => {
             const action = s.attention?.actions?.[0];
             const state = s.state === 'done' ? 'done' : s.state === 'attention' ? 'attn' : 'todo';
+            const hasRelances = Boolean(s.relances?.length);
             return (
-              <div key={s.id} className={`ck-check ${state}`} title={s.attention?.reason || s.title}>
+              <div
+                key={s.id}
+                className={`ck-check ${state} ${hasRelances ? 'has-rel' : ''}`}
+                title={s.attention?.reason || (hasRelances ? 'Voir les relances' : s.title)}
+                onClick={hasRelances ? () => onOpenRelances(s) : undefined}
+              >
                 <span className="ck-check-state" aria-hidden>
                   {state === 'done' ? '✓' : state === 'attn' ? '!' : '·'}
                 </span>
                 <span className="ck-check-ico" aria-hidden>{CHECK_ICON[s.kind]}</span>
                 <span className="ck-check-label">{checkLabel(s)}</span>
-                <span className="ck-check-detail">{checkDetail(s)}</span>
+                <span className="ck-check-detail">{checkDetail(s, planDate)}</span>
+                {hasRelances && <span className="ck-check-rel" aria-hidden>🔔{s.relances!.length}</span>}
                 {action && (
-                  <button type="button" className="ck-check-cta" onClick={() => onAction(s, action)}>
+                  <button
+                    type="button"
+                    className="ck-check-cta"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAction(s, action);
+                    }}
+                  >
                     {action.label}
                   </button>
                 )}

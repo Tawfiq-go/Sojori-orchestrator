@@ -769,6 +769,136 @@
   cursor: pointer;
 }
 
+/* ── Lignes checklist cliquables (relances) ── */
+
+.ck-check.has-rel { cursor: pointer; border-radius: 8px; padding: 2px 6px; margin: -2px -6px; transition: background 0.15s; }
+.ck-check.has-rel:hover { background: rgba(230, 182, 76, 0.08); }
+
+.ck-check-rel {
+  flex-shrink: 0;
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--ck-gold);
+  background: rgba(230, 182, 76, 0.12);
+  padding: 1px 7px;
+  border-radius: 99px;
+}
+
+/* ── Panneau relances ── */
+
+.ck-relpop-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(10, 8, 4, 0.55);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ck-in 0.15s ease both;
+}
+
+.ck-relpop {
+  width: min(480px, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ck-panel);
+  border: 1px solid rgba(230, 182, 76, 0.30);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  color: var(--ck-text);
+  animation: ck-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ck-relpop-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--ck-line);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.ck-relpop-hdr button {
+  border: 0;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ck-text2);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ck-relpop-list { padding: 10px 16px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+
+.ck-relpop-empty { font-size: 12px; color: var(--ck-text3); font-weight: 600; padding: 8px 0; }
+
+.ck-relpop-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ck-relpop-ico { width: 16px; text-align: center; font-weight: 900; flex-shrink: 0; }
+.ck-relpop-item.done .ck-relpop-ico { color: var(--ck-ok); }
+.ck-relpop-item.todo .ck-relpop-ico { color: var(--ck-gold); }
+.ck-relpop-item.skip .ck-relpop-ico { color: var(--ck-text3); }
+.ck-relpop-item.fail .ck-relpop-ico { color: var(--ck-bad); }
+
+.ck-relpop-lbl { flex: 1; min-width: 0; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ck-relpop-when {
+  flex-shrink: 0;
+  font-family: "Geist Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ck-text2);
+}
+
+.ck-relpop-item.todo .ck-relpop-when { color: var(--ck-gold); }
+
+.ck-relpop-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ck-line);
+}
+
+.ck-relpop-actions button {
+  border: 1px solid var(--ck-line);
+  background: transparent;
+  color: var(--ck-text2);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 8px 13px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ck-relpop-actions button:hover { color: var(--ck-gold); border-color: rgba(230, 182, 76, 0.5); }
+
+.ck-relpop-actions button.primary {
+  background: var(--ck-gold);
+  border-color: var(--ck-gold);
+  color: #171307;
+}
+
+.ck-relpop-actions button.primary:disabled { opacity: 0.6; cursor: default; }
+
 /* ── Entrée ── */
 
 @keyframes ck-in {

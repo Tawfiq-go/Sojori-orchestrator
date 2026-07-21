@@ -492,6 +492,14 @@ export async function getOpsFeed(days = 2): Promise<OpsFeedResponse> {
   return data as OpsFeedResponse;
 }
 
+export type DayPlanStepRelance = {
+  index: number;
+  label: string;
+  scheduledAt: string;
+  sentAt?: string | null;
+  status: 'en_attente' | 'en_cours' | 'fait' | 'saute' | 'echec';
+};
+
 export type DayPlanAction = {
   type: 'assign' | 'relance_guest' | 'force_slot' | 'plan' | 'call';
   label: string;
@@ -520,6 +528,11 @@ export type DayPlanStep = {
   estimatedTime?: string;
   /** Prochaine relance client planifiée (ISO) — quand l'heure n'est pas encore choisie. */
   nextRelanceAt?: string;
+  /** Historique + planification des relances du choose-task (départ/arrivée). */
+  relances?: DayPlanStepRelance[];
+  /** TaskId du choose-task — « Fixer une heure » / « Relancer maintenant ». */
+  chooseTaskId?: string;
+  guestPhone?: string;
   auto: boolean;
   meta?: string;
   chainId?: string;
