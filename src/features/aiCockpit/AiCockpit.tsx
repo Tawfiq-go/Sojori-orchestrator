@@ -563,12 +563,14 @@ function RelancesPanel({
   const [sending, setSending] = useState(false);
   const relances = step.relances ?? [];
   const nextPending = relances.find((r) => r.status === 'en_attente');
+  /* choose-task (départ/arrivée) sinon la tâche elle-même (ex. enregistrement). */
+  const relanceTaskId = step.chooseTaskId ?? step.taskId;
 
   const sendNow = async () => {
-    if (!nextPending || !step.chooseTaskId || sending) return;
+    if (!nextPending || !relanceTaskId || sending) return;
     setSending(true);
     try {
-      await fulltaskApi.sendPlanRelance(step.reservationId, step.chooseTaskId, nextPending.index);
+      await fulltaskApi.sendPlanRelance(step.reservationId, relanceTaskId, nextPending.index);
       toast.success(`Relance « ${nextPending.label} » envoyée`);
       onReload();
     } catch (err) {
@@ -604,7 +606,7 @@ function RelancesPanel({
         </div>
 
         <div className="ck-relpop-actions">
-          {nextPending && step.chooseTaskId && (
+          {nextPending && relanceTaskId && (
             <button type="button" className="primary" disabled={sending} onClick={() => void sendNow()}>
               {sending ? 'Envoi…' : '📨 Relancer maintenant'}
             </button>
@@ -689,8 +691,9 @@ function checkDetail(s: DayPlanStep, planDate?: string): string {
     const relance = s.nextRelanceAt ? ` · relance ${fmtWhen(s.nextRelanceAt, planDate)}` : '';
     return `${est}${relance}`;
   }
-  if (s.registrationPending) return 'enregistrement en attente';
-  return s.time ? `prévu ${s.time}` : 'en attente';
+  const rel = s.nextRelanceAt ? ` · relance ${fmtWhen(s.nextRelanceAt, planDate)}` : '';
+  if (s.registrationPending) return `enregistrement en attente${rel}`;
+  return s.time ? `prévu ${s.time}${rel}` : `en attente${rel}`;
 }
 
 function FlightRow({
