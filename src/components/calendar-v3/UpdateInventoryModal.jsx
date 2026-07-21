@@ -12,6 +12,36 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { fr } from 'date-fns/locale';
 
+function splitContiguousIsoRanges(sortedIsos) {
+  if (!sortedIsos.length) return [];
+  const ranges = [];
+  let start = sortedIsos[0];
+  let prev = sortedIsos[0];
+  for (let i = 1; i < sortedIsos.length; i += 1) {
+    const d = sortedIsos[i];
+    const next = new Date(`${prev}T12:00:00`);
+    next.setDate(next.getDate() + 1);
+    const expected = toIso(next);
+    if (d !== expected) {
+      ranges.push({ from: start, to: prev });
+      start = d;
+    }
+    prev = d;
+  }
+  ranges.push({ from: start, to: prev });
+  return ranges;
+}
+
+function selectedDatesHaveGaps(sortedIsos) {
+  if (sortedIsos.length <= 1) return false;
+  for (let i = 1; i < sortedIsos.length; i += 1) {
+    const next = new Date(`${sortedIsos[i - 1]}T12:00:00`);
+    next.setDate(next.getDate() + 1);
+    if (toIso(next) !== sortedIsos[i]) return true;
+  }
+  return false;
+}
+
 /** Payload PUT update-inventory — omet undefined/null pour éviter Joi 400. */
 export function sanitizeInventoryUpdatePayload(item) {
   const keys = [
@@ -29,6 +59,7 @@ export function sanitizeInventoryUpdatePayload(item) {
 
 export default function UpdateInventoryModal({
   open, onClose, selectedCells = [], currency = 'MAD', inventoryData = {}, listings = [], onSave,
+  sojoriMinStayByDate = {},
 }) {
   const [step, setStep] = useState('form'); // 'form' | 'confirm'
   const [error, setError] = useState(null);
@@ -194,6 +225,17 @@ export default function UpdateInventoryModal({
     return out;
   }, [form, displayCurrency, cellsAnalysis.isSingleListing]);
 
+  /** Reco min stay Sojori (gap / event) si identique sur toute la sélection. */
+  const sojoriMinStayReco = useMemo(() => {
+    if (!selectedCells.length) return null;
+    const values = selectedCells
+      .map((c) => sojoriMinStayByDate[c.dateStr])
+      .filter((v) => typeof v === 'number' && v > 0);
+    if (values.length === 0) return null;
+    const first = values[0];
+    return values.every((v) => v === first) ? first : null;
+  }, [selectedCells, sojoriMinStayByDate]);
+
   const handleSubmit = () => {
     if (changesSummary.length === 0) { setError('Veuillez modifier au moins un champ'); return; }
     setError(null); setStep('confirm');
@@ -209,9 +251,15 @@ export default function UpdateInventoryModal({
     const groups = Object.values(cellsByRoom).map(g => ({ ...g, dates: [...g.dates].sort() }));
     const payloads = [];
     groups.forEach(g => {
-      // Toujours utiliser les dates éditables du formulaire (convertir Date → ISO string)
-      const dateFrom = editableStartDate ? toIso(editableStartDate) : g.dates[0];
-      const dateTo = editableEndDate ? toIso(editableEndDate) : g.dates[g.dates.length - 1];
+      const sortedDates = [...g.dates].sort();
+      const hasGaps = selectedDatesHaveGaps(sortedDates);
+      const ranges = hasGaps
+        ? splitContiguousIsoRanges(sortedDates)
+        : [{
+            from: editableStartDate ? toIso(editableStartDate) : sortedDates[0],
+            to: editableEndDate ? toIso(editableEndDate) : sortedDates[sortedDates.length - 1],
+          }];
+      ranges.forEach(({ from: dateFrom, to: dateTo }) => {
       const base = { roomTypeId: g.roomTypeId, date_from: dateFrom, date_to: dateTo };
       if (form.manualPrice !== '')   payloads.push({ type: 'manualPrice',         ...base, price: +form.manualPrice });
       if (form.availability !== '') {
@@ -246,6 +294,7 @@ export default function UpdateInventoryModal({
           priceMode: form.priceMode,
         });
       }
+      });
     });
     return payloads.map(sanitizeInventoryUpdatePayload);
   };
@@ -281,12 +330,12 @@ export default function UpdateInventoryModal({
     <ModalPortal>
       <div onClick={onClose} style={{
         position: 'fixed', inset: 0, background: 'rgba(20,17,10,0.45)',
-        backdropFilter: 'blur(4px)', zIndex: 55,
+        backdropFilter: 'blur(4px)', zIndex: 1250,
       }} />
       <div style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 60,
+        zIndex: 1260,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -508,13 +557,61 @@ export default function UpdateInventoryModal({
                 }}>▶ Restrictions séjour</summary>
                 <div style={{ marginTop: 8 }}>
                   <Section label="Min stay">
+                    {cellsAnalysis.minStay.common !== null && (
+                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                        Actuel: <b>{cellsAnalysis.minStay.common} nuit(s)</b>
+                      </div>
+                    )}
+                    {cellsAnalysis.minStay.common === null && cellsAnalysis.minStay.min !== null && (
+                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                        Min: <b>{cellsAnalysis.minStay.min}</b> • Max: <b>{cellsAnalysis.minStay.max} nuit(s)</b>
+                      </div>
+                    )}
+                    {sojoriMinStayReco != null ? (
+                      <button
+                        type="button"
+                        onClick={() => upd('minStay', String(sojoriMinStayReco))}
+                        style={{
+                          marginBottom: 6,
+                          padding: '5px 10px',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          fontFamily: '"Geist Mono", monospace',
+                          cursor: 'pointer',
+                          borderRadius: 8,
+                          border: `1px solid ${T.gold}`,
+                          background: T.goldTint,
+                          color: T.goldDeep,
+                        }}
+                      >
+                        Reprendre reco Sojori · {sojoriMinStayReco} n
+                      </button>
+                    ) : null}
                     <FieldBox>
-                      <input type="number" placeholder="Ex: 2" value={form.minStay}
-                        onChange={e => upd('minStay', e.target.value)} />
+                      <input
+                        type="number"
+                        placeholder={
+                          cellsAnalysis.minStay.common != null
+                            ? `Actuel: ${cellsAnalysis.minStay.common} nuit(s)`
+                            : 'Laisser vide pour ne pas modifier'
+                        }
+                        value={form.minStay}
+                        onChange={e => upd('minStay', e.target.value)}
+                      />
                       <span style={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>nuits</span>
                     </FieldBox>
                   </Section>
                   <Section label="Max stay">
+                    {cellsAnalysis.maxStay.common !== null && (
+                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                        Actuel: <b>{cellsAnalysis.maxStay.common} nuit(s)</b>
+                      </div>
+                    )}
+                    {cellsAnalysis.maxStay.common === null && cellsAnalysis.maxStay.min !== null && (
+                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
+                        Min: <b>{cellsAnalysis.maxStay.min}</b> • Max: <b>{cellsAnalysis.maxStay.max} nuit(s)</b>
+                      </div>
+                    )}
                     <FieldBox>
                       <input type="number" placeholder="Ex: 7" value={form.maxStay}
                         onChange={e => upd('maxStay', e.target.value)} />

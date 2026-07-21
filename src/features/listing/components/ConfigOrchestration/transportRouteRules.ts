@@ -1,10 +1,9 @@
 import type { ListingPropertyPlace } from './transportListingProperty';
 import { isAutoPropertyPlaceLabel } from './transportListingProperty';
 import type { TransportJourneyTag, TransportRouteItem } from './transportRouteCatalog';
-import { cloneCityAssociation } from './transportRouteCatalog';
+import { buildRouteLabel, cloneCityAssociation } from './transportRouteCatalog';
 
 function pickExternalLabel(route: TransportRouteItem, property: ListingPropertyPlace): string {
-  // Ne pas trim : sinon l'espace en cours de saisie (« aéroport de casa ») est avalé.
   if (typeof route.externalLabel === 'string') {
     return route.externalLabel;
   }
@@ -20,14 +19,19 @@ function pickExternalLabel(route: TransportRouteItem, property: ListingPropertyP
   return isAutoPropertyPlaceLabel(from, property) ? '' : from;
 }
 
-/** Bascule Arrivée / Départ / Autre — conserve le libellé externe (aéroport, gare…). */
+function syncLabelFromHub(route: TransportRouteItem): string {
+  const hubName = (route.hubName || '').trim();
+  return buildRouteLabel(route.externalKind, hubName, route.journeyTag).fr;
+}
+
 export function migrateJourneyTag(
   route: TransportRouteItem,
   property: ListingPropertyPlace,
   nextTag: TransportJourneyTag,
 ): Partial<TransportRouteItem> {
   const externalLabel = pickExternalLabel(route, property);
-  return { journeyTag: nextTag, externalLabel };
+  const labelFr = buildRouteLabel(route.externalKind, route.hubName || '', nextTag).fr;
+  return { journeyTag: nextTag, externalLabel, labelFr };
 }
 
 export function syncRouteEndpoints(
@@ -36,30 +40,36 @@ export function syncRouteEndpoints(
 ): TransportRouteItem {
   const propName = (property.name || 'Logement').trim();
   const externalLabel = pickExternalLabel(route, property);
+  const labelFr = syncLabelFromHub(route);
+  const hubName = route.hubName || '';
 
   if (route.journeyTag === 'arrival') {
     return {
       ...route,
+      labelFr,
+      hubName,
       cityIds: cloneCityAssociation(route.cityIds),
       departureType: 'from_external',
       arrivalType: 'to_property',
       from: externalLabel,
       to: propName,
       externalLabel,
-      externalKind: route.externalKind || 'other',
+      externalKind: route.externalKind || 'airport',
       propertyPlace: property,
     };
   }
   if (route.journeyTag === 'departure') {
     return {
       ...route,
+      labelFr,
+      hubName,
       cityIds: cloneCityAssociation(route.cityIds),
       departureType: 'from_property',
       arrivalType: 'to_external',
       from: propName,
       to: externalLabel,
       externalLabel,
-      externalKind: route.externalKind || 'other',
+      externalKind: route.externalKind || 'airport',
       propertyPlace: property,
     };
   }
@@ -67,6 +77,8 @@ export function syncRouteEndpoints(
   const to = isAutoPropertyPlaceLabel(route.to || '', property) ? '' : route.to || '';
   return {
     ...route,
+    labelFr,
+    hubName,
     cityIds: cloneCityAssociation(route.cityIds),
     journeyTag: 'other',
     departureType: undefined,
@@ -74,10 +86,10 @@ export function syncRouteEndpoints(
     from,
     to,
     externalLabel: externalLabel || from,
-    externalKind: route.externalKind || 'other',
+    externalKind: route.externalKind || 'airport',
     propertyPlace: property,
   };
 }
 
 export const TRANSPORT_V1_NOTE =
-  'Arrivée / Départ : le logement est fixe (nom + adresse). L’autre point = navette (aéroport, gare…). Autre = les deux libres.';
+  "Choisissez le type (A\u00e9roport, Gare\u2026) et le nom du lieu. Le syst\u00e8me g\u00e9n\u00e8re le nom en FR, EN, AR.";

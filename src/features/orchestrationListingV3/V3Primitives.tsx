@@ -243,7 +243,7 @@ export function V3Section({
   kind,
   title,
   subtitle,
-  enabled,
+  enabled = true,
   onEnabledChange,
   open,
   onOpenChange,
@@ -255,8 +255,9 @@ export function V3Section({
   kind: ToggleKind;
   title: ReactNode;
   subtitle?: string;
-  enabled: boolean;
-  onEnabledChange: (v: boolean) => void;
+  /** Si absent avec onEnabledChange : pas de toggle groupe (collapse seul). */
+  enabled?: boolean;
+  onEnabledChange?: (v: boolean) => void;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   locked?: boolean;
@@ -264,7 +265,8 @@ export function V3Section({
   children: ReactNode;
 }) {
   const tint = KIND_TINT[kind];
-  const active = enabled && !locked;
+  const showGroupToggle = typeof onEnabledChange === 'function';
+  const active = showGroupToggle ? enabled && !locked : !locked;
 
   return (
     <Box
@@ -339,20 +341,24 @@ export function V3Section({
             </Typography>
           ) : null}
         </Box>
-        <Typography
-          sx={{
-            fontSize: 9,
-            fontWeight: 800,
-            fontFamily: 'monospace',
-            color: active ? tint.color : V3.t4,
-            letterSpacing: '0.06em',
-            flexShrink: 0,
-            mr: 0.5,
-          }}
-        >
-          {active ? 'ON' : 'OFF'}
-        </Typography>
-        <V3Toggle kind={kind} checked={enabled} disabled={locked} onChange={onEnabledChange} />
+        {showGroupToggle ? (
+          <>
+            <Typography
+              sx={{
+                fontSize: 9,
+                fontWeight: 800,
+                fontFamily: 'monospace',
+                color: active ? tint.color : V3.t4,
+                letterSpacing: '0.06em',
+                flexShrink: 0,
+                mr: 0.5,
+              }}
+            >
+              {active ? 'ON' : 'OFF'}
+            </Typography>
+            <V3Toggle kind={kind} checked={enabled} disabled={locked} onChange={onEnabledChange} />
+          </>
+        ) : null}
         <Typography
           sx={{
             color: V3.t4,

@@ -284,46 +284,35 @@ function OwnerExpressBar({
   ].filter(Boolean);
 
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [autoSnapshot, setAutoSnapshot] = useState(false);
-  const [autoComps, setAutoComps] = useState(false);
+  const [autoSnapshot, setAutoSnapshot] = useState(true);
   const [autoPropagation, setAutoPropagation] = useState(false);
-  const [lastCompsAt, setLastCompsAt] = useState<string | null>(null);
-  const [savingToggle, setSavingToggle] = useState<'snap' | 'comps' | 'prop' | null>(null);
+  const [savingToggle, setSavingToggle] = useState<'snap' | 'prop' | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
 
   const loadState = useCallback(async () => {
     try {
       const cfg = await fetchPilotConfig(listingId);
-      setAutoSnapshot(Boolean(cfg.data?.config?.autoSnapshotEnabled));
-      setAutoComps(Boolean(cfg.data?.config?.autoCompsEnabled));
+      setAutoSnapshot(cfg.data?.config?.autoSnapshotEnabled !== false);
       setAutoPropagation(Boolean(cfg.data?.config?.enabled));
-      setLastCompsAt(cfg.data?.config?.lastCompsAt ?? null);
     } catch { /* config absente */ }
   }, [listingId]);
 
   useEffect(() => { void loadState(); }, [loadState]);
 
-  const saveToggle = async (kind: 'snap' | 'comps' | 'prop', value: boolean) => {
+  const saveToggle = async (kind: 'snap' | 'prop', value: boolean) => {
     setSavingToggle(kind);
     setToggleError(null);
     const prevSnap = autoSnapshot;
-    const prevComps = autoComps;
     const prevProp = autoPropagation;
     if (kind === 'snap') setAutoSnapshot(value);
-    else if (kind === 'comps') setAutoComps(value);
     else setAutoPropagation(value);
     try {
       await savePilotConfig(
         listingId,
-        kind === 'snap'
-          ? { autoSnapshotEnabled: value }
-          : kind === 'comps'
-            ? { autoCompsEnabled: value }
-            : { enabled: value },
+        kind === 'snap' ? { autoSnapshotEnabled: value } : { enabled: value },
       );
     } catch (e) {
       setAutoSnapshot(prevSnap);
-      setAutoComps(prevComps);
       setAutoPropagation(prevProp);
       setToggleError(e instanceof Error ? e.message : 'Échec de la sauvegarde');
     } finally {
@@ -331,12 +320,7 @@ function OwnerExpressBar({
     }
   };
 
-  const majLine = [
-    snapshotAt ? `est. ${fmtDateShort(snapshotAt)}` : null,
-    lastCompsAt ? `conc. ${fmtDateShort(lastCompsAt)}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const majLine = snapshotAt ? `est. ${fmtDateShort(snapshotAt)}` : null;
 
   return (
     <Box
@@ -392,13 +376,6 @@ function OwnerExpressBar({
           checked={autoSnapshot}
           saving={savingToggle === 'snap'}
           onChange={(v) => void saveToggle('snap', v)}
-        />
-        <OwnerAutoSwitch
-          label="Concurrence auto"
-          sub="chaque lundi"
-          checked={autoComps}
-          saving={savingToggle === 'comps'}
-          onChange={(v) => void saveToggle('comps', v)}
         />
         <OwnerAutoSwitch
           label="Sync calendrier"

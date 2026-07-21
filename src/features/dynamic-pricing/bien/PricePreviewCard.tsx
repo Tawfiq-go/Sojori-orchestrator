@@ -6,10 +6,11 @@
 // groupé par mois. Source : apply-preview-diff (aucun nouveau endpoint).
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
-import { Box, Stack, Typography, Button, CircularProgress } from '@mui/material';
+import { Box, Stack, Typography, Button, CircularProgress, Tooltip, Checkbox } from '@mui/material';
 import { T } from '../_tokens';
 import type { ApplyPreviewDiffDto, ApplyPreviewDiffRowDto } from '../../../services/dynamicPricingApi';
 import type { PricingEvent } from './PricingControls';
+import { usePricePreviewSelectionOptional } from './pricePreviewSelectionContext';
 
 const MONO = '"Geist Mono", monospace';
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR');
@@ -23,13 +24,82 @@ const PERIODS = [
   { key: '365', label: '12 mois', days: 365 },
 ] as const;
 
-type RowStatus = 'reserved' | 'blocked' | 'manual' | 'free';
+type RowStatus = 'reserved' | 'blocked' | 'free';
+type CalendarPriceMode = 'manual' | 'dynamic';
 
 function rowStatus(row: ApplyPreviewDiffRowDto): RowStatus {
-  if (row.alert === 'reserved') return 'reserved';
-  if (row.alert === 'blocked') return 'blocked';
-  if (row.alert === 'manual') return 'manual';
+  if (row.skipReason === 'has_reservation' || row.alert === 'reserved') return 'reserved';
+  if (row.skipReason === 'not_available' || row.alert === 'blocked') return 'blocked';
   return 'free';
+}
+
+function calendarPriceMode(row: ApplyPreviewDiffRowDto): CalendarPriceMode {
+  if (typeof row.applyManual === 'boolean') return row.applyManual ? 'manual' : 'dynamic';
+  if (row.skipReason === 'apply_manual' || row.alert === 'manual') return 'manual';
+  return 'dynamic';
+}
+
+function priceModeLetter(mode: CalendarPriceMode): 'M' | 'D' {
+  return mode === 'manual' ? 'M' : 'D';
+}
+
+function priceModeLabel(mode: CalendarPriceMode): string {
+  return mode === 'manual' ? 'Prix manuel calendrier' : 'Prix dynamique Sojori';
+}
+
+function statusWord(st: RowStatus): string {
+  if (st === 'reserved') return 'RÉSERVÉ';
+  if (st === 'blocked') return 'BLOQUÉ';
+  return 'LIBRE';
+}
+
+function DayStatusBadge({ row, st }: { row: ApplyPreviewDiffRowDto; st: RowStatus }) {
+  const mode = calendarPriceMode(row);
+  const letter = priceModeLetter(mode);
+  return (
+    <Box
+      component="span"
+      title={`${priceModeLabel(mode)} · ${statusWord(st)}`}
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.5,
+        fontSize: 10,
+        fontWeight: 800,
+        borderRadius: 999,
+        pl: 0.5,
+        pr: 1.125,
+        py: 0.25,
+        fontFamily: MONO,
+        whiteSpace: 'nowrap',
+        bgcolor: st === 'reserved' ? T.success : st === 'blocked' ? T.bg3 : T.goldTint2,
+        color: st === 'reserved' ? '#fff' : st === 'blocked' ? T.text3 : T.goldDeep,
+      }}
+    >
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minWidth: 16,
+          height: 16,
+          px: 0.375,
+          borderRadius: '4px',
+          fontSize: 9,
+          fontWeight: 900,
+          lineHeight: 1,
+          bgcolor: mode === 'manual' ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.08)',
+          color: mode === 'manual' ? T.info : st === 'reserved' ? T.success : T.text2,
+          border: mode === 'manual' ? `1px solid ${T.info}` : 'none',
+        }}
+      >
+        {letter}
+      </Box>
+      {statusWord(st)}
+      {st === 'blocked' ? ' ⚠' : ''}
+    </Box>
+  );
 }
 
 function monthLabelFr(iso: string): string {
@@ -42,6 +112,108 @@ function dayLabelFr(iso: string): string {
   return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
+const CHART_PLOT_H = 82;
+const CHART_LABEL_HEADROOM = 16;
+
+function shouldShowEstimateLabel(
+  rowCount: number,
+  compact: boolean,
+  isMonthStart: boolean,
+  dayOfWeek: number,
+): boolean {
+  if (!compact) return true;
+  if (rowCount > 180) return isMonthStart;
+  return isMonthStart || dayOfWeek === 1;
+}
+
+function priceHeightPct(value: number, max: number): number {
+  if (value <= 0 || max <= 0) return 0;
+  return Math.max(3, (value / max) * 100);
+}
+
+function buildLinePoints(
+  rows: ApplyPreviewDiffRowDto[],
+  getValue: (r: ApplyPreviewDiffRowDto) => number,
+  max: number,
+): string {
+  return rows
+    .map((r, i) => {
+      const v = getValue(r);
+      const y = 100 - (v > 0 ? priceHeightPct(v, max) : 0);
+      return `${i + 0.5},${y}`;
+    })
+    .join(' ');
+}
+
+function fmtMad(v: number | null | undefined): string {
+  return v != null ? `${fmt(v)} MAD` : '—';
+}
+
+function priceDelta(a: number | null | undefined, b: number | null | undefined): number | null {
+  if (a == null || b == null) return null;
+  return a - b;
+}
+
+function fmtSignedDelta(d: number | null): string {
+  if (d == null) return '—';
+  return `${d > 0 ? '+' : ''}${fmt(d)} MAD`;
+}
+
+function deltaTone(d: number | null): string {
+  if (d == null) return T.text4;
+  if (d > 0) return T.success;
+  if (d < 0) return T.error;
+  return T.text3;
+}
+
+const STATUS_LABEL: Record<RowStatus, string> = {
+  reserved: 'Réservé',
+  blocked: 'Bloqué sans résa',
+  free: 'Libre',
+};
+
+function ChartDayTooltipContent({
+  row,
+  status,
+  rule,
+}: {
+  row: ApplyPreviewDiffRowDto;
+  status: RowStatus;
+  rule?: { name: string; emoji?: string };
+}) {
+  const marche = row.airroiMad;
+  const sojori = row.g7ProposedMad;
+  const cal = row.calendarCurrentMad;
+  const deltaMarcheCal = priceDelta(marche, cal);
+  const deltaSojoriCal = priceDelta(sojori, cal);
+  const lineSx = { fontSize: 10.5, fontFamily: MONO, lineHeight: 1.5, fontVariantNumeric: 'tabular-nums' };
+
+  return (
+    <Stack spacing={0.375} sx={{ py: 0.125 }}>
+      <Typography sx={{ fontSize: 11.5, fontWeight: 800, lineHeight: 1.3 }}>{dayLabelFr(row.date)}</Typography>
+      <Typography sx={{ fontSize: 10, color: T.text3 }}>
+        {STATUS_LABEL[status]} · {priceModeLetter(calendarPriceMode(row))} = {priceModeLabel(calendarPriceMode(row)).toLowerCase()}
+      </Typography>
+      <Box sx={{ height: 4 }} />
+      <Typography sx={lineSx}>Prix estimé (marché) : {fmtMad(marche)}</Typography>
+      <Typography sx={{ ...lineSx, fontWeight: 800, color: T.goldDeep }}>Prix Sojori : {fmtMad(sojori)}</Typography>
+      <Typography sx={lineSx}>Prix calendrier : {fmtMad(cal)}</Typography>
+      <Box sx={{ height: 4 }} />
+      <Typography sx={{ ...lineSx, color: deltaTone(deltaMarcheCal) }}>
+        Δ1 marché − cal. : {fmtSignedDelta(deltaMarcheCal)}
+      </Typography>
+      <Typography sx={{ ...lineSx, color: deltaTone(deltaSojoriCal), fontWeight: 700 }}>
+        Δ2 Sojori − cal. : {fmtSignedDelta(deltaSojoriCal)}
+      </Typography>
+      {rule ? (
+        <Typography sx={{ fontSize: 10, color: T.warning, mt: 0.25 }}>
+          {rule.emoji ?? '🗓'} {rule.name}
+        </Typography>
+      ) : null}
+    </Stack>
+  );
+}
+
 export interface PricePreviewCardProps {
   data: ApplyPreviewDiffDto | null;
   loading?: boolean;
@@ -49,9 +221,6 @@ export interface PricePreviewCardProps {
   onReload?: () => void;
   /** Règles actives → liseré orange sur le strip + chip 🗓 dans le tableau. */
   events?: PricingEvent[];
-  onApply?: () => void;
-  canApply?: boolean;
-  applyLoading?: boolean;
 }
 
 export default function PricePreviewCard({
@@ -60,10 +229,8 @@ export default function PricePreviewCard({
   error = null,
   onReload,
   events = [],
-  onApply,
-  canApply = false,
-  applyLoading = false,
 }: PricePreviewCardProps) {
+  const selection = usePricePreviewSelectionOptional();
   const [periodKey, setPeriodKey] = React.useState<(typeof PERIODS)[number]['key']>('30');
 
   const period = PERIODS.find((p) => p.key === periodKey) ?? PERIODS[2];
@@ -93,6 +260,13 @@ export default function PricePreviewCard({
       .filter((r) => r.date >= today && r.date <= horizon)
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [data, period.days]);
+
+  React.useEffect(() => {
+    selection?.setPreviewRows(rows);
+  }, [rows, selection]);
+
+  const selectedDates = selection?.selectedDates ?? new Set<string>();
+  const canSelect = Boolean(selection);
 
   const stats = React.useMemo(() => {
     let reserved = 0;
@@ -126,6 +300,29 @@ export default function PricePreviewCard({
     };
   }, [rows]);
 
+  const freeRowDates = React.useMemo(
+    () => rows.filter((r) => rowStatus(r) === 'free').map((r) => r.date),
+    [rows],
+  );
+
+  const allFreeSelected =
+    freeRowDates.length > 0 && freeRowDates.every((d) => selectedDates.has(d));
+
+  const someFreeSelected = freeRowDates.some((d) => selectedDates.has(d));
+
+  const toggleDate = (date: string, st: RowStatus) => {
+    selection?.toggleDate(date, st === 'free');
+  };
+
+  const toggleAllFree = () => {
+    selection?.toggleAllFree(freeRowDates);
+  };
+
+  const canEditInventory = canSelect;
+
+  /** ≤ 31 j : tout le tableau visible · > 31 j : scroll vertical dans le cadre du tableau */
+  const tableFitsWithoutInnerScroll = period.days <= 31;
+
   const maxPrice = React.useMemo(
     () =>
       rows.reduce(
@@ -137,6 +334,15 @@ export default function PricePreviewCard({
 
   // ≤ 31 jours : les barres remplissent la largeur · au-delà : largeur fixe + scroll horizontal
   const compactBars = rows.length > 31;
+
+  const sojoriLinePoints = React.useMemo(
+    () => buildLinePoints(rows, (r) => r.g7ProposedMad ?? 0, maxPrice),
+    [rows, maxPrice],
+  );
+  const calendarLinePoints = React.useMemo(
+    () => buildLinePoints(rows, (r) => r.calendarCurrentMad ?? 0, maxPrice),
+    [rows, maxPrice],
+  );
 
   const chipSx = {
     display: 'flex', alignItems: 'baseline', gap: 0.75,
@@ -234,117 +440,260 @@ export default function PricePreviewCard({
             ) : null}
           </Stack>
 
-          {/* Graphe comparatif : barre = prix Sojori · trait sombre = prix calendrier actuel */}
-          <Box sx={{ mt: 2, pt: 0.75, pb: 0.5, borderRadius: 1.25, bgcolor: T.bg2, border: `1px solid ${T.border}`, px: 1, overflowX: 'auto' }}>
-            <Stack
-              direction="row"
+          {/* Graphe : barres marché + lignes Sojori & calendrier */}
+          <Box sx={{ mt: 2, pt: 1.75, pb: 0.75, borderRadius: 1.25, bgcolor: T.bg2, border: `1px solid ${T.border}`, px: 1, overflowX: 'auto' }}>
+            <Box
               sx={{
-                gap: '3px',
-                alignItems: 'stretch',
-                minWidth: compactBars ? `${rows.length * 17}px` : undefined,
+                position: 'relative',
+                minWidth: compactBars ? `${rows.length * 18}px` : undefined,
+                overflow: 'visible',
               }}
             >
-              {rows.map((r, i) => {
-                const st = rowStatus(r);
-                const sojori = r.g7ProposedMad ?? 0;
-                const cal = r.calendarCurrentMad ?? 0;
-                const marche = r.airroiMad ?? 0;
-                const hSojori = sojori > 0 ? Math.max(14, Math.round((sojori / maxPrice) * 100)) : 0;
-                const hCal = cal > 0 ? Math.max(4, Math.round((cal / maxPrice) * 100)) : 0;
-                const hMarche = marche > 0 ? Math.max(10, Math.round((marche / maxPrice) * 100)) : 0;
-                const rule = ruleForDate(r.date);
-                const title =
-                  `${dayLabelFr(r.date)} · ` +
-                  (st === 'reserved'
-                    ? `réservé${cal ? ` · vendu ${fmt(cal)} MAD` : ''}`
-                    : st === 'blocked'
-                      ? 'bloqué sans résa'
-                      : `marché ${fmt(marche)} → Sojori ${fmt(sojori)} MAD${cal ? ` · calendrier ${fmt(cal)} MAD` : ''}`) +
-                  (rule ? ` · ${rule.emoji ?? '🗓'} ${rule.name}` : '');
-                const d = new Date(r.date);
-                const dayNum = d.getDate();
-                const isMonthStart = dayNum === 1 || i === 0;
-                // Jours sous les barres : tous si ≤ 31 j · sinon 1ᵉʳ du mois + lundis
-                const showLabel = !compactBars || isMonthStart || d.getDay() === 1;
-                const label = isMonthStart
-                  ? `${dayNum} ${d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}`
-                  : String(dayNum);
-                return (
-                  <Box key={r.date} title={title} sx={{ flex: compactBars ? '0 0 14px' : 1, minWidth: compactBars ? 14 : 8, display: 'flex', flexDirection: 'column' }}>
-                  <Box sx={{ height: 74, position: 'relative', borderLeft: isMonthStart && i > 0 ? `1.5px solid ${T.borderStrong}` : 'none' }}>
-                    {/* Fond : prix marché (estimation) */}
-                    {st === 'free' && hMarche > 0 ? (
-                      <Box
-                        sx={{
-                          position: 'absolute', left: 0, right: 0, bottom: 0,
-                          height: `${hMarche}%`, borderRadius: '3px 3px 0 0',
-                          bgcolor: T.infoTint, border: `1px solid rgba(6,115,179,0.22)`, borderBottom: 'none',
-                        }}
-                      />
-                    ) : null}
-                    {/* Barre prix Sojori (au premier plan, plus étroite) */}
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        left: st === 'free' ? '18%' : 0,
-                        right: st === 'free' ? '18%' : 0,
-                        bottom: 0,
-                        height: `${st === 'blocked' ? 26 : hSojori}%`,
-                        borderRadius: '3px 3px 0 0',
-                        background:
-                          st === 'reserved'
-                            ? T.success
-                            : st === 'blocked'
-                              ? 'transparent'
-                              : `linear-gradient(180deg, ${T.gold}, ${T.goldDeep})`,
-                        opacity: st === 'reserved' ? 0.65 : 1,
-                        border: st === 'blocked' ? `1.5px dashed ${T.borderStrong}` : 'none',
-                        borderBottom: 'none',
-                        zIndex: 1,
+              <Stack
+                direction="row"
+                sx={{
+                  gap: '3px',
+                  alignItems: 'stretch',
+                  height: CHART_PLOT_H,
+                  position: 'relative',
+                  zIndex: 0,
+                  overflow: 'visible',
+                  pt: `${CHART_LABEL_HEADROOM}px`,
+                  boxSizing: 'content-box',
+                }}
+              >
+                {rows.map((r, i) => {
+                  const st = rowStatus(r);
+                  const cal = r.calendarCurrentMad ?? 0;
+                  const marche = r.airroiMad ?? 0;
+                  const hMarche = priceHeightPct(marche, maxPrice);
+                  const rule = ruleForDate(r.date);
+                  const d = new Date(r.date);
+                  const dayNum = d.getDate();
+                  const isMonthStart = dayNum === 1 || i === 0;
+                  const showDayLabel = !compactBars || isMonthStart || d.getDay() === 1;
+                  const showEstimateLabel =
+                    marche > 0 && shouldShowEstimateLabel(rows.length, compactBars, isMonthStart, d.getDay());
+                  const dayLabel = isMonthStart
+                    ? `${dayNum} ${d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}`
+                    : String(dayNum);
+
+                  return (
+                    <Tooltip
+                      key={r.date}
+                      arrow
+                      placement="top"
+                      enterDelay={120}
+                      slotProps={{
+                        tooltip: {
+                          sx: {
+                            bgcolor: T.bg1,
+                            color: T.text,
+                            border: `1px solid ${T.borderStrong}`,
+                            boxShadow: '0 8px 24px rgba(15,23,42,0.14)',
+                            maxWidth: 300,
+                            p: 1.25,
+                          },
+                        },
+                        arrow: { sx: { color: T.bg1, '&::before': { border: `1px solid ${T.borderStrong}` } } },
                       }}
-                    />
-                    {/* Trait prix calendrier actuel */}
-                    {st === 'free' && hCal > 0 ? (
+                      title={<ChartDayTooltipContent row={r} status={st} rule={rule} />}
+                    >
                       <Box
                         sx={{
-                          position: 'absolute', left: '6%', right: '6%', bottom: `${hCal}%`,
-                          height: 2, borderRadius: 1, bgcolor: T.text, zIndex: 2,
+                          flex: compactBars ? '0 0 15px' : 1,
+                          minWidth: compactBars ? 15 : 8,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          position: 'relative',
+                          cursor: 'crosshair',
                         }}
-                      />
-                    ) : null}
-                    {/* Liseré règle de période */}
-                    {rule ? (
-                      <Box sx={{ position: 'absolute', left: 0, right: 0, bottom: -1, height: 3, borderRadius: 2, bgcolor: T.warning, zIndex: 2 }} />
-                    ) : null}
-                  </Box>
-                  {/* Jour sous la barre */}
-                  <Typography
-                    sx={{
-                      fontFamily: MONO, fontSize: 8.5, textAlign: 'center', mt: '3px',
-                      color: isMonthStart ? T.text2 : T.text4,
-                      fontWeight: isMonthStart ? 800 : 400,
-                      whiteSpace: 'nowrap', lineHeight: 1, minHeight: 10, userSelect: 'none',
-                    }}
-                  >
-                    {showLabel ? label : ' '}
-                  </Typography>
-                  </Box>
-                );
-              })}
-            </Stack>
+                      >
+                      <Box
+                        sx={{
+                          flex: 1,
+                          position: 'relative',
+                          borderLeft: isMonthStart && i > 0 ? `1.5px solid ${T.borderStrong}` : 'none',
+                          overflow: 'visible',
+                        }}
+                      >
+                        {showEstimateLabel ? (
+                          <Typography
+                            sx={{
+                              position: 'absolute',
+                              left: '50%',
+                              bottom: marche > 0 ? `${hMarche}%` : '100%',
+                              transform: 'translate(-50%, -4px)',
+                              fontFamily: MONO,
+                              fontSize: compactBars ? 7 : 8,
+                              fontWeight: 800,
+                              color: T.info,
+                              lineHeight: 1,
+                              whiteSpace: 'nowrap',
+                              zIndex: 4,
+                              pointerEvents: 'none',
+                              letterSpacing: '-0.02em',
+                            }}
+                          >
+                            {fmt(marche)}
+                          </Typography>
+                        ) : null}
+                        {st === 'reserved' ? (
+                          <Box
+                            sx={{
+                              position: 'absolute',
+                              left: '8%',
+                              right: '8%',
+                              bottom: 0,
+                              height: cal > 0 ? `${priceHeightPct(cal, maxPrice)}%` : '28%',
+                              borderRadius: '3px 3px 0 0',
+                              bgcolor: T.success,
+                              opacity: 0.55,
+                            }}
+                          />
+                        ) : st === 'blocked' ? (
+                          <Box
+                            sx={{
+                              position: 'absolute',
+                              left: '8%',
+                              right: '8%',
+                              bottom: 0,
+                              height: `${Math.max(22, hMarche || 18)}%`,
+                              borderRadius: '3px 3px 0 0',
+                              border: `1.5px dashed ${T.borderStrong}`,
+                              bgcolor: T.bg1,
+                            }}
+                          />
+                        ) : hMarche > 0 ? (
+                          <Box
+                            sx={{
+                              position: 'absolute',
+                              left: '12%',
+                              right: '12%',
+                              bottom: 0,
+                              height: `${hMarche}%`,
+                              borderRadius: '3px 3px 0 0',
+                              bgcolor: T.infoTint,
+                              border: '1px solid rgba(6,115,179,0.35)',
+                              borderBottom: 'none',
+                            }}
+                          />
+                        ) : null}
+                        {rule ? (
+                          <Box
+                            sx={{
+                              position: 'absolute',
+                              left: 0,
+                              right: 0,
+                              bottom: -1,
+                              height: 3,
+                              borderRadius: 2,
+                              bgcolor: T.warning,
+                              zIndex: 2,
+                            }}
+                          />
+                        ) : null}
+                      </Box>
+                      <Typography
+                        sx={{
+                          fontFamily: MONO,
+                          fontSize: 8.5,
+                          textAlign: 'center',
+                          mt: '4px',
+                          color: isMonthStart ? T.text2 : T.text4,
+                          fontWeight: isMonthStart ? 800 : 400,
+                          whiteSpace: 'nowrap',
+                          lineHeight: 1,
+                          minHeight: 10,
+                          userSelect: 'none',
+                        }}
+                      >
+                        {showDayLabel ? dayLabel : ' '}
+                      </Typography>
+                      </Box>
+                    </Tooltip>
+                  );
+                })}
+              </Stack>
+
+              {rows.length > 1 ? (
+                <Box
+                  component="svg"
+                  viewBox={`0 0 ${rows.length} 100`}
+                  preserveAspectRatio="none"
+                  sx={{
+                    position: 'absolute',
+                    top: CHART_LABEL_HEADROOM,
+                    left: 0,
+                    width: '100%',
+                    height: CHART_PLOT_H,
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                    overflow: 'visible',
+                  }}
+                >
+                  <polyline
+                    points={calendarLinePoints}
+                    fill="none"
+                    stroke={T.text}
+                    strokeWidth={0.45}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <polyline
+                    points={sojoriLinePoints}
+                    fill="none"
+                    stroke={T.goldDeep}
+                    strokeWidth={0.55}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  {rows.map((r, i) => {
+                    const st = rowStatus(r);
+                    const cal = r.calendarCurrentMad ?? 0;
+                    const soj = r.g7ProposedMad ?? 0;
+                    return (
+                      <React.Fragment key={`pt-${r.date}`}>
+                        {cal > 0 ? (
+                          <circle
+                            cx={i + 0.5}
+                            cy={100 - priceHeightPct(cal, maxPrice)}
+                            r={0.42}
+                            fill={T.text}
+                          />
+                        ) : null}
+                        {soj > 0 && st !== 'blocked' ? (
+                          <circle
+                            cx={i + 0.5}
+                            cy={100 - priceHeightPct(soj, maxPrice)}
+                            r={0.48}
+                            fill={T.gold}
+                            stroke={T.goldDeep}
+                            strokeWidth={0.12}
+                          />
+                        ) : null}
+                      </React.Fragment>
+                    );
+                  })}
+                </Box>
+              ) : null}
+            </Box>
           </Box>
           <Stack direction="row" sx={{ gap: 2.25, mt: 1.25, flexWrap: 'wrap', alignItems: 'center' }}>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', bgcolor: T.infoTint, border: '1px solid rgba(6,115,179,0.35)', mr: 0.625, verticalAlign: '-1px' }} />
-              fond bleu = prix marché
+              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 12, borderRadius: '2px', bgcolor: T.infoTint, border: '1px solid rgba(6,115,179,0.35)', mr: 0.625, verticalAlign: '-2px' }} />
+              barre bleue = prix marché
             </Typography>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', background: `linear-gradient(180deg, ${T.gold}, ${T.goldDeep})`, mr: 0.625, verticalAlign: '-1px' }} />
-              barre or = prix Sojori (après réglages)
+              <Box component="span" sx={{ display: 'inline-block', width: 14, height: 0, borderTop: `2.5px solid ${T.goldDeep}`, mr: 0.625, verticalAlign: 'middle' }} />
+              <Box component="span" sx={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', bgcolor: T.gold, border: `1px solid ${T.goldDeep}`, mr: 0.5, verticalAlign: '0px' }} />
+              ligne or = prix Sojori
             </Typography>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-              <Box component="span" sx={{ display: 'inline-block', width: 12, height: 2, borderRadius: 1, bgcolor: T.text2, mr: 0.625, verticalAlign: '2px' }} />
-              trait = prix calendrier actuel
+              <Box component="span" sx={{ display: 'inline-block', width: 14, height: 0, borderTop: `2px solid ${T.text}`, mr: 0.625, verticalAlign: 'middle' }} />
+              trait = calendrier actuel
             </Typography>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
               <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', bgcolor: T.success, opacity: 0.65, mr: 0.625, verticalAlign: '-1px' }} />
@@ -358,17 +707,58 @@ export default function PricePreviewCard({
               <Box component="span" sx={{ display: 'inline-block', width: 12, height: 3, borderRadius: 2, bgcolor: T.warning, mr: 0.625, verticalAlign: '1px' }} />
               règle de période
             </Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+              <Box component="span" sx={{ display: 'inline-block', fontFamily: MONO, fontWeight: 900, fontSize: 9, minWidth: 14, textAlign: 'center', borderRadius: '3px', bgcolor: T.infoTint, color: T.info, border: `1px solid ${T.info}`, mr: 0.5, px: 0.375 }}>M</Box>
+              manuel
+              <Box component="span" sx={{ mx: 0.75, color: T.text4 }}>·</Box>
+              <Box component="span" sx={{ display: 'inline-block', fontFamily: MONO, fontWeight: 900, fontSize: 9, minWidth: 14, textAlign: 'center', borderRadius: '3px', bgcolor: T.bg3, color: T.text2, mr: 0.5, px: 0.375 }}>D</Box>
+              dynamique
+            </Typography>
             {compactBars ? (
-              <Typography sx={{ fontSize: 10.5, color: T.text4 }}>faites défiler le graphe horizontalement →</Typography>
+              <Typography sx={{ fontSize: 10.5, color: T.text4 }}>
+                montants estimés : 1er du mois{rows.length > 180 ? '' : ' + lundis'} · faites défiler →
+              </Typography>
             ) : null}
           </Stack>
 
-          {/* Tableau */}
-          <Box sx={{ overflowX: 'auto', mt: 2, border: `1px solid ${T.border}`, borderRadius: 1.375, maxHeight: 460, overflowY: 'auto' }}>
+          {/* Tableau — détail jour par jour · scroll interne si > 31 j */}
+          <Box
+            sx={{
+              overflowX: 'auto',
+              mt: 2,
+              border: `1px solid ${T.border}`,
+              borderRadius: 1.375,
+              ...(tableFitsWithoutInnerScroll
+                ? { overflowY: 'visible' }
+                : { maxHeight: 460, overflowY: 'auto' }),
+            }}
+          >
             <Box component="table" sx={{ borderCollapse: 'collapse', width: '100%', minWidth: 780 }}>
               <Box component="thead" sx={{ position: 'sticky', top: 0, zIndex: 1 }}>
                 <Box component="tr">
-                  {['Date', 'Statut', 'Prix estimé (marché)', 'Prix Sojori (après réglages)', 'Prix calendrier actuel', 'Δ Sojori vs cal.'].map((h, i) => (
+                  {canEditInventory ? (
+                    <Box
+                      component="th"
+                      sx={{
+                        width: 40,
+                        p: '9px 8px',
+                        borderBottom: `1.5px solid ${T.borderStrong}`,
+                        bgcolor: T.bg2,
+                        textAlign: 'center',
+                      }}
+                    >
+                      <Checkbox
+                        size="small"
+                        checked={allFreeSelected}
+                        indeterminate={someFreeSelected && !allFreeSelected}
+                        disabled={freeRowDates.length === 0}
+                        onChange={toggleAllFree}
+                        sx={{ p: 0, color: T.text3, '&.Mui-checked': { color: T.goldDeep } }}
+                        inputProps={{ 'aria-label': 'Sélectionner tous les jours libres' }}
+                      />
+                    </Box>
+                  ) : null}
+                  {['Date', 'Statut (M/D)', 'Prix estimé (marché)', 'Prix Sojori (après réglages)', 'Prix calendrier actuel', 'Δ Sojori vs cal.'].map((h, i) => (
                     <Box
                       key={h}
                       component="th"
@@ -390,8 +780,12 @@ export default function PricePreviewCard({
                   const showMonth = i === 0 || r.date.slice(0, 7) !== rows[i - 1].date.slice(0, 7);
                   const delta = r.deltaMad;
                   const cellSx = {
-                    p: '7px 12px', borderBottom: `1px solid ${T.border}`, textAlign: 'right' as const,
-                    fontFamily: MONO, fontSize: 12, fontVariantNumeric: 'tabular-nums',
+                    p: '7px 12px',
+                    borderBottom: `1px solid ${T.border}`,
+                    textAlign: 'right' as const,
+                    fontFamily: MONO,
+                    fontSize: 12,
+                    fontVariantNumeric: 'tabular-nums',
                     bgcolor: st === 'reserved' ? T.successTint : st === 'blocked' ? T.bg2 : undefined,
                     color: st === 'blocked' ? T.text4 : undefined,
                   };
@@ -399,12 +793,40 @@ export default function PricePreviewCard({
                     <React.Fragment key={r.date}>
                       {showMonth ? (
                         <Box component="tr">
-                          <Box component="td" colSpan={6} sx={{ bgcolor: T.bg3, fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.text2, fontWeight: 800, p: '5px 12px' }}>
+                          <Box
+                            component="td"
+                            colSpan={canEditInventory ? 7 : 6}
+                            sx={{ bgcolor: T.bg3, fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.text2, fontWeight: 800, p: '5px 12px' }}
+                          >
                             {monthLabelFr(r.date)}
                           </Box>
                         </Box>
                       ) : null}
-                      <Box component="tr">
+                      <Box
+                        component="tr"
+                        onClick={st === 'free' ? () => toggleDate(r.date, st) : undefined}
+                        sx={{
+                          bgcolor: selectedDates.has(r.date) ? T.goldTint2 : undefined,
+                          cursor: st === 'free' ? 'pointer' : 'default',
+                          '&:hover': st === 'free' ? { bgcolor: selectedDates.has(r.date) ? T.goldTint : T.bg2 } : undefined,
+                        }}
+                      >
+                        {canEditInventory ? (
+                          <Box
+                            component="td"
+                            sx={{ ...cellSx, textAlign: 'center', width: 40, p: '7px 8px' }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Checkbox
+                              size="small"
+                              checked={selectedDates.has(r.date)}
+                              disabled={st !== 'free'}
+                              onChange={() => toggleDate(r.date, st)}
+                              sx={{ p: 0, color: T.text3, '&.Mui-checked': { color: T.goldDeep } }}
+                              inputProps={{ 'aria-label': `Sélectionner ${r.date}` }}
+                            />
+                          </Box>
+                        ) : null}
                         <Box component="td" sx={{ ...cellSx, textAlign: 'left', fontFamily: 'inherit', fontWeight: 700, whiteSpace: 'nowrap' }}>
                           {dayLabelFr(r.date)}
                           {rule ? (
@@ -444,18 +866,7 @@ export default function PricePreviewCard({
                           ) : null}
                         </Box>
                         <Box component="td" sx={{ ...cellSx, textAlign: 'center' }}>
-                          <Box
-                            component="span"
-                            sx={{
-                              fontSize: 10, fontWeight: 800, borderRadius: 999, px: 1.125, py: 0.25, fontFamily: MONO, whiteSpace: 'nowrap',
-                              bgcolor:
-                                st === 'reserved' ? T.success : st === 'blocked' ? T.bg3 : st === 'manual' ? T.infoTint : T.goldTint2,
-                              color:
-                                st === 'reserved' ? '#fff' : st === 'blocked' ? T.text3 : st === 'manual' ? T.info : T.goldDeep,
-                            }}
-                          >
-                            {st === 'reserved' ? 'RÉSERVÉ' : st === 'blocked' ? 'BLOQUÉ ⚠' : st === 'manual' ? 'PRIX MANUEL' : 'LIBRE'}
-                          </Box>
+                          <DayStatusBadge row={r} st={st} />
                         </Box>
                         <Box component="td" sx={cellSx}>{r.airroiMad != null ? fmt(r.airroiMad) : '—'}</Box>
                         <Box component="td" sx={{ ...cellSx, fontWeight: 800 }}>{r.g7ProposedMad != null ? fmt(r.g7ProposedMad) : '—'}</Box>
@@ -476,10 +887,12 @@ export default function PricePreviewCard({
                           }}
                         >
                           {delta == null ? '—' : `${delta > 0 ? '+' : ''}${fmt(delta)}`}
-                          {st !== 'free' ? (
-                            <Box component="span" sx={{ fontSize: 9.5, color: T.text4, fontWeight: 400, ml: 0.625 }}>
-                              {st === 'reserved' ? 'figé' : st === 'blocked' ? 'non poussé' : 'manuel'}
-                            </Box>
+                          {st === 'reserved' ? (
+                            <Box component="span" sx={{ fontSize: 9.5, color: T.text4, fontWeight: 400, ml: 0.625 }}>figé</Box>
+                          ) : st === 'blocked' ? (
+                            <Box component="span" sx={{ fontSize: 9.5, color: T.text4, fontWeight: 400, ml: 0.625 }}>non poussé</Box>
+                          ) : calendarPriceMode(r) === 'manual' ? (
+                            <Box component="span" sx={{ fontSize: 9.5, color: T.info, fontWeight: 400, ml: 0.625 }}>M</Box>
                           ) : null}
                         </Box>
                       </Box>
@@ -490,26 +903,11 @@ export default function PricePreviewCard({
             </Box>
           </Box>
 
-          {/* Pied : action */}
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 1.75, flexWrap: 'wrap', gap: 1.25 }}>
-            <Typography sx={{ fontSize: 11, color: T.text3 }}>
-              Les jours réservés sont figés · les jours bloqués ne sont jamais poussés.
-            </Typography>
-            {onApply ? (
-              <Button
-                disabled={!canApply || applyLoading}
-                onClick={onApply}
-                sx={{
-                  bgcolor: T.goldDeep, color: '#fff', borderRadius: 1.125, px: 2.5, py: 1,
-                  fontSize: 12.5, fontWeight: 700, textTransform: 'none',
-                  '&:hover': { bgcolor: T.gold, color: T.text },
-                  '&.Mui-disabled': { bgcolor: T.bg3, color: T.text4 },
-                }}
-              >
-                {applyLoading ? 'Propagation…' : 'Propager ces prix vers le calendrier →'}
-              </Button>
-            ) : null}
-          </Stack>
+          {/* Pied : aide */}
+          <Typography sx={{ fontSize: 11, color: T.text3, mt: 1.75 }}>
+            Cochez des jours libres → « Modifier » dans le bandeau en haut.
+            Les jours réservés sont figés · les bloqués ne sont jamais poussés.
+          </Typography>
         </>
       ) : null}
     </Box>

@@ -36,6 +36,8 @@ export interface StatsCardsProps {
   ttmHint?: string;
   /** Ex. médiane occ. comps (~0,10 $) */
   pacingHint?: string;
+  /** Masque toute référence concurrence / comps (vue owner) */
+  ownerMode?: boolean;
 }
 
 const fmtMad = (n: number) => n.toLocaleString('fr-FR');
@@ -53,7 +55,21 @@ export default function StatsCards({
   potentialHint,
   ttmHint,
   pacingHint,
+  ownerMode = false,
 }: StatsCardsProps) {
+  const ownerPotentialHint =
+    ownerMode && potentialHint?.toLowerCase().includes('comp')
+      ? 'Estimation Sojori · projection 12 mois'
+      : potentialHint;
+  const ownerPacingHint =
+    ownerMode && pacingHint?.toLowerCase().includes('comp')
+      ? 'Occupation projetée · estimation marché'
+      : pacingHint;
+  const pacingMonthLabel =
+    ownerMode && pacing.monthLabel.toLowerCase().includes('comp')
+      ? 'Estimation marché'
+      : pacing.monthLabel;
+
   return (
     <Box
       sx={{
@@ -63,20 +79,24 @@ export default function StatsCards({
         ...DP_LAYOUT_SX,
       }}
     >
-      <StatCard label="POTENTIEL ANNUEL" emoji="⭐" tooltip={potentialHint ?? 'revenue-estimate marché non branché'}>
+      <StatCard label="POTENTIEL ANNUEL" emoji="⭐" tooltip={ownerPotentialHint ?? (ownerMode ? 'Estimation prix de marché Sojori' : 'revenue-estimate marché non branché')}>
         {hasPotentialProd ? (
           <>
             <ValueBlock value={fmtMad(potentialAnnual.p50)} unit="MAD" sub={`≈ ${fmtMad(potentialUsd)} USD`} />
             <RangeBar p25={potentialAnnual.p25} p50={potentialAnnual.p50} p75={potentialAnnual.p75} />
-            {potentialHint ? (
-              <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.75 }}>{potentialHint}</Typography>
+            {ownerPotentialHint ? (
+              <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.75 }}>{ownerPotentialHint}</Typography>
             ) : null}
           </>
         ) : (
           <DataEmptyPlaceholder
             compact
             title="—"
-            hint="Médiane comps ou refresh marché · revenue-estimate pas encore branché"
+            hint={
+              ownerMode
+                ? 'Estimation marché pas encore disponible — activez « Estimation auto » (lun. & jeu.)'
+                : 'Médiane comps ou refresh marché · revenue-estimate pas encore branché'
+            }
           />
         )}
       </StatCard>
@@ -123,7 +143,7 @@ export default function StatsCards({
       <StatCard
         label="PACING L90D"
         emoji="⚡"
-        tooltip={pacingHint ?? 'Occupation récente vs TTM · ou référence comps'}
+        tooltip={ownerPacingHint ?? (ownerMode ? 'Occupation récente vs estimation marché' : 'Occupation récente vs TTM · ou référence comps')}
       >
         {hasL90d ? (
           <>
@@ -131,11 +151,11 @@ export default function StatsCards({
               value={String(Math.round(pacing.fillRate * 100))}
               unit="%"
               sub={
-                pacing.monthLabel.startsWith('Marché')
-                  ? `${pacing.monthLabel} · occ. 24 mois`
-                  : pacing.monthLabel.startsWith('Estimation')
-                    ? `${pacing.monthLabel} · occ. projetée`
-                    : `${pacing.monthLabel} · ${pacingHint?.includes('comps') ? 'occ. médiane comps' : 'occupation 90 j'}`
+                pacingMonthLabel.startsWith('Marché')
+                  ? `${pacingMonthLabel} · occ. 24 mois`
+                  : pacingMonthLabel.startsWith('Estimation')
+                    ? `${pacingMonthLabel} · occ. projetée`
+                    : `${pacingMonthLabel} · occupation 90 j`
               }
               trend={
                 pacing.trendPct !== 0
@@ -148,13 +168,18 @@ export default function StatsCards({
             />
             <MiniStats
               items={[
-                { v: pacing.avgAdr > 0 ? fmtMad(pacing.avgAdr) : dash, l: pacingHint?.includes('comps') ? 'ADR comps' : pacing.monthLabel.startsWith('Estimation') ? 'ADR est.' : 'ADR L90D' },
+                {
+                  v: pacing.avgAdr > 0 ? fmtMad(pacing.avgAdr) : dash,
+                  l: pacingMonthLabel.startsWith('Estimation') ? 'ADR est.' : 'ADR L90D',
+                },
                 { v: pacing.avgStayNights > 0 ? `${pacing.avgStayNights.toFixed(1)}n` : dash, l: 'Durée moy' },
-                { v: pacing.compsCount > 0 ? String(pacing.compsCount) : dash, l: 'Comps' },
+                ownerMode
+                  ? { v: pacing.leadTimeDays > 0 ? `${Math.round(pacing.leadTimeDays)}j` : dash, l: 'Lead time' }
+                  : { v: pacing.compsCount > 0 ? String(pacing.compsCount) : dash, l: 'Comps' },
               ]}
             />
-            {pacingHint ? (
-              <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.75 }}>{pacingHint}</Typography>
+            {ownerPacingHint ? (
+              <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.75 }}>{ownerPacingHint}</Typography>
             ) : null}
           </>
         ) : (
@@ -162,7 +187,7 @@ export default function StatsCards({
             compact
             title="—"
             hint={
-              pacingHint ??
+              ownerPacingHint ??
               'Estimation marché indisponible — activez « Estimation auto » (lun. & jeu.)'
             }
           />

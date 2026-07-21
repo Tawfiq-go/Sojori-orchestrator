@@ -25,8 +25,6 @@ import {
   TextArea,
   ConfigIntroBar,
   PillButton,
-  LockedPropertyBox,
-  PlaceEndpointField,
   TYPO,
 } from './SHARED';
 import { DashedAddButton } from '../../../../components/listing/form-v2/components/cleaning/CleaningSlotDialogs';
@@ -35,6 +33,9 @@ import {
   cloneCityAssociation,
   TRANSPORT_JOURNEY_OPTIONS,
   journeyLabel,
+  HUB_TYPES,
+  hubTypeLabel,
+  buildRouteLabel,
   type TransportExternalKind,
   type TransportJourneyTag,
   type TransportPriceType,
@@ -86,6 +87,7 @@ function mapApiRoute(t: Record<string, unknown>, i: number, fallbackProperty: Li
     lat: route.propertyLat ?? fallbackProperty.lat,
     lng: route.propertyLng ?? fallbackProperty.lng,
   };
+  const hubName = String((t as Record<string, unknown>).hubName || (route as Record<string, unknown>).hubName || '');
   const draft: TransportRouteItem = {
     id: String(t.id || `route_${i}`),
     labelFr: name.fr || 'Route',
@@ -97,7 +99,8 @@ function mapApiRoute(t: Record<string, unknown>, i: number, fallbackProperty: Li
       route.externalLabel ||
       (route.journeyTag === 'departure' ? route.to : route.from) ||
       '',
-    externalKind: route.externalKind || 'other',
+    externalKind: route.externalKind || 'airport',
+    hubName,
     propertyPlace,
     priceType: pricing.type === 'per_person' ? 'per_person' : 'total',
     price: Number(pricing.amount) || 0,
@@ -131,12 +134,13 @@ function normalizeLoadedRoutes(
 
 function routeToApi(r: TransportRouteItem, i: number, property: ListingPropertyPlace) {
   const synced = syncRouteEndpoints(r, property);
-  const fr = synced.labelFr;
+  const labels = buildRouteLabel(synced.externalKind, synced.hubName || '', synced.journeyTag);
   const p = synced.propertyPlace || property;
   return {
     id: synced.id,
     enabled: synced.enabled,
-    name: { fr, en: fr, ar: fr },
+    hubName: synced.hubName || '',
+    name: labels,
     description: { fr: synced.descriptionFr, en: synced.descriptionFr, ar: synced.descriptionFr },
     route: {
       from: synced.from,
@@ -534,29 +538,6 @@ export default function TransportConfigTab({
   );
 }
 
-function RoutePlaceCell({
-  label,
-  locked,
-  place,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  locked: boolean;
-  place: ListingPropertyPlace;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  if (locked) {
-    return <LockedPropertyBox name={place.name} address={place.address} label={label} />;
-  }
-  return (
-    <PlaceEndpointField label={label} value={value} onChange={onChange} placeholder={placeholder} />
-  );
-}
-
 function SortableRoute({
   route,
   listingProperty,
@@ -581,7 +562,6 @@ function SortableRoute({
   const isDeparture = route.journeyTag === 'departure';
   const isOther = route.journeyTag === 'other';
   const place = route.propertyPlace || listingProperty;
-  const externalValue = route.externalLabel || '';
 
   return (
     <Box
@@ -655,6 +635,23 @@ function SortableRoute({
             </Stack>
           </FormRow>
 
+          <FormRow compact label="Type de lieu">
+            <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
+              {HUB_TYPES.map(kind => (
+                <PillButton
+                  key={kind}
+                  active={route.externalKind === kind}
+                  onClick={() => {
+                    const labels = buildRouteLabel(kind, route.hubName || '', route.journeyTag);
+                    onUpdate({ externalKind: kind, labelFr: labels.fr });
+                  }}
+                >
+                  {hubTypeLabel(kind)}
+                </PillButton>
+              ))}
+            </Stack>
+          </FormRow>
+
           <Box
             sx={{
               mb: 1.25,
@@ -663,37 +660,38 @@ function SortableRoute({
               gap: 1.25,
             }}
           >
-            <RoutePlaceCell
-              label="Provenance"
-              locked={isDeparture}
-              place={place}
-              value={isOther ? route.from : externalValue}
-              onChange={v =>
-                onUpdate(isOther ? { from: v, externalLabel: v } : { externalLabel: v })
-              }
-              placeholder="Ex. Aéroport Marrakech, Gare Casa-Voyageurs…"
-            />
-            <RoutePlaceCell
-              label="Destination"
-              locked={isArrival}
-              place={place}
-              value={isOther ? route.to : externalValue}
-              onChange={v => onUpdate(isOther ? { to: v } : { externalLabel: v })}
-              placeholder="Ex. Aéroport Mohammed V, Marina…"
-            />
+            <FormRow compact label="Nom du lieu">
+              <TextInput
+                value={route.hubName || ''}
+                onChange={e => {
+                  const hubName = e.target.value;
+                  const labels = buildRouteLabel(route.externalKind, hubName, route.journeyTag);
+                  onUpdate({ hubName, externalLabel: hubName, labelFr: labels.fr });
+                }}
+                placeholder="Ex. Marrakech, Casablanca, Tanger…"
+              />
+            </FormRow>
+            {isOther && (
+              <FormRow compact label="Destination">
+                <TextInput
+                  value={route.to || ''}
+                  onChange={e => onUpdate({ to: e.target.value })}
+                  placeholder="Ex. Marina, Centre-ville…"
+                />
+              </FormRow>
+            )}
           </Box>
           <Typography sx={{ ...TYPO.caption, color: T.text3, mb: 1.25 }}>
-            {isArrival &&
-              'Arrivée : provenance modifiable (navette) · destination = votre logement (fixe).'}
-            {isDeparture &&
-              'Départ : provenance = logement (fixe) · destination modifiable (navette).'}
+            {isArrival && `Arrivée : ${route.labelFr || 'lieu'} → votre logement (fixe).`}
+            {isDeparture && `Départ : votre logement (fixe) → ${route.labelFr || 'lieu'}.`}
             {isOther && 'Autre : provenance et destination libres.'}
           </Typography>
 
+          <Typography sx={{ ...TYPO.monoHelp, fontSize: 10.5, color: T.text3, mb: 1 }}>
+            Aperçu : 🇫🇷 {buildRouteLabel(route.externalKind, route.hubName || '', route.journeyTag).fr} · 🇬🇧 {buildRouteLabel(route.externalKind, route.hubName || '', route.journeyTag).en} · 🇸🇦 {buildRouteLabel(route.externalKind, route.hubName || '', route.journeyTag).ar}
+          </Typography>
+
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 0 }}>
-            <FormRow compact label="Nom affiché">
-              <TextInput value={route.labelFr} onChange={e => onUpdate({ labelFr: e.target.value })} />
-            </FormRow>
             <FormRow compact label="Tarif">
               <Stack direction="row" sx={{ gap: 0.5 }}>
                 <PillButton active={route.priceType === 'total'} onClick={() => onUpdate({ priceType: 'total' })}>Fixe</PillButton>
