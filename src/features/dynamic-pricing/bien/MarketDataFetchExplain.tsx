@@ -1,7 +1,7 @@
 import { Box, Typography } from '@mui/material';
 import { T, DP_LAYOUT_SX } from '../_tokens';
 
-/** Explique les flux marché — visible admin uniquement. */
+/** Explique le flux concurrence — visible admin uniquement (onglet Concurrence). */
 export default function MarketDataFetchExplain({ isPlatformAdmin = false }: { isPlatformAdmin?: boolean }) {
   if (!isPlatformAdmin) return null;
 
@@ -16,7 +16,7 @@ export default function MarketDataFetchExplain({ isPlatformAdmin = false }: { is
         }}
       >
         <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 1 }}>
-          Données utiles PM · estimation + concurrence
+          Concurrence · comparables AirROI
         </Typography>
         <Box
           component="ul"
@@ -30,22 +30,18 @@ export default function MarketDataFetchExplain({ isPlatformAdmin = false }: { is
           }}
         >
           <li>
-            <strong>Estimation marché</strong> (~0,20 $) — profil Sojori · potentiel §02 & calendrier pricing.
-            Vos ADR/calendrier ops restent dans Sojori (pas besoin de relire Airbnb).
+            <strong>Concurrence</strong> (~0,10 $) — jusqu’à ~25 annonces similaires autour du GPS du
+            listing · médianes §01, carte §02, tableau §03.
           </li>
           <li>
-            <strong>Concurrence</strong> (~0,10 $) — jusqu’à ~25 annonces similaires · carte §06 & tableau détaillé §07.
+            GPS + chambres / SDB / capacité pris sur la fiche Sojori — pas besoin de l’URL Airbnb RU
+            pour lancer les comps.
           </li>
-          {isPlatformAdmin ? (
-            <li>
-              <strong>Admin</strong> — refresh complet Airbnb (fiche + metrics + tarifs/jour) disponible dans le bandeau
-              pour étude rentabilité.
-            </li>
-          ) : null}
+          <li>
+            <strong>Estimation & aperçu prix</strong> — onglet « Réglages pricing » (potentiel §02,
+            aperçu §05). Refresh complet Airbnb (perf annonce) : bandeau admin.
+          </li>
         </Box>
-        <Typography sx={{ fontSize: 11, color: T.text3, mt: 1 }}>
-          Prix marché ville (Marrakech, Casablanca) : refresh portefeuille « Actualisation des données » (admin).
-        </Typography>
       </Box>
     </Box>
   );
