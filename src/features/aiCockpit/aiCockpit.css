@@ -913,6 +913,35 @@
 /* Le lien x/y du composant Réservations (thème clair) — le rendre lisible sur fond sombre */
 .ck-relpop-reg > span + * { color: var(--ck-gold) !important; }
 
+.ck-relpop-time {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--ck-line);
+  border-radius: 8px;
+  color: var(--ck-text);
+  font: inherit;
+  font-family: "Geist Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 8px;
+  color-scheme: dark;
+}
+
+.ck-relpop-apply {
+  border: 0;
+  cursor: pointer;
+  background: var(--ck-gold);
+  color: #171307;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: transform 0.15s;
+}
+
+.ck-relpop-apply:hover { transform: translateY(-1px); }
+.ck-relpop-apply:disabled { opacity: 0.55; cursor: default; }
+
 .ck-relpop-actions {
   display: flex;
   gap: 8px;

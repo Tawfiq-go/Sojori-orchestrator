@@ -581,6 +581,9 @@ function RelancesPanel({
   onReload: () => void;
 }) {
   const [sending, setSending] = useState(false);
+  /* Ménage : choisir/modifier l'heure — patch du scheduledDate de la tâche (même API que la page Tâches). */
+  const [cleanTime, setCleanTime] = useState(step.time ?? step.estimatedTime ?? '11:00');
+  const [savingTime, setSavingTime] = useState(false);
   const relances = step.relances ?? [];
   const nextPending = relances.find((r) => r.status === 'en_attente');
   /* choose-task (départ/arrivée) sinon la tâche elle-même (ex. enregistrement). */
@@ -603,7 +606,7 @@ function RelancesPanel({
     <div className="ck-relpop-backdrop" onClick={onClose} role="presentation">
       <div className="ck-relpop" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Relances">
         <div className="ck-relpop-hdr">
-          <span>🔔 Relances · {checkLabel(step)}</span>
+          <span>{CHECK_ICON[step.kind]} {checkLabel(step)}</span>
           <button type="button" onClick={onClose} aria-label="Fermer">✕</button>
         </div>
 
@@ -624,6 +627,43 @@ function RelancesPanel({
             );
           })}
         </div>
+
+        {/* Ménage : choisir / modifier l'heure (patch scheduledDate de la tâche) */}
+        {step.kind === 'cleaning' && step.taskId && (
+          <div className="ck-relpop-reg">
+            <span>🕐 Heure du ménage :</span>
+            <input
+              type="time"
+              className="ck-relpop-time"
+              value={cleanTime}
+              onChange={(e) => setCleanTime(e.target.value)}
+              aria-label="Heure du ménage"
+            />
+            <button
+              type="button"
+              className="ck-relpop-apply"
+              disabled={savingTime || !/^\d{2}:\d{2}$/.test(cleanTime)}
+              onClick={() =>
+                void (async () => {
+                  setSavingTime(true);
+                  try {
+                    const res = await fulltaskApi.patchTask(step.taskId!, {
+                      scheduledDate: `${planDate}T${cleanTime}:00`,
+                    });
+                    if (res?.success === false) throw new Error(res?.error || 'Mise à jour refusée');
+                    toast.success(`Ménage planifié à ${cleanTime}`);
+                    onReload();
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Échec mise à jour de l'heure");
+                    setSavingTime(false);
+                  }
+                })()
+              }
+            >
+              {savingTime ? '…' : 'Appliquer'}
+            </button>
+          </div>
+        )}
 
         {/* Enregistrement : finalisation voyageurs — même API que la page Réservations */}
         {step.taskType === 'registration' && (
@@ -650,6 +690,20 @@ function RelancesPanel({
               }
             >
               🕐 Fixer une heure
+            </button>
+          )}
+          {step.kind === 'cleaning' && step.taskId && (
+            <button
+              type="button"
+              onClick={() =>
+                onAction(step, {
+                  type: 'assign',
+                  label: step.staffName ? 'Modifier le staff' : 'Assigner un staff',
+                  taskId: step.taskId,
+                })
+              }
+            >
+              👤 {step.staffName ? 'Modifier le staff' : 'Assigner un staff'}
             </button>
           )}
           {step.guestPhone && (
@@ -842,7 +896,8 @@ function FlightRow({
             const action = s.attention?.actions?.[0];
             const state = s.state === 'done' ? 'done' : s.state === 'attention' ? 'attn' : 'todo';
             const isRegistration = s.taskType === 'registration';
-            const clickable = Boolean(s.relances?.length) || isRegistration;
+            const isCleaningTask = s.kind === 'cleaning' && Boolean(s.taskId);
+            const clickable = Boolean(s.relances?.length) || isRegistration || isCleaningTask;
             return (
               <div
                 key={s.id}
