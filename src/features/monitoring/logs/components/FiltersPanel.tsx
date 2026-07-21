@@ -12,6 +12,7 @@ const TIME_RANGES = [
   { value: '6h', label: '6 h' },
   { value: '24h', label: '24 h' },
   { value: '7d', label: '7 j' },
+  { value: 'custom', label: 'Période…' },
 ] as const;
 
 const SEVERITIES = [
@@ -45,6 +46,7 @@ interface FiltersPanelProps {
 export function FiltersPanel({ filters, onFilterChange, onClear, stats }: FiltersPanelProps) {
   const services = Array.from(new Set([...DEFAULT_SERVICES, ...(stats?.services || [])]));
   const infoHeavy = filters.severity === 'info' || filters.severity === 'everything';
+  const isCustom = filters.timeRange === 'custom';
 
   return (
     <Stack spacing={1.5}>
@@ -58,6 +60,32 @@ export function FiltersPanel({ filters, onFilterChange, onClear, stats }: Filter
           />
         ))}
       </FilterBar>
+
+      {isCustom ? (
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ alignItems: { sm: 'center' } }}>
+          <TextField
+            size="small"
+            label="Du"
+            type="datetime-local"
+            value={filters.startAt}
+            onChange={(e) => onFilterChange('startAt', e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            sx={{ maxWidth: 240 }}
+          />
+          <TextField
+            size="small"
+            label="Au"
+            type="datetime-local"
+            value={filters.endAt}
+            onChange={(e) => onFilterChange('endAt', e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            sx={{ maxWidth: 240 }}
+          />
+          <Typography sx={{ fontSize: 11, color: t.text3 }}>
+            Max 7 jours
+          </Typography>
+        </Stack>
+      ) : null}
 
       <FilterBar>
         {SEVERITIES.map((opt) => (

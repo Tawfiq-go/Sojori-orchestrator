@@ -57,8 +57,18 @@ function toQueryParams(
   filters: LogsFilters,
   before?: number | null,
 ): Record<string, string | undefined> {
+  const isCustom = filters.timeRange === 'custom';
+  const startIso =
+    isCustom && filters.startAt
+      ? new Date(filters.startAt).toISOString()
+      : undefined;
+  const endIso =
+    isCustom && filters.endAt ? new Date(filters.endAt).toISOString() : undefined;
+
   return {
-    timeRange: filters.timeRange,
+    timeRange: isCustom ? 'custom' : filters.timeRange,
+    start: startIso,
+    end: endIso,
     service: filters.service !== 'all' ? filters.service : undefined,
     // Backend: omitted/`all` = alerts only; `everything` = incl. info
     severity: filters.severity === 'all' ? undefined : filters.severity,
@@ -67,6 +77,20 @@ function toQueryParams(
     limit: String(LOGS_PAGE_SIZE),
     before: before != null ? String(before) : undefined,
     sortTime: 'desc',
+  };
+}
+
+function toStatsParams(filters: LogsFilters): Record<string, string | undefined> {
+  const isCustom = filters.timeRange === 'custom';
+  return {
+    timeRange: isCustom ? 'custom' : filters.timeRange,
+    start:
+      isCustom && filters.startAt ? new Date(filters.startAt).toISOString() : undefined,
+    end: isCustom && filters.endAt ? new Date(filters.endAt).toISOString() : undefined,
+    service: filters.service !== 'all' ? filters.service : undefined,
+    search: filters.search.trim() || undefined,
+    category: filters.category !== 'all' ? filters.category : undefined,
+    includeInfo: wantsInfoVolume(filters.severity) ? '1' : undefined,
   };
 }
 
@@ -82,19 +106,26 @@ export function useLogs(filters: LogsFilters, page: number, before: number | nul
     setLoading(true);
     setError(null);
     try {
+      if (filters.timeRange === 'custom') {
+        const startMs = Date.parse(filters.startAt);
+        const endMs = Date.parse(filters.endAt);
+        if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
+          throw new Error('Période personnalisée invalide.');
+        }
+        if (endMs <= startMs) {
+          throw new Error('La date de fin doit être après la date de début.');
+        }
+        if (endMs - startMs > 7 * 24 * 60 * 60 * 1000) {
+          throw new Error('La période personnalisée est limitée à 7 jours.');
+        }
+      }
+
       const params = toQueryParams(filters, page > 1 ? before : null);
-      const includeInfo = wantsInfoVolume(filters.severity);
 
       // Stats must not block the journal: a Loki stats timeout used to wipe the whole page.
       const [logsSettled, statsSettled] = await Promise.allSettled([
         logsProxyGet<LogsQueryResponse>('/query', params),
-        logsProxyGet<LogsStatsResponse>('/stats', {
-          timeRange: filters.timeRange,
-          service: filters.service !== 'all' ? filters.service : undefined,
-          search: filters.search.trim() || undefined,
-          category: filters.category !== 'all' ? filters.category : undefined,
-          includeInfo: includeInfo ? '1' : undefined,
-        }),
+        logsProxyGet<LogsStatsResponse>('/stats', toStatsParams(filters)),
       ]);
 
       if (logsSettled.status === 'rejected') {
