@@ -516,6 +516,8 @@ export type DayPlanStep = {
   staffName?: string | null;
   registrationPending?: boolean;
   state: 'done' | 'pending' | 'attention';
+  /** Prochaine relance client planifiée (ISO) — quand l'heure n'est pas encore choisie. */
+  nextRelanceAt?: string;
   auto: boolean;
   meta?: string;
   chainId?: string;
@@ -540,6 +542,8 @@ export type DayPlanChain = {
   status: 'ok' | 'tight' | 'broken';
   cleaningDurationMinutes: number;
   expectedCleaningEnd: string;
+  /** Heures départ/arrivée non choisies : la marge est estimée sur des défauts. */
+  hoursUnknown?: boolean;
 };
 
 export type DayPlanResponse = {
