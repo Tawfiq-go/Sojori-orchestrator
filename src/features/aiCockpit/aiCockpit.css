@@ -1,0 +1,703 @@
+/* ════════════════════════════════════════════════════════════════════
+   aiCockpit.css — Cockpit IA · salle de contrôle sombre
+   ════════════════════════════════════════════════════════════════════ */
+
+.ck-root {
+  --ck-bg: #12100a;
+  --ck-panel: #1b1810;
+  --ck-panel2: #221e13;
+  --ck-line: rgba(230, 182, 76, 0.14);
+  --ck-gold: #e6b64c;
+  --ck-gold-deep: #b8851a;
+  --ck-text: #f4efe4;
+  --ck-text2: #b5ad9c;
+  --ck-text3: #7d766a;
+  --ck-ok: #34d399;
+  --ck-warn: #fbbf24;
+  --ck-bad: #f87171;
+  --ck-ai: #a78bfa;
+
+  position: relative;
+  min-height: calc(100vh - 120px);
+  margin: -8px -24px -24px;
+  padding: 22px 30px 40px;
+  background:
+    radial-gradient(1100px 480px at 80% -10%, rgba(184, 133, 26, 0.14), transparent 60%),
+    radial-gradient(900px 420px at -10% 110%, rgba(124, 58, 237, 0.10), transparent 60%),
+    var(--ck-bg);
+  color: var(--ck-text);
+  border-radius: 18px 18px 0 0;
+  overflow: hidden;
+}
+
+/* grille de fond façon radar */
+.ck-root::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(230, 182, 76, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(230, 182, 76, 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none;
+  mask-image: radial-gradient(1200px 600px at 50% 0%, #000 30%, transparent 100%);
+}
+
+/* ── Topbar ── */
+
+.ck-topbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  animation: ck-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ck-brand { display: flex; align-items: center; gap: 12px; }
+
+.ck-brand-orb {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 30%, #f2d38b, var(--ck-gold-deep) 65%);
+  box-shadow: 0 0 24px rgba(230, 182, 76, 0.5);
+  animation: ck-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes ck-breathe {
+  0%, 100% { box-shadow: 0 0 18px rgba(230, 182, 76, 0.35); transform: scale(1); }
+  50% { box-shadow: 0 0 34px rgba(230, 182, 76, 0.65); transform: scale(1.06); }
+}
+
+.ck-brand-name { font-size: 17px; font-weight: 850; letter-spacing: -0.02em; }
+.ck-brand-sub { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ck-text3); }
+
+.ck-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--ck-ok);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  padding: 4px 10px;
+  border-radius: 99px;
+}
+
+.ck-live i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ck-ok);
+  animation: ck-blink 1.4s ease-in-out infinite;
+}
+
+@keyframes ck-blink { 50% { opacity: 0.25; } }
+
+.ck-clock {
+  margin-left: auto;
+  font-family: "Geist Mono", monospace;
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  color: var(--ck-gold);
+  text-shadow: 0 0 22px rgba(230, 182, 76, 0.35);
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-datenav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--ck-panel);
+  border: 1px solid var(--ck-line);
+  border-radius: 11px;
+  padding: 3px;
+}
+
+.ck-datenav button {
+  border: 0;
+  background: transparent;
+  color: var(--ck-text2);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  padding: 5px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ck-datenav button:hover { background: var(--ck-panel2); color: var(--ck-gold); }
+
+.ck-datenav .ck-today { font-size: 11.5px; }
+
+.ck-datenav input {
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ck-text);
+  font: inherit;
+  font-family: "Geist Mono", monospace;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 5px 2px;
+  color-scheme: dark;
+}
+
+/* ── Ligne de journée ── */
+
+.ck-dayline {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  animation: ck-in 0.5s 0.05s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ck-dayline-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ck-text3);
+  flex-shrink: 0;
+}
+
+.ck-dayline-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: visible;
+}
+
+.ck-dayline-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--ck-gold-deep), var(--ck-gold));
+  box-shadow: 0 0 14px rgba(230, 182, 76, 0.35);
+  transition: width 1s linear;
+}
+
+.ck-dayline-cursor {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--ck-gold);
+  box-shadow: 0 0 0 4px rgba(230, 182, 76, 0.22), 0 0 18px rgba(230, 182, 76, 0.6);
+  animation: ck-breathe 2.4s ease-in-out infinite;
+}
+
+.ck-dayline-edge {
+  font-family: "Geist Mono", monospace;
+  font-size: 9.5px;
+  color: var(--ck-text3);
+  flex-shrink: 0;
+}
+
+/* ── Console copilot ── */
+
+.ck-console {
+  position: relative;
+  background: linear-gradient(180deg, var(--ck-panel), var(--ck-panel2));
+  border: 1px solid var(--ck-line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  animation: ck-in 0.5s 0.1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ck-ask {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(230, 182, 76, 0.22);
+  border-radius: 12px;
+  padding: 3px 5px 3px 13px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.ck-ask:focus-within {
+  border-color: var(--ck-gold);
+  box-shadow: 0 0 0 3px rgba(230, 182, 76, 0.16), 0 0 30px rgba(230, 182, 76, 0.12);
+}
+
+.ck-ask-orb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f2d38b, var(--ck-gold-deep));
+  animation: ck-breathe 2.6s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.ck-ask input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ck-text);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 11px 0;
+}
+
+.ck-ask input::placeholder { color: var(--ck-text3); }
+
+.ck-ask button {
+  border: 0;
+  cursor: pointer;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f2d38b, var(--ck-gold-deep));
+  color: #171307;
+  font-size: 15px;
+  font-weight: 900;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.ck-ask button:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(230, 182, 76, 0.4); }
+
+.ck-prompts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+.ck-prompts button {
+  border: 1px solid var(--ck-line);
+  background: transparent;
+  color: var(--ck-text2);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ck-prompts button:hover {
+  border-color: rgba(230, 182, 76, 0.5);
+  color: var(--ck-gold);
+  transform: translateY(-1px);
+}
+
+.ck-reply {
+  margin-top: 11px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  background: rgba(230, 182, 76, 0.07);
+  border-left: 3px solid var(--ck-gold);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.55;
+  color: var(--ck-text);
+  animation: ck-in 0.25s ease both;
+}
+
+.ck-caret {
+  display: inline-block;
+  width: 7px;
+  height: 13px;
+  margin-left: 2px;
+  background: var(--ck-gold);
+  vertical-align: -2px;
+  animation: ck-blink 0.8s steps(2) infinite;
+}
+
+.ck-reply-cta {
+  margin-left: 10px;
+  border: 0;
+  cursor: pointer;
+  background: var(--ck-gold);
+  color: #171307;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 850;
+  padding: 5px 12px;
+  border-radius: 8px;
+  animation: ck-in 0.25s ease both;
+}
+
+.ck-dots { display: inline-flex; gap: 5px; }
+
+.ck-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ck-gold);
+  animation: ck-bounce 1s ease-in-out infinite;
+}
+
+.ck-dots i:nth-child(2) { animation-delay: 0.14s; }
+.ck-dots i:nth-child(3) { animation-delay: 0.28s; }
+
+@keyframes ck-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.35; }
+  50% { transform: translateY(-5px); opacity: 1; }
+}
+
+/* ── KPI ── */
+
+.ck-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 1100px) { .ck-kpis { grid-template-columns: repeat(2, 1fr); } }
+
+.ck-kpi {
+  background: var(--ck-panel);
+  border: 1px solid var(--ck-line);
+  border-radius: 13px;
+  padding: 12px 15px;
+  animation: ck-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ck-kpi b {
+  display: block;
+  font-family: "Geist Mono", monospace;
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ck-gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-kpi span {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ck-text3);
+}
+
+.ck-kpi.ai b { color: var(--ck-ai); }
+.ck-kpi.warn b { color: var(--ck-warn); }
+.ck-kpi.ok b { color: var(--ck-ok); }
+
+/* ── Tableau de vol ── */
+
+.ck-board { position: relative; }
+
+.ck-board-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 4px 2px 10px;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ck-text2);
+}
+
+.ck-board-title.solo { margin-top: 22px; }
+
+.ck-board-hint {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ck-text3);
+  text-transform: none;
+}
+
+.ck-empty {
+  padding: 34px;
+  text-align: center;
+  color: var(--ck-text3);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--ck-panel);
+  border: 1px dashed var(--ck-line);
+  border-radius: 14px;
+}
+
+.ck-flight {
+  position: relative;
+  background: var(--ck-panel);
+  border: 1px solid var(--ck-line);
+  border-left: 3px solid var(--ck-ok);
+  border-radius: 14px;
+  padding: 13px 16px 11px;
+  margin-bottom: 10px;
+  animation: ck-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s, border-color 0.2s;
+}
+
+.ck-flight:hover { transform: translateX(3px); box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4); }
+
+.ck-flight.tight { border-left-color: var(--ck-warn); }
+.ck-flight.broken { border-left-color: var(--ck-bad); }
+
+.ck-flight.is-target {
+  animation: ck-target 1.5s ease-in-out 2;
+  border-color: rgba(230, 182, 76, 0.65);
+}
+
+@keyframes ck-target {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(230, 182, 76, 0.55), 0 0 40px rgba(230, 182, 76, 0.18); }
+  50% { box-shadow: 0 0 0 6px rgba(230, 182, 76, 0.2), 0 0 40px rgba(230, 182, 76, 0.08); }
+}
+
+.ck-flight-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ck-flight-name {
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ck-flight-chip {
+  flex-shrink: 0;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 99px;
+}
+
+.ck-flight-chip.ok { color: var(--ck-ok); background: rgba(52, 211, 153, 0.10); }
+.ck-flight-chip.tight { color: var(--ck-warn); background: rgba(251, 191, 36, 0.10); }
+.ck-flight-chip.broken { color: var(--ck-bad); background: rgba(248, 113, 113, 0.12); animation: ck-blink 1.6s ease-in-out infinite; }
+
+/* piste : départ ──ménage──╌gap╌── arrivée */
+
+.ck-strip {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 2px 0 10px;
+}
+
+.ck-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 120px;
+}
+
+.ck-node-time {
+  font-family: "Geist Mono", monospace;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ck-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-node-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2.5px solid var(--ck-text3);
+  background: var(--ck-bg);
+}
+
+.ck-node-dot.done { border-color: var(--ck-ok); background: var(--ck-ok); }
+.ck-node-dot.dep { border-color: var(--ck-gold-deep); }
+.ck-node-dot.arr { border-color: var(--ck-gold); }
+
+.ck-node-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ck-text2);
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ck-seg {
+  position: relative;
+  flex: 2;
+  height: 22px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--ck-line);
+  overflow: hidden;
+  margin: 0 8px;
+  align-self: center;
+}
+
+.ck-seg.gap { flex: 1; height: 8px; border-radius: 99px; }
+
+.ck-seg-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, rgba(184, 133, 26, 0.5), rgba(230, 182, 76, 0.8));
+  transition: width 60s linear;
+}
+
+.ck-seg.gap .ck-seg-fill { background: rgba(230, 182, 76, 0.35); }
+
+/* balayage lumineux sur la fenêtre de ménage en cours */
+.ck-seg:not(.gap)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.10) 50%, transparent 65%);
+  transform: translateX(-100%);
+  animation: ck-sweep 3.6s ease-in-out infinite;
+}
+
+@keyframes ck-sweep {
+  0%, 45% { transform: translateX(-100%); }
+  80%, 100% { transform: translateX(100%); }
+}
+
+.ck-seg-label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 10.5px;
+  font-weight: 750;
+  color: var(--ck-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 10px;
+}
+
+.ck-seg-label em { font-style: normal; color: var(--ck-warn); }
+
+/* pied de ligne */
+
+.ck-flight-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 26px;
+}
+
+.ck-flight-reason {
+  flex: 1;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--ck-text2);
+  line-height: 1.4;
+}
+
+.ck-flight-reason.warn { color: var(--ck-warn); }
+
+.ck-flight-cta {
+  flex-shrink: 0;
+  border: 0;
+  cursor: pointer;
+  background: var(--ck-gold);
+  color: #171307;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 850;
+  padding: 7px 14px;
+  border-radius: 9px;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.ck-flight-cta:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(230, 182, 76, 0.35); }
+
+.ck-flight-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 750;
+  color: var(--ck-ok);
+}
+
+.ck-flight-auto i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: rgba(52, 211, 153, 0.15);
+  font-size: 10px;
+  font-style: normal;
+}
+
+/* ── Trafic hors turnover ── */
+
+.ck-solo { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
+
+.ck-solo-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--ck-panel);
+  border: 1px solid var(--ck-line);
+  border-radius: 11px;
+  padding: 9px 12px;
+  animation: ck-in 0.4s ease both;
+}
+
+.ck-solo-item.attention { border-color: rgba(251, 191, 36, 0.4); }
+
+.ck-solo-kind { font-size: 13px; }
+
+.ck-solo-time {
+  font-family: "Geist Mono", monospace;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ck-gold);
+}
+
+.ck-solo-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ck-solo-guest { font-size: 11px; color: var(--ck-text3); font-weight: 650; }
+
+.ck-solo-item button {
+  border: 1px solid rgba(230, 182, 76, 0.4);
+  background: transparent;
+  color: var(--ck-gold);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* ── Entrée ── */
+
+@keyframes ck-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ck-root *, .ck-root *::before, .ck-root *::after { animation: none !important; }
+}
