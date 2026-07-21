@@ -899,6 +899,20 @@
 
 .ck-relpop-item.todo .ck-relpop-when { color: var(--ck-gold); }
 
+.ck-relpop-reg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--ck-line);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ck-text2);
+}
+
+/* Le lien x/y du composant Réservations (thème clair) — le rendre lisible sur fond sombre */
+.ck-relpop-reg > span + * { color: var(--ck-gold) !important; }
+
 .ck-relpop-actions {
   display: flex;
   gap: 8px;

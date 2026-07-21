@@ -17,6 +17,7 @@ import type {
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import PlanManualAssignModal from '../planReservation/PlanManualAssignModal';
 import EscaladeForceSlotModal from '../planReservation/EscaladeForceSlotModal';
+import { ReservationRegistrationActions } from '../../components/reservations/ReservationRegistrationActions';
 import './aiCockpit.css';
 
 /* ─── Helpers temps ─── */
@@ -624,6 +625,17 @@ function RelancesPanel({
           })}
         </div>
 
+        {/* Enregistrement : finalisation voyageurs — même API que la page Réservations */}
+        {step.taskType === 'registration' && (
+          <div className="ck-relpop-reg">
+            <span>📝 Finaliser l'enregistrement voyageurs :</span>
+            <ReservationRegistrationActions
+              reservationId={step.reservationId}
+              onRegistrationUpdated={() => onReload()}
+            />
+          </div>
+        )}
+
         <div className="ck-relpop-actions">
           {nextPending && relanceTaskId && (
             <button type="button" className="primary" disabled={sending} onClick={() => void sendNow()}>
@@ -829,13 +841,14 @@ function FlightRow({
           {orderedChecks.map((s) => {
             const action = s.attention?.actions?.[0];
             const state = s.state === 'done' ? 'done' : s.state === 'attention' ? 'attn' : 'todo';
-            const hasRelances = Boolean(s.relances?.length);
+            const isRegistration = s.taskType === 'registration';
+            const clickable = Boolean(s.relances?.length) || isRegistration;
             return (
               <div
                 key={s.id}
-                className={`ck-check ${state} ${hasRelances ? 'has-rel' : ''}`}
-                title={s.attention?.reason || (hasRelances ? 'Voir les relances' : s.title)}
-                onClick={hasRelances ? () => onOpenRelances(s) : undefined}
+                className={`ck-check ${state} ${clickable ? 'has-rel' : ''}`}
+                title={s.attention?.reason || (clickable ? 'Voir relances & actions' : s.title)}
+                onClick={clickable ? () => onOpenRelances(s) : undefined}
               >
                 <span className="ck-check-state" aria-hidden>
                   {state === 'done' ? '✓' : state === 'attn' ? '!' : '·'}
@@ -843,7 +856,9 @@ function FlightRow({
                 <span className="ck-check-ico" aria-hidden>{CHECK_ICON[s.kind]}</span>
                 <span className="ck-check-label">{checkLabel(s)}</span>
                 <span className="ck-check-detail">{checkDetail(s, planDate)}</span>
-                {hasRelances && <span className="ck-check-rel" aria-hidden>🔔{s.relances!.length}</span>}
+                {Boolean(s.relances?.length) && (
+                  <span className="ck-check-rel" aria-hidden>🔔{s.relances!.length}</span>
+                )}
                 {action && (
                   <button
                     type="button"
