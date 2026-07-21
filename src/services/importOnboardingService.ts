@@ -250,3 +250,32 @@ export async function launchImportOrchestration(
   });
   return res.data ?? { success: false };
 }
+
+/**
+ * Annule l’orchestration pour une résa pending :
+ * import conservé, pas de plan créé (status skipped).
+ */
+export async function skipImportOrchestration(reservationId: string): Promise<{
+  success: boolean;
+  reservationNumber?: string;
+  status?: string;
+  alreadySkipped?: boolean;
+}> {
+  logImportOnboarding('skip POST →', {
+    reservationId,
+    url: `${RESERVATIONS_BASE}/${reservationId}/import-orchestration/skip`,
+  });
+  const res = await apiClient.post(
+    `${RESERVATIONS_BASE}/${reservationId}/import-orchestration/skip`,
+    {},
+  );
+  logImportOnboarding('skip POST ←', {
+    reservationId,
+    httpStatus: res.status,
+    success: res.data?.success,
+    reservationNumber: res.data?.reservationNumber,
+    status: res.data?.status,
+    fullBody: res.data,
+  });
+  return res.data ?? { success: false };
+}

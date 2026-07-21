@@ -249,7 +249,7 @@ export default function MarrakechMap({
   bien,
   radiusKmOptions = [0.5, 1, 2, 3],
   minRatingOptions = [4.0, 4.5, 4.8],
-  radiusKm = 1,
+  radiusKm = 3,
   minRating = 4.0,
   onRadiusChange,
   onMinRatingChange,
@@ -262,14 +262,17 @@ export default function MarrakechMap({
   const bienLng = Number(bien.lng);
   const bienOk = Number.isFinite(bienLat) && Number.isFinite(bienLng);
 
-  const filteredComps = useMemo(() => {
+  const ratingFilteredComps = useMemo(() => {
     if (!bienOk) return [];
-    return compositions.filter(
-      (c) =>
-        c.rating >= minR &&
-        distanceKm(bienLat, bienLng, c.lat, c.lng) <= radius,
-    );
-  }, [compositions, bienLat, bienLng, bienOk, minR, radius]);
+    return compositions.filter((c) => c.rating >= minR);
+  }, [compositions, bienOk, minR]);
+
+  const inRadiusCount = useMemo(() => {
+    if (!bienOk) return 0;
+    return ratingFilteredComps.filter(
+      (c) => distanceKm(bienLat, bienLng, c.lat, c.lng) <= radius,
+    ).length;
+  }, [ratingFilteredComps, bienLat, bienLng, bienOk, radius]);
 
   return (
     <Box
@@ -352,7 +355,7 @@ export default function MarrakechMap({
           onChange={(id) => setBasemapId(id as MapBasemapId)}
         />
         <Typography sx={{ ml: 'auto', fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
-          {filteredComps.length} / {compositions.length} comps
+          {ratingFilteredComps.length} comps · {inRadiusCount} dans {radius}km
         </Typography>
       </Stack>
 
@@ -363,7 +366,7 @@ export default function MarrakechMap({
           bienLng={bienLng}
           bienOk={bienOk}
           bienName={bien.name}
-          filteredComps={filteredComps}
+          filteredComps={ratingFilteredComps}
           radiusKm={radius}
         />
 

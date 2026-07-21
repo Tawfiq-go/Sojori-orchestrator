@@ -13,6 +13,17 @@ export function normalizeCityKey(city: string | null | undefined): string {
   return raw;
 }
 
+/** Occ. marché par défaut quand l’API estimate ne renvoie pas occupancy (TTM / pacing auto). */
+const DEFAULT_CITY_OCCUPANCY: Record<string, number> = {
+  Marrakech: 0.43,
+  Casablanca: 0.38,
+};
+
+export function defaultOccupancyForCity(city: string | null | undefined): number {
+  const key = normalizeCityKey(city);
+  return DEFAULT_CITY_OCCUPANCY[key] ?? 0;
+}
+
 export function listingMatchesCityScope(
   listingCity: string | null | undefined,
   scope: string | null,

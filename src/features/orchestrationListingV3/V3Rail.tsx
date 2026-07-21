@@ -19,7 +19,7 @@ import {
 } from './listingCapabilityActivation';
 import { SCHEDULED_MESSAGES_RAIL_KEY } from './OrchestrationModelSubTabs';
 
-const GROUP_EMOJI: Record<string, string> = {
+export const GROUP_EMOJI: Record<string, string> = {
   cleaning: '🧹',
   journey: '✈️',
   communication: '💬',

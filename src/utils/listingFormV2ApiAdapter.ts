@@ -634,9 +634,111 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     messageCheckout: Array.isArray(hydrated.messageCheckout) ? [...hydrated.messageCheckout] : [],
     preporteyInformation: isRecord(hydrated.preporteyInformation) ? { ...hydrated.preporteyInformation } : {},
     otaChannelsSnapshot: isRecord(hydrated.otaChannelsSnapshot) ? { ...hydrated.otaChannelsSnapshot } : undefined,
-    directPaymentMethods: Array.isArray(hydrated.directPaymentMethods)
-      ? [...hydrated.directPaymentMethods]
-      : undefined,
+    directPaymentMethods: mapDirectPaymentMethodsFromApi(hydrated),
+    directPayment: mapDirectPaymentFromApi(hydrated),
+    visibility: mapVisibilityFromApi(hydrated),
+    channelDiscounts: mapChannelDiscountsFromApi(hydrated),
+    directEnabled: mapVisibilityFromApi(hydrated).sojori,
+  };
+}
+
+function mapPartialMethodFromApi(partial: UnknownRecord, legacy?: UnknownRecord | null) {
+  const src = partial && Object.keys(partial).length ? partial : legacy || {};
+  return {
+    enabled: src.enabled === true,
+    depositPercent: asNumber(src.depositPercent) ?? 20,
+    allowFullPayment: src.allowFullPayment !== false,
+  };
+}
+
+function mapChannelDiscountsFromApi(hydrated: UnknownRecord): {
+  sojori: number | '';
+  directBooking: number | '';
+  whatsapp: number | '';
+  marketplace: number | '';
+} {
+  const raw = isRecord(hydrated.channelDiscounts) ? hydrated.channelDiscounts : {};
+  const legacyDirect = asNumber(hydrated.directDiscount);
+  const pick = (key: string) => {
+    const v = asNumber(raw[key]);
+    return v != null && v > 0 ? v : '';
+  };
+  return {
+    sojori: pick('sojori'),
+    directBooking: pick('directBooking') || (legacyDirect != null && legacyDirect > 0 ? legacyDirect : ''),
+    whatsapp: pick('whatsapp'),
+    marketplace: pick('marketplace'),
+  };
+}
+
+function mapDirectPaymentMethodsFromApi(hydrated: UnknownRecord): string[] {
+  const dp = mapDirectPaymentFromApi(hydrated);
+  return dp.methods;
+}
+
+function mapDirectPaymentFromApi(hydrated: UnknownRecord): {
+  methods: string[];
+  cashForReturningOnly: boolean;
+  wire: { iban: string; bic: string; holder: string; bankName: string };
+  partialPayment: {
+    card: { enabled: boolean; depositPercent: number; allowFullPayment: boolean };
+    wire: { enabled: boolean; depositPercent: number; allowFullPayment: boolean };
+  };
+} {
+  const raw = isRecord(hydrated.directPayment) ? hydrated.directPayment : {};
+  const legacyMethods = Array.isArray(hydrated.directPaymentMethods)
+    ? hydrated.directPaymentMethods.map((m) => String(m))
+    : ['card', 'wire', 'cash'];
+  const methodsRaw = Array.isArray(raw.methods) ? raw.methods.map((m) => String(m)) : legacyMethods;
+  const allowed = new Set(['card', 'wire', 'cash']);
+  const methods = methodsRaw.filter((m) => allowed.has(m));
+  const wire = isRecord(raw.wire) ? raw.wire : {};
+  const partial = isRecord(raw.partialPayment) ? raw.partialPayment : {};
+  const legacyPartial =
+    partial.enabled !== undefined && !partial.card && !partial.wire ? partial : null;
+  return {
+    methods: methods.length ? methods : ['card', 'wire', 'cash'],
+    cashForReturningOnly: raw.cashForReturningOnly === true,
+    wire: {
+      iban: asString(wire.iban),
+      bic: asString(wire.bic),
+      holder: asString(wire.holder),
+      bankName: asString(wire.bankName),
+    },
+    partialPayment: {
+      card: mapPartialMethodFromApi(
+        isRecord(partial.card) ? partial.card : {},
+        legacyPartial,
+      ),
+      wire: mapPartialMethodFromApi(isRecord(partial.wire) ? partial.wire : {}),
+    },
+  };
+}
+
+function mapVisibilityFromApi(hydrated: UnknownRecord): {
+  sojori: boolean;
+  directBooking: boolean;
+  whatsapp: boolean;
+  marketplace: boolean;
+} {
+  const vis = isRecord(hydrated.visibility) ? hydrated.visibility : null;
+  if (vis) {
+    return {
+      sojori: vis.sojori !== false,
+      directBooking: vis.directBooking !== false,
+      whatsapp: vis.whatsapp !== false,
+      marketplace: vis.marketplace !== false,
+    };
+  }
+  const sojori =
+    hydrated.directEnabled !== undefined
+      ? hydrated.directEnabled === true
+      : hydrated.atSojori !== false;
+  return {
+    sojori,
+    directBooking: true,
+    whatsapp: true,
+    marketplace: true,
   };
 }
 
@@ -927,13 +1029,66 @@ export function mergeFormV2ToUpdatePropertyPayload(
     payload.otaChannelsSnapshot = values.otaChannelsSnapshot;
   }
 
-  if (values.directEnabled !== undefined) {
-    payload.directEnabled = values.directEnabled === true;
+  if (isRecord(values.visibility)) {
+    payload.visibility = {
+      sojori: values.visibility.sojori === true,
+      directBooking: values.visibility.directBooking === true,
+      whatsapp: values.visibility.whatsapp === true,
+      marketplace: values.visibility.marketplace === true,
+    };
+    payload.atSojori = payload.visibility.sojori;
+  } else if (values.directEnabled !== undefined) {
+    payload.visibility = {
+      sojori: values.directEnabled === true,
+      directBooking: true,
+      whatsapp: true,
+      marketplace: true,
+    };
+    payload.atSojori = values.directEnabled === true;
   }
-  if (values.slug !== undefined) payload.slug = asString(values.slug);
-  if (values.directDiscount !== undefined) payload.directDiscount = asNumber(values.directDiscount);
-  if (values.returningGuestDiscount !== undefined) {
-    payload.returningGuestDiscount = values.returningGuestDiscount === true;
+  if (isRecord(values.channelDiscounts)) {
+    const cd = values.channelDiscounts;
+    payload.channelDiscounts = {
+      sojori: asNumber(cd.sojori) ?? 0,
+      directBooking: asNumber(cd.directBooking) ?? 0,
+      whatsapp: asNumber(cd.whatsapp) ?? 0,
+      marketplace: asNumber(cd.marketplace) ?? 0,
+    };
+  }
+
+  if (isRecord(values.directPayment) || Array.isArray(values.directPaymentMethods)) {
+    const dp = isRecord(values.directPayment) ? values.directPayment : {};
+    const methodsRaw = Array.isArray(dp.methods)
+      ? dp.methods
+      : Array.isArray(values.directPaymentMethods)
+        ? values.directPaymentMethods
+        : ['card', 'wire', 'cash'];
+    const wire = isRecord(dp.wire) ? dp.wire : {};
+    const partial = isRecord(dp.partialPayment) ? dp.partialPayment : {};
+    const cardPartial = isRecord(partial.card) ? partial.card : {};
+    const wirePartial = isRecord(partial.wire) ? partial.wire : {};
+    payload.directPayment = {
+      methods: methodsRaw.map((m) => String(m)).filter((m) => ['card', 'wire', 'cash'].includes(m)),
+      cashForReturningOnly: dp.cashForReturningOnly === true,
+      wire: {
+        iban: asString(wire.iban),
+        bic: asString(wire.bic),
+        holder: asString(wire.holder),
+        bankName: asString(wire.bankName),
+      },
+      partialPayment: {
+        card: {
+          enabled: cardPartial.enabled === true,
+          depositPercent: asNumber(cardPartial.depositPercent) ?? 20,
+          allowFullPayment: cardPartial.allowFullPayment !== false,
+        },
+        wire: {
+          enabled: wirePartial.enabled === true,
+          depositPercent: asNumber(wirePartial.depositPercent) ?? 20,
+          allowFullPayment: wirePartial.allowFullPayment !== false,
+        },
+      },
+    };
   }
 
   if (values.cancellationPolicy !== undefined && values.cancellationPolicy !== 'custom' && values.cancellationPolicy !== '') {

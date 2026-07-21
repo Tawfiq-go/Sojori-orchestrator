@@ -32,6 +32,10 @@ export interface StatsCardsProps {
   };
   /** Ex. médiane revenus TTM des comps marché */
   potentialHint?: string;
+  /** Ex. projection depuis estimation (~0,20 $) */
+  ttmHint?: string;
+  /** Ex. médiane occ. comps (~0,10 $) */
+  pacingHint?: string;
 }
 
 const fmtMad = (n: number) => n.toLocaleString('fr-FR');
@@ -47,6 +51,8 @@ export default function StatsCards({
   performance,
   pacing,
   potentialHint,
+  ttmHint,
+  pacingHint,
 }: StatsCardsProps) {
   return (
     <Box
@@ -75,13 +81,17 @@ export default function StatsCards({
         )}
       </StatCard>
 
-      <StatCard label="PERFORMANCE TTM" emoji="📊" tooltip="Snapshot marché · performance_metrics">
+      <StatCard
+        label="PERFORMANCE TTM"
+        emoji="📊"
+        tooltip={ttmHint ?? 'Revenus · occupation · ADR sur 12 mois'}
+      >
         {hasTtm ? (
           <>
             <ValueBlock
               value={fmtMad(performance.ttmRevenue)}
               unit="MAD"
-              sub={`≈ ${fmtMad(performance.ttmUsd)} USD · 12 derniers mois`}
+              sub={`≈ ${fmtMad(performance.ttmUsd)} USD · 12 mois`}
             />
             <MiniStats
               items={[
@@ -90,37 +100,72 @@ export default function StatsCards({
                 { v: String(performance.nights), l: 'Nuits' },
               ]}
             />
-            <CtxPhrase warn>
-              Quartile estimé · <b>{performance.quartile}</b>
-            </CtxPhrase>
+            {ttmHint ? (
+              <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.75 }}>{ttmHint}</Typography>
+            ) : (
+              <CtxPhrase warn>
+                Quartile estimé · <b>{performance.quartile}</b>
+              </CtxPhrase>
+            )}
           </>
         ) : (
-          <DataEmptyPlaceholder compact title="—" hint="Refresh marché (⟳) pour ce bien" />
+          <DataEmptyPlaceholder
+            compact
+            title="—"
+            hint={
+              ttmHint ??
+              'Estimation marché indisponible — activez « Estimation auto » (lun. & jeu.)'
+            }
+          />
         )}
       </StatCard>
 
-      <StatCard label="PACING L90D" emoji="⚡" tooltip="l90d_* · snapshot listing">
+      <StatCard
+        label="PACING L90D"
+        emoji="⚡"
+        tooltip={pacingHint ?? 'Occupation récente vs TTM · ou référence comps'}
+      >
         {hasL90d ? (
           <>
             <ValueBlock
               value={String(Math.round(pacing.fillRate * 100))}
               unit="%"
-              sub={`${pacing.monthLabel} · occupation 90 j`}
-              trend={{
-                delta: pacing.trendPct,
-                label: `${pacing.trendPct >= 0 ? '+' : ''}${Math.round(pacing.trendPct * 100)} pts vs TTM`,
-              }}
+              sub={
+                pacing.monthLabel.startsWith('Marché')
+                  ? `${pacing.monthLabel} · occ. 24 mois`
+                  : pacing.monthLabel.startsWith('Estimation')
+                    ? `${pacing.monthLabel} · occ. projetée`
+                    : `${pacing.monthLabel} · ${pacingHint?.includes('comps') ? 'occ. médiane comps' : 'occupation 90 j'}`
+              }
+              trend={
+                pacing.trendPct !== 0
+                  ? {
+                      delta: pacing.trendPct,
+                      label: `${pacing.trendPct >= 0 ? '+' : ''}${Math.round(pacing.trendPct * 100)} pts vs estimation`,
+                    }
+                  : undefined
+              }
             />
             <MiniStats
               items={[
-                { v: pacing.avgAdr > 0 ? fmtMad(pacing.avgAdr) : dash, l: 'ADR L90D' },
+                { v: pacing.avgAdr > 0 ? fmtMad(pacing.avgAdr) : dash, l: pacingHint?.includes('comps') ? 'ADR comps' : pacing.monthLabel.startsWith('Estimation') ? 'ADR est.' : 'ADR L90D' },
                 { v: pacing.avgStayNights > 0 ? `${pacing.avgStayNights.toFixed(1)}n` : dash, l: 'Durée moy' },
-                { v: dash, l: 'Comps' },
+                { v: pacing.compsCount > 0 ? String(pacing.compsCount) : dash, l: 'Comps' },
               ]}
             />
+            {pacingHint ? (
+              <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.75 }}>{pacingHint}</Typography>
+            ) : null}
           </>
         ) : (
-          <DataEmptyPlaceholder compact title="—" hint="Champs l90d_* absents du snapshot" />
+          <DataEmptyPlaceholder
+            compact
+            title="—"
+            hint={
+              pacingHint ??
+              'Estimation marché indisponible — activez « Estimation auto » (lun. & jeu.)'
+            }
+          />
         )}
       </StatCard>
     </Box>

@@ -41,8 +41,9 @@ export const DETAIL_TABS = [
     { id: 'availability', icon: '📅', label: 'Disponibilité & séjour' },
     { id: 'fees',         icon: '💳', label: 'Fees & Deposits' },
   ]},
-  { group: 'Distribution', items: [
-    { id: 'distribution', icon: '📡', label: 'Distribution' },
+  { group: 'Canaux', items: [
+    { id: 'direct-booking', icon: '🌐', label: 'Direct booking' },
+    { id: 'ota',            icon: '📡', label: 'OTA' },
   ]},
   { group: 'Inventaire', items: [
     { id: 'rooms',        icon: '🛏️', label: 'Rooms & Beds' },
@@ -70,8 +71,9 @@ export const DETAIL_TABS_MULTI = [
     { id: 'availability', icon: '📅', label: 'Disponibilité & séjour' },
     { id: 'fees',         icon: '💳', label: 'Fees & Deposits' },
   ]},
-  { group: 'Distribution', items: [
-    { id: 'distribution', icon: '📡', label: 'Distribution' },
+  { group: 'Canaux', items: [
+    { id: 'direct-booking', icon: '🌐', label: 'Direct booking' },
+    { id: 'ota',            icon: '📡', label: 'OTA' },
   ]},
   { group: 'Admin', items: [
     { id: 'license',      icon: '📄', label: 'License' },

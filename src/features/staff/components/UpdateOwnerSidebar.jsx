@@ -229,7 +229,20 @@ const CREATE_EMPTY_PM_PROFILE = {
   verified: false,
   published: false,
   responseTime: '',
+  distributionChannels: {
+    sojori: true,
+    directBooking: true,
+    whatsapp: true,
+    marketplace: true,
+  },
 };
+
+const PM_DISTRIBUTION_CHANNEL_ROWS = [
+  { key: 'sojori', icon: '🏠', title: 'Sojori marketplace', desc: 'Catalogue sojori.com et réservations marketplace' },
+  { key: 'directBooking', icon: '🌐', title: 'Direct booking', desc: 'Site marque blanche du PM (ex. daraway.com)' },
+  { key: 'whatsapp', icon: '💬', title: 'WhatsApp', desc: 'Recherche et réservation via le flow WhatsApp' },
+  { key: 'marketplace', icon: '👥', title: 'Autres PMs', desc: 'Partage inter-PMs sur la vitrine publique' },
+];
 
 const CREATE_INITIAL_VALUES = {
   firstName: '',
@@ -260,6 +273,7 @@ const CREATE_INITIAL_VALUES = {
 
 const OWNER_TABS = [
   { id: 'compte', label: 'Compte' },
+  { id: 'canaux-distribution', label: 'Canaux distribution' },
   { id: 'entreprise', label: 'Entreprise RU' },
   { id: 'webhooks-ru', label: 'Webhooks RU' },
   { id: 'sojori-web', label: 'Site sojori-vente' },
@@ -1509,6 +1523,12 @@ const UpdateOwnerSidebar = ({
           verified: owner?.pmProfile?.verified || false,
           published: owner?.pmProfile?.published || false,
           responseTime: owner?.pmProfile?.responseTime || '',
+          distributionChannels: {
+            sojori: owner?.pmProfile?.distributionChannels?.sojori !== false,
+            directBooking: owner?.pmProfile?.distributionChannels?.directBooking !== false,
+            whatsapp: owner?.pmProfile?.distributionChannels?.whatsapp !== false,
+            marketplace: owner?.pmProfile?.distributionChannels?.marketplace !== false,
+          },
         };
         })(),
       };
@@ -2519,6 +2539,42 @@ const UpdateOwnerSidebar = ({
                     <input className="input" name="country" value={values.country} onChange={handleChange} />
                   </div>
                 </div>
+                  </>
+                )}
+              />
+
+              <TabPanel
+                active={activeTab}
+                id="canaux-distribution"
+                render={() => (
+                  <>
+                    <div className="owner-form-hint" style={{ marginBottom: 12 }}>
+                      <b>Autorisations canal (niveau PM)</b> — activez les canaux que ce property manager
+                      peut utiliser. La granularité par annonce se configure ensuite dans chaque listing
+                      (onglet <b>Direct booking</b>).
+                    </div>
+                    {PM_DISTRIBUTION_CHANNEL_ROWS.map((row) => {
+                      const dc = values.pmProfile?.distributionChannels || {};
+                      const checked = dc[row.key] !== false;
+                      return (
+                        <div key={row.key} className="admin-row" style={{ marginBottom: 10 }}>
+                          <span style={{ fontSize: 18 }}>{row.icon}</span>
+                          <div style={{ flex: 1 }}>
+                            <div className="nm">{row.title}</div>
+                            <div className="ds">{row.desc}</div>
+                          </div>
+                          <div
+                            className={`toggle${checked ? ' on' : ''}`}
+                            onClick={() => {
+                              setFieldValue(`pmProfile.distributionChannels.${row.key}`, !checked);
+                            }}
+                            onKeyDown={() => {}}
+                            role="switch"
+                            aria-checked={checked}
+                          />
+                        </div>
+                      );
+                    })}
                   </>
                 )}
               />
