@@ -392,6 +392,31 @@ export default function PricePreviewCard({
                               {rule.emoji ?? '🗓'} {rule.name}
                             </Box>
                           ) : null}
+                          {r.applied?.occupancyPct != null ? (
+                            <Box component="span" title={`Ajustement occupation appliqué : ${r.applied.occupancyPct > 0 ? '+' : ''}${r.applied.occupancyPct} %`} sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: r.applied.occupancyPct < 0 ? T.errorTint : T.successTint, color: r.applied.occupancyPct < 0 ? T.error : T.success }}>
+                              📉 {r.applied.occupancyPct > 0 ? '+' : ''}{r.applied.occupancyPct} %
+                            </Box>
+                          ) : null}
+                          {r.applied?.lastMinutePct != null ? (
+                            <Box component="span" title={`Dernière minute appliquée : ${r.applied.lastMinutePct} %`} sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: T.infoTint, color: T.info }}>
+                              ⏰ {r.applied.lastMinutePct > 0 ? '+' : ''}{r.applied.lastMinutePct} %
+                            </Box>
+                          ) : null}
+                          {r.applied?.gapMinStay ? (
+                            <Box component="span" title={`Comble trous : min stay ${r.applied.gapMinStay.from} → ${r.applied.gapMinStay.to} nuits`} sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: T.goldTint, color: T.goldDeep }}>
+                              🧩 {r.applied.gapMinStay.from}→{r.applied.gapMinStay.to} n
+                            </Box>
+                          ) : null}
+                          {r.applied?.gapSignaled ? (
+                            <Box component="span" title="Trou d'une nuit signalé (pas de modification automatique)" sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: T.bg3, color: T.text3 }}>
+                              🧩 trou 1 n
+                            </Box>
+                          ) : null}
+                          {r.applied?.clamp ? (
+                            <Box component="span" title={r.applied.clamp === 'ceiling' ? 'Prix ramené au plafond' : 'Prix remonté au plancher'} sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: T.bg3, color: T.text2 }}>
+                              {r.applied.clamp === 'ceiling' ? '⤒ plafond' : '⤓ plancher'}
+                            </Box>
+                          ) : null}
                         </Box>
                         <Box component="td" sx={{ ...cellSx, textAlign: 'center' }}>
                           <Box
