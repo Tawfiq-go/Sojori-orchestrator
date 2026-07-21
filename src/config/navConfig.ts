@@ -110,7 +110,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     roles: PM_ROLES,
     core: true,
     items: [
-      { id: 'orch/focus', label: 'Focus · Copilot', iconType: 'settings', iconColor: '#b8851a', badge: 'AI' },
+      { id: 'orch/cockpit', label: 'Cockpit IA', iconType: 'settings', iconColor: '#b8851a', badge: 'AI' },
       { id: 'orch/plans', label: 'Plans par séjour', iconType: 'settings', iconColor: '#666666', badge: 'CORE' },
       { id: 'orch/day-plan', label: 'Plan de journée', iconType: 'settings', iconColor: '#666666', badge: 'NEW' },
       { id: 'orch/workflows', label: 'Workflows · config', iconType: 'settings', iconColor: '#666666' },
