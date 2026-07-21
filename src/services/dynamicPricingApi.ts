@@ -650,6 +650,15 @@ export type ApplyPreviewDiffAlertDto =
   | 'blocked'
   | 'no_change';
 
+/** Ajustements réellement appliqués sur le jour (chips aperçu). */
+export type ApplyPreviewDiffAppliedDto = {
+  occupancyPct?: number;
+  lastMinutePct?: number;
+  clamp?: 'floor' | 'ceiling';
+  gapMinStay?: { from: number; to: number };
+  gapSignaled?: boolean;
+};
+
 export type ApplyPreviewDiffRowDto = {
   date: string;
   airroiMad: number | null;
@@ -660,6 +669,7 @@ export type ApplyPreviewDiffRowDto = {
   alert: ApplyPreviewDiffAlertDto;
   pushToCalendar: boolean;
   skipReason?: string;
+  applied?: ApplyPreviewDiffAppliedDto;
 };
 
 export type ApplyPreviewDiffDto = {
