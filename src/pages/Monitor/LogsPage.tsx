@@ -21,12 +21,12 @@ import {
 } from '../../features/monitoring/shared/MonitorDesign';
 
 export default function LogsPage() {
-  const { filters, updateFilter, clearFilters } = useFilters();
+  const { filters, updateFilter, patchFilters, clearFilters } = useFilters();
   const [page, setPage] = useState(1);
   // Cursor stack: index 0 unused; page N uses cursors[N] as `before` (page 1 = null).
   const [cursors, setCursors] = useState<(number | null)[]>([null]);
   const before = page > 1 ? cursors[page] ?? null : null;
-  const { logs, stats, hasMore, nextBefore, loading, error, refetch } = useLogs(
+  const { logs, stats, hasMore, nextBefore, loading, error, rangeWarning, refetch } = useLogs(
     filters,
     page,
     before,
@@ -163,12 +163,14 @@ export default function LogsPage() {
         <FiltersPanel
           filters={filters}
           onFilterChange={updateFilter}
+          onPatchFilters={patchFilters}
           onClear={clearFilters}
           stats={stats}
         />
       </MonitorSection>
 
       {error ? <Alert severity="error">{error}</Alert> : null}
+      {rangeWarning ? <Alert severity="warning">{rangeWarning}</Alert> : null}
 
       <MonitorSection
         dense
