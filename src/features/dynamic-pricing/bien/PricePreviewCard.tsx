@@ -465,16 +465,22 @@ export default function PricePreviewCard({
                           sx={{
                             ...cellSx, fontWeight: 800,
                             color:
-                              st !== 'free' || delta == null
+                              delta == null
                                 ? T.text4
                                 : delta > 0
                                   ? T.success
                                   : delta < 0
                                     ? T.error
                                     : T.text4,
+                            opacity: st === 'free' ? 1 : 0.75,
                           }}
                         >
-                          {st === 'reserved' ? 'figé' : st === 'blocked' ? 'non poussé' : st === 'manual' ? 'manuel' : delta == null ? '—' : `${delta > 0 ? '+' : ''}${fmt(delta)}`}
+                          {delta == null ? '—' : `${delta > 0 ? '+' : ''}${fmt(delta)}`}
+                          {st !== 'free' ? (
+                            <Box component="span" sx={{ fontSize: 9.5, color: T.text4, fontWeight: 400, ml: 0.625 }}>
+                              {st === 'reserved' ? 'figé' : st === 'blocked' ? 'non poussé' : 'manuel'}
+                            </Box>
+                          ) : null}
                         </Box>
                       </Box>
                     </React.Fragment>
