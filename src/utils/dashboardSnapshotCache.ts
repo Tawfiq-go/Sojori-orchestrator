@@ -8,7 +8,7 @@ const HINTS_PREFIX = 'sojori-dashboard-hints-v1:';
 const SNAPSHOT_TTL_MS = 5 * 60_000;
 const HINTS_TTL_MS = 30 * 60_000;
 
-function cacheKey(period: DashboardPeriod, listingIds: string[], ownerId?: string | null) {
+function cacheKey(period: DashboardPeriod | string, listingIds: string[], ownerId?: string | null) {
   const ids = [...listingIds].sort().join(',');
   const owner = ownerId ? String(ownerId) : '__platform__';
   return `${PREFIX}${owner}:${period}:${ids}`;
@@ -48,7 +48,7 @@ export function writeDashboardListingIdsHint(ownerId: string | null | undefined,
 }
 
 export function readDashboardSnapshotCache(
-  period: DashboardPeriod,
+  period: DashboardPeriod | string,
   listingIds: string[],
   ownerId?: string | null,
 ): DashboardSnapshot | null {
@@ -63,7 +63,7 @@ export type DashboardSnapshotCacheEntry = {
 };
 
 export function readDashboardSnapshotCacheEntry(
-  period: DashboardPeriod,
+  period: DashboardPeriod | string,
   listingIds: string[],
   ownerId?: string | null,
   options?: { includePartial?: boolean },
@@ -100,7 +100,7 @@ export function readDashboardSnapshotCacheEntry(
 
 /** `hydrated: false` = core seul (ne pas réutiliser au prochain chargement). */
 export function writeDashboardSnapshotCache(
-  period: DashboardPeriod,
+  period: DashboardPeriod | string,
   listingIds: string[],
   snapshot: DashboardSnapshot,
   ownerId?: string | null,
