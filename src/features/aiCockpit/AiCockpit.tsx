@@ -469,10 +469,18 @@ export default function AiCockpit() {
             </div>
             <div className="ck-solo">
               {soloTraffic.map((s) => (
-                <div key={s.id} className={`ck-solo-item ${s.state}`}>
+                <div
+                  key={s.id}
+                  className={`ck-solo-item ${s.state}`}
+                  title={s.attention?.reason || s.title}
+                >
                   <span className="ck-solo-kind">{CHECK_ICON[s.kind]}</span>
-                  <span className="ck-solo-time">{s.time ? fmtTime(s.time) : '—:—'}</span>
-                  <span className="ck-solo-name" title={s.listingName}>{s.listingName}</span>
+                  <span className="ck-solo-time">
+                    {s.time ? fmtTime(s.time) : s.kind === 'cleaning' ? 'au départ' : '—:—'}
+                  </span>
+                  <span className="ck-solo-name" title={s.title}>
+                    {s.kind === 'arrival' || s.kind === 'departure' ? s.listingName : s.title}
+                  </span>
                   {s.guestName && <span className="ck-solo-guest">{s.guestName}</span>}
                   {s.state === 'attention' && s.attention?.actions?.[0] && (
                     <button type="button" onClick={() => runAction(s, s.attention!.actions[0])}>
