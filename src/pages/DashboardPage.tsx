@@ -111,13 +111,37 @@ function DashboardPageContent() {
   const [selectedMonth, setSelectedMonth] = useState('');
   const monthOptions = useMemo(() => {
     const now = new Date();
-    return Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const mk = (offset: number) => {
+      const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
       return { key, label: label.charAt(0).toUpperCase() + label.slice(1) };
-    });
+    };
+    return {
+      current: mk(0),
+      // Le pilotage se fait vers l'avant : les mois à venir d'abord (déjà réservé)
+      future: Array.from({ length: 12 }, (_, i) => mk(i + 1)),
+      past: Array.from({ length: 12 }, (_, i) => mk(-(i + 1))),
+    };
   }, []);
+  const monthLabelByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of [monthOptions.current, ...monthOptions.future, ...monthOptions.past]) map.set(m.key, m.label);
+    return map;
+  }, [monthOptions]);
+  /** ‹ › : pas d'un mois depuis le mois affiché ('' = mois courant). */
+  const stepMonth = useCallback(
+    (delta: number) => {
+      const base = selectedMonth || monthOptions.current.key;
+      const [y, m] = base.split('-').map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthLabelByKey.has(key)) return;
+      setSelectedMonth(key === monthOptions.current.key ? '' : key);
+      setPeriod('Mois');
+    },
+    [selectedMonth, monthOptions, monthLabelByKey],
+  );
   const cachePeriodKey = selectedMonth ? `${period}:${selectedMonth}` : period;
   const [properties, setProperties] = useState<DashboardPropertyOption[]>([]);
   const [listingFilterOptions, setListingFilterOptions] = useState<DashboardPropertyOption[]>([]);
@@ -524,7 +548,7 @@ function DashboardPageContent() {
     <DashboardWrapper hidePageHeader disableScopeGate>
       <PageHeader
         title="Dashboard principal"
-        count={ownerScopeUnset ? '—' : dashboardReady ? (selectedMonth ? (monthOptions.find((m) => m.key === selectedMonth)?.label ?? selectedMonth) : period) : 'Chargement…'}
+        count={ownerScopeUnset ? '—' : dashboardReady ? (selectedMonth ? (monthLabelByKey.get(selectedMonth) ?? selectedMonth) : period) : 'Chargement…'}
       >
         <Button sx={btnGhostSx} disabled={ownerScopeUnset} onClick={() => setRefreshKey((value) => value + 1)}>
           Actualiser
@@ -628,6 +652,7 @@ function DashboardPageContent() {
             setSelectedMonth(key);
             if (key) setPeriod('Mois');
           }}
+          onStep={stepMonth}
         />
         <ListingCheckboxFilter
           listings={listingOptions}
@@ -960,39 +985,76 @@ function MonthPickerChip({
   options,
   value,
   onChange,
+  onStep,
 }: {
-  options: Array<{ key: string; label: string }>;
+  options: {
+    current: { key: string; label: string };
+    future: Array<{ key: string; label: string }>;
+    past: Array<{ key: string; label: string }>;
+  };
   value: string;
   onChange: (key: string) => void;
+  onStep: (delta: number) => void;
 }) {
+  const stepSx = {
+    border: '1.5px solid rgba(20,17,10,0.14)',
+    bgcolor: '#fff',
+    borderRadius: '99px',
+    minWidth: 0,
+    width: 30,
+    height: 30,
+    p: 0,
+    fontSize: 14,
+    fontWeight: 800,
+    color: 'text.secondary',
+    '&:hover': { borderColor: '#F4CF5E', bgcolor: 'rgba(244,207,94,0.14)', color: '#c79b22' },
+  } as const;
   return (
-    <Box
-      component="select"
-      value={value}
-      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
-      aria-label="Choisir un mois"
-      sx={{
-        border: '1.5px solid',
-        borderColor: value ? '#F4CF5E' : 'rgba(20,17,10,0.14)',
-        bgcolor: value ? 'rgba(244,207,94,0.14)' : '#fff',
-        color: value ? '#c79b22' : 'inherit',
-        borderRadius: '99px',
-        px: 1.75,
-        py: 0.75,
-        fontSize: 12.5,
-        fontWeight: 700,
-        fontFamily: 'inherit',
-        cursor: 'pointer',
-        appearance: 'none',
-      }}
-    >
-      <option value="">📅 Choisir un mois…</option>
-      {options.map((m) => (
-        <option key={m.key} value={m.key}>
-          {m.label}
-        </option>
-      ))}
-    </Box>
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+      <Button sx={stepSx} onClick={() => onStep(-1)} aria-label="Mois précédent">
+        ‹
+      </Button>
+      <Box
+        component="select"
+        value={value}
+        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
+        aria-label="Choisir un mois"
+        sx={{
+          border: '1.5px solid',
+          borderColor: value ? '#F4CF5E' : 'rgba(20,17,10,0.14)',
+          bgcolor: value ? 'rgba(244,207,94,0.14)' : '#fff',
+          color: value ? '#c79b22' : 'inherit',
+          borderRadius: '99px',
+          px: 1.75,
+          py: 0.75,
+          fontSize: 12.5,
+          fontWeight: 700,
+          fontFamily: 'inherit',
+          cursor: 'pointer',
+          appearance: 'none',
+          maxWidth: 190,
+        }}
+      >
+        <option value="">📅 {options.current.label} (en cours)</option>
+        <optgroup label="📈 À venir — déjà réservé">
+          {options.future.map((m) => (
+            <option key={m.key} value={m.key}>
+              {m.label}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="🕓 Mois passés">
+          {options.past.map((m) => (
+            <option key={m.key} value={m.key}>
+              {m.label}
+            </option>
+          ))}
+        </optgroup>
+      </Box>
+      <Button sx={stepSx} onClick={() => onStep(1)} aria-label="Mois suivant">
+        ›
+      </Button>
+    </Stack>
   );
 }
 
