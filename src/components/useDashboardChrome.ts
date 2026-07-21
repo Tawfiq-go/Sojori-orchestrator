@@ -215,6 +215,10 @@ export function useDashboardChrome() {
       return 'finances/reports';
     }
 
+    if (path.startsWith('/orchestration/focus')) {
+      return 'orch/focus';
+    }
+
     if (
       path.startsWith('/orchestration/ops') ||
       path.startsWith('/tasks/ops') ||

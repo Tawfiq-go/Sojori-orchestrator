@@ -60,6 +60,9 @@ const OrchestrationDailyOpsPage = lazyWithReload(() =>
 const OrchestrationDayPlanPage = lazyWithReload(() =>
   import('./pages/OrchestrationDayPlanPage').then((module) => ({ default: module.default }))
 );
+const OrchestrationFocusPage = lazyWithReload(() =>
+  import('./pages/OrchestrationFocusPage').then((module) => ({ default: module.default }))
+);
 const OrchestrationPlansPageV2 = lazyWithReload(() =>
   import("./pages/OrchestrationPlansPageV2").then((module) => ({ default: module.default }))
 );
@@ -334,6 +337,7 @@ function App() {
               <Route path="/orchestration/plans" element={<LazyRoute><PlansReservationPage /></LazyRoute>} />
               <Route path="/orchestration/ops" element={<LazyRoute><OrchestrationDailyOpsPage /></LazyRoute>} />
               <Route path="/orchestration/day-plan" element={<LazyRoute><OrchestrationDayPlanPage /></LazyRoute>} />
+              <Route path="/orchestration/focus" element={<LazyRoute><OrchestrationFocusPage /></LazyRoute>} />
               <Route path="/orchestration/config" element={<LazyRoute><TasksOrchestrationFulltaskPage /></LazyRoute>} />
               <Route path="/orchestration/whatsapp-messages" element={<LazyRoute><TasksWhatsAppMessagesPage /></LazyRoute>} />
               <Route path="/orchestration/mockup" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
