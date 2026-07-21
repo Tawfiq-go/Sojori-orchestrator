@@ -585,6 +585,84 @@
 
 .ck-seg-label em { font-style: normal; color: var(--ck-warn); }
 
+/* ── Checklist statuts + actions par turnover ── */
+
+.ck-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 5px 14px;
+  margin: 2px 0 10px;
+  padding: 9px 12px;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.ck-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11.5px;
+  animation: ck-in 0.35s ease both;
+}
+
+.ck-check-state {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.ck-check.done .ck-check-state { background: rgba(52, 211, 153, 0.15); color: var(--ck-ok); }
+.ck-check.attn .ck-check-state { background: rgba(251, 191, 36, 0.18); color: var(--ck-warn); animation: ck-blink 1.6s ease-in-out infinite; }
+.ck-check.todo .ck-check-state { background: rgba(255, 255, 255, 0.07); color: var(--ck-text3); }
+
+.ck-check-ico { font-size: 11px; flex-shrink: 0; }
+
+.ck-check-label {
+  font-weight: 750;
+  color: var(--ck-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ck-check.done .ck-check-label { color: var(--ck-text2); }
+
+.ck-check-detail {
+  flex-shrink: 0;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ck-text3);
+}
+
+.ck-check.done .ck-check-detail { color: var(--ck-ok); }
+.ck-check.attn .ck-check-detail { color: var(--ck-warn); }
+
+.ck-check-cta {
+  flex-shrink: 0;
+  margin-left: auto;
+  border: 1px solid rgba(230, 182, 76, 0.45);
+  background: rgba(230, 182, 76, 0.10);
+  color: var(--ck-gold);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ck-check-cta:hover { background: var(--ck-gold); color: #171307; transform: translateY(-1px); }
+
 /* pied de ligne */
 
 .ck-flight-foot {

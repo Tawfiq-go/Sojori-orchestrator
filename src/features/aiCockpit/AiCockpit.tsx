@@ -67,6 +67,8 @@ type Flight = {
   cleaning?: DayPlanStep;
   arrival?: DayPlanStep;
   attentionStep?: DayPlanStep;
+  /** Toutes les étapes des 2 réservations de la chaîne — checklist statuts + actions. */
+  checkSteps: DayPlanStep[];
 };
 
 type CopilotReply = {
@@ -224,21 +226,30 @@ export default function AiCockpit() {
     if (!plan) return [];
     return (plan.chains ?? []).map((chain) => {
       const steps = plan.steps.filter((s) => s.chainId === chain.id);
+      /* Toutes les étapes des 2 réservations (enregistrement, choix d'heure,
+         relances…) — pas seulement celles taguées chainId. */
+      const checkSteps = plan.steps.filter(
+        (s) =>
+          (s.reservationId === chain.departingReservationId ||
+            s.reservationId === chain.arrivingReservationId) &&
+          (s.kind !== 'message' || s.state === 'attention'),
+      );
       return {
         chain,
         departure: steps.find((s) => s.kind === 'departure'),
         cleaning: steps.find((s) => s.kind === 'cleaning'),
         arrival: steps.find((s) => s.kind === 'arrival'),
         attentionStep: steps.find((s) => s.state === 'attention'),
+        checkSteps,
       };
     });
   }, [plan]);
 
-  /** Arrivées / départs hors chaîne — le reste du trafic du jour. */
+  /** Hors chaîne : arrivées/départs du jour + toute étape qui requiert une décision. */
   const soloTraffic = useMemo(() => {
     if (!plan) return [];
     return plan.steps.filter(
-      (s) => (s.kind === 'arrival' || s.kind === 'departure') && !s.chainId,
+      (s) => !s.chainId && (s.kind === 'arrival' || s.kind === 'departure' || s.state === 'attention'),
     );
   }, [plan]);
 
@@ -459,7 +470,7 @@ export default function AiCockpit() {
             <div className="ck-solo">
               {soloTraffic.map((s) => (
                 <div key={s.id} className={`ck-solo-item ${s.state}`}>
-                  <span className="ck-solo-kind">{s.kind === 'arrival' ? '🛬' : '🛫'}</span>
+                  <span className="ck-solo-kind">{CHECK_ICON[s.kind]}</span>
                   <span className="ck-solo-time">{s.time ? fmtTime(s.time) : '—:—'}</span>
                   <span className="ck-solo-name" title={s.listingName}>{s.listingName}</span>
                   {s.guestName && <span className="ck-solo-guest">{s.guestName}</span>}
@@ -509,6 +520,31 @@ function Kpi({ value, label, tone, delay }: { value: string; label: string; tone
 
 /* ─── Ligne du tableau de vol ─── */
 
+const CHECK_ICON: Record<DayPlanStep['kind'], string> = {
+  departure: '🛫',
+  arrival: '🛬',
+  cleaning: '🧹',
+  task: '📋',
+  message: '💬',
+  relance: '🔔',
+};
+
+function checkLabel(s: DayPlanStep): string {
+  if (s.kind === 'departure') return `Heure départ${s.guestName ? ` · ${s.guestName}` : ''}`;
+  if (s.kind === 'arrival') return `Heure arrivée${s.guestName ? ` · ${s.guestName}` : ''}`;
+  if (s.kind === 'cleaning') return s.staffName ? `Ménage · ${s.staffName}` : 'Ménage';
+  const first = (s.title || '').split('·')[0]?.trim();
+  return `${first || s.kind}${s.guestName ? ` · ${s.guestName}` : ''}`;
+}
+
+function checkDetail(s: DayPlanStep): string {
+  if (s.state === 'done') return s.time ? `fait · ${s.time}` : 'fait';
+  if (s.kind === 'cleaning' && !s.staffName) return 'non assigné';
+  if (s.hourUnknown || (!s.time && (s.kind === 'departure' || s.kind === 'arrival'))) return 'heure non choisie';
+  if (s.registrationPending) return 'enregistrement en attente';
+  return s.time ? `prévu ${s.time}` : 'en attente';
+}
+
 function FlightRow({
   flight,
   index,
@@ -520,7 +556,16 @@ function FlightRow({
   targeted: boolean;
   onAction: (step: DayPlanStep, action: DayPlanAction) => void;
 }) {
-  const { chain, departure, cleaning, arrival, attentionStep } = flight;
+  const { chain, departure, cleaning, arrival, attentionStep, checkSteps } = flight;
+
+  /* Checklist ordonnée : côté départ → ménage → côté arrivée. */
+  const orderedChecks = [...checkSteps].sort((a, b) => {
+    const side = (s: DayPlanStep) =>
+      s.kind === 'cleaning' ? 1 : s.reservationId === chain.departingReservationId ? 0 : 2;
+    const rank = (s: DayPlanStep) =>
+      s.kind === 'departure' || s.kind === 'arrival' ? 0 : s.kind === 'task' ? 1 : 2;
+    return side(a) - side(b) || rank(a) - rank(b) || String(a.time || '').localeCompare(String(b.time || ''));
+  });
 
   const now = new Date();
   const nowM = now.getHours() * 60 + now.getMinutes();
@@ -581,14 +626,34 @@ function FlightRow({
         </div>
       </div>
 
+      {/* Checklist statuts + actions : enregistrement, choix d'heure, assignation… */}
+      {orderedChecks.length > 0 && (
+        <div className="ck-checks">
+          {orderedChecks.map((s) => {
+            const action = s.attention?.actions?.[0];
+            const state = s.state === 'done' ? 'done' : s.state === 'attention' ? 'attn' : 'todo';
+            return (
+              <div key={s.id} className={`ck-check ${state}`} title={s.attention?.reason || s.title}>
+                <span className="ck-check-state" aria-hidden>
+                  {state === 'done' ? '✓' : state === 'attn' ? '!' : '·'}
+                </span>
+                <span className="ck-check-ico" aria-hidden>{CHECK_ICON[s.kind]}</span>
+                <span className="ck-check-label">{checkLabel(s)}</span>
+                <span className="ck-check-detail">{checkDetail(s)}</span>
+                {action && (
+                  <button type="button" className="ck-check-cta" onClick={() => onAction(s, action)}>
+                    {action.label}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="ck-flight-foot">
         {cta && attentionStep ? (
-          <>
-            <span className="ck-flight-reason">{attentionStep.attention?.reason}</span>
-            <button type="button" className="ck-flight-cta" onClick={() => onAction(attentionStep, cta)}>
-              {cta.label}
-            </button>
-          </>
+          <span className="ck-flight-reason warn">{attentionStep.attention?.reason}</span>
         ) : status === 'broken' || (cleaning && !cleaning.staffName) ? (
           <span className="ck-flight-reason warn">
             {status === 'broken'
