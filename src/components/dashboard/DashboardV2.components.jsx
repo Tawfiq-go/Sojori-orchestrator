@@ -712,10 +712,10 @@ const OWNER_QUICK_ACTIONS = [
   { emoji: '⭐', label: 'Avis voyageurs', to: '/communications?section=guest&tab=reviews' },
 ];
 
-function OwnerQuickActions({ user }) {
+function OwnerQuickActions({ user, simulationActive = false }) {
   const navigate = useNavigate();
   const role = String(user?.role || '').toLowerCase();
-  if (role !== 'owner') return null;
+  if (role !== 'owner' && !simulationActive) return null;
   return (
     <Stack direction="row" spacing={0.25} sx={{
       alignItems: 'center', flexShrink: 0,
@@ -785,7 +785,7 @@ export function TopBar({
       {adminScopeInTopBar ? <AdminBusinessScopeTopFilter /> : null}
 
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto', gap: 0.5 }}>
-        <OwnerQuickActions user={user} />
+        <OwnerQuickActions user={user} simulationActive={simulationActive} />
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', pl: 0.5 }}>
           <AdminSessionTopBarButton />
           <NotificationBell />
@@ -976,7 +976,13 @@ export function StatsRow({ children }) {
   );
 }
 
-export function StatCard({ icon, iconBg, iconColor, value, label, trend, trendUp = true }) {
+export function StatCard({ icon, iconBg, iconColor, value, label, trend, trendUp }) {
+  // Direction déduite du signe du trend — plus jamais de ↑ vert sur un chiffre négatif.
+  const trendStr = String(trend ?? '').trim();
+  const hasDelta = /[-+−]?\d/.test(trendStr) && trendStr !== '—' && !/MAD$/.test(trendStr);
+  const isNegative = /^[-−]/.test(trendStr);
+  const isZero = /^[+-−]?0([.,]0+)?\s*%?$/.test(trendStr);
+  const up = typeof trendUp === 'boolean' ? trendUp : !isNegative;
   return (
     <Box sx={{
       bgcolor: t.bg1, border: `1px solid ${t.border}`,
@@ -994,13 +1000,13 @@ export function StatCard({ icon, iconBg, iconColor, value, label, trend, trendUp
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 13, bgcolor: iconBg, color: iconColor,
         }}>{icon}</Box>
-        {trend && (
+        {hasDelta && (
           <Box sx={{
             fontSize: 11, fontWeight: 700, fontFamily: 'Geist Mono',
             p: '2px 7px', borderRadius: '5px',
-            bgcolor: trendUp ? t.successTint : t.errorTint,
-            color: trendUp ? t.success : t.error,
-          }}>{trendUp ? '↑' : '↓'} {trend}</Box>
+            bgcolor: isZero ? t.bg3 : up ? t.successTint : t.errorTint,
+            color: isZero ? t.text3 : up ? t.success : t.error,
+          }}>{isZero ? '=' : up ? '↑' : '↓'} {trendStr}</Box>
         )}
       </Stack>
       <Typography sx={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.6px', lineHeight: 1 }}>{value}</Typography>

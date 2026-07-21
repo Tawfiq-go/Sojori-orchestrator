@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { lazyWithReload } from '../utils/lazyWithReload';
 import { Link as RouterLink } from 'react-router-dom';
 import {
@@ -427,13 +427,46 @@ function DashboardPageContent() {
     };
   }, [period, refreshKey, dashboardDataRevision, selectedPropertyIds, authLoading, isAuthenticated, requestOwnerId, ownerScopeUnset, adminScopeMode]);
 
+  /** Noms réels des biens — jamais d'ID tronqué (« Listing …d294ee ») face au client. */
+  const listingNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of [...listingOptions, ...snapshot.properties]) {
+      if (p.id && p.name && !p.name.startsWith('Listing …')) map.set(p.id, p.name);
+    }
+    return map;
+  }, [listingOptions, snapshot.properties]);
+
+  const withRealName = useCallback(
+    <T extends { listingId?: string; property: string }>(row: T): T => ({
+      ...row,
+      property: (row.listingId && listingNameById.get(row.listingId)) || row.property,
+    }),
+    [listingNameById],
+  );
+
   const topLiveProperties = useMemo(
     () =>
       [...snapshot.occupancyByProperty]
         .sort((a, b) => (b.adr ?? 0) - (a.adr ?? 0) || b.occupancy - a.occupancy)
-        .slice(0, 4),
-    [snapshot.occupancyByProperty]
+        .slice(0, 4)
+        .map(withRealName),
+    [snapshot.occupancyByProperty, withRealName]
   );
+
+  /** Arrivées & départs fusionnés (sans l'heure 00:00, triés par date). */
+  const arrivalsDepartures = useMemo(() => {
+    const strip = (w: string) => w.replace(/ ?00:00$/, '');
+    const sortKey = (w: string) => {
+      const m = w.match(/(\d{2})\/(\d{2})/);
+      return m ? `${m[2]}${m[1]}` : '9999';
+    };
+    return [
+      ...snapshot.upcomingCheckIns.map((i) => ({ ...i, kind: '🛬 Arrivée' })),
+      ...snapshot.upcomingCheckOuts.map((i) => ({ ...i, kind: '🛫 Départ' })),
+    ]
+      .map((i) => ({ ...i, when: strip(i.when) }))
+      .sort((a, b) => sortKey(a.when).localeCompare(sortKey(b.when)));
+  }, [snapshot.upcomingCheckIns, snapshot.upcomingCheckOuts]);
 
   const occupancyPanelDesc = useMemo(() => {
     const scope =
@@ -463,6 +496,11 @@ function DashboardPageContent() {
     return filtered.length > 0 ? filtered : snapshot.occupancyByProperty;
   }, [snapshot.occupancyByProperty, selectedPropertyIds, listingOptions]);
 
+  const namedOccupancyByProperty = useMemo(
+    () => displayedOccupancyByProperty.map(withRealName),
+    [displayedOccupancyByProperty, withRealName],
+  );
+
   const applyListingFilter = (ids: string[]) => {
     setSelectedPropertyIds(ids);
   };
@@ -479,7 +517,7 @@ function DashboardPageContent() {
           Actualiser
         </Button>
         <Button sx={btnPrimarySx} disabled={ownerScopeUnset} onClick={() => setRefreshKey((value) => value + 1)}>
-          Generer report
+          Générer le rapport
         </Button>
       </PageHeader>
 
@@ -587,7 +625,7 @@ function DashboardPageContent() {
           iconBg="rgba(230,176,34,0.12)"
           iconColor={t.primaryDeep}
           value={snapshot.kpis.totalReservations.value.toString()}
-          label={`Reservations ${period.toLowerCase()}`}
+          label={`Réservations · ${period.toLowerCase()}`}
           trend={snapshot.kpis.totalReservations.trend}
         />
         <StatCard
@@ -629,16 +667,15 @@ function DashboardPageContent() {
           icon="⭐"
           iconBg="rgba(230,176,34,0.12)"
           iconColor={t.primaryDeep}
-          value={ratingDisplay.display}
-          label="Rating moyen"
-          trend={ratingDisplay.trend}
+          value={`${ratingDisplay.display}/5`}
+          label="Note moyenne voyageurs"
         />
         <StatCard
           icon="👥"
           iconBg="rgba(16,185,129,0.12)"
           iconColor={t.success}
           value={snapshot.kpis.guestsThisMonth.value.toString()}
-          label="Guests ce mois"
+          label="Voyageurs ce mois"
           trend={snapshot.kpis.guestsThisMonth.trend}
         />
         <StatCard
@@ -650,10 +687,6 @@ function DashboardPageContent() {
           trend={snapshot.kpis.revpar.trend}
         />
       </StatsRow>
-
-      <Suspense fallback={null}>
-        <OrchestrationOpsCards ownerId={requestOwnerId || undefined} />
-      </Suspense>
 
       <Box
         sx={{
@@ -710,7 +743,7 @@ function DashboardPageContent() {
           </StableChart>
         </Panel>
 
-        <Panel title="Reservations par source" desc="Airbnb, Booking, Direct, Vrbo">
+        <Panel title="Réservations par source" desc="Airbnb, Booking, Direct, Vrbo">
           <StableChart height={320}>
             {({ width, height }: { width: number; height: number }) => {
               const outerRadius = Math.max(70, Math.min(110, Math.floor(Math.min(width, height) * 0.34)));
@@ -759,7 +792,7 @@ function DashboardPageContent() {
         >
           <StableChart height={320}>
             {({ width, height }: { width: number; height: number }) => (
-              <BarChart width={width} height={height} data={displayedOccupancyByProperty}>
+              <BarChart width={width} height={height} data={namedOccupancyByProperty}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                 <XAxis dataKey="property" hide />
                 <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
@@ -769,7 +802,7 @@ function DashboardPageContent() {
             )}
           </StableChart>
           <ScrollableList>
-            {displayedOccupancyByProperty.map((property, index) => (
+            {namedOccupancyByProperty.map((property, index) => (
               <Stack
                 key={property.listingId ?? `${property.property}-${index}`}
                 direction="row"
@@ -784,20 +817,23 @@ function DashboardPageContent() {
           </ScrollableList>
         </Panel>
 
-        <Panel title="Check-ins / Check-outs" desc="Vue jour par jour">
-          <StableChart height={320}>
-            {({ width, height }: { width: number; height: number }) => (
-              <BarChart width={width} height={height} data={snapshot.checkFlow}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
-                <XAxis dataKey="label" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="checkIns" fill="#e6b022" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="checkOuts" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
-              </BarChart>
+        <Panel title="Arrivées & départs" desc={`Prochains mouvements · ${VISIBLE_LIST_HINT}`}>
+          <ScrollableList>
+            {arrivalsDepartures.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                Aucune arrivée ni départ à venir sur la période.
+              </Typography>
+            ) : (
+              arrivalsDepartures.map((item) => (
+                <MiniRow
+                  key={`${item.kind}-${item.id}`}
+                  title={`${item.kind} · ${item.guest}`}
+                  subtitle={`${item.property} · ${item.when}`}
+                  badge={item.source}
+                />
+              ))
             )}
-          </StableChart>
+          </ScrollableList>
         </Panel>
       </Box>
 
@@ -806,75 +842,9 @@ function DashboardPageContent() {
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, 1fr)' },
           gap: 2,
-          mb: 2,
         }}
       >
-        <Panel title="Prochains check-ins" desc={`5 prochains · ${VISIBLE_LIST_HINT}`}>
-          <ScrollableList>
-            {snapshot.upcomingCheckIns.map((item) => (
-              <MiniRow
-                key={item.id}
-                title={item.guest}
-                subtitle={`${item.property} · ${item.when}`}
-                badge={item.source}
-              />
-            ))}
-          </ScrollableList>
-        </Panel>
-
-        <Panel title="Prochains check-outs" desc={`5 prochains · ${VISIBLE_LIST_HINT}`}>
-          <ScrollableList>
-            {snapshot.upcomingCheckOuts.map((item) => (
-              <MiniRow
-                key={item.id}
-                title={item.guest}
-                subtitle={`${item.property} · ${item.when}`}
-                badge={item.source}
-              />
-            ))}
-          </ScrollableList>
-        </Panel>
-
-        <Panel title="Reservations recentes" desc={`Derniers mouvements · ${VISIBLE_LIST_HINT}`}>
-          <ScrollableList>
-            {snapshot.recentBookings.map((item) => (
-              <MiniRow
-                key={`${item.type || 'booking'}-${item.id}`}
-                title={`${item.type || 'Réservation'} · ${item.guest}`}
-                subtitle={`${item.property} · ${item.when}`}
-                badge={item.source}
-              />
-            ))}
-          </ScrollableList>
-        </Panel>
-      </Box>
-
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', xl: 'repeat(4, 1fr)' },
-          gap: 2,
-        }}
-      >
-        <Panel title="Quick actions" desc={`Raccourcis de pilotage · ${VISIBLE_LIST_HINT}`}>
-          <ScrollableList spacing={0.75}>
-            {['📤 Exporter les KPIs', '📅 Voir reservations', '🧩 Ouvrir les taches', '💬 Aller aux messages'].map((action) => (
-              <Button
-                key={action}
-                sx={{
-                  ...btnGhostSx,
-                  justifyContent: 'flex-start',
-                  color: t.text2,
-                  fontWeight: 600,
-                }}
-              >
-                {action}
-              </Button>
-            ))}
-          </ScrollableList>
-        </Panel>
-
-        <Panel title="Taches urgentes" desc={`5 prioritaires · ${VISIBLE_LIST_HINT}`}>
+        <Panel title="Tâches urgentes" desc={`5 prioritaires · ${VISIBLE_LIST_HINT}`}>
           <ScrollableList>
             {snapshot.urgentTasks.map((task) => (
               <MiniRow
@@ -900,13 +870,13 @@ function DashboardPageContent() {
           </ScrollableList>
         </Panel>
 
-        <Panel title="Avis recents & alertes" desc={`Reviews + notifications · ${VISIBLE_LIST_HINT}`}>
+        <Panel title="Avis récents & alertes" desc={`Reviews + notifications · ${VISIBLE_LIST_HINT}`}>
           <ScrollableList spacing={1.5}>
             {snapshot.recentReviews.map((review) => (
               <Box key={review.id}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
                   <Typography sx={{ fontWeight: 700 }}>{review.guest}</Typography>
-                  <Badge variant="success">{review.rating}/5</Badge>
+                  <Badge variant="success">{review.rating}{Number(review.rating) > 5 ? '/10' : '/5'}</Badge>
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
                   {review.property} · {review.comment}
@@ -933,13 +903,13 @@ function DashboardPageContent() {
 
       {topLiveProperties.length > 0 ? (
         <Box sx={{ mt: 2 }}>
-          <Panel title="Top properties live" desc="Selectionnee depuis les donnees live">
+          <Panel title="Top biens" desc="Classés par ADR puis occupation · données live">
             <Stack spacing={1.25}>
               {topLiveProperties.map((item, index) => (
                 <MiniRow
                   key={item.listingId ?? `${item.property}-${index}`}
                   title={`${index + 1}. ${item.property}`}
-                  subtitle={`OCC ${item.occupancy}%${item.adr ? ` · ADR ${item.adr} MAD` : ''}`}
+                  subtitle={`Occupation ${item.occupancy}%${item.adr ? ` · ADR ${item.adr} MAD` : ''}`}
                   badge="Live"
                 />
               ))}
@@ -947,6 +917,15 @@ function DashboardPageContent() {
           </Panel>
         </Box>
       ) : null}
+
+      {/* ── Opérations (interne) — en bas, après la vue client ── */}
+      <Divider sx={{ my: 3 }} />
+      <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 1.5, color: t.text2 }}>
+        ⚙️ Opérations du jour
+      </Typography>
+      <Suspense fallback={null}>
+        <OrchestrationOpsCards ownerId={requestOwnerId || undefined} />
+      </Suspense>
         </>
       )}
     </DashboardWrapper>
