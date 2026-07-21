@@ -539,8 +539,15 @@ function checkLabel(s: DayPlanStep): string {
 
 function checkDetail(s: DayPlanStep): string {
   if (s.state === 'done') return s.time ? `fait · ${s.time}` : 'fait';
-  if (s.kind === 'cleaning' && !s.staffName) return 'non assigné';
-  if (s.hourUnknown || (!s.time && (s.kind === 'departure' || s.kind === 'arrival'))) return 'heure non choisie';
+  /* Règle métier : le ménage démarre à l'heure de départ client. */
+  if (s.kind === 'cleaning') {
+    const when = s.hourUnknown || !s.time ? 'au départ client' : `prévu ${s.time}`;
+    return s.staffName ? when : `non assigné · ${when}`;
+  }
+  if (s.hourUnknown || (!s.time && (s.kind === 'departure' || s.kind === 'arrival'))) {
+    const relance = s.nextRelanceAt ? ` · relance ${fmtTime(s.nextRelanceAt)}` : '';
+    return `non choisie — défaut${relance}`;
+  }
   if (s.registrationPending) return 'enregistrement en attente';
   return s.time ? `prévu ${s.time}` : 'en attente';
 }
@@ -581,8 +588,10 @@ function FlightRow({
   const gapPct = seg(endM, arrM) * 100;
 
   const status = chain.status;
-  const statusChip =
-    status === 'broken'
+  /* Heures non choisies : la marge est calculée sur des défauts — pas une vraie alerte. */
+  const statusChip = chain.hoursUnknown
+    ? { cls: 'tight', txt: '⏳ heures à confirmer' }
+    : status === 'broken'
       ? { cls: 'broken', txt: `⚠ ${fmtDuration(chain.slackMinutes)} de dépassement` }
       : status === 'tight'
         ? { cls: 'tight', txt: `⏱ marge ${fmtDuration(chain.slackMinutes)}` }
@@ -609,9 +618,12 @@ function FlightRow({
         </div>
 
         <div className="ck-seg">
-          <div className="ck-seg-fill clean" style={{ width: `${cleanPct}%` }} />
+          <div className="ck-seg-fill clean" style={{ width: `${chain.hoursUnknown ? 0 : cleanPct}%` }} />
           <span className="ck-seg-label">
-            🧹 {cleaning?.staffName || <em>à assigner</em>} · fin {fmtTime(chain.expectedCleaningEnd)}
+            🧹 {cleaning?.staffName || <em>à assigner</em>}
+            {chain.hoursUnknown
+              ? ` · au départ client (${fmtDuration(chain.cleaningDurationMinutes)})`
+              : ` · fin ${fmtTime(chain.expectedCleaningEnd)}`}
           </span>
         </div>
 
@@ -654,6 +666,10 @@ function FlightRow({
       <div className="ck-flight-foot">
         {cta && attentionStep ? (
           <span className="ck-flight-reason warn">{attentionStep.attention?.reason}</span>
+        ) : chain.hoursUnknown ? (
+          <span className="ck-flight-reason warn">
+            Heures non confirmées — marge estimée par défaut, relances client en cours.
+          </span>
         ) : status === 'broken' || (cleaning && !cleaning.staffName) ? (
           <span className="ck-flight-reason warn">
             {status === 'broken'
