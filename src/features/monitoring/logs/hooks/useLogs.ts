@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { logsProxyGet } from '../../../../utils/monitoringApi';
 import type { LogsFilters } from './useFilters';
 
@@ -53,15 +53,64 @@ function wantsInfoVolume(severity: LogsFilters['severity']): boolean {
   return severity === 'info' || severity === 'everything';
 }
 
+function entryTimeMs(entry: LogEntry): number {
+  const ts = entry.timestamp;
+  if (ts instanceof Date) return ts.getTime();
+  if (typeof ts === 'number') return ts;
+  const parsed = Date.parse(String(ts));
+  return Number.isNaN(parsed) ? NaN : parsed;
+}
+
+/** Keep only rows inside the requested custom window (guards undeployed API). */
+function clampLogsToCustomRange(rows: LogEntry[], filters: LogsFilters): {
+  rows: LogEntry[];
+  clamped: boolean;
+} {
+  if (filters.timeRange !== 'custom' || !filters.startAt || !filters.endAt) {
+    return { rows, clamped: false };
+  }
+  const startMs = Date.parse(filters.startAt);
+  const endMs = Date.parse(filters.endAt);
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return { rows, clamped: false };
+
+  const filtered = rows.filter((row) => {
+    const t = entryTimeMs(row);
+    if (Number.isNaN(t)) return true;
+    return t >= startMs && t <= endMs;
+  });
+  return { rows: filtered, clamped: filtered.length < rows.length };
+}
+
+function friendlyError(err: unknown): string {
+  const apiError = err as {
+    response?: { data?: { error?: string; details?: string }; status?: number };
+    message?: string;
+  };
+  const details =
+    apiError.response?.data?.details ||
+    apiError.response?.data?.error ||
+    apiError.message ||
+    '';
+  const text = String(details);
+  if (/too many outstanding requests/i.test(text)) {
+    return 'Loki est saturé (trop de requêtes en parallèle). Attends quelques secondes, utilise 1 h, ou applique la période une seule fois.';
+  }
+  if (/timeout of \d+ms exceeded/i.test(text)) {
+    return 'Loki a mis trop longtemps à répondre. Raccourcis la période ou filtre un service.';
+  }
+  if (/Invalid timeRange|Custom range requires/i.test(text)) {
+    return 'La période personnalisée n’est pas encore supportée par l’API déployée (srv-logs-proxy). Utilise 1 h / 6 h / 24 h en attendant le déploiement.';
+  }
+  return text || 'Impossible de charger les logs.';
+}
+
 function toQueryParams(
   filters: LogsFilters,
   before?: number | null,
 ): Record<string, string | undefined> {
   const isCustom = filters.timeRange === 'custom';
   const startIso =
-    isCustom && filters.startAt
-      ? new Date(filters.startAt).toISOString()
-      : undefined;
+    isCustom && filters.startAt ? new Date(filters.startAt).toISOString() : undefined;
   const endIso =
     isCustom && filters.endAt ? new Date(filters.endAt).toISOString() : undefined;
 
@@ -70,7 +119,6 @@ function toQueryParams(
     start: startIso,
     end: endIso,
     service: filters.service !== 'all' ? filters.service : undefined,
-    // Backend: omitted/`all` = alerts only; `everything` = incl. info
     severity: filters.severity === 'all' ? undefined : filters.severity,
     search: filters.search.trim() || undefined,
     category: filters.category !== 'all' ? filters.category : undefined,
@@ -94,6 +142,17 @@ function toStatsParams(filters: LogsFilters): Record<string, string | undefined>
   };
 }
 
+function shouldFetchStats(filters: LogsFilters): boolean {
+  // Stats = 3 Loki metric queries. Skip on long custom windows to avoid overload.
+  if (filters.timeRange === 'custom') {
+    const startMs = Date.parse(filters.startAt);
+    const endMs = Date.parse(filters.endAt);
+    if (Number.isNaN(startMs) || Number.isNaN(endMs)) return false;
+    return endMs - startMs <= 6 * 60 * 60 * 1000;
+  }
+  return filters.timeRange === '1h' || filters.timeRange === '6h';
+}
+
 export function useLogs(filters: LogsFilters, page: number, before: number | null) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [stats, setStats] = useState<LogsStats>({});
@@ -101,10 +160,20 @@ export function useLogs(filters: LogsFilters, page: number, before: number | nul
   const [nextBefore, setNextBefore] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rangeWarning, setRangeWarning] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
 
   const refetch = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const requestId = ++requestIdRef.current;
+
     setLoading(true);
     setError(null);
+    setRangeWarning(null);
+
     try {
       if (filters.timeRange === 'custom') {
         const startMs = Date.parse(filters.startAt);
@@ -122,35 +191,45 @@ export function useLogs(filters: LogsFilters, page: number, before: number | nul
 
       const params = toQueryParams(filters, page > 1 ? before : null);
 
-      // Stats must not block the journal: a Loki stats timeout used to wipe the whole page.
-      const [logsSettled, statsSettled] = await Promise.allSettled([
-        logsProxyGet<LogsQueryResponse>('/query', params),
-        logsProxyGet<LogsStatsResponse>('/stats', toStatsParams(filters)),
-      ]);
+      // Journal first — never compete with 3 stats metric queries on the same tick.
+      const logsRes = await logsProxyGet<LogsQueryResponse>('/query', params, {
+        signal: controller.signal,
+      });
+      if (requestId !== requestIdRef.current) return;
 
-      if (logsSettled.status === 'rejected') {
-        const err = logsSettled.reason as {
-          response?: { data?: { error?: string; details?: string } };
-          message?: string;
-        };
-        throw err;
+      const rawRows = logsRes.data?.logs ?? [];
+      const { rows, clamped } = clampLogsToCustomRange(rawRows, filters);
+      if (clamped) {
+        setRangeWarning(
+          'L’API a renvoyé des logs hors période (srv-logs-proxy pas à jour ou Loki saturé). Affichage filtré côté client.',
+        );
       }
 
-      const logsRes = logsSettled.value;
-      const rows = logsRes.data?.logs ?? [];
       setLogs(
         rows.map((row, idx) => ({
           ...row,
           logId: row.logId || `${row.service || 'log'}-${idx}-${String(row.timestamp)}`,
         })),
       );
-      setHasMore(Boolean(logsRes.data?.hasMore));
+      setHasMore(Boolean(logsRes.data?.hasMore) && !clamped);
       setNextBefore(
         typeof logsRes.data?.nextBefore === 'number' ? logsRes.data.nextBefore : null,
       );
 
-      if (statsSettled.status === 'fulfilled') {
-        const statsRes = statsSettled.value;
+      if (!shouldFetchStats(filters)) {
+        setStats((prev) => ({
+          ...prev,
+          partial: true,
+          totalLogs: prev.totalLogs ?? null,
+        }));
+        return;
+      }
+
+      try {
+        const statsRes = await logsProxyGet<LogsStatsResponse>('/stats', toStatsParams(filters), {
+          signal: controller.signal,
+        });
+        if (requestId !== requestIdRef.current) return;
         const s = statsRes.data?.stats ?? {};
         setStats({
           ...s,
@@ -158,33 +237,32 @@ export function useLogs(filters: LogsFilters, page: number, before: number | nul
           topServices: statsRes.data?.topServices ?? s.topServices,
           services: statsRes.data?.services ?? s.services,
         });
-      } else {
-        console.warn('[Logs] stats fetch failed (journal still shown):', statsSettled.reason);
+      } catch (statsErr) {
+        if (controller.signal.aborted) return;
+        console.warn('[Logs] stats fetch failed (journal still shown):', statsErr);
         setStats((prev) => ({ ...prev, partial: true }));
       }
     } catch (err) {
+      if (controller.signal.aborted) return;
+      if (requestId !== requestIdRef.current) return;
       console.error('[Logs] fetch failed:', err);
-      const apiError = err as {
-        response?: { data?: { error?: string; details?: string } };
-        message?: string;
-      };
-      setError(
-        apiError.response?.data?.details ||
-          apiError.response?.data?.error ||
-          apiError.message ||
-          'Impossible de charger les logs.',
-      );
+      setError(friendlyError(err));
       setLogs([]);
       setHasMore(false);
       setNextBefore(null);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [filters, page, before]);
 
   useEffect(() => {
     void refetch();
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [refetch]);
 
-  return { logs, stats, hasMore, nextBefore, loading, error, refetch };
+  return { logs, stats, hasMore, nextBefore, loading, error, rangeWarning, refetch };
 }

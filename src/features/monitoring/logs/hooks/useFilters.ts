@@ -60,10 +60,14 @@ export function useFilters() {
     });
   }, []);
 
+  const patchFilters = useCallback((patch: Partial<LogsFilters>) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
+  }, []);
+
   const clearFilters = useCallback(() => {
     const range = defaultCustomRange();
     setFilters({ ...DEFAULT_FILTERS, startAt: range.startAt, endAt: range.endAt });
   }, []);
 
-  return { filters, updateFilter, clearFilters };
+  return { filters, updateFilter, patchFilters, clearFilters };
 }

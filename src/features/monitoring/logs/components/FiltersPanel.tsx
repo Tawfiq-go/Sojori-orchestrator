@@ -1,7 +1,9 @@
-import { Stack, TextField, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { Button, Stack, TextField, Typography } from '@mui/material';
 import {
   FilterBar,
   FilterChip,
+  btnGhostSx,
   monitorTokens as t,
 } from '../../shared/MonitorDesign';
 import type { LogsFilters } from '../hooks/useFilters';
@@ -39,14 +41,42 @@ const DEFAULT_SERVICES = [
 interface FiltersPanelProps {
   filters: LogsFilters;
   onFilterChange: <K extends keyof LogsFilters>(key: K, value: LogsFilters[K]) => void;
+  onPatchFilters?: (patch: Partial<LogsFilters>) => void;
   onClear: () => void;
   stats?: LogsStats;
 }
 
-export function FiltersPanel({ filters, onFilterChange, onClear, stats }: FiltersPanelProps) {
+export function FiltersPanel({
+  filters,
+  onFilterChange,
+  onPatchFilters,
+  onClear,
+  stats,
+}: FiltersPanelProps) {
   const services = Array.from(new Set([...DEFAULT_SERVICES, ...(stats?.services || [])]));
   const infoHeavy = filters.severity === 'info' || filters.severity === 'everything';
   const isCustom = filters.timeRange === 'custom';
+
+  // Draft dates — only commit on "Appliquer" so we don't flood Loki on every click.
+  const [draftStart, setDraftStart] = useState(filters.startAt);
+  const [draftEnd, setDraftEnd] = useState(filters.endAt);
+
+  useEffect(() => {
+    setDraftStart(filters.startAt);
+    setDraftEnd(filters.endAt);
+  }, [filters.startAt, filters.endAt]);
+
+  const applyCustomRange = () => {
+    if (onPatchFilters) {
+      onPatchFilters({ timeRange: 'custom', startAt: draftStart, endAt: draftEnd });
+      return;
+    }
+    onFilterChange('startAt', draftStart);
+    onFilterChange('endAt', draftEnd);
+    if (filters.timeRange !== 'custom') {
+      onFilterChange('timeRange', 'custom');
+    }
+  };
 
   return (
     <Stack spacing={1.5}>
@@ -62,13 +92,17 @@ export function FiltersPanel({ filters, onFilterChange, onClear, stats }: Filter
       </FilterBar>
 
       {isCustom ? (
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ alignItems: { sm: 'center' } }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.25}
+          sx={{ alignItems: { sm: 'center' }, flexWrap: 'wrap' }}
+        >
           <TextField
             size="small"
             label="Du"
             type="datetime-local"
-            value={filters.startAt}
-            onChange={(e) => onFilterChange('startAt', e.target.value)}
+            value={draftStart}
+            onChange={(e) => setDraftStart(e.target.value)}
             InputLabelProps={{ shrink: true }}
             sx={{ maxWidth: 240 }}
           />
@@ -76,14 +110,23 @@ export function FiltersPanel({ filters, onFilterChange, onClear, stats }: Filter
             size="small"
             label="Au"
             type="datetime-local"
-            value={filters.endAt}
-            onChange={(e) => onFilterChange('endAt', e.target.value)}
+            value={draftEnd}
+            onChange={(e) => setDraftEnd(e.target.value)}
             InputLabelProps={{ shrink: true }}
             sx={{ maxWidth: 240 }}
           />
-          <Typography sx={{ fontSize: 11, color: t.text3 }}>
-            Max 7 jours
-          </Typography>
+          <Button
+            sx={{ ...btnGhostSx, minHeight: 36 }}
+            onClick={applyCustomRange}
+            disabled={
+              draftStart === filters.startAt &&
+              draftEnd === filters.endAt &&
+              filters.timeRange === 'custom'
+            }
+          >
+            Appliquer
+          </Button>
+          <Typography sx={{ fontSize: 11, color: t.text3 }}>Max 7 jours</Typography>
         </Stack>
       ) : null}
 
