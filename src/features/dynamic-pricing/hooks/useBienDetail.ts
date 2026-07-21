@@ -307,7 +307,10 @@ export type BienDetailResult = {
   view: BienViewProps | null;
 };
 
-export function useBienDetail(listingId: string | undefined): BienDetailResult | null {
+export function useBienDetail(
+  listingId: string | undefined,
+  ownerId?: string | null,
+): BienDetailResult | null {
   const [aiEnabled, setAiEnabled] = useState(false);
   const [floor, setFloor] = useState<number | null>(null);
   const [ceiling, setCeiling] = useState<number | null>(null);
@@ -463,7 +466,10 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     if (!opts?.background) setLoading(true);
     setError(null);
     try {
-      const portfolioRes = await fetchDynamicPricingPortfolio({ year: calendarYear });
+      const portfolioRes = await fetchDynamicPricingPortfolio({
+        year: calendarYear,
+        ...(ownerId ? { ownerId } : {}),
+      });
       if (!portfolioRes.data?.success) {
         throw new Error('Portfolio indisponible');
       }
@@ -485,6 +491,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
           const scopedRes = await fetchDynamicPricingPortfolio({
             year: calendarYear,
             city: listingCityKey,
+            ...(ownerId ? { ownerId } : {}),
           });
           if (scopedRes.data?.success) marketPayload = scopedRes.data;
         }
@@ -621,7 +628,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     } finally {
       setLoading(false);
     }
-  }, [listingId, calendarYear]);
+  }, [listingId, calendarYear, ownerId]);
 
   useEffect(() => {
     void load();
@@ -653,7 +660,10 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
   const softReloadMarketRow = useCallback(async () => {
     if (!listingId) return;
     // Pas de setLoading — on garde la fiche montée, on patch seulement le snapshot / marché.
-    const portfolioRes = await fetchDynamicPricingPortfolio({ year: calendarYear });
+    const portfolioRes = await fetchDynamicPricingPortfolio({
+      year: calendarYear,
+      ...(ownerId ? { ownerId } : {}),
+    });
     if (!portfolioRes.data?.success) {
       throw new Error('Portfolio indisponible après actualisation');
     }
@@ -673,6 +683,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
         const scopedRes = await fetchDynamicPricingPortfolio({
           year: calendarYear,
           city: listingCityKey,
+          ...(ownerId ? { ownerId } : {}),
         });
         if (scopedRes.data?.success) {
           marketPayload = scopedRes.data;
@@ -713,7 +724,7 @@ export function useBienDetail(listingId: string | undefined): BienDetailResult |
     setCalendarFromAirroi(fromAirroi);
 
     await pilot.runPreview().catch(() => undefined);
-  }, [listingId, calendarYear, pilot]);
+  }, [listingId, calendarYear, ownerId, pilot]);
 
   const refreshAirroi = useCallback(async () => {
     if (!listingId) return;

@@ -16,7 +16,10 @@ export type BienAirroiDetailResult = {
 };
 
 /** Détail bien — lecture snapshot uniquement (GET portfolio), jamais marché au chargement. */
-export function useBienAirroiDetail(listingId: string | undefined): BienAirroiDetailResult {
+export function useBienAirroiDetail(
+  listingId: string | undefined,
+  ownerId?: string | null,
+): BienAirroiDetailResult {
   const [row, setRow] = useState<PortfolioRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +29,9 @@ export function useBienAirroiDetail(listingId: string | undefined): BienAirroiDe
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchDynamicPricingPortfolio();
+      const res = await fetchDynamicPricingPortfolio(
+        ownerId ? { ownerId } : undefined,
+      );
       if (!res.data?.success) {
         throw new Error('Portfolio indisponible');
       }
@@ -51,7 +56,7 @@ export function useBienAirroiDetail(listingId: string | undefined): BienAirroiDe
     } finally {
       setLoading(false);
     }
-  }, [listingId]);
+  }, [listingId, ownerId]);
 
   useEffect(() => {
     void load();

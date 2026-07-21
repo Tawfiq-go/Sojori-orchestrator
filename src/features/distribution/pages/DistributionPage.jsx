@@ -4,6 +4,8 @@ import { distributionApi } from '../services/distributionApi';
 import { RentalUnitedApi } from '../../rentalUnited/services/RentalUnitedApi';
 import { getOwners } from '../../staff/services/serverApi.task';
 import { hasAdminAccess } from 'utils/rbac.utils';
+import { useAdminOwnerFilter } from '../../../context/AdminOwnerFilterContext';
+import { usePmSimulation } from '../../../context/PmSimulationContext';
 import DistributionHeader from '../components/DistributionHeader';
 import PropertyChannelTable from '../components/PropertyChannelTable';
 import ChannelDetailDrawer from '../components/ChannelDetailDrawer';
@@ -23,8 +25,13 @@ export default function DistributionPage() {
   /** null = OK ou pas encore chargé ; sinon message utilisateur (API indispo, etc.) */
   const [overviewError, setOverviewError] = useState(null);
 
-  const isAdmin = hasAdminAccess(user?.role);
-  const ownerId = isAdmin && selectedOwnerId ? selectedOwnerId : user?.ownerId || user?._id;
+  const { requestOwnerId } = useAdminOwnerFilter();
+  const { isActive: simulationActive } = usePmSimulation();
+
+  const isAdmin = hasAdminAccess(user?.role) && !simulationActive;
+  const ownerId =
+    requestOwnerId ||
+    (isAdmin && selectedOwnerId ? selectedOwnerId : user?.ownerId || user?._id);
 
   useEffect(() => {
     if (!isAdmin) return;

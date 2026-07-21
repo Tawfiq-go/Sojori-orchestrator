@@ -114,7 +114,7 @@ export function AdminOwnerFilterProvider({ children }) {
   const clearSelection = useCallback(() => setScopeAll(), [setScopeAll]);
 
   useEffect(() => {
-    if (!showOwnerFilter) return;
+    if (!showOwnerFilter && !simulatedOwnerId) return;
     let cancelled = false;
     setOwnersLoading(true);
     getOwnersAllPages({ search_text: '', accountStatus: 'live' })
@@ -131,7 +131,7 @@ export function AdminOwnerFilterProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [showOwnerFilter]);
+  }, [showOwnerFilter, simulatedOwnerId]);
 
   const value = useMemo(
     () => ({

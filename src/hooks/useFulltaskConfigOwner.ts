@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
+import { usePmSimulation } from '../context/PmSimulationContext';
 import { useAuth } from './useAuth';
 import { resolveTasksUserScope } from '../services/fulltaskTasksService';
 import { getOwnerListLabel } from '../utils/ownerDisplay.utils';
@@ -27,8 +28,10 @@ export function useFulltaskConfigOwner(): FulltaskConfigOwnerScope {
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
   const legacyUser = useMemo(() => toLegacyAuthUser(user), [user]);
   const { selectedOwnerId, owners } = useAdminOwnerFilter();
+  const { isActive: simulationActive, snapshot: simulationSnapshot } = usePmSimulation();
 
   const isPlatformAdmin = isPlatformAdminRole(String(legacyUser?.role ?? user?.role ?? ''));
+  const effectiveIsPlatformAdmin = isPlatformAdmin && !simulationActive;
 
   const ownerKey = useMemo(() => {
     if (!scope.canAccessAllOwners) {
@@ -42,10 +45,14 @@ export function useFulltaskConfigOwner(): FulltaskConfigOwnerScope {
     return 'global';
   }, [scope.canAccessAllOwners, scope.ownerId, legacyUser, selectedOwnerId]);
 
-  const isAdminTemplate = isPlatformAdmin && scope.canAccessAllOwners && ownerKey === 'global';
-  const hideOwnerScopeLabels = !isPlatformAdmin && !isAdminTemplate;
+  const isAdminTemplate =
+    effectiveIsPlatformAdmin && scope.canAccessAllOwners && ownerKey === 'global';
+  const hideOwnerScopeLabels = !effectiveIsPlatformAdmin && !isAdminTemplate;
 
   const ownerDisplayName = useMemo(() => {
+    if (simulationActive && simulationSnapshot?.ownerLabel) {
+      return simulationSnapshot.ownerLabel;
+    }
     if (scope.canAccessAllOwners) {
       const sel = selectedOwnerId?.trim();
       // Template Admin
@@ -64,7 +71,7 @@ export function useFulltaskConfigOwner(): FulltaskConfigOwnerScope {
     }
     const u = user as { email?: string; company?: string } | null;
     return u?.company || u?.email || 'Mon compte';
-  }, [scope.canAccessAllOwners, selectedOwnerId, owners, legacyUser, user]);
+  }, [scope.canAccessAllOwners, selectedOwnerId, owners, legacyUser, user, simulationActive, simulationSnapshot?.ownerLabel]);
 
   const ownerKeyDetail = isAdminTemplate
     ? `Template Admin · ${ORCHESTRATION_ADMIN_OWNER_ID} · tous les PM`
@@ -74,7 +81,7 @@ export function useFulltaskConfigOwner(): FulltaskConfigOwnerScope {
     ownerKey,
     ownerDisplayName,
     ownerKeyDetail,
-    showOwnerPicker: isPlatformAdmin,
+    showOwnerPicker: effectiveIsPlatformAdmin,
     isAdminTemplate,
     hideOwnerScopeLabels,
   };
