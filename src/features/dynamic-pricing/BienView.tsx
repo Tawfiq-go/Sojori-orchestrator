@@ -16,8 +16,7 @@ import type {
   PricingEvent,
   PricingSuggestion,
 } from './bien/PricingControls';
-import YearlyCalendar from './bien/YearlyCalendar';
-import type { CalendarDay, CalendarWindowMode } from './bien/YearlyCalendar';
+import type { CalendarDay } from './bien/YearlyCalendar';
 import MarketCharts from './bien/MarketCharts';
 import type { SeasonalityPoint, PacingPoint, SupplyGrowthPoint } from './bien/MarketCharts';
 import type { CompsMarketStats, SelfVsComps } from './utils/computeCompsMarketStats';
@@ -253,7 +252,7 @@ export default function BienView(props: BienViewProps) {
   const [calendarUpdateOpen, setCalendarUpdateOpen] = useState(false);
   const [compareComp, setCompareComp] = useState<CompRow | null>(null);
   const previewSelection = usePricePreviewSelectionOptional();
-  // Onglets de la vue avancée : potentiel+calendrier · réglages · marché
+  // Onglets : réglages · concurrence (owner + admin)
   const [advTab, setAdvTab] = useState<'reglages' | 'bien'>('reglages');
   const modeLabel =
     activeModeLabel ??
@@ -428,7 +427,7 @@ export default function BienView(props: BienViewProps) {
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
           {([
             ['reglages', '⚙️ Réglages pricing'],
-            ['bien', isPlatformAdmin ? '📊 Analyse et concurrences' : '📊 Analyse'],
+            ['bien', '📊 Concurrence'],
           ] as const).map(([key, label]) => (
             <Box
               key={key}
@@ -451,9 +450,8 @@ export default function BienView(props: BienViewProps) {
         </Stack>
       </Box>
 
-      {/* ── Analyse et concurrences ── */}
-      {advTab === 'bien' ? (<>
-      <MarketDataFetchExplain isPlatformAdmin={isPlatformAdmin} />
+      {/* ── Réglages pricing (potentiel + réglages + aperçu prix) ── */}
+      {advTab === 'reglages' ? (<>
       <Section
         num="02"
         title="Le potentiel de votre bien"
@@ -500,30 +498,7 @@ export default function BienView(props: BienViewProps) {
           pacingHint={pacingHint}
           ownerMode={!isPlatformAdmin}
         />
-        {isPlatformAdmin && provenance.hasRevenueEstimate && !hasCompsProd ? (
-          <Box
-            sx={{
-              mt: 2,
-              p: 1.5,
-              borderRadius: 1.5,
-              bgcolor: T.warningTint,
-              border: `1px solid ${T.warning}`,
-              fontSize: 12,
-              color: T.text2,
-              lineHeight: 1.5,
-            }}
-          >
-            <b>Estimation Sojori seule</b> — pas encore de comparables sur ce listing (
-            <code style={{ fontSize: 11 }}>{listing._id}</code>). Bandeau →{' '}
-            <b>Actualiser concurrence</b> (~0,10 $, ~25 annonces voisines).
-          </Box>
-        ) : null}
       </Section>
-
-      </>) : null}
-
-      {/* ── Réglages pricing (sans en-tête : gain vertical, statut de save seul) ── */}
-      {advTab === 'reglages' ? (<>
       <Box sx={{ position: 'relative' }}>
         {configSaveStatus !== 'idle' ? (
           <Typography
@@ -626,168 +601,12 @@ export default function BienView(props: BienViewProps) {
 
       </>) : null}
 
-      {/* ── Calendrier (onglet Bien & comps) ── */}
+      {/* ── Concurrence (owner + admin) ── */}
       {advTab === 'bien' ? (<>
-      {(hasCalendarProd || provenance.hasAirroiSnapshot || calendarDays.length > 0) && (
-        <Section
-          num="04"
-          title={
-            calendarUsesPilotPreview
-              ? calendarPricingSource === 'estimate'
-                ? 'Prévisualisation prix (estimation Sojori)'
-                : 'Calendrier pilote Sojori'
-              : calendarHasEventOverlay
-                ? 'Marché + events (aperçu)'
-                : calendarFromAirroi
-                  ? 'Tarifs marché Sojori'
-                  : 'Calendrier de recommandations'
-          }
-          sub={
-            calendarUsesPilotPreview
-              ? calendarPricingSource === 'estimate'
-                ? `${calendarDays.length} j · 3 niveaux (estimation → Sojori §03 → calendrier) · vérifiez avant « Appliquer »`
-                : `${calendarDays.length} jours · pilote v2 (modes, bornes${(eventsCount ?? 0) > 0 ? ', events' : ''}) · courbe 365j`
-              : calendarHasEventOverlay
-                ? `${calendarDays.length} j · events en orange sur la courbe · preview pilote en cours…`
-                : calendarFromAirroi
-              ? `${calendarDays.length} jours · lecture seule marché · pas le moteur Sojori`
-              : pilotPreviewLoading
-                ? 'Calcul preview depuis l’estimation Sojori…'
-                : provenance.hasRevenueEstimate
-                  ? 'Estimation enregistrée — courbe générée depuis ADR × saisonnalité (pas les tarifs journaliers bruts)'
-                  : calendarFromCache
-                  ? `Prix/jour · pilote Sojori (mixEngine v2 + audit G7)${pilotApplySummary ? ` · ${pilotApplySummary}` : ''}`
-                  : '⟳ Estimation Sojori puis prévisualiser ici avant envoi calendrier'
-          }
-          sources={[
-            calendarUsesPilotPreview || calendarHasEventOverlay
-              ? {
-                  kind: 'prod',
-                  label:
-                    calendarPricingSource === 'estimate'
-                      ? 'Preview estimation'
-                      : (eventsCount ?? 0) > 0
-                        ? 'Pilote + events'
-                        : 'Pilote v2',
-                  tooltip:
-                    calendarPricingSource === 'estimate'
-                      ? 'Bleu = estimation Sojori · Or = prix Sojori (bornes, mode, events) · Gris = calendrier actuel'
-                      : 'Preview mixEngine v2.4 · orange = jour event',
-                }
-              : calendarFromAirroi
-              ? {
-                  kind: 'partial',
-                  label: 'Marché seul',
-                  tooltip: 'Tarifs journaliers marché — comparaison uniquement, pas le prix pilote',
-                }
-              : calendarFromCache || pilotPreviewLoading
-                ? { kind: 'prod', label: 'Pilote v2', tooltip: 'POST preview / apply' }
-                : provenance.hasRevenueEstimate
-                  ? { kind: 'partial', label: 'Estimation OK', tooltip: 'Preview en cours ou bornes §03 manquantes' }
-                  : { kind: 'empty', label: 'VIDE' },
-          ]}
-          snapshotAt={provenance.snapshotAt}
-          snapshotLabel={
-            calendarPricingSource === 'estimate' || provenance.hasRevenueEstimate
-              ? 'Estimation Sojori'
-              : 'Snapshot marché'
-          }
-        >
-          {/* L'aperçu des écarts a déménagé : onglet Réglages → bloc « Aperçu des prix » */}
-          {pilotApplyError ? (
-            <Typography sx={{ fontSize: 12, color: T.error, fontWeight: 600, mb: 1 }}>
-              {pilotApplyError}
-            </Typography>
-          ) : null}
-          <YearlyCalendar
-            days={calendarDays}
-            compareMarketDays={calendarMarketDays}
-            compareCalendarDays={calendarOpsDays}
-            compactHeader
-            pricingSource={
-              calendarPricingSource ??
-              (calendarUsesPilotPreview || calendarHasEventOverlay
-                ? 'sojori'
-                : calendarFromAirroi
-                  ? 'airroi'
-                  : 'sojori')
-            }
-            applyLoading={pilotApplyLoading}
-            windowMode={(calendarWindowMode ?? 'rolling12m') as CalendarWindowMode}
-            year={calendarYear}
-            yearOptions={calendarFromCache && !calendarFromAirroi ? calendarYearOptions : undefined}
-            showApplyButton={calendarUsesPilotPreview && aiEnabled && applyPrice}
-            priceSyncActive={aiEnabled && applyPrice}
-            minStaySyncActive={aiEnabled && applyMinStay}
-            sourceHint={(() => {
-              const snap = provenance.snapshotAt
-                ? new Date(provenance.snapshotAt).toLocaleString('fr-FR', {
-                    dateStyle: 'short',
-                    timeStyle: 'short',
-                  })
-                : null;
-              const snapDays = airroiCalendarDaysCount ?? 0;
-              if (calendarUsesPilotPreview) {
-                const lines = [
-                  calendarPricingSource === 'estimate'
-                    ? 'Courbe or = prix Sojori (modes §03 + bornes min/max + events). Bleu = estimation Sojori brute. Gris = calendrier actuel.'
-                    : 'Courbe or = pilote Sojori (preview live).',
-                  snap ? `Estimation Sojori du ${snap}.` : '',
-                  'Non synchronisé vers le calendrier tant que vous n’avez pas activé Sojori AI et cliqué « Appliquer ».',
-                ];
-                return lines.filter(Boolean).join(' ');
-              }
-              if (calendarHasEventOverlay) {
-                return `Estimation prix de marché${snap ? ` (${snap})` : ''} + events en orange (aperçu local, pas encore appliqué).`;
-              }
-              if (calendarFromAirroi) {
-                return [
-                  'Lecture seule des tarifs marché Sojori — pas le calendrier actuel.',
-                  snap ? `Dernier refresh : ${snap}.` : '',
-                  'USD→MAD ×10 · couleurs = tertiles bas/moyen/haut sur la fenêtre affichée.',
-                ]
-                  .filter(Boolean)
-                  .join(' ');
-              }
-              if (calendarFromCache) {
-                return 'Tarifs Sojori mixEngine — vue par année civile · clic = Justification G7';
-              }
-              return undefined;
-            })()}
-            sourceLinkLabel={
-              calendarUsesPilotPreview
-                ? calendarPricingSource === 'estimate'
-                  ? 'Prévisualisation estimation Sojori ⓘ'
-                  : 'Source pilote Sojori ⓘ'
-                : calendarFromAirroi
-                  ? 'Comparaison tarifs marché Sojori ⓘ'
-                  : provenance.hasRevenueEstimate
-                    ? 'Estimation Sojori enregistrée ⓘ'
-                    : undefined
-            }
-            emptyHint={
-              calendarAirroiError
-                ? `Les tarifs journaliers n’ont pas été renvoyés : ${calendarAirroiError}. Relancez ⟳ ou contactez le support si l’erreur persiste (HTTP 400 connu sur certaines annonces).`
-                : provenance.hasRevenueEstimate && !calendarUsesPilotPreview
-                  ? 'Estimation OK — vérifiez plancher/plafond §03 puis attendez la courbe preview (~1 s).'
-                  : provenance.hasAirroiSnapshot
-                  ? 'Aucun tarif journalier dans le snapshot — optionnel. Lancez l’estimation Sojori si besoin.'
-                  : '⟳ Récupérer l’estimation Sojori'
-            }
-            onYearChange={calendarFromCache && !calendarFromAirroi ? onYearChange : undefined}
-            onDayClick={handleDayClick}
-            onApplyToOps={onApplyToOps}
-          />
-        </Section>
-      )}
-
-      </>) : null}
-
-      {/* ── Comps listing (admin) ── */}
-      {advTab === 'bien' && isPlatformAdmin ? (<>
-      {(hasCompsMarket || (isPlatformAdmin && selfVsComps && (selfVsComps.adrDeltaPct != null || selfVsComps.occDeltaPts != null))) ? (
+      <MarketDataFetchExplain isPlatformAdmin={isPlatformAdmin} />
+      {(hasCompsMarket || (selfVsComps && (selfVsComps.adrDeltaPct != null || selfVsComps.occDeltaPts != null))) ? (
       <Section
-        num="05"
+        num="01"
         title="Votre bien vs concurrents"
         sub="Médianes TTM des comparables de cette annonce"
         sources={[
@@ -811,7 +630,7 @@ export default function BienView(props: BienViewProps) {
 
       {/* ── Carte ── */}
       <Section
-        num="06"
+        num="02"
         title={`Carte · positionnement`}
         sub={`GPS fiche listing · ${compMapPins.length} concurrents autour`}
         sources={[
@@ -838,7 +657,7 @@ export default function BienView(props: BienViewProps) {
 
       {/* ── Tableau concurrents ── */}
       <Section
-        num="07"
+        num="03"
         title={`Vos ${Math.max(0, compRows.length - 1)} concurrents directs`}
         sub="Comparables de l’annonce · tri colonnes"
         sources={[
@@ -853,6 +672,33 @@ export default function BienView(props: BienViewProps) {
           onCompare={selfCompareProfile ? (row) => setCompareComp(row) : undefined}
         />
       </Section>
+      {provenance.hasRevenueEstimate && !hasCompsProd ? (
+        <Box
+          sx={{
+            mt: 2,
+            p: 1.5,
+            borderRadius: 1.5,
+            bgcolor: T.warningTint,
+            border: `1px solid ${T.warning}`,
+            fontSize: 12,
+            color: T.text2,
+            lineHeight: 1.5,
+          }}
+        >
+          {isPlatformAdmin ? (
+            <>
+              <b>Estimation OK</b> — pas encore de comparables sur ce listing (
+              <code style={{ fontSize: 11 }}>{listing._id}</code>). Bandeau →{' '}
+              <b>Actualiser concurrence</b> (~0,10 $, ~25 annonces voisines).
+            </>
+          ) : (
+            <>
+              <b>Estimation OK</b> — vos concurrents seront récupérés automatiquement (lun.) ou
+              contactez Sojori pour un refresh immédiat.
+            </>
+          )}
+        </Box>
+      ) : null}
       </>) : null}
 
       <CompCompareModal

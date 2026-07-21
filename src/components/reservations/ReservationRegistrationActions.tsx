@@ -204,6 +204,7 @@ export function ReservationRegistrationActions({
         document_number: data.document_number?.trim() || undefined,
       });
       if (res?.success === false) throw new Error(res?.error || 'Échec');
+      const state = res?.data?.state;
       if (state) {
         const nextMembers = mergeMembersAfterSave(members, selectedIndex, data);
         const ctxPatch = registrationPatchFromGuestContext(res?.data?.guestContext);
@@ -305,9 +306,20 @@ export function ReservationRegistrationActions({
             <CircularProgress size={20} />
           </Stack>
         ) : !flow ? (
-          <Typography sx={{ fontSize: 12, color: T.text3 }}>Aucune tâche enregistrement.</Typography>
-        ) : (
-          <>
+          <Stack spacing={1}>
+            <Typography sx={{ fontSize: 12, color: T.text3 }}>
+              Impossible de charger l’enregistrement (tâche absente ou erreur API).
+            </Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => void loadFlow()}
+              sx={{ fontSize: 11, textTransform: 'none', fontWeight: 700 }}
+            >
+              Réessayer
+            </Button>
+          </Stack>
+        ) : (          <>
             <FormControl size="small" fullWidth sx={{ mb: 1 }}>
               <Select
                 value={selectedIndex}

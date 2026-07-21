@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════
 // Sojori — Reservation Sejour Page · édition « Atelier 2026 »
-// Wrapper de page avec header sticky, infobar, 4 onglets.
+// Wrapper de page avec header sticky, infobar, 3 onglets.
 // Tous les onglets injectés via slots — pas de logique métier ici.
 // ════════════════════════════════════════════════════════════════════
 
@@ -16,7 +16,7 @@ import { buildReservationUpdatePayload } from '../utils/reservationEditPayload';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { GuestInfoTab } from '../components/reservation/GuestInfoTab';
 import { FinancierTab } from '../components/reservation/FinancierTab';
-import { SejourTab } from '../components/reservation/SejourTab';
+import { MessagesTab } from '../components/reservation/MessagesTab';
 
 const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a',
@@ -27,7 +27,7 @@ const T = {
   success: '#0a8f5e', warning: '#c46506', error: '#c81e1e', info: '#0673b3',
 };
 
-const TAB_NAMES = ['guest-info', 'sejour', 'messages', 'financier'];
+const TAB_NAMES = ['sejour', 'financier', 'messages'];
 
 function formatStayRange(arrival?: string, departure?: string): string {
   if (!arrival) return '—';
@@ -80,8 +80,10 @@ export function ReservationSejourPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // Initialize tab from URL query param
-  const initialTab = TAB_NAMES.indexOf(searchParams.get('tab') || 'guest-info');
+  // Initialize tab from URL (?tab=guest-info legacy → séjour)
+  const rawTab = searchParams.get('tab') || 'sejour';
+  const tabKey = rawTab === 'guest-info' ? 'sejour' : rawTab;
+  const initialTab = TAB_NAMES.indexOf(tabKey);
   const [tab, setTab] = useState(initialTab >= 0 ? initialTab : 0);
   const [isEditMode, setIsEditMode] = useState(false);
   const cachedShell = id ? getCachedReservationDetail(id) : null;
@@ -257,26 +259,17 @@ export function ReservationSejourPage() {
         />
       );
     }
-    if (tab === 1) return <SejourTab reservationDetails={reservationDetails} />;
-    if (tab === 2) {
+    if (tab === 1) {
       return (
-        <Box sx={{ p: { xs: 1, sm: 1.5 } }}>
-          <Box sx={{ p: 6, textAlign: 'center', bgcolor: T.bg1, border: `1px dashed rgba(20,17,10,0.14)`, borderRadius: 1.25 }}>
-            <Typography sx={{ fontSize: 32, mb: 1 }}>💬</Typography>
-            <Typography sx={{ fontSize: 15, fontWeight: 700, color: T.text2 }}>Messages · WhatsApp / Chat / Reviews / Templates</Typography>
-            <Typography sx={{ fontSize: 12.5, color: T.text3, mt: 0.5 }}>À brancher : composant MessagesTab</Typography>
-          </Box>
-        </Box>
+        <FinancierTab
+          reservationDetails={reservationDetails}
+          isEditMode={isEditMode}
+          editedData={editedData}
+          onEditedDataChange={setEditedData}
+        />
       );
     }
-    return (
-      <FinancierTab
-        reservationDetails={reservationDetails}
-        isEditMode={isEditMode}
-        editedData={editedData}
-        onEditedDataChange={setEditedData}
-      />
-    );
+    return <MessagesTab reservationDetails={reservationDetails} />;
   }, [tab, reservationDetails, isEditMode, editedData, refreshReservation]);
 
   const tabsBar = (
@@ -299,10 +292,9 @@ export function ReservationSejourPage() {
         '& .MuiTabs-indicator': { backgroundColor: T.primary, height: 2, borderRadius: 1 },
       }}
     >
-      <Tab label="Guest Info" />
       <Tab label="Séjour" />
-      <Tab label="Messages" />
       <Tab label="Financier" />
+      <Tab label="Messages" />
     </Tabs>
   );
 
