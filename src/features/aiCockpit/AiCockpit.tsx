@@ -14,6 +14,7 @@ import type {
   DayPlanResponse,
   DayPlanStep,
 } from '../../services/fulltaskApi';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import PlanManualAssignModal from '../planReservation/PlanManualAssignModal';
 import EscaladeForceSlotModal from '../planReservation/EscaladeForceSlotModal';
 import './aiCockpit.css';
@@ -179,6 +180,8 @@ const PROMPTS = [
 
 export default function AiCockpit() {
   const navigate = useNavigate();
+  /** ⚠️ Multi-tenant : toute donnée affichée/envoyée à l'IA est scopée owner. */
+  const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [date, setDate] = useState(() => toIso(new Date()));
   const [plan, setPlan] = useState<DayPlanResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -199,16 +202,17 @@ export default function AiCockpit() {
   }, []);
 
   const load = useCallback(async () => {
+    if (!scopeFetchReady) return;
     setLoading(true);
     try {
-      setPlan(await fulltaskApi.getDayPlan(date));
+      setPlan(await fulltaskApi.getDayPlan(date, requestOwnerId));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur chargement cockpit');
       setPlan(null);
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, scopeFetchReady, requestOwnerId]);
 
   useEffect(() => {
     void load();
@@ -252,24 +256,45 @@ export default function AiCockpit() {
     return () => clearInterval(t);
   }, [reply]);
 
+  const showReply = useCallback((r: CopilotReply) => {
+    setThinking(false);
+    setReply(r);
+    if (r.targets.length) {
+      window.setTimeout(() => {
+        boardRef.current
+          ?.querySelector(`[data-flight="${r.targets[0]}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 120);
+    }
+  }, []);
+
   const ask = (raw?: string) => {
     const q = (raw ?? query).trim();
     if (!q || !plan) return;
     setQuery(q);
     setThinking(true);
     setReply(null);
-    window.setTimeout(() => {
-      const r = copilotReply(q, plan, flights);
-      setThinking(false);
-      setReply(r);
-      if (r.targets.length) {
-        window.setTimeout(() => {
-          boardRef.current
-            ?.querySelector(`[data-flight="${r.targets[0]}"]`)
-            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 120);
+
+    /* Suggestions connues → moteur local : instantané et sait surligner les lignes. */
+    if (raw !== undefined || PROMPTS.includes(q)) {
+      window.setTimeout(() => showReply(copilotReply(q, plan, flights)), 600);
+      return;
+    }
+
+    /* Question libre → Haiku côté backend (plan déjà scopé owner là-bas). */
+    void (async () => {
+      try {
+        const res = await fulltaskApi.askDayPlanCopilot(q, date, requestOwnerId);
+        if (res.success && res.answer) {
+          showReply({ text: res.answer, targets: [] });
+          return;
+        }
+        /* IA non configurée / indisponible → repli sur le moteur local. */
+        showReply(copilotReply(q, plan, flights));
+      } catch {
+        showReply(copilotReply(q, plan, flights));
       }
-    }, 600);
+    })();
   };
 
   const runAction = (step: DayPlanStep, action: DayPlanAction) => {
