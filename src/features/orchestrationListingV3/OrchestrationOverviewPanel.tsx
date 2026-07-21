@@ -64,6 +64,8 @@ import {
 import type { CatalogMessage, ScheduledOrchestrationMessage } from '../taskHub/staff-design/types';
 import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
 import OrchestrationGlobalSwitch from './OrchestrationGlobalSwitch';
+import { V3Section } from './V3Primitives';
+import { GROUP_EMOJI } from './V3Rail';
 import { V3 } from './theme';
 
 const GROUP_ORDER: CapabilityGroupId[] = [
@@ -809,6 +811,7 @@ export default function OrchestrationOverviewPanel({
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
   const [activationStatus, setActivationStatus] = useState<ServiceActivationStatusEntry[]>([]);
   const [orchestrationEnabled, setOrchestrationEnabled] = useState(true);
+  const [openGroups, setOpenGroups] = useState<Set<CapabilityGroupId | 'messages'>>(new Set());
 
   const reload = useCallback((_opts?: { silent?: boolean }) => {
     // Pas de setLoading(true) ici : évite de démonter la grille / les modals (effet « reload page »).
@@ -1921,12 +1924,25 @@ export default function OrchestrationOverviewPanel({
       list.push(r);
       byGroup.set(r.group, list);
     }
-    return GROUP_ORDER.filter((g) => byGroup.has(g)).map((g) => ({
-      id: g,
-      label: CAPABILITY_GROUPS[g],
-      rows: byGroup.get(g)!,
-    }));
+    return GROUP_ORDER.filter((g) => byGroup.has(g)).map((g) => {
+      const groupRows = byGroup.get(g)!;
+      return {
+        id: g,
+        label: CAPABILITY_GROUPS[g],
+        rows: groupRows,
+        activeCount: groupRows.filter((r) => r.on).length,
+      };
+    });
   }, [rows]);
+
+  const toggleGroup = (id: CapabilityGroupId | 'messages') => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const configGestionValues = useMemo(() => {
     if (!configModal) return {};
@@ -2043,73 +2059,79 @@ export default function OrchestrationOverviewPanel({
         </Typography>
       </Box>
 
-      <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 1.5, bgcolor: V3.card, overflowX: 'auto' }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t, mb: 0.75 }}>
+      <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 1.5, bgcolor: V3.card }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t, mb: 1 }}>
           Flows &amp; messages — config d&apos;ensemble
         </Typography>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns:
-              '36px minmax(140px,1.25fr) 44px minmax(150px,1.3fr) minmax(110px,1fr) minmax(100px,0.95fr) 0.8fr 0.95fr 0.75fr 0.7fr 88px',
-            gap: 0.75,
-            alignItems: 'center',
-            minWidth: 1240,
-          }}
-        >
-          <Typography sx={head}> </Typography>
-          <Typography sx={head} title="Nom du service / flow">
-            Service
-          </Typography>
-          <Typography sx={head} title="Activer ou couper le service">
-            ON
-          </Typography>
-          <Typography sx={head} title="WhatsApp · Créer tâche · Relances · Staff · Escalade">
-            Décisions
-          </Typography>
-          <Typography sx={head} title="Prix, créneaux, catalogue, textes…">
-            Contenu
-          </Typography>
-          <Typography sx={head} title="Fenêtre où le menu WhatsApp est proposé au voyageur">
-            Visibilité WA
-          </Typography>
-          <Typography sx={head} title="Rappels WhatsApp au voyageur si pas encore fait">
-            Relances client
-          </Typography>
-          <Typography sx={head} title="Fenêtre d’assignation équipe + auto-accept">
-            Assignation
-          </Typography>
-          <Typography sx={head} title="Notification pour rappeler le staff à J / heure (pas l’assignation)">
-            Rappels staff
-          </Typography>
-          <Typography sx={head} title="Alerte admin si non traité à temps">
-            Escalade
-          </Typography>
-          <Typography sx={head} title="Ouvrir la fiche de configuration">
-            Éditer
-          </Typography>
 
-          {groupedRows.map((group, gi) => (
-            <Box key={group.id} sx={{ display: 'contents' }}>
-              <Typography
+        {groupedRows.map((group) => (
+          <V3Section
+            key={group.id}
+            icon={GROUP_EMOJI[group.id] ?? '•'}
+            kind="manage"
+            title={group.label}
+            subtitle={`${group.rows.length} flow${group.rows.length > 1 ? 's' : ''}`}
+            enabled
+            onEnabledChange={() => {}}
+            open={openGroups.has(group.id)}
+            onOpenChange={() => toggleGroup(group.id)}
+            badge={
+              <Box
+                component="span"
                 sx={{
-                  ...head,
-                  gridColumn: '1 / -1',
-                  mt: gi === 0 ? 0.5 : 1.25,
-                  mb: 0.25,
-                  color: V3.t,
-                  fontSize: 11.5,
-                  bgcolor: V3.alt,
-                  px: 1,
-                  py: 0.5,
-                  borderRadius: 1,
+                  fontFamily: 'monospace',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: group.activeCount > 0 ? V3.su : V3.t4,
                 }}
               >
-                {group.label}
-                <Box component="span" sx={{ ml: 1, fontWeight: 600, color: V3.t3, fontSize: 10.5 }}>
-                  · flows
-                </Box>
-              </Typography>
+                {group.activeCount}/{group.rows.length} actifs
+              </Box>
+            }
+          >
+            <Box sx={{ overflowX: 'auto' }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns:
+                    '36px minmax(140px,1.25fr) 44px minmax(150px,1.3fr) minmax(110px,1fr) minmax(100px,0.95fr) 0.8fr 0.95fr 0.75fr 0.7fr 88px',
+                  gap: 0.75,
+                  alignItems: 'center',
+                  minWidth: 1240,
+                }}
+              >
+                <Typography sx={head}> </Typography>
+                <Typography sx={head} title="Nom du service / flow">
+                  Service
+                </Typography>
+                <Typography sx={head} title="Activer ou couper le service">
+                  ON
+                </Typography>
+                <Typography sx={head} title="WhatsApp · Créer tâche · Relances · Staff · Escalade">
+                  Décisions
+                </Typography>
+                <Typography sx={head} title="Prix, créneaux, catalogue, textes…">
+                  Contenu
+                </Typography>
+                <Typography sx={head} title="Fenêtre où le menu WhatsApp est proposé au voyageur">
+                  Visibilité WA
+                </Typography>
+                <Typography sx={head} title="Rappels WhatsApp au voyageur si pas encore fait">
+                  Relances client
+                </Typography>
+                <Typography sx={head} title="Fenêtre d’assignation équipe + auto-accept">
+                  Assignation
+                </Typography>
+                <Typography sx={head} title="Notification pour rappeler le staff à J / heure (pas l’assignation)">
+                  Rappels staff
+                </Typography>
+                <Typography sx={head} title="Alerte admin si non traité à temps">
+                  Escalade
+                </Typography>
+                <Typography sx={head} title="Ouvrir la fiche de configuration">
+                  Éditer
+                </Typography>
+
               {group.rows.map((r) => (
                 <Box key={r.key} sx={{ display: 'contents' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'center' }}>
@@ -2294,30 +2316,45 @@ export default function OrchestrationOverviewPanel({
                   </Box>
                 </Box>
               ))}
+              </Box>
             </Box>
-          ))}
+          </V3Section>
+        ))}
 
-          <Typography
-            sx={{
-              ...head,
-              gridColumn: '1 / -1',
-              mt: 1.5,
-              mb: 0.25,
-              color: V3.t,
-              fontSize: 11.5,
-              bgcolor: V3.clientT,
-              px: 1,
-              py: 0.5,
-              borderRadius: 1,
-            }}
-          >
-            Messages planifiés
-            <Box component="span" sx={{ ml: 1, fontWeight: 600, color: V3.t3, fontSize: 10.5 }}>
-              · envois automatiques (hors menu)
+        <V3Section
+          icon="📨"
+          kind="client"
+          title="Messages planifiés"
+          subtitle="Envois automatiques (hors menu)"
+          enabled
+          onEnabledChange={() => {}}
+          open={openGroups.has('messages')}
+          onOpenChange={() => toggleGroup('messages')}
+          badge={
+            <Box
+              component="span"
+              sx={{
+                fontFamily: 'monospace',
+                fontSize: 9,
+                fontWeight: 700,
+                color: messages.some((m) => m.enabled !== false) ? V3.su : V3.t4,
+              }}
+            >
+              {messages.filter((m) => m.enabled !== false).length}/{messages.length} actifs
             </Box>
-          </Typography>
-
-          {/* En-têtes adaptés messages (même grille que les flows) */}
+          }
+        >
+        <Box sx={{ overflowX: 'auto' }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns:
+              '36px minmax(140px,1.25fr) 44px minmax(150px,1.3fr) minmax(110px,1fr) minmax(100px,0.95fr) 0.8fr 0.95fr 0.75fr 0.7fr 88px',
+            gap: 0.75,
+            alignItems: 'center',
+            minWidth: 1240,
+          }}
+        >
           <Typography sx={head}> </Typography>
           <Typography sx={head}>Message</Typography>
           <Typography sx={head}>ON</Typography>
@@ -2416,6 +2453,8 @@ export default function OrchestrationOverviewPanel({
             })
           )}
         </Box>
+        </Box>
+        </V3Section>
       </Box>
 
       {renderEditor()}

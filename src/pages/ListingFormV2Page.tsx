@@ -29,9 +29,11 @@ export function ListingFormV2Page() {
   const tabParam =
     tabParamRaw === 'city-tax-config'
       ? 'messages-config'
-      : tabParamRaw === 'channels' || tabParamRaw === 'direct'
-        ? 'distribution'
-        : tabParamRaw === 'rules' || tabParamRaw === 'rules-guest'
+      : tabParamRaw === 'channels' || tabParamRaw === 'distribution'
+        ? 'ota'
+        : tabParamRaw === 'direct' || tabParamRaw === 'direct-booking'
+          ? 'direct-booking'
+          : tabParamRaw === 'rules' || tabParamRaw === 'rules-guest'
           ? 'availability'
           : tabParamRaw;
   const defaultLevel =
@@ -64,14 +66,28 @@ export function ListingFormV2Page() {
     enabled: !!id,
   });
 
+  /** Ne reset le formulaire que quand le document listing change — pas à chaque refetch pricing. */
+  const listingSyncKey = useMemo(() => {
+    if (!listingDoc || !id) return '';
+    const updated = (listingDoc as { updatedAt?: unknown }).updatedAt;
+    return `${id}:${String(updated ?? '')}`;
+  }, [id, listingDoc]);
+
+  const pricingPatch = useMemo(
+    () => ({
+      longStayDiscounts: normalizeLongStayDiscountsFromApi(pricingRule?.longStayDiscounts),
+      lastMinuteDiscount: normalizeLastMinuteDiscountsFromApi(pricingRule?.lastMinuteDiscount),
+    }),
+    [pricingRule],
+  );
+
   const initialFormValues = useMemo(() => {
     if (!formValues) return null;
     return {
       ...formValues,
-      longStayDiscounts: normalizeLongStayDiscountsFromApi(pricingRule?.longStayDiscounts),
-      lastMinuteDiscount: normalizeLastMinuteDiscountsFromApi(pricingRule?.lastMinuteDiscount),
+      ...pricingPatch,
     };
-  }, [formValues, pricingRule]);
+  }, [formValues, pricingPatch]);
 
   const { data: listingStructure } = useQuery({
     queryKey: ['listing-structure'],
@@ -94,10 +110,21 @@ export function ListingFormV2Page() {
       const discounts = discountsToApiPayload(values);
       await calendarService.updatePricingDiscounts(id!, discounts);
     },
-    onSuccess: () => {
+    onSuccess: (_result, savedValues) => {
       toast.success('Listing enregistré avec succès');
-      queryClient.invalidateQueries({ queryKey: ['listing', id] });
-      queryClient.invalidateQueries({ queryKey: ['listing-pricing-discounts', id] });
+      const payload = mergeFormV2ToUpdatePropertyPayload(savedValues);
+      queryClient.setQueryData(['listing', id], (old) => {
+        if (!old || typeof old !== 'object') return old;
+        const next = { ...(old as Record<string, unknown>) };
+        if (payload.visibility) next.visibility = payload.visibility;
+        if (payload.channelDiscounts) next.channelDiscounts = payload.channelDiscounts;
+        if (payload.directPayment) next.directPayment = payload.directPayment;
+        if (payload.atSojori !== undefined) next.atSojori = payload.atSojori;
+        next.updatedAt = new Date().toISOString();
+        return next;
+      });
+      void queryClient.invalidateQueries({ queryKey: ['listing', id] });
+      void queryClient.invalidateQueries({ queryKey: ['listing-pricing-discounts', id] });
     },
     onError: (error: any) => {
       toast.error(error?.message || "Erreur lors de l'enregistrement");
@@ -147,6 +174,8 @@ export function ListingFormV2Page() {
     <DashboardWrapper>
       <ListingFormV2
         listingId={id!}
+        listingSyncKey={listingSyncKey}
+        pricingPatch={pricingPatch}
         initialValues={initialFormValues}
         importedFieldsSource={initialFormValues}
         defaultLevel={defaultLevel}

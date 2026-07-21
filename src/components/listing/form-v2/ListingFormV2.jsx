@@ -19,13 +19,15 @@ import { GeneralTab, LocationTab }                          from './tabs/General
 import { PhotosTabReal }                                    from './tabs/PhotosTabReal';
 import AmenitiesTab                                         from './tabs/DetailTabsAmenities';
 import { PricingTab, AvailabilityTab, FeesTab }             from './tabs/DetailTabsCommercial';
-import { DistributionTab, RoomsTab, LicenseTab } from './tabs/DetailTabsDistribution';
+import { DistributionTab, DirectBookingTab, RoomsTab, LicenseTab } from './tabs/DetailTabsDistribution';
 import { RuImportDataTab } from './tabs/DetailTabsRuImport';
 import PostImportOnboardingTab from './tabs/PostImportOnboardingTab';
 import ListingOrchestrationV3Embed from '../../../features/orchestrationListingV3/ListingOrchestrationV3Embed';
 
 export default function ListingFormV2({
   listingId,
+  listingSyncKey,
+  pricingPatch,
   initialValues = {},
   importedFieldsSource,
   defaultLevel = 'detail',
@@ -53,7 +55,16 @@ export default function ListingFormV2({
       setValues(initialValues);
       setImportOnboardingActive(Boolean(initialValues.importOnboarding?.active));
     }
-  }, [initialValues]);
+  }, [listingSyncKey, listingId]);
+
+  useEffect(() => {
+    if (!pricingPatch) return;
+    setValues((prev) => ({
+      ...prev,
+      longStayDiscounts: pricingPatch.longStayDiscounts,
+      lastMinuteDiscount: pricingPatch.lastMinuteDiscount,
+    }));
+  }, [pricingPatch]);
 
   useEffect(() => {
     if (!listingId) return;
@@ -177,8 +188,11 @@ export default function ListingFormV2({
       if (tabKey === 'pricing')      return <PricingTab     {...common} />;
       if (tabKey === 'availability') return <AvailabilityTab {...common} />;
       if (tabKey === 'fees')         return <FeesTab        {...common} />;
-      if (tabKey === 'distribution' || tabKey === 'direct') {
+      if (tabKey === 'ota' || tabKey === 'distribution') {
         return <DistributionTab {...common} listingId={listingId} />;
+      }
+      if (tabKey === 'direct-booking' || tabKey === 'direct') {
+        return <DirectBookingTab {...common} listingId={listingId} />;
       }
       if (tabKey === 'rooms') {
         // Multi : types/stock dans Infos bâtiment, photos dans Photos, prix dans Pricing

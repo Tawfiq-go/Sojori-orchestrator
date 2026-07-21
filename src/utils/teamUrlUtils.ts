@@ -1,12 +1,13 @@
 /** URL Équipe & Rôles — aligné legacy sojori-dashboard */
 
-export type TeamSection = 'property-manager' | 'worker' | 'groups' | 'onboarding';
+export type TeamSection = 'property-manager' | 'worker' | 'groups' | 'onboarding' | 'access-marketplaces';
 
 export const TEAM_SECTION_TABS: Record<TeamSection, string> = {
   'property-manager': 'list',
   worker: 'worker',
   groups: 'groups',
   onboarding: 'onboarding',
+  'access-marketplaces': 'marketplaces',
 };
 
 /** @deprecated → /admin/equipe?tab=onboarding */
@@ -25,6 +26,7 @@ export function teamSectionFromPath(pathname: string, tabParam: string | null): 
   const tab = (tabParam || '').toLowerCase();
   if (tab === ADMIN_WHATSAPP_LEGACY_TAB) return 'property-manager';
   if (tab === 'onboarding' || tab === ONBOARDING_LEGACY_TAB) return 'onboarding';
+  if (tab === 'marketplaces' || tab === 'access-marketplaces') return 'access-marketplaces';
   if (tab === 'worker') return 'worker';
   if (tab === 'groups') return 'groups';
   return 'property-manager';

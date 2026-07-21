@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, Stack, Typography } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import { useAuth } from '../hooks/useAuth';
@@ -12,9 +12,11 @@ import {
   DynamicPricingShell,
   PortfolioView,
   T,
+  DP_LAYOUT_SX,
 } from '../features/dynamic-pricing';
 import { useBienDetail } from '../features/dynamic-pricing/hooks/useBienDetail';
 import BienExpressBar from '../features/dynamic-pricing/bien/BienExpressBar';
+import BienListingSwitcher from '../features/dynamic-pricing/bien/BienListingSwitcher';
 import { usePortfolio } from '../features/dynamic-pricing/hooks/usePortfolio';
 import DynamicPricingBreadcrumb, {
   bienHref,
@@ -154,20 +156,37 @@ export function DynamicPricingPage() {
             </Box>
           ) : listingId && bienDetail?.view ? (
             <>
-              <DynamicPricingBreadcrumb
-                crumbs={[
-                  { label: 'Pricing', onClick: () => navigate(portfolioHref(cityScope)) },
-                  ...(bienCityLabel
-                    ? [{
-                        label: bienCityLabel,
-                        onClick: () => navigate(portfolioHref(bienCityLabel)),
-                      }]
-                    : []),
-                  ...(isPlatformAdmin
-                    ? [{ label: bienDetail.view.listing.name }]
-                    : []),
-                ]}
-              />
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                sx={{
+                  ...DP_LAYOUT_SX,
+                  pt: 1,
+                  pb: 0.5,
+                  alignItems: { xs: 'stretch', md: 'flex-start' },
+                  justifyContent: 'space-between',
+                  gap: 1,
+                }}
+              >
+                <DynamicPricingBreadcrumb
+                  embedded
+                  crumbs={[
+                    { label: 'Pricing', onClick: () => navigate(portfolioHref(cityScope)) },
+                    ...(bienCityLabel
+                      ? [{
+                          label: bienCityLabel,
+                          onClick: () => navigate(portfolioHref(bienCityLabel)),
+                        }]
+                      : []),
+                  ]}
+                />
+                <BienListingSwitcher
+                  rows={portfolio.rows}
+                  currentListingId={listingId}
+                  cityScope={cityScope}
+                  loading={portfolio.loading}
+                  onSelect={(id, city) => navigate(bienHref(id, city ?? cityScope))}
+                />
+              </Stack>
               <BienExpressBar
                 view={bienDetail.view}
                 isPlatformAdmin={isPlatformAdmin}

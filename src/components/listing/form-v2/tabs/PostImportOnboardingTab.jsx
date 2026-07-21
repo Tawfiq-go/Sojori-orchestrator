@@ -17,6 +17,7 @@ import { toast } from 'react-toastify';
 import {
   finishListingImportOnboarding,
   launchImportOrchestration,
+  skipImportOrchestration,
   listPendingImportOrchestrationReservations,
   loadListingOrchestrationActivation,
   logImportOnboarding,
@@ -56,6 +57,19 @@ const btnPrimary = {
   whiteSpace: 'nowrap',
   '&:hover': { background: `linear-gradient(180deg, #d4a432 0%, ${T.primary} 100%)` },
   '&.Mui-disabled': { opacity: 0.55, color: '#fff' },
+};
+
+const btnSkip = {
+  textTransform: 'none',
+  fontWeight: 600,
+  fontSize: 12,
+  px: 1.25,
+  py: 0.5,
+  borderRadius: 1,
+  whiteSpace: 'nowrap',
+  color: T.text2,
+  borderColor: T.border,
+  '&:hover': { borderColor: T.text3, bgcolor: T.bg2 },
 };
 
 function fmtDate(d) {
@@ -120,16 +134,19 @@ function buildDefaultMessageEnabled(rules) {
 function ReservationRowLine({
   row,
   launching,
+  skipping,
   disabled,
   expanded,
   onToggleExpand,
   onLaunch,
+  onSkip,
   activeServices,
   activeMessages,
   messageCount,
 }) {
   const ch = channelStyle(row.channelName);
   const st = statusStyle(row.status);
+  const busy = launching || skipping;
 
   return (
     <Box sx={ROW_GRID}>
@@ -227,8 +244,21 @@ function ReservationRowLine({
         ) : null}
         <Button
           size="small"
+          variant="outlined"
+          disabled={busy}
+          title="Garde la résa importée, sans créer de plan d’orchestration"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSkip(row.id);
+          }}
+          sx={btnSkip}
+        >
+          {skipping ? <CircularProgress size={14} /> : 'Annuler'}
+        </Button>
+        <Button
+          size="small"
           variant="contained"
-          disabled={disabled}
+          disabled={disabled || skipping}
           onClick={(e) => {
             e.stopPropagation();
             onLaunch(row.id);
@@ -253,6 +283,7 @@ export function PostImportOnboardingTab({ listingId, onFinished }) {
   const [messageRules, setMessageRules] = useState([]);
   const [messageCatalog, setMessageCatalog] = useState([]);
   const [launchingId, setLaunchingId] = useState(null);
+  const [skippingId, setSkippingId] = useState(null);
   const [finishing, setFinishing] = useState(false);
   const [expandedResaId, setExpandedResaId] = useState(null);
 
@@ -477,6 +508,39 @@ export function PostImportOnboardingTab({ listingId, onFinished }) {
     }
   };
 
+  const handleSkip = async (reservationId) => {
+    const row = rows.find((r) => r.id === reservationId);
+    const ok = window.confirm(
+      `Annuler l’orchestration pour ${row?.reservationNumber ?? reservationId} ?\n\n` +
+        'La réservation reste importée (calendrier OK), mais aucun plan ne sera créé.',
+    );
+    if (!ok) return;
+
+    logImportOnboarding('Annuler orchestration — début', {
+      reservationId,
+      reservationNumber: row?.reservationNumber,
+    });
+    setSkippingId(reservationId);
+    try {
+      const result = await skipImportOrchestration(reservationId);
+      logImportOnboarding('Annuler orchestration — fin', { reservationId, result });
+      if (result.success) {
+        toast.success(
+          `Orchestration annulée — ${result.reservationNumber ?? reservationId} (import conservé, pas de plan)`,
+        );
+        if (expandedResaId === reservationId) setExpandedResaId(null);
+        await loadRows(false);
+      } else {
+        toast.error('Échec annulation orchestration');
+      }
+    } catch (e) {
+      console.error('[import-onboarding] Annuler — erreur', e);
+      toast.error(`Annulation: ${e instanceof Error ? e.message : 'erreur'}`);
+    } finally {
+      setSkippingId(null);
+    }
+  };
+
   const handleFinishImport = async () => {
     if (!listingId) return;
     setFinishing(true);
@@ -643,6 +707,7 @@ export function PostImportOnboardingTab({ listingId, onFinished }) {
                       <ReservationRowLine
                         row={r}
                         launching={launchingId === r.id}
+                        skipping={skippingId === r.id}
                         disabled={isLaunchDisabledForResa(r.id)}
                         expanded={expanded}
                         onToggleExpand={() => {
@@ -658,6 +723,7 @@ export function PostImportOnboardingTab({ listingId, onFinished }) {
                           setExpandedResaId(next);
                         }}
                         onLaunch={handleLaunch}
+                        onSkip={handleSkip}
                         activeServices={countActiveForResa(r.id)}
                         activeMessages={countActiveMessagesForResa(r.id)}
                         messageCount={messageRules.length}

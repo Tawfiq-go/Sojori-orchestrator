@@ -9,7 +9,7 @@ import { formatDistanceMeters } from '../utils/geoDistance';
 
 function airbnbListingUrl(airbnbListingId: string | null | undefined): string | null {
   const id = String(airbnbListingId ?? '').trim();
-  if (!/^\d+$/.test(id)) return null;
+  if (!/^\d{5,20}$/.test(id)) return null;
   return `https://www.airbnb.fr/rooms/${id}`;
 }
 
@@ -39,6 +39,8 @@ export interface CompsTableProps {
   rows: CompRow[];
   /** Colonnes détaillées (quartier, lits, voyageurs, RevPAR…). */
   showFullDetail?: boolean;
+  /** Clic ligne ou bouton « Comparer » (owners). */
+  onCompare?: (row: CompRow) => void;
 }
 
 const GRADIENTS = {
@@ -51,7 +53,7 @@ const GRADIENTS = {
 
 type SortKey = 'distance' | 'rating' | 'adr' | 'occupancy' | 'revenue';
 
-export default function CompsTable({ rows, showFullDetail = false }: CompsTableProps) {
+export default function CompsTable({ rows, showFullDetail = false, onCompare }: CompsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('distance');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -114,13 +116,25 @@ export default function CompsTable({ rows, showFullDetail = false }: CompsTableP
               <Th sortable active={sortKey === 'occupancy'} dir={sortDir} onClick={() => toggleSort('occupancy')}>Occ.</Th>
               {showFullDetail ? <Th>RevPAR</Th> : null}
               <Th sortable active={sortKey === 'revenue'} dir={sortDir} onClick={() => toggleSort('revenue')}>Rev. TTM</Th>
+              {onCompare ? <Th>Comparer</Th> : null}
             </Box>
           </Box>
           <Box component="tbody">
             {sortedRows.map(row => (
-              <Box component="tr" key={row.id} sx={{
+              <Box
+                component="tr"
+                key={row.id}
+                onClick={
+                  onCompare && !row.isSelf
+                    ? () => onCompare(row)
+                    : undefined
+                }
+                sx={{
                 bgcolor: row.isSelf ? 'rgba(244,207,94,0.06)' : 'transparent',
                 '&:hover': { bgcolor: row.isSelf ? 'rgba(244,207,94,0.10)' : T.bg2 },
+                ...(onCompare && !row.isSelf
+                  ? { cursor: 'pointer' }
+                  : {}),
               }}>
                 <Td>
                   <Box sx={{
@@ -136,36 +150,32 @@ export default function CompsTable({ rows, showFullDetail = false }: CompsTableP
                     </Box>
                   ) : (() => {
                     const url = airbnbListingUrl(row.airbnbListingId);
-                    return url ? (
-                      <Box
-                        component="a"
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        sx={{
-                          fontWeight: 700,
-                          letterSpacing: '-0.005em',
-                          color: T.text,
-                          textDecoration: 'none',
-                          '&:hover': { color: T.goldDeep, textDecoration: 'underline' },
-                        }}
-                      >
-                        {row.name}
-                        <Box
-                          component="span"
-                          sx={{
-                            ml: 0.5,
-                            fontSize: 10,
-                            fontFamily: '"Geist Mono", monospace',
-                            color: T.text3,
-                            fontWeight: 600,
-                          }}
-                        >
-                          ↗ Voir l’annonce
-                        </Box>
-                      </Box>
-                    ) : (
-                      <Box sx={{ fontWeight: 700, letterSpacing: '-0.005em' }}>{row.name}</Box>
+                    return (
+                      <Stack direction="row" sx={{ alignItems: 'baseline', gap: 0.75, flexWrap: 'wrap' }}>
+                        <Box sx={{ fontWeight: 700, letterSpacing: '-0.005em' }}>{row.name}</Box>
+                        {url ? (
+                          <Box
+                            component="a"
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={url}
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            sx={{
+                              fontSize: 10,
+                              fontFamily: '"Geist Mono", monospace',
+                              color: T.goldDeep,
+                              fontWeight: 700,
+                              textDecoration: 'none',
+                              whiteSpace: 'nowrap',
+                              '&:hover': { textDecoration: 'underline' },
+                            }}
+                          >
+                            ↗ Voir l’annonce
+                          </Box>
+                        ) : null}
+                      </Stack>
                     );
                   })()}
                 </Td>
@@ -201,6 +211,36 @@ export default function CompsTable({ rows, showFullDetail = false }: CompsTableP
                   <Td mono>{row.revparTtm != null ? `${row.revparTtm.toLocaleString('fr-FR')} MAD` : '—'}</Td>
                 ) : null}
                 <Td mono colorIf={row.isSelf ? T.error : undefined}>{row.revenueTtm.toLocaleString('fr-FR')}<Unit>MAD</Unit></Td>
+                {onCompare && !row.isSelf ? (
+                  <Td>
+                    <Box
+                      component="button"
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCompare(row);
+                      }}
+                      sx={{
+                        border: `1px solid ${T.gold}`,
+                        bgcolor: T.goldTint,
+                        color: T.goldDeep,
+                        borderRadius: 1,
+                        px: 1,
+                        py: 0.375,
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        whiteSpace: 'nowrap',
+                        '&:hover': { bgcolor: T.goldTint2 },
+                      }}
+                    >
+                      Comparer
+                    </Box>
+                  </Td>
+                ) : onCompare ? (
+                  <Td>—</Td>
+                ) : null}
               </Box>
             ))}
           </Box>
