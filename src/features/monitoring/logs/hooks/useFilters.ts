@@ -2,7 +2,14 @@ import { useCallback, useState } from 'react';
 
 export type LogsTimeRange = '1h' | '6h' | '24h' | '7d';
 
-export type LogsSeverity = 'all' | 'critical' | 'error' | 'warning' | 'info';
+/** `all` = alert levels only (no info). `everything` = all levels including info. */
+export type LogsSeverity =
+  | 'all'
+  | 'everything'
+  | 'critical'
+  | 'error'
+  | 'warning'
+  | 'info';
 
 export interface LogsFilters {
   timeRange: LogsTimeRange;
@@ -15,6 +22,7 @@ export interface LogsFilters {
 const DEFAULT_FILTERS: LogsFilters = {
   timeRange: '1h',
   service: 'all',
+  // Default excludes info — volume of info lines is what made Loki time out.
   severity: 'all',
   search: '',
   category: 'all',

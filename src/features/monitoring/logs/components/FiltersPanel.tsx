@@ -15,11 +15,12 @@ const TIME_RANGES = [
 ] as const;
 
 const SEVERITIES = [
-  { value: 'all', label: 'Tous niveaux' },
+  { value: 'all', label: 'Alertes' },
   { value: 'critical', label: 'Critical' },
   { value: 'error', label: 'Error' },
   { value: 'warning', label: 'Warning' },
   { value: 'info', label: 'Info' },
+  { value: 'everything', label: 'Tout (+info)' },
 ] as const;
 
 const DEFAULT_SERVICES = [
@@ -43,6 +44,8 @@ interface FiltersPanelProps {
 
 export function FiltersPanel({ filters, onFilterChange, onClear, stats }: FiltersPanelProps) {
   const services = Array.from(new Set([...DEFAULT_SERVICES, ...(stats?.services || [])]));
+  const infoHeavy = filters.severity === 'info' || filters.severity === 'everything';
+
   return (
     <Stack spacing={1.5}>
       <FilterBar>
@@ -89,8 +92,16 @@ export function FiltersPanel({ filters, onFilterChange, onClear, stats }: Filter
       {stats?.totalLogs != null && (
         <Typography sx={{ fontSize: 11, color: t.text3 }}>
           {stats.totalLogs} log(s) indexés sur la période
+          {stats.partial ? ' · compteurs partiels' : ''}
         </Typography>
       )}
+
+      {infoHeavy ? (
+        <Typography sx={{ fontSize: 11, color: '#b45309' }}>
+          Info / Tout charge beaucoup plus de lignes Loki — préfère une période courte (1 h) et la
+          pagination.
+        </Typography>
+      ) : null}
 
       <FilterChip label="Réinitialiser" onClick={onClear} />
     </Stack>
