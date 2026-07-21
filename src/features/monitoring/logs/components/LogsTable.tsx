@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Typography } from '@mui/material';
 import { formatCasablancaDate } from '../../../../utils/dateFormatting.js';
 import {
@@ -14,6 +15,7 @@ interface LogsTableProps {
   logs: LogEntry[];
   loading: boolean;
   onLogClick: (log: LogEntry) => void;
+  footer?: ReactNode;
 }
 
 function rowSeverity(log: LogEntry): string {
@@ -26,7 +28,7 @@ function rowMessage(log: LogEntry): string {
   return JSON.stringify(log).slice(0, 240);
 }
 
-export function LogsTable({ logs, loading, onLogClick }: LogsTableProps) {
+export function LogsTable({ logs, loading, onLogClick, footer }: LogsTableProps) {
   if (loading && logs.length === 0) {
     return <MonitorLoading label="Chargement des logs…" />;
   }
@@ -44,6 +46,7 @@ export function LogsTable({ logs, loading, onLogClick }: LogsTableProps) {
     <DataTable
       hideRowActions
       onRowClick={(row) => onLogClick(row as LogEntry)}
+      footer={footer}
       columns={[
         {
           key: 'timestamp',
