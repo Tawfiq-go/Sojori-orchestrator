@@ -360,6 +360,25 @@ export default function AiCockpit() {
         <div className="ck-clock" aria-label="Heure actuelle">
           {clock.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </div>
+        {/* Navigation rapide : Aujourd'hui / J+1 / J+2 / J+3 sans passer par le calendrier */}
+        <div className="ck-quickdays">
+          {[0, 1, 2, 3].map((d) => {
+            const iso = addDaysIso(toIso(new Date()), d);
+            const label = d === 0 ? "Aujourd'hui" : `J+${d}`;
+            return (
+              <button
+                key={d}
+                type="button"
+                className={date === iso ? 'on' : ''}
+                title={frDate(iso)}
+                onClick={() => setDate(iso)}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="ck-datenav">
           <button type="button" onClick={() => setDate(addDaysIso(date, -1))} aria-label="Jour précédent">‹</button>
           <input

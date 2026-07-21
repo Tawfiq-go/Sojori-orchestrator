@@ -110,6 +110,37 @@
   font-variant-numeric: tabular-nums;
 }
 
+.ck-quickdays {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--ck-panel);
+  border: 1px solid var(--ck-line);
+  border-radius: 11px;
+  padding: 3px;
+}
+
+.ck-quickdays button {
+  border: 0;
+  background: transparent;
+  color: var(--ck-text2);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 6px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.ck-quickdays button:hover { background: var(--ck-panel2); color: var(--ck-gold); }
+
+.ck-quickdays button.on {
+  background: linear-gradient(135deg, #f2d38b, var(--ck-gold-deep));
+  color: #171307;
+}
+
 .ck-datenav {
   display: inline-flex;
   align-items: center;
