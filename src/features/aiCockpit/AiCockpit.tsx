@@ -584,6 +584,11 @@ function RelancesPanel({
   /* Ménage : choisir/modifier l'heure — patch du scheduledDate de la tâche (même API que la page Tâches). */
   const [cleanTime, setCleanTime] = useState(step.time ?? step.estimatedTime ?? '11:00');
   const [savingTime, setSavingTime] = useState(false);
+  /* ⚠️ ReservationRegistrationActions appelle onRegistrationUpdated dès le chargement
+     (synchro compteurs) : ne JAMAIS fermer le panneau sur ce callback — on marque
+     « touché » et on recharge le plan à la fermeture. */
+  const [regTouched, setRegTouched] = useState(false);
+  const close = () => (regTouched ? onReload() : onClose());
   const relances = step.relances ?? [];
   const nextPending = relances.find((r) => r.status === 'en_attente');
   /* choose-task (départ/arrivée) sinon la tâche elle-même (ex. enregistrement). */
@@ -603,11 +608,11 @@ function RelancesPanel({
   };
 
   return (
-    <div className="ck-relpop-backdrop" onClick={onClose} role="presentation">
+    <div className="ck-relpop-backdrop" onClick={close} role="presentation">
       <div className="ck-relpop" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Relances">
         <div className="ck-relpop-hdr">
           <span>{CHECK_ICON[step.kind]} {checkLabel(step)}</span>
-          <button type="button" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" onClick={close} aria-label="Fermer">✕</button>
         </div>
 
         <div className="ck-relpop-list">
@@ -671,7 +676,7 @@ function RelancesPanel({
             <span>📝 Finaliser l'enregistrement voyageurs :</span>
             <ReservationRegistrationActions
               reservationId={step.reservationId}
-              onRegistrationUpdated={() => onReload()}
+              onRegistrationUpdated={() => setRegTouched(true)}
             />
           </div>
         )}
