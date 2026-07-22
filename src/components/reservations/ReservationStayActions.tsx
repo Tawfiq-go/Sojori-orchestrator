@@ -14,6 +14,7 @@ import * as fulltaskApi from '../../services/fulltaskApi';
 import { blurActiveElement } from '../../utils/domFocus';
 import { stayPatchFromGuestContext } from '../../utils/guestContextReservationPatch';
 import { guestContextStaySummary, logResaGuest } from '../../utils/resaGuestActionDebug';
+import { useWriteAccess } from '../../hooks/useWriteAccess';
 
 const T = {
   success: '#0a8f5e',
@@ -82,6 +83,8 @@ export function ReservationStayActions({
   taskId,
   onStayUpdated,
 }: Props) {
+  const { readOnly } = useWriteAccess('reservations');
+  const locked = Boolean(disabled || readOnly);
   const isArrival = kind === 'arrival';
   const defaultHour = isArrival ? 15 : 11;
   const chooseTitle = isArrival ? 'Choisir arrivée' : 'Choisir départ';
@@ -213,11 +216,11 @@ export function ReservationStayActions({
     fontFamily: '"Geist Mono", monospace',
     fontSize: 11,
     fontWeight: 600,
-    cursor: disabled ? 'default' : 'pointer',
+    cursor: locked ? 'default' : 'pointer',
     borderRadius: 0.25,
     px: 0.15,
     lineHeight: 1.3,
-    '&:hover': disabled ? {} : { bgcolor: 'rgba(184,133,26,0.08)' },
+    '&:hover': locked ? {} : { bgcolor: 'rgba(184,133,26,0.08)' },
   };
 
   const showChoose = mode === 'both' || mode === 'choose';
@@ -231,7 +234,7 @@ export function ReservationStayActions({
           component="span"
           title={chooseTitle}
           onClick={(e) => {
-            if (disabled) return;
+            if (locked) return;
             setChooseAnchor(e.currentTarget);
           }}
           sx={{
@@ -250,7 +253,7 @@ export function ReservationStayActions({
           component="span"
           title={declareTitle}
           onClick={(e) => {
-            if (disabled) return;
+            if (locked) return;
             setDeclareAnchor(e.currentTarget);
           }}
           sx={{
@@ -271,7 +274,7 @@ export function ReservationStayActions({
             component="span"
             title={chooseTitle}
             onClick={(e) => {
-              if (disabled) return;
+              if (locked) return;
               setChooseAnchor(e.currentTarget);
             }}
             sx={{
@@ -290,7 +293,7 @@ export function ReservationStayActions({
             component="span"
             title={declareTitle}
             onClick={(e) => {
-              if (disabled) return;
+              if (locked) return;
               setDeclareAnchor(e.currentTarget);
             }}
             sx={{

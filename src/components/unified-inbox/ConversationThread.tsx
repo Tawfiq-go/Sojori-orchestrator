@@ -10,6 +10,7 @@ import type { Thread, Message, QuickTemplate, QuickAction, GuestMenuDispatchOpti
 import { formatWhatsAppDeliveryError } from './formatWhatsAppDeliveryError';
 import { extractHttpErrorMessage } from '../../utils/extractHttpErrorMessage';
 import { useAuth } from '../../hooks/useAuth';
+import { useWriteAccess } from '../../hooks/useWriteAccess';
 import { Roles } from '../../constants/roles';
 
 function interactiveContentBadge(
@@ -67,6 +68,9 @@ interface ConversationThreadProps {
    * - auto: déduit depuis thread.channel
    */
   threadMode?: 'auto' | 'whatsapp' | 'ota';
+  /** OTA : statut WhatsApp guest + ouverture du fil */
+  whatsappGuestKind?: 'loading' | 'actif' | 'jamais' | 'nonum' | null;
+  onOpenWhatsApp?: () => void;
 }
 
 export default function ConversationThread({
@@ -95,8 +99,11 @@ export default function ConversationThread({
   messagesTotal = 0,
   highlightKeyword = '',
   threadMode = 'auto',
+  whatsappGuestKind = null,
+  onOpenWhatsApp,
 }: ConversationThreadProps) {
   const { user } = useAuth();
+  const { readOnly } = useWriteAccess();
   const normalizedRole = String(user?.role || '').toLowerCase();
   const canInspectAi =
     user?.role === Roles.Admin ||
@@ -198,7 +205,7 @@ export default function ConversationThread({
 
   const handleSend = async () => {
     const text = inputValue.trim();
-    if (!text || sending) return;
+    if (readOnly || !text || sending) return;
     setSending(true);
     setSendError(null);
     try {
@@ -459,7 +466,45 @@ export default function ConversationThread({
           </Box>
         </Box>
 
-        <Stack direction="row" sx={{ gap: 0.5, flexShrink: 0 }}>
+        <Stack direction="row" sx={{ gap: 0.5, flexShrink: 0, alignItems: 'center' }}>
+          {isOta && whatsappGuestKind ? (
+            <Box
+              component="button"
+              type="button"
+              onClick={onOpenWhatsApp}
+              sx={{
+                ...headerActionBtnSx,
+                width: 'auto',
+                px: 1,
+                gap: 0.5,
+                fontSize: 11,
+                fontWeight: 700,
+                ...(whatsappGuestKind === 'actif'
+                  ? { bgcolor: 'rgba(18,140,75,0.12)', color: '#0a8f5e' }
+                  : whatsappGuestKind === 'jamais'
+                    ? { bgcolor: 'rgba(220,38,38,0.08)', color: '#dc2626' }
+                    : { color: T.text3 }),
+              }}
+              title={
+                whatsappGuestKind === 'actif'
+                  ? 'Fil WhatsApp actif — ouvrir'
+                  : whatsappGuestKind === 'jamais'
+                    ? 'Jamais contacté sur WhatsApp — ouvrir / initier'
+                    : whatsappGuestKind === 'nonum'
+                      ? 'Pas de numéro WhatsApp'
+                      : 'Vérification WhatsApp…'
+              }
+            >
+              💬{' '}
+              {whatsappGuestKind === 'loading'
+                ? '…'
+                : whatsappGuestKind === 'actif'
+                  ? 'WA ✓'
+                  : whatsappGuestKind === 'jamais'
+                    ? 'WA ∅'
+                    : 'WA ⚠'}
+            </Box>
+          ) : null}
           {(isOta ? ['🔗', '🌐', '⋮'] : ['📞', '🎥', '🔍', '⋮']).map((icon) => (
             <Box key={icon} component="button" sx={headerActionBtnSx} title={icon}>
               {icon}
@@ -1177,6 +1222,22 @@ export default function ConversationThread({
         </Box>
       )}
 
+      {readOnly ? (
+        <Box
+          sx={{
+            px: '18px',
+            py: '12px',
+            borderTop: `1px solid ${T.border}`,
+            bgcolor: T.bg2,
+            flexShrink: 0,
+            fontSize: 12,
+            color: T.text3,
+            fontWeight: 600,
+          }}
+        >
+          Lecture seule — envoi de messages désactivé pour le compte propriétaire.
+        </Box>
+      ) : (
       <Box
         sx={{
           px: '18px',
@@ -1300,6 +1361,7 @@ export default function ConversationThread({
           ➤
         </Box>
       </Box>
+      )}
 
       <Box
         sx={{

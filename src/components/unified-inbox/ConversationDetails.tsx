@@ -21,6 +21,14 @@ interface ConversationDetailsProps {
   type: 'whatsapp' | 'staff' | 'ota' | 'leads' | 'reviews';
   reservation?: InboxReservationData;
   onAction?: (action: string) => void;
+  /** Statut WhatsApp guest (onglet Messages OTA) */
+  whatsappGuest?: {
+    kind: 'loading' | 'actif' | 'jamais' | 'nonum';
+    phone?: string;
+  } | null;
+  onOpenWhatsApp?: () => void;
+  onInitiateWhatsApp?: () => void;
+  initiatingWhatsApp?: boolean;
 }
 
 export default function ConversationDetails({
@@ -28,6 +36,10 @@ export default function ConversationDetails({
   type,
   reservation,
   onAction,
+  whatsappGuest = null,
+  onOpenWhatsApp,
+  onInitiateWhatsApp,
+  initiatingWhatsApp = false,
 }: ConversationDetailsProps) {
   const isStaff = type === 'staff';
   const isLeads = type === 'leads';
@@ -225,6 +237,121 @@ export default function ConversationDetails({
                 {r.commission != null && (
                   <DtRow label="Commission">{`${r.commission} ${r.currency || 'EUR'}`}</DtRow>
                 )}
+              </DtCard>
+            )}
+
+            {type === 'ota' && whatsappGuest && (
+              <DtCard title="WhatsApp" emoji="💬">
+                <DtRow label="Canal">
+                  {whatsappGuest.kind === 'loading' ? (
+                    <Typography component="span" sx={{ color: T.text4, fontSize: 12.5 }}>
+                      Vérification…
+                    </Typography>
+                  ) : whatsappGuest.kind === 'actif' ? (
+                    <StatusPill label="✓ fil actif" />
+                  ) : whatsappGuest.kind === 'jamais' ? (
+                    <StatusPill label="∅ jamais contacté" />
+                  ) : (
+                    <StatusPill label="⚠ pas de numéro" />
+                  )}
+                </DtRow>
+                {(whatsappGuest.phone || r.guestPhone || thread.phone) && (
+                  <DtRow label="Téléphone">
+                    <Typography
+                      component="span"
+                      sx={{ fontFamily: '"Geist Mono", monospace', fontWeight: 700, fontSize: 12.5 }}
+                    >
+                      +{String(whatsappGuest.phone || r.guestPhone || thread.phone).replace(/\D/g, '')}
+                    </Typography>
+                  </DtRow>
+                )}
+                <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                  {whatsappGuest.kind === 'actif' ? (
+                    <Box
+                      component="button"
+                      type="button"
+                      onClick={onOpenWhatsApp}
+                      sx={{
+                        border: 0,
+                        cursor: 'pointer',
+                        borderRadius: '9px',
+                        px: 1.5,
+                        py: 1,
+                        fontWeight: 700,
+                        fontSize: 12,
+                        bgcolor: '#128C4B',
+                        color: '#fff',
+                        '&:hover': { bgcolor: '#0d6e3a' },
+                      }}
+                    >
+                      💬 Ouvrir le fil WhatsApp →
+                    </Box>
+                  ) : null}
+                  {whatsappGuest.kind === 'jamais' ? (
+                    <>
+                      <Box
+                        component="button"
+                        type="button"
+                        onClick={onInitiateWhatsApp}
+                        disabled={initiatingWhatsApp}
+                        sx={{
+                          border: 0,
+                          cursor: initiatingWhatsApp ? 'wait' : 'pointer',
+                          borderRadius: '9px',
+                          px: 1.5,
+                          py: 1,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          bgcolor: '#128C4B',
+                          color: '#fff',
+                          opacity: initiatingWhatsApp ? 0.7 : 1,
+                          '&:hover': { bgcolor: '#0d6e3a' },
+                        }}
+                      >
+                        {initiatingWhatsApp ? 'Envoi…' : '💬 Initier WhatsApp →'}
+                      </Box>
+                      <Box
+                        component="button"
+                        type="button"
+                        onClick={onOpenWhatsApp}
+                        sx={{
+                          border: `1.5px solid ${T.border}`,
+                          cursor: 'pointer',
+                          borderRadius: '9px',
+                          px: 1.5,
+                          py: 0.85,
+                          fontWeight: 700,
+                          fontSize: 11.5,
+                          bgcolor: T.bg1,
+                          color: T.text2,
+                          '&:hover': { bgcolor: T.bg2 },
+                        }}
+                      >
+                        Voir dans Résas / WhatsApp
+                      </Box>
+                    </>
+                  ) : null}
+                  {whatsappGuest.kind === 'nonum' ? (
+                    <Box
+                      component="button"
+                      type="button"
+                      onClick={onOpenWhatsApp}
+                      sx={{
+                        border: `1.5px solid ${T.border}`,
+                        cursor: 'pointer',
+                        borderRadius: '9px',
+                        px: 1.5,
+                        py: 0.85,
+                        fontWeight: 700,
+                        fontSize: 11.5,
+                        bgcolor: T.bg1,
+                        color: T.text2,
+                      }}
+                    >
+                      Ouvrir Résas (chercher un numéro)
+                    </Box>
+                  ) : null}
+                </Box>
               </DtCard>
             )}
           </>

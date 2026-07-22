@@ -11,6 +11,9 @@ import {
 } from '../utils/dashboardDebug';
 import { runtimeLog } from '../utils/runtimeLog';
 import { hasDevTokenBypass, invalidateSession } from '../utils/devApiAccess';
+import store from '../redux/store';
+import { isLandlordMutationAllowlisted, isLandlordRole } from '../utils/writeAccess';
+import { toast } from 'react-toastify';
 
 /**
  * VITE_DISABLE_AUTH : ne concerne que le garde `ProtectedRoute` (éviter la redirection login).
@@ -114,6 +117,26 @@ apiClient.interceptors.request.use(
       config.url?.includes('/complete-reset')
     ) {
       return config;
+    }
+
+    // Landlord = lecture seule : bloquer POST/PUT/PATCH/DELETE (sauf auth)
+    const method = String(config.method || 'get').toLowerCase();
+    if (['post', 'put', 'patch', 'delete'].includes(method)) {
+      const role = store.getState?.().auth?.user?.role;
+      if (isLandlordRole(role) && !isLandlordMutationAllowlisted(config.url)) {
+        const err = new Error(
+          'Compte propriétaire : accès en lecture seule — modification impossible.',
+        ) as Error & { code?: string; response?: { status: number; data: unknown } };
+        err.code = 'LANDLORD_READ_ONLY';
+        err.response = {
+          status: 403,
+          data: { success: false, error: err.message },
+        };
+        if (typeof window !== 'undefined') {
+          toast.warn(err.message, { toastId: 'landlord-readonly' });
+        }
+        return Promise.reject(err);
+      }
     }
 
     // Gestion du FormData (préserver le Content-Type natif)

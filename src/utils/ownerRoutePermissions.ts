@@ -351,9 +351,8 @@ export function isWorkerAdminAccess(
   ownerAccess?: boolean,
 ): boolean {
   if (ownerAccess) return true;
-  return grants.some(
-    (g) => g?.feature === '*' || (g?.actions || []).includes('*'),
-  );
+  // Uniquement actions:'*' = admin. `{ feature:'*', actions:['get'] }` = lecture globale, pas écriture.
+  return grants.some((g) => (g?.actions || []).includes('*'));
 }
 
 export function grantAllows(
