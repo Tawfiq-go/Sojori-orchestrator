@@ -19,6 +19,8 @@ export interface InboxReservationData {
   checkOutDisplay?: string;
   nightsCount?: number;
   guestsLabel?: string;
+  /** Téléphone voyageur (OTA / résa) */
+  guestPhone?: string;
   totalPrice?: number;
   currency?: string;
   paymentStatus?: string;

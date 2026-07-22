@@ -117,6 +117,7 @@ export interface DashboardKpis {
 export interface DashboardRevenuePoint {
   date: string;
   revenue: number;
+  /** Arrivées (check-in) ce jour / semaine / mois — pas le stock de résas. */
   bookings: number;
 }
 

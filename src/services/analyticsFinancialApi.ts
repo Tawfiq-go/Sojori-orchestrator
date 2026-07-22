@@ -12,6 +12,8 @@ export type FinancialQuery = FinancialRange & {
   listingIds?: string[];
   channelName?: string[];
   staging?: boolean;
+  /** Admin PM scope — transmis aux endpoints qui supportent ownerId / filterOwnerId. */
+  ownerId?: string | null;
   signal?: AbortSignal;
 };
 
@@ -27,6 +29,11 @@ function buildUrlSearchParams(opts: FinancialQuery): URLSearchParams {
   }
   for (const ch of opts.channelName ?? []) {
     if (ch) sp.append('channelName', ch);
+  }
+  const ownerId = opts.ownerId?.trim();
+  if (ownerId) {
+    sp.set('ownerId', ownerId);
+    sp.append('filterOwnerId', ownerId);
   }
   return sp;
 }
@@ -93,13 +100,57 @@ export async function fetchAverageRevenuePerStay(q: FinancialQuery): Promise<num
 
 export async function fetchCalendarOccupancyRate(q: FinancialQuery): Promise<number> {
   const sp = buildUrlSearchParams(q);
-  const r = await apiClient.get(`${MICROSERVICE_BASE_URL.SRV_CALENDAR}/calendar/occupancy-rate`, {
-    params: sp,
-    signal: q.signal,
-    timeout: 60_000,
-  });
+  const r = await apiClient.get(
+    `${MICROSERVICE_BASE_URL.SRV_CALENDAR}/calendar/occupancy-rate?${sp}`,
+    { signal: q.signal, timeout: 60_000 },
+  );
   const data = r.data as { occupancyRate?: unknown; data?: { occupancyRate?: unknown } };
   return parseNum(data?.occupancyRate ?? data?.data?.occupancyRate);
+}
+
+/**
+ * Occupation réelle mois par mois sur les 12 mois se terminant à endDate
+ * (pas une intensité relative normalisée à 100).
+ */
+export async function fetchSeasonalityOccupancy(
+  q: FinancialQuery,
+): Promise<Array<{ month: string; occupancy: number }>> {
+  const end = new Date(`${q.endDate}T12:00:00`);
+  if (Number.isNaN(end.getTime())) return [];
+
+  const months = Array.from({ length: 12 }, (_, index) => {
+    const d = new Date(end.getFullYear(), end.getMonth() - (11 - index), 1);
+    const startDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const endDate = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`;
+    const label = d
+      .toLocaleDateString('fr-FR', { month: 'short' })
+      .replace(/\.$/, '')
+      .trim();
+    return { startDate, endDate, label };
+  });
+
+  const CONCURRENCY = 4;
+  const out: Array<{ month: string; occupancy: number }> = [];
+  for (let i = 0; i < months.length; i += CONCURRENCY) {
+    const chunk = months.slice(i, i + CONCURRENCY);
+    const part = await Promise.all(
+      chunk.map(async (m) => {
+        try {
+          const occupancy = await fetchCalendarOccupancyRate({
+            ...q,
+            startDate: m.startDate,
+            endDate: m.endDate,
+          });
+          return { month: m.label, occupancy: Math.round(Math.max(0, occupancy) * 10) / 10 };
+        } catch {
+          return { month: m.label, occupancy: 0 };
+        }
+      }),
+    );
+    out.push(...part);
+  }
+  return out;
 }
 
 export type ChannelStatRow = { label: string; value: number };
@@ -185,28 +236,71 @@ const MAX_LANDR_LISTING_IDS = 30;
 
 const DEFAULT_LANDR_TIMEOUT_MS = 25_000;
 
-/** Performance par listing — même source que le dashboard (revenue-per-l-and-r). */
-export async function fetchListingPerformanceLandR(
-  q: FinancialQuery,
-  options?: { timeoutMs?: number },
-): Promise<{ items: LandRPerformanceItem[]; totals: LandRTotals }> {
-  const listingIds = (q.listingIds ?? []).filter(Boolean).slice(0, MAX_LANDR_LISTING_IDS);
-  if (listingIds.length === 0) {
-    return {
-      items: [],
-      totals: {
-        totalRevenue: 0,
-        totalNightsBooked: 0,
-        totalCheckIns: 0,
-        totalCancelations: 0,
-        averageOccupancyRate: 0,
-        averageNightlyRate: 0,
-        averageRevenuePerStay: 0,
-        totalCancelationsPercentage: 0,
-      },
-    };
-  }
+const EMPTY_LANDR: { items: LandRPerformanceItem[]; totals: LandRTotals } = {
+  items: [],
+  totals: {
+    totalRevenue: 0,
+    totalNightsBooked: 0,
+    totalCheckIns: 0,
+    totalCancelations: 0,
+    averageOccupancyRate: 0,
+    averageNightlyRate: 0,
+    averageRevenuePerStay: 0,
+    totalCancelationsPercentage: 0,
+  },
+};
 
+function chunkIds(ids: string[], size: number): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
+  return out;
+}
+
+function mergeLandRResults(
+  parts: Array<{ items: LandRPerformanceItem[]; totals: LandRTotals }>,
+): { items: LandRPerformanceItem[]; totals: LandRTotals } {
+  const items = parts.flatMap((p) => p.items);
+  let totalRevenue = 0;
+  let totalNightsBooked = 0;
+  let totalCheckIns = 0;
+  let totalCancelations = 0;
+  let occWeighted = 0;
+  let occWeight = 0;
+  for (const p of parts) {
+    totalRevenue += p.totals.totalRevenue;
+    totalNightsBooked += p.totals.totalNightsBooked;
+    totalCheckIns += p.totals.totalCheckIns;
+    totalCancelations += p.totals.totalCancelations;
+    const w = p.totals.totalNightsBooked || p.items.length;
+    if (w > 0 && p.totals.averageOccupancyRate > 0) {
+      occWeighted += p.totals.averageOccupancyRate * w;
+      occWeight += w;
+    }
+  }
+  const denom = totalCheckIns + totalCancelations;
+  return {
+    items,
+    totals: {
+      totalRevenue,
+      totalNightsBooked,
+      totalCheckIns,
+      totalCancelations,
+      averageOccupancyRate: occWeight > 0 ? Math.round((occWeighted / occWeight) * 10) / 10 : 0,
+      averageNightlyRate:
+        totalNightsBooked > 0 ? Math.round((totalRevenue / totalNightsBooked) * 100) / 100 : 0,
+      averageRevenuePerStay:
+        totalCheckIns > 0 ? Math.round((totalRevenue / totalCheckIns) * 100) / 100 : 0,
+      totalCancelationsPercentage:
+        denom > 0 ? Math.round((totalCancelations / denom) * 1000) / 10 : 0,
+    },
+  };
+}
+
+async function fetchLandRChunk(
+  q: FinancialQuery,
+  listingIds: string[],
+  timeoutMs: number,
+): Promise<{ items: LandRPerformanceItem[]; totals: LandRTotals }> {
   const sp = new URLSearchParams();
   sp.set('startDate', q.startDate);
   sp.set('endDate', q.endDate);
@@ -218,64 +312,76 @@ export async function fetchListingPerformanceLandR(
     if (ch) sp.append('channelName', ch);
   }
 
+  const r = await apiClient.get(
+    `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/revenue-per-l-and-r?${sp.toString()}`,
+    { signal: q.signal, timeout: timeoutMs },
+  );
+
+  const body = r.data as {
+    byItems?: Array<Record<string, unknown>>;
+    totals?: Record<string, unknown>;
+  };
+
+  const items = (body.byItems ?? []).map((row) => ({
+    itemId: String(row.itemId ?? ''),
+    itemName: String(row.itemName || '—').trim() || '—',
+    totalRevenue: parseNum(row.totalRevenue),
+    nightsBooked: parseNum(row.nightsBooked),
+    totalCheckIns: parseNum(row.totalCheckIns),
+    cancelations: parseNum(row.cancelations),
+    occupancyRate: parseNum(row.occupancyRate),
+    averageNightlyRate: parseNum(row.averageNightlyRate ?? row.revenuePerNightBooked),
+    averageRevenuePerStay: parseNum(row.averageRevenuePerStay),
+    cancelationsPercentage: parseNum(row.cancelationsPercentage),
+    avgStay: parseNum(row.avgStay),
+  }));
+
+  const t = body.totals ?? {};
+  const totals: LandRTotals = {
+    totalRevenue: parseNum(t.totalRevenue),
+    totalNightsBooked: parseNum(t.totalNightsBooked),
+    totalCheckIns: parseNum(t.totalCheckIns),
+    totalCancelations: parseNum(t.totalCancelations),
+    averageOccupancyRate: parseNum(t.averageOccupancyRate),
+    averageNightlyRate: parseNum(t.averageNightlyRate),
+    averageRevenuePerStay: parseNum(t.averageRevenuePerStay),
+    totalCancelationsPercentage: parseNum(t.totalCancelationsPercentage),
+  };
+
+  return { items, totals };
+}
+
+/** Performance par listing — même source que le dashboard (revenue-per-l-and-r). */
+export async function fetchListingPerformanceLandR(
+  q: FinancialQuery,
+  options?: { timeoutMs?: number },
+): Promise<{ items: LandRPerformanceItem[]; totals: LandRTotals }> {
+  const listingIds = (q.listingIds ?? []).filter(Boolean);
+  if (listingIds.length === 0) return { ...EMPTY_LANDR, totals: { ...EMPTY_LANDR.totals } };
+
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_LANDR_TIMEOUT_MS;
+  const chunks = chunkIds(listingIds, MAX_LANDR_LISTING_IDS);
+
   try {
-    const r = await apiClient.get(
-      `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/reservations/revenue-per-l-and-r?${sp.toString()}`,
-      { signal: q.signal, timeout: options?.timeoutMs ?? DEFAULT_LANDR_TIMEOUT_MS },
-    );
-
-    const body = r.data as {
-      byItems?: Array<Record<string, unknown>>;
-      totals?: Record<string, unknown>;
-    };
-
-    const items = (body.byItems ?? []).map((row) => ({
-      itemId: String(row.itemId ?? ''),
-      itemName: String(row.itemName || '—').trim() || '—',
-      totalRevenue: parseNum(row.totalRevenue),
-      nightsBooked: parseNum(row.nightsBooked),
-      totalCheckIns: parseNum(row.totalCheckIns),
-      cancelations: parseNum(row.cancelations),
-      occupancyRate: parseNum(row.occupancyRate),
-      averageNightlyRate: parseNum(row.averageNightlyRate ?? row.revenuePerNightBooked),
-      averageRevenuePerStay: parseNum(row.averageRevenuePerStay),
-      cancelationsPercentage: parseNum(row.cancelationsPercentage),
-      avgStay: parseNum(row.avgStay),
-    }));
-
-    const t = body.totals ?? {};
-    const totals: LandRTotals = {
-      totalRevenue: parseNum(t.totalRevenue),
-      totalNightsBooked: parseNum(t.totalNightsBooked),
-      totalCheckIns: parseNum(t.totalCheckIns),
-      totalCancelations: parseNum(t.totalCancelations),
-      averageOccupancyRate: parseNum(t.averageOccupancyRate),
-      averageNightlyRate: parseNum(t.averageNightlyRate),
-      averageRevenuePerStay: parseNum(t.averageRevenuePerStay),
-      totalCancelationsPercentage: parseNum(t.totalCancelationsPercentage),
-    };
-
-    return { items, totals };
+    const parts = await Promise.all(chunks.map((ids) => fetchLandRChunk(q, ids, timeoutMs)));
+    return mergeLandRResults(parts);
   } catch (err) {
     if ((err as { code?: string }).code !== 'ERR_CANCELED') {
       runtimeLog('warn', 'AnalyticsAPI', 'revenue-per-l-and-r failed', {
         message: err instanceof Error ? err.message : String(err),
+        listingCount: listingIds.length,
+        chunks: chunks.length,
       });
     }
-    return {
-      items: [],
-      totals: {
-        totalRevenue: 0,
-        totalNightsBooked: 0,
-        totalCheckIns: 0,
-        totalCancelations: 0,
-        averageOccupancyRate: 0,
-        averageNightlyRate: 0,
-        averageRevenuePerStay: 0,
-        totalCancelationsPercentage: 0,
-      },
-    };
+    return { ...EMPTY_LANDR, totals: { ...EMPTY_LANDR.totals } };
   }
+}
+
+/** Taux d'annulation LandR : cancelled / (checkIns + cancelled). Inclut 0 %. */
+export function cancelRateFromLandRTotals(totals: LandRTotals): number | null {
+  const denom = totals.totalCheckIns + totals.totalCancelations;
+  if (denom <= 0) return null;
+  return Math.round((totals.totalCancelations / denom) * 1000) / 10;
 }
 
 export type ChannelBookingRow = { source: string; bookings: number; share: number };
@@ -311,22 +417,51 @@ export type AnalyticsReservationRow = {
   status?: string;
 };
 
-/** Réservations sur la période — démographie, lead time, durée séjour. */
+/** Statuts pour taux d'annulation + démographie (check-in dans la fenêtre — Hostaway). */
+const ANALYTICS_RESERVATION_STATUSES = [
+  'Pending',
+  'Confirmed',
+  'Completed',
+  'CancelledByAdmin',
+  'CancelledByCustomer',
+  'CancelledByOta',
+  'CancelledAfterFailedPayment',
+  'OtherCancellation',
+  'Rejected',
+  'cancelled',
+  'CancelledByHost',
+].join(',');
+
+function arrivalInRange(arrivalIso: string | undefined, startDate: string, endDate: string): boolean {
+  if (!arrivalIso) return false;
+  const day = arrivalIso.slice(0, 10);
+  return day >= startDate && day <= endDate;
+}
+
+/** Réservations sur la période — démographie, lead time, durée séjour, annulations (check-in). */
 export async function fetchReservationsForAnalytics(
   q: FinancialQuery,
 ): Promise<AnalyticsReservationRow[]> {
   const listingIds = new Set((q.listingIds ?? []).filter(Boolean));
+  const ownerId = q.ownerId?.trim() || null;
   try {
     const result = await reservationsService.getList({
       dateType: 'arrival',
       startDate: q.startDate,
       endDate: q.endDate,
       limit: 100,
-      sortField: 'createdAt',
-      sortOrder: 'desc',
+      sortField: 'checkin',
+      sortOrder: 'asc',
+      status: ANALYTICS_RESERVATION_STATUSES,
+      ownerId,
+      filterOwnerId: ownerId || undefined,
+      strictArrivalWindow: true,
     });
     return result.data
       .filter((row) => {
+        if (!arrivalInRange(row.arrivalDate != null ? String(row.arrivalDate) : undefined, q.startDate, q.endDate)) {
+          return false;
+        }
         if (listingIds.size === 0) return true;
         const lid = String(row.sojoriId ?? '');
         return listingIds.has(lid);

@@ -229,7 +229,8 @@ export function finalizeDashboardSnapshot(snapshot: DashboardSnapshot): Dashboar
       const clamped = clampOccupancyPercent(avg);
       kpis.occupancyRate = {
         value: clamped,
-        trend: `${clamped.toFixed(1)}%`,
+        // Jamais la valeur absolue en « trend » (StatCard l'affiche comme ↑ MoM).
+        trend: '—',
       };
     }
   }
@@ -247,7 +248,7 @@ export function finalizeDashboardSnapshot(snapshot: DashboardSnapshot): Dashboar
     if (estimatedOccupancy > 0) {
       kpis.occupancyRate = {
         value: estimatedOccupancy,
-        trend: `${estimatedOccupancy.toFixed(1)}%`,
+        trend: '—',
       };
     }
   }
@@ -256,21 +257,27 @@ export function finalizeDashboardSnapshot(snapshot: DashboardSnapshot): Dashboar
     const clamped = clampOccupancyPercent(kpis.occupancyRate.value);
     kpis.occupancyRate = {
       value: clamped,
-      trend: `${clamped.toFixed(1)}%`,
+      // Conserver un vrai MoM s'il existe déjà ; sinon pas de flèche.
+      trend:
+        kpis.occupancyRate.trend &&
+        kpis.occupancyRate.trend !== '—' &&
+        /[+\-−]/.test(String(kpis.occupancyRate.trend))
+          ? kpis.occupancyRate.trend
+          : '—',
     };
   }
 
-  if (kpis.revpar.value <= 0 && kpis.adr.value > 0 && kpis.occupancyRate.value > 0) {
+  // RevPAR = ADR × occupation (jamais ≈ ADR si l’occupation n’est pas ~100 %).
+  if (kpis.adr.value > 0 && kpis.occupancyRate.value > 0) {
     const revpar = Math.round((kpis.adr.value * kpis.occupancyRate.value) / 100);
-    kpis.revpar = { value: revpar, trend: `${revpar} MAD` };
+    kpis.revpar = { value: revpar, trend: '—' };
   } else if (
-    kpis.revpar.value <= 0 &&
     kpis.monthlyRevenue.value > 0 &&
     kpis.activeProperties.value > 0
   ) {
     const revpar = Math.round(kpis.monthlyRevenue.value / (30 * kpis.activeProperties.value));
     if (revpar > 0) {
-      kpis.revpar = { value: revpar, trend: `${revpar} MAD` };
+      kpis.revpar = { value: revpar, trend: '—' };
     }
   }
 

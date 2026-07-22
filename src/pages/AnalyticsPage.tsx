@@ -1,6 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { Alert, Autocomplete, Box, Button, Skeleton, Stack, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Skeleton,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+} from '@mui/material';
 import {
   Bar,
   BarChart,
@@ -19,7 +36,6 @@ import {
   DataTable,
   FilterBar,
   FilterChip,
-  PageHeader,
   Panel,
   StableChart,
   StatCard,
@@ -28,7 +44,17 @@ import {
   btnPrimarySx,
   tokens as t,
 } from '../components/dashboard/DashboardV2.components';
+import { ListingCheckboxFilter } from '../components/dashboard/ListingCheckboxFilter';
+import {
+  MonthPickerChip,
+  stepMonthKey,
+  useMonthPickerState,
+} from '../components/dashboard/MonthPickerChip';
 import { analyticsService } from '../services/analyticsService';
+import {
+  runAnalyticsDataAudit,
+  type AnalyticsAuditSummary,
+} from '../services/analyticsAuditService';
 import { buildEmptyAnalyticsSnapshot } from '../services/analyticsSnapshotBuilder';
 import { useAdminScopeFetchReady } from '../hooks/useAdminScopeFetchReady';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
@@ -55,20 +81,36 @@ export function AnalyticsPage() {
 }
 
 function AnalyticsPageContent() {
-  const { requestOwnerId, ownerScopeUnset } = useAdminOwnerFilter();
+  const { requestOwnerId, ownerScopeUnset, showOwnerFilter } = useAdminOwnerFilter();
   const scopeFetchReady = useAdminScopeFetchReady();
-  const [period, setPeriod] = useState<(typeof analyticsPeriodOptions)[number]['value']>('30d');
+  const [period, setPeriod] = useState<(typeof analyticsPeriodOptions)[number]['value']>('month');
   const [comparison, setComparison] = useState<'vs-last-period' | 'vs-last-year'>('vs-last-period');
   const [source, setSource] = useState<(typeof sourceOptions)[number]>('Tous');
   const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+  /** Mois calendaire YYYY-MM — '' = mois en cours (quand period === month). */
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const { options: monthOptions, labelByKey: monthLabelByKey } = useMonthPickerState();
+  const stepMonth = useCallback(
+    (delta: number) => {
+      const next = stepMonthKey(selectedMonth, delta, monthOptions, monthLabelByKey);
+      if (next === null) return;
+      setSelectedMonth(next);
+      setPeriod('month');
+    },
+    [selectedMonth, monthOptions, monthLabelByKey],
+  );
   const [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrichingLandR, setEnrichingLandR] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
   const [reloadAttempt, setReloadAttempt] = useState(0);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [audit, setAudit] = useState<AnalyticsAuditSummary | null>(null);
   const loadGenerationRef = useRef(0);
 
   useEffect(() => {
@@ -86,6 +128,7 @@ function AnalyticsPageContent() {
       listingIds: selectedProperties,
       customStartDate: customStartDate || null,
       customEndDate: customEndDate || null,
+      month: selectedMonth || (period === 'month' ? monthOptions.current.key : null),
       reloadAttempt,
     });
 
@@ -107,6 +150,14 @@ function AnalyticsPageContent() {
       return;
     }
 
+    if (!scopeFetchReady) {
+      runtimeLog('info', 'AnalyticsPage', 'Skip fetch: scope pas pret', { loadId });
+      if (loadId === loadGenerationRef.current) {
+        setLoading(true);
+      }
+      return;
+    }
+
     const controller = new AbortController();
 
     async function loadAnalytics() {
@@ -118,18 +169,19 @@ function AnalyticsPageContent() {
       setEnrichingLandR(false);
       runtimeLog('info', 'AnalyticsPage', 'loadAnalytics start', { loadId });
       try {
-        const nextSnapshot = await analyticsService.getSnapshot(
-          {
-            period,
-            comparison,
-            source,
-            listingIds: selectedProperties,
-            customStartDate,
-            customEndDate,
-            ownerId: requestOwnerId,
-          },
-          { signal: controller.signal },
-        );
+        const query: AnalyticsQuery = {
+          period,
+          comparison,
+          source,
+          listingIds: selectedProperties,
+          customStartDate,
+          customEndDate,
+          month: selectedMonth || undefined,
+          ownerId: requestOwnerId,
+        };
+        const nextSnapshot = await analyticsService.getSnapshot(query, {
+          signal: controller.signal,
+        });
 
         if (loadId !== loadGenerationRef.current) {
           runtimeLog('warn', 'AnalyticsPage', 'Snapshot recu mais loadId obsolete — ignore', { loadId });
@@ -145,19 +197,9 @@ function AnalyticsPageContent() {
 
         setEnrichingLandR(true);
         try {
-          const enriched = await analyticsService.enrichWithLandR(
-            {
-              period,
-              comparison,
-              source,
-              listingIds: selectedProperties,
-              customStartDate,
-              customEndDate,
-              ownerId: requestOwnerId,
-            },
-            nextSnapshot,
-            { signal: controller.signal },
-          );
+          const enriched = await analyticsService.enrichWithLandR(query, nextSnapshot, {
+            signal: controller.signal,
+          });
           if (loadId === loadGenerationRef.current) {
             setSnapshot(enriched);
             runtimeLog('info', 'AnalyticsPage', 'landR enrich OK', { loadId });
@@ -211,6 +253,9 @@ function AnalyticsPageContent() {
     source,
     requestOwnerId,
     ownerScopeUnset,
+    scopeFetchReady,
+    selectedMonth,
+    monthOptions.current.key,
   ]);
 
   const activeProperties = useMemo(
@@ -233,9 +278,19 @@ function AnalyticsPageContent() {
       listingIds: selectedProperties,
       customStartDate,
       customEndDate,
+      month: selectedMonth || undefined,
       ownerId: requestOwnerId,
     }),
-    [comparison, customEndDate, customStartDate, period, requestOwnerId, selectedProperties, source],
+    [
+      comparison,
+      customEndDate,
+      customStartDate,
+      period,
+      requestOwnerId,
+      selectedProperties,
+      selectedMonth,
+      source,
+    ],
   );
 
   const money = useMemo(
@@ -315,66 +370,53 @@ function AnalyticsPageContent() {
     }
   };
 
+  const handleVerifyData = async () => {
+    if (!showOwnerFilter || ownerScopeUnset || isCustomDateIncomplete) return;
+    setAuditOpen(true);
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const summary = await runAnalyticsDataAudit(currentQuery);
+      const nameById = new Map(activeProperties.map((p) => [p.id, p.name || p.label]));
+      summary.reservations = summary.reservations.map((r) => ({
+        ...r,
+        listingName:
+          nameById.get(r.listingId) ||
+          (r.listingName !== '—' && r.listingName !== r.listingId ? r.listingName : r.listingId || '—'),
+      }));
+      summary.scope.mode = 'admin';
+      setAudit(summary);
+    } catch (err) {
+      setAudit(null);
+      setAuditError(err instanceof Error ? err.message : 'Echec du recalcul audit');
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
   return (
     <DashboardWrapper breadcrumb={['Pilotage', 'Analytics']}>
-      <PageHeader
-        title="Analytics"
-        count={
-          ownerScopeUnset
-            ? '—'
-            : `${loading ? 'Actualisation' : snapshot?.periodLabel ?? 'Analytics'} · ${
-                comparison === 'vs-last-period' ? 'vs periode precedente' : 'vs annee precedente'
-              }${
-                snapshot?.displayCurrency
-                  ? ` · montants en ${snapshot.displayCurrency}${
-                      snapshot.mixedListingCurrencies && snapshot.listingCurrencies.length > 0
-                        ? ` (listings: ${snapshot.listingCurrencies.join(', ')})`
-                        : snapshot.listingCurrencies.length === 1
-                          ? ` (listings: ${snapshot.listingCurrencies[0]})`
-                          : ''
-                    }`
-                  : ''
-              }`
-        }
-      >
-        <Button
-          sx={btnGhostSx}
-          disabled={exportDisabled}
-          onClick={() => {
-            void handleExport('pdf');
-          }}
-        >
-          {exporting === 'pdf' ? 'Export PDF...' : 'Export PDF'}
-        </Button>
-        <Button
-          sx={btnGhostSx}
-          disabled={exportDisabled}
-          onClick={() => {
-            void handleExport('csv');
-          }}
-        >
-          {exporting === 'csv' ? 'Export Excel...' : 'Export Excel'}
-        </Button>
-        <Button
-          sx={btnPrimarySx}
-          disabled={exportDisabled}
-          onClick={() => {
-            void handleExport('csv');
-          }}
-        >
-          {exporting === 'csv' ? 'Export CSV...' : 'Export CSV'}
-        </Button>
-      </PageHeader>
-
       <FilterBar>
         {analyticsPeriodOptions.map((item) => (
           <FilterChip
             key={item.value}
             label={item.label}
             active={period === item.value}
-            onClick={() => setPeriod(item.value)}
+            onClick={() => {
+              setPeriod(item.value);
+              if (item.value !== 'month') setSelectedMonth('');
+            }}
           />
         ))}
+        <MonthPickerChip
+          options={monthOptions}
+          value={selectedMonth}
+          onChange={(key) => {
+            setSelectedMonth(key);
+            setPeriod('month');
+          }}
+          onStep={stepMonth}
+        />
         <FilterChip
           label={comparison === 'vs-last-period' ? 'Vs periode precedente' : 'Vs annee precedente'}
           active
@@ -384,6 +426,38 @@ function AnalyticsPageContent() {
             )
           }
         />
+        <Button
+          size="small"
+          sx={btnGhostSx}
+          disabled={exportDisabled}
+          onClick={() => {
+            void handleExport('csv');
+          }}
+        >
+          {exporting === 'csv' ? 'Export…' : 'CSV'}
+        </Button>
+        <Button
+          size="small"
+          sx={btnGhostSx}
+          disabled={exportDisabled}
+          onClick={() => {
+            void handleExport('pdf');
+          }}
+        >
+          {exporting === 'pdf' ? 'PDF…' : 'PDF'}
+        </Button>
+        {showOwnerFilter ? (
+          <Button
+            size="small"
+            sx={btnPrimarySx}
+            disabled={ownerScopeUnset || isCustomDateIncomplete || auditLoading}
+            onClick={() => {
+              void handleVerifyData();
+            }}
+          >
+            {auditLoading ? 'Vérif…' : 'Vérifier données'}
+          </Button>
+        ) : null}
       </FilterBar>
 
       {period === 'custom' && (
@@ -418,33 +492,28 @@ function AnalyticsPageContent() {
             onClick={() => setSource(item)}
           />
         ))}
-        <Autocomplete
-          multiple
-          size="small"
-          limitTags={1}
-          options={activeProperties}
-          getOptionLabel={(property) => property.label}
-          isOptionEqualToValue={(option, value) => option.id === value.id}
-          value={activeProperties.filter((property) => selectedProperties.includes(property.id))}
-          onChange={(_event, value) => setSelectedProperties(value.map((property) => property.id))}
+        <ListingCheckboxFilter
+          listings={activeProperties}
+          selectedIds={selectedProperties}
+          onApply={(ids) => {
+            // Recalcule tout le snapshot (KPIs, charts, LandR) sur ce sous-ensemble.
+            setSnapshot(null);
+            setLoading(true);
+            setSelectedProperties(ids);
+          }}
           loading={loading && activeProperties.length === 0}
-          noOptionsText={
-            loading ? 'Chargement des listings actifs…' : 'Aucun listing actif'
-          }
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              placeholder={
-                selectedProperties.length === 0
-                  ? `Listings actifs (${activeProperties.length || '…'})`
-                  : `${selectedProperties.length} listing(s)`
-              }
-            />
-          )}
-          sx={{ minWidth: 280, flex: '1 1 320px', maxWidth: 480 }}
+          disabled={ownerScopeUnset || activeProperties.length === 0}
         />
         {selectedProperties.length > 0 ? (
-          <Button size="small" sx={btnGhostSx} onClick={() => setSelectedProperties([])}>
+          <Button
+            size="small"
+            sx={btnGhostSx}
+            onClick={() => {
+              setSnapshot(null);
+              setLoading(true);
+              setSelectedProperties([]);
+            }}
+          >
             Tous actifs
           </Button>
         ) : null}
@@ -597,19 +666,21 @@ function AnalyticsPageContent() {
           '& > *': { minWidth: 0 },
         }}
       >
-        <Panel title="Saisonnalite" desc="Intensite relative par mois (CA ou reservations)">
+        <Panel title="Saisonnalite" desc="Occupation réelle · 12 mois (calendrier)">
           {snapshot.seasonality.length > 0 ? (
             <StableChart height={320}>
               {({ width, height }: { width: number; height: number }) => (
                 <BarChart width={width} height={height} data={snapshot.seasonality}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
                   <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="occupancy" radius={[8, 8, 0, 0]}>
+                  <YAxis domain={[0, 100]} unit="%" />
+                  <Tooltip
+                    formatter={(value: number) => [`${Number(value).toFixed(1)} %`, 'Occupation']}
+                  />
+                  <Bar dataKey="occupancy" name="Occupation %" radius={[8, 8, 0, 0]}>
                     {snapshot.seasonality.map((item, index) => (
                       <Cell
-                        key={item.month}
+                        key={`${item.month}-${index}`}
                         fill={sourceColors[index % sourceColors.length]}
                       />
                     ))}
@@ -737,7 +808,171 @@ function AnalyticsPageContent() {
           </Stack>
         </Panel>
       )}
+      {showOwnerFilter ? (
+        <Dialog
+          open={auditOpen}
+          onClose={() => {
+            if (!auditLoading) setAuditOpen(false);
+          }}
+          maxWidth="lg"
+          fullWidth
+        >
+          <DialogTitle>Audit analytics (admin)</DialogTitle>
+          <DialogContent dividers>
+            {auditLoading ? (
+              <Stack spacing={1} sx={{ py: 2 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Recalcul manuel en cours (revenus, nuits, LandR, liste résas)…
+                </Typography>
+                <Skeleton height={28} />
+                <Skeleton height={28} />
+                <Skeleton height={120} />
+              </Stack>
+            ) : auditError ? (
+              <Alert severity="error">{auditError}</Alert>
+            ) : audit ? (
+              <Stack spacing={2}>
+                <Alert severity="info">
+                  {audit.scope.periodLabel} · {audit.scope.startDate} → {audit.scope.endDate} ·{' '}
+                  {audit.scope.listingCount} listing(s)
+                  {audit.scope.ownerId ? ` · owner ${audit.scope.ownerId}` : ''} · source{' '}
+                  {audit.scope.source}
+                </Alert>
+
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' },
+                    gap: 1.5,
+                  }}
+                >
+                  <AuditStat label="Revenus API" value={`${Math.round(audit.apis.revenueMad)} MAD`} />
+                  <AuditStat label="Nuits API" value={String(audit.apis.bookedNights)} />
+                  <AuditStat label="ADR recalculé" value={`${audit.apis.adrMad} MAD`} />
+                  <AuditStat
+                    label="Taux annulation"
+                    value={`${audit.apis.cancelRateLandRPct ?? audit.apis.cancelRateListPct}%`}
+                  />
+                </Box>
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                  Annulations — {audit.cancelBreakdown.formula}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Check-ins : {audit.cancelBreakdown.checkIns} · Annulations métier :{' '}
+                  {audit.cancelBreakdown.softCancels} · Échecs paiement (exclus) :{' '}
+                  {audit.cancelBreakdown.failedPayments}
+                  {audit.apis.cancelRateLandRPct != null
+                    ? ` · LandR : ${audit.apis.cancelRateLandRPct}%`
+                    : ''}{' '}
+                  · Liste : {audit.apis.cancelRateListPct}%
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  Statuts :{' '}
+                  {Object.entries(audit.statusCounts)
+                    .map(([k, v]) => `${k}=${v}`)
+                    .join(' · ') || '—'}
+                </Typography>
+
+                {audit.listTruncated ? (
+                  <Alert severity="warning">
+                    Liste plafonnée (total API {audit.listTotal}) — le détail peut être incomplet.
+                  </Alert>
+                ) : null}
+
+                <Box sx={{ overflowX: 'auto', border: `1px solid ${t.border}`, borderRadius: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Résa</TableCell>
+                        <TableCell>Guest</TableCell>
+                        <TableCell>Listing</TableCell>
+                        <TableCell>Arrivée</TableCell>
+                        <TableCell>Statut</TableCell>
+                        <TableCell>Rôle taux</TableCell>
+                        <TableCell align="right">Nuits</TableCell>
+                        <TableCell align="right">Prix</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {audit.reservations.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8}>
+                            <Typography variant="body2" color="text.secondary">
+                              Aucune réservation dans la fenêtre (arrivée).
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        audit.reservations.map((row) => (
+                          <TableRow key={row.id || row.reservationNumber}>
+                            <TableCell>{row.reservationNumber}</TableCell>
+                            <TableCell>{row.guestName}</TableCell>
+                            <TableCell>{row.listingName}</TableCell>
+                            <TableCell>{row.arrivalDate}</TableCell>
+                            <TableCell>{row.status}</TableCell>
+                            <TableCell>{row.roleInCancelRate}</TableCell>
+                            <TableCell align="right">{row.nights}</TableCell>
+                            <TableCell align="right">{row.totalPrice}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </Box>
+
+                <Stack spacing={0.5}>
+                  {audit.notes.map((note) => (
+                    <Typography key={note} variant="caption" color="text.secondary">
+                      • {note}
+                    </Typography>
+                  ))}
+                </Stack>
+              </Stack>
+            ) : null}
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
+                void handleVerifyData();
+              }}
+              disabled={auditLoading}
+              sx={btnGhostSx}
+            >
+              Relancer
+            </Button>
+            <Button
+              onClick={() => setAuditOpen(false)}
+              disabled={auditLoading}
+              sx={btnPrimarySx}
+            >
+              Fermer
+            </Button>
+          </DialogActions>
+        </Dialog>
+      ) : null}
     </DashboardWrapper>
+  );
+}
+
+function AuditStat({ label, value }: { label: string; value: string }) {
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        borderRadius: 2,
+        border: `1px solid ${t.border}`,
+        bgcolor: '#fff',
+      }}
+    >
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+        {label}
+      </Typography>
+      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+        {value}
+      </Typography>
+    </Box>
   );
 }
 

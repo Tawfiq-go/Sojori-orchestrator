@@ -626,174 +626,39 @@ export function GeneralTab({
 
       {isMulti ? (
         <Card
-          title="🛏 Types de chambres"
-          meta={`${roomTypesList.length} types · ${multiUnits} unités`}
+          title="Aperçu types"
+          meta={
+            roomTypesList.length
+              ? `${roomTypesList.length} · ${multiUnits} u.`
+              : 'Aucun'
+          }
         >
-          <Typography sx={{ fontSize: 12.5, color: T.text2, mb: 1.75, lineHeight: 1.45 }}>
-            Ici : <b>nom</b>, <b>stock</b> et <b>capacité</b>. Photos → onglet <b>Photos</b> ·
-            Prix → <b>Pricing (par type)</b>. Sur RU : 1 Property par type · U = unités.
+          <Typography sx={{ fontSize: 12.5, color: T.text2, lineHeight: 1.45, mb: 1 }}>
+            Résumé bâtiment — édition complète dans <b>Config Rooms</b>
+            {roomTypesList.length
+              ? ` · ${roomTypesList.length} types · ${multiUnits} unités`
+              : ''}.
           </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            {roomTypesList.map((rt, i) => (
-              <Box
-                key={String(rt._id || rt.roomTypeName || i)}
-                sx={{
-                  p: 1.75,
-                  borderRadius: '12px',
-                  border: `1px solid ${T.borderStrong}`,
-                  bgcolor: T.bg1,
-                  boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
-                }}
-              >
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1}
-                  sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mb: 1.5 }}
-                >
-                  <TextField
-                    size="small"
-                    label="Nom du type"
-                    value={rt.roomTypeName || ''}
-                    onChange={(e) => patchRoomTypeField(i, { roomTypeName: e.target.value })}
-                    sx={{ ...sxInput, flex: 1, minWidth: 180 }}
-                  />
-                  <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexShrink: 0 }}>
-                    <Chip
-                      label={`×${Math.max(1, Number(rt.roomNumber) || 1)}`}
-                      size="small"
-                      sx={{
-                        fontWeight: 800,
-                        bgcolor: T.primaryTint,
-                        color: T.primaryDeep,
-                        border: '1px solid rgba(184,133,26,0.3)',
-                      }}
-                    />
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={() => duplicateRoomType(i)}
-                      sx={{ textTransform: 'none', fontWeight: 700, minWidth: 0, px: 1 }}
-                    >
-                      Dupliquer
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="text"
-                      color="error"
-                      disabled={roomTypesList.length <= 1}
-                      onClick={() => removeRoomType(i)}
-                      sx={{ textTransform: 'none', fontWeight: 700, minWidth: 0, px: 1 }}
-                    >
-                      Supprimer
-                    </Button>
-                  </Stack>
-                </Stack>
-                <Box
+          {roomTypesList.length > 0 ? (
+            <Stack direction="row" flexWrap="wrap" gap={0.75}>
+              {roomTypesList.map((rt, i) => (
+                <Chip
+                  key={String(rt._id || rt.roomTypeName || i)}
+                  size="small"
+                  label={`${rt.roomTypeName || `Type ${i + 1}`} · ×${Math.max(1, Number(rt.roomNumber) || 1)} · ${Number(rt.basePrice) || 0} ${values.currencyCode || 'MAD'}`}
                   sx={{
-                    display: 'grid',
-                    gridTemplateColumns: {
-                      xs: '1fr 1fr',
-                      md: 'repeat(3, 1fr)',
-                      lg: 'repeat(6, 1fr)',
-                    },
-                    gap: 1.5,
+                    fontWeight: 700,
+                    bgcolor: T.bg2,
+                    border: `1px solid ${T.border}`,
                   }}
-                >
-                  <Field label="Unités (stock)" required ruField="roomNumber">
-                    <Counter
-                      value={Math.max(1, Number(rt.roomNumber) || 1)}
-                      min={1}
-                      max={99}
-                      onChange={(v) => patchRoomTypeField(i, { roomNumber: v })}
-                    />
-                  </Field>
-                  <Field label="Pers. capacity" required ruField="personCapacity">
-                    <Counter
-                      value={Math.max(1, Number(rt.personCapacity) || 1)}
-                      min={1}
-                      max={30}
-                      onChange={(v) => patchRoomTypeField(i, { personCapacity: v })}
-                    />
-                  </Field>
-                  <Field label="Pers. max" ruField="personCapacityMax">
-                    <Counter
-                      value={Math.max(
-                        Number(rt.personCapacity) || 1,
-                        Number(rt.personCapacityMax) || Number(rt.personCapacity) || 1,
-                      )}
-                      min={1}
-                      max={40}
-                      onChange={(v) =>
-                        patchRoomTypeField(i, {
-                          personCapacityMax: Math.max(v, Number(rt.personCapacity) || 1),
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field label="Chambres" ruField="bedroomsNumber">
-                    <Counter
-                      value={Math.max(0, Number(rt.bedroomsNumber) || 0)}
-                      min={0}
-                      max={20}
-                      onChange={(v) => patchRoomTypeField(i, { bedroomsNumber: v })}
-                    />
-                  </Field>
-                  <Field label="Lits" ruField="bedsNumber">
-                    <Counter
-                      value={Math.max(0, Number(rt.bedsNumber) || 0)}
-                      min={0}
-                      max={30}
-                      onChange={(v) => patchRoomTypeField(i, { bedsNumber: v })}
-                    />
-                  </Field>
-                  <Field label="SDB" ruField="bathroomsNumber">
-                    <Counter
-                      value={Math.max(0, Number(rt.bathroomsNumber) || 0)}
-                      min={0}
-                      max={20}
-                      onChange={(v) => patchRoomTypeField(i, { bathroomsNumber: v })}
-                    />
-                  </Field>
-                </Box>
-                <Box sx={{ mt: 1.5, maxWidth: 180 }}>
-                  <Field label="Surface (m²)" ruField="surface">
-                    <TextField
-                      size="small"
-                      type="number"
-                      fullWidth
-                      value={rt.surface ?? ''}
-                      onChange={(e) =>
-                        patchRoomTypeField(i, {
-                          surface: e.target.value === '' ? 0 : +e.target.value,
-                        })
-                      }
-                      sx={sxInput}
-                      slotProps={{ htmlInput: { min: 0 } }}
-                    />
-                  </Field>
-                </Box>
-              </Box>
-            ))}
-            {roomTypesList.length === 0 && (
-              <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
-                Aucun type — cliquez sur « Ajouter un type ».
-              </Typography>
-            )}
-            <Button
-              variant="outlined"
-              onClick={addRoomType}
-              sx={{
-                alignSelf: 'flex-start',
-                textTransform: 'none',
-                fontWeight: 800,
-                borderRadius: '10px',
-                borderColor: T.borderStrong,
-                color: T.primaryDeep,
-              }}
-            >
-              + Ajouter un type
-            </Button>
-          </Box>
+                />
+              ))}
+            </Stack>
+          ) : (
+            <Typography sx={{ fontSize: 12, color: T.text3 }}>
+              Aucun type — ouvrez <b>Config Rooms</b>.
+            </Typography>
+          )}
         </Card>
       ) : (
         <Card title="🛏 Chambres & lits">

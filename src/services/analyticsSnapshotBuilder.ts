@@ -13,6 +13,7 @@ import type {
   AnalyticsSummary,
 } from '../types/analytics.types';
 import {
+  cancelRateFromLandRTotals,
   channelNamesForAnalyticsSource,
   fetchAverageDailyRate,
   fetchAverageRevenuePerStay,
@@ -24,6 +25,7 @@ import {
   fetchRentalRevenue,
   fetchReservationStatsTimeline,
   fetchReservationsForAnalytics,
+  fetchSeasonalityOccupancy,
   type AnalyticsReservationRow,
   type LandRPerformanceItem,
   type LandRTotals,
@@ -46,7 +48,13 @@ function metric(current: number, previous: number) {
 }
 
 function isCancelledStatus(status?: string): boolean {
-  return /cancel/i.test(status ?? '');
+  const s = status ?? '';
+  return /cancel/i.test(s) || /^rejected$/i.test(s);
+}
+
+/** Annulation « métier » (hors échec de paiement) pour le taux d'annulation. */
+function isSoftCancelForRate(status?: string): boolean {
+  return isCancelledStatus(status) && !/failed.?payment/i.test(status ?? '');
 }
 
 function computePerformanceScore(
@@ -138,26 +146,10 @@ function computeAverageLeadTime(reservations: AnalyticsReservationRow[]): number
   return Math.round((days.reduce((s, d) => s + d, 0) / days.length) * 10) / 10;
 }
 
-function buildSeasonality(
-  monthTimeline: Array<{ label: string; bookings: number; revenue: number }>,
+/** Fallback : intensité relative des arrivées (si calendar occ. indisponible). */
+function buildSeasonalityFallback(
   reservations: AnalyticsReservationRow[] = [],
 ): AnalyticsSeasonalityItem[] {
-  const fromTimeline = monthTimeline
-    .filter((p) => p.label && p.label !== '—')
-    .map((p) => ({
-      month: p.label,
-      // reservation-stats renvoie le CA dans `y` — pas de count/checkIns.
-      intensity: p.bookings > 0 ? p.bookings : p.revenue,
-    }));
-
-  if (fromTimeline.length > 0 && fromTimeline.some((p) => p.intensity > 0)) {
-    const max = Math.max(...fromTimeline.map((p) => p.intensity));
-    return fromTimeline.map((p) => ({
-      month: p.month,
-      occupancy: Math.round((p.intensity / max) * 1000) / 10,
-    }));
-  }
-
   const byMonth = new Map<string, { label: string; count: number }>();
   for (const r of reservations) {
     if (isCancelledStatus(r.status)) continue;
@@ -165,7 +157,7 @@ function buildSeasonality(
     const arrival = new Date(r.arrivalDate);
     if (Number.isNaN(arrival.getTime())) continue;
     const sortKey = format(arrival, 'yyyy-MM');
-    const label = format(arrival, 'MMM yy');
+    const label = format(arrival, 'MMM');
     const row = byMonth.get(sortKey);
     if (row) row.count += 1;
     else byMonth.set(sortKey, { label, count: 1 });
@@ -370,7 +362,7 @@ function averageStayFromReservations(
 }
 
 function cancelRateFromReservations(reservations: AnalyticsReservationRow[]): number {
-  const cancelled = reservations.filter((r) => isCancelledStatus(r.status)).length;
+  const cancelled = reservations.filter((r) => isSoftCancelForRate(r.status)).length;
   const confirmed = reservations.filter((r) => !isCancelledStatus(r.status)).length;
   const total = cancelled + confirmed;
   if (total === 0) return 0;
@@ -397,11 +389,24 @@ export function resolveAnalyticsRanges(query: AnalyticsQuery): {
   statsPeriod: 'day' | 'week' | 'month';
 } {
   const today = new Date();
+  const iso = (d: Date) => format(d, 'yyyy-MM-dd');
   let start: Date;
   let end: Date = today;
   let label = '30 jours';
 
-  if (query.period === 'custom' && query.customStartDate && query.customEndDate) {
+  const monthKey =
+    (query.month && /^\d{4}-\d{2}$/.test(query.month) ? query.month : null) ||
+    (query.period === 'month'
+      ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+      : null);
+
+  if (monthKey) {
+    const [y, m] = monthKey.split('-').map(Number);
+    start = new Date(y, m - 1, 1);
+    end = new Date(y, m, 0);
+    const monthLabel = start.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    label = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+  } else if (query.period === 'custom' && query.customStartDate && query.customEndDate) {
     start = new Date(query.customStartDate);
     end = new Date(query.customEndDate);
     label = `${query.customStartDate} → ${query.customEndDate}`;
@@ -419,25 +424,43 @@ export function resolveAnalyticsRanges(query: AnalyticsQuery): {
     label = '30 jours';
   }
 
-  const days = Math.max(1, differenceInCalendarDays(end, start) + 1);
-  const prevEnd = subDays(start, 1);
-  const prevStart = subDays(prevEnd, days - 1);
+  let prevStart: Date;
+  let prevEnd: Date;
+  if (monthKey && query.comparison === 'vs-last-year') {
+    const [y, m] = monthKey.split('-').map(Number);
+    prevStart = new Date(y - 1, m - 1, 1);
+    prevEnd = new Date(y - 1, m, 0);
+  } else if (monthKey) {
+    const [y, m] = monthKey.split('-').map(Number);
+    prevStart = new Date(y, m - 2, 1);
+    prevEnd = new Date(y, m - 1, 0);
+  } else if (query.comparison === 'vs-last-year') {
+    prevStart = new Date(start);
+    prevEnd = new Date(end);
+    prevStart.setFullYear(prevStart.getFullYear() - 1);
+    prevEnd.setFullYear(prevEnd.getFullYear() - 1);
+  } else {
+    const days = Math.max(1, differenceInCalendarDays(end, start) + 1);
+    prevEnd = subDays(start, 1);
+    prevStart = subDays(prevEnd, days - 1);
+  }
 
+  const days = Math.max(1, differenceInCalendarDays(end, start) + 1);
   const statsPeriod: 'day' | 'week' | 'month' =
-    days <= 14 ? 'day' : days <= 120 ? 'week' : 'month';
+    days <= 45 ? 'day' : days <= 120 ? 'week' : 'month';
 
   return {
     current: {
-      startDate: format(start, 'yyyy-MM-dd'),
-      endDate: format(end, 'yyyy-MM-dd'),
+      startDate: iso(start),
+      endDate: iso(end),
     },
     previous: {
-      startDate: format(prevStart, 'yyyy-MM-dd'),
-      endDate: format(prevEnd, 'yyyy-MM-dd'),
+      startDate: iso(prevStart),
+      endDate: iso(prevEnd),
     },
     periodLabel:
       query.comparison === 'vs-last-year'
-        ? `${label} (vs N-1 approx.)`
+        ? `${label} (vs N-1)`
         : `${label} (vs période préc.)`,
     statsPeriod,
   };
@@ -532,9 +555,11 @@ export async function buildAnalyticsSnapshotClient(
 
   const properties = await fetchListingProperties(signal, query.ownerId);
   const activeIds = properties.map((property) => property.id).filter(Boolean);
+  // Si l'utilisateur a coché des listings : ne garder QUE ceux-là (recalcul complet scoped).
+  // Ne pas retomber sur tout le portefeuille si un id n'est pas encore dans le directory.
   const effectiveListingIds =
     selectedListingIds.length > 0
-      ? selectedListingIds.filter((id) => activeIds.includes(id))
+      ? selectedListingIds.filter((id) => !activeIds.length || activeIds.includes(id))
       : activeIds;
 
   // Scope owner (réel ou simulé PM) : si aucun listing n'est résolu pour ce propriétaire,
@@ -545,7 +570,13 @@ export async function buildAnalyticsSnapshotClient(
     return { ...buildEmptyAnalyticsSnapshot(), periodLabel, properties };
   }
 
-  const base = { listingIds: effectiveListingIds, channelName, staging: query.staging, signal };
+  const base = {
+    listingIds: effectiveListingIds,
+    channelName,
+    staging: query.staging,
+    ownerId: query.ownerId ?? null,
+    signal,
+  };
   const currentQ = { ...base, ...current };
   const previousQ = { ...base, ...previous };
 
@@ -564,7 +595,7 @@ export async function buildAnalyticsSnapshotClient(
     channelBookings,
     timelineCur,
     timelinePrev,
-    monthTimelineCur,
+    seasonalityRaw,
     reservationsCur,
     reservationsPrev,
   ] = await Promise.all([
@@ -590,11 +621,7 @@ export async function buildAnalyticsSnapshotClient(
       () => fetchReservationStatsTimeline({ ...previousQ, period: statsPeriod }),
       [],
     ),
-    withFallback(
-      'timeline-month',
-      () => fetchReservationStatsTimeline({ ...currentQ, period: 'month' }),
-      [],
-    ),
+    withFallback('seasonality-12m', () => fetchSeasonalityOccupancy(currentQ), []),
     withFallback('reservations', () => fetchReservationsForAnalytics(currentQ), []),
     withFallback('reservations-prev', () => fetchReservationsForAnalytics(previousQ), []),
   ]);
@@ -610,7 +637,12 @@ export async function buildAnalyticsSnapshotClient(
 
   if (options?.includeLandR) {
     const landRTimeout = options.landRTimeoutMs ?? 90_000;
-    landRCur = await fetchListingPerformanceLandR(currentQ, { timeoutMs: landRTimeout });
+    const [cur, prev] = await Promise.all([
+      fetchListingPerformanceLandR(currentQ, { timeoutMs: landRTimeout }),
+      fetchListingPerformanceLandR(previousQ, { timeoutMs: landRTimeout }),
+    ]);
+    landRCur = cur;
+    landRPrev = prev;
   }
 
   const portfolioOcc =
@@ -618,21 +650,19 @@ export async function buildAnalyticsSnapshotClient(
   const portfolioOccPrev =
     landRPrev.totals.averageOccupancyRate > 0 ? landRPrev.totals.averageOccupancyRate : occPrev;
 
+  // Hostaway Occupancy : taux d'annulation = check-in dans la fenêtre (pas cancellationDate).
+  // Priorité à la liste arrival-scoped ; LandR en secours (peut différer si stay-overlap).
+  const cancelFromList = cancelRateFromReservations(reservationsCur);
+  const cancelFromListPrev = cancelRateFromReservations(reservationsPrev);
   const cancelRate =
-    landRCur.totals.totalCancelationsPercentage > 0
-      ? landRCur.totals.totalCancelationsPercentage
-      : landRCur.totals.totalCheckIns + landRCur.totals.totalCancelations > 0
-        ? Math.round(
-            (landRCur.totals.totalCancelations /
-              (landRCur.totals.totalCheckIns + landRCur.totals.totalCancelations)) *
-              1000,
-          ) / 10
-        : cancelRateFromReservations(reservationsCur);
+    reservationsCur.length > 0
+      ? cancelFromList
+      : cancelRateFromLandRTotals(landRCur.totals) ?? cancelFromList;
 
   const cancelRatePrev =
-    landRPrev.totals.totalCancelationsPercentage > 0
-      ? landRPrev.totals.totalCancelationsPercentage
-      : cancelRateFromReservations(reservationsPrev);
+    reservationsPrev.length > 0
+      ? cancelFromListPrev
+      : cancelRateFromLandRTotals(landRPrev.totals) ?? cancelFromListPrev;
 
   const avgStayCur =
     landRCur.totals.totalCheckIns > 0
@@ -693,7 +723,10 @@ export async function buildAnalyticsSnapshotClient(
   }
 
   const channelShare = buildChannelShare(channelRows, channelBookings);
-  const seasonality = buildSeasonality(monthTimelineCur, reservationsCur);
+  const seasonality =
+    seasonalityRaw.some((row) => row.occupancy > 0)
+      ? seasonalityRaw
+      : buildSeasonalityFallback(reservationsCur);
   const guestDemographics = buildGuestDemographics(reservationsCur);
   const lengthOfStay = buildDistribution(
     reservationsCur,
@@ -731,13 +764,19 @@ export async function buildAnalyticsSnapshotClient(
 
   const occupancyByProperty =
     landRCur.items.length > 0
-      ? landRCur.items.map((item) => {
-          const prop = properties.find((p) => p.id === String(item.itemId));
-          return {
-            property: item.itemName !== '—' ? item.itemName : prop?.name ?? '—',
-            occupancy: Math.round(item.occupancyRate * 10) / 10,
-          };
-        })
+      ? landRCur.items
+          .filter(
+            (item) =>
+              selectedListingIds.length === 0 ||
+              selectedListingIds.includes(String(item.itemId)),
+          )
+          .map((item) => {
+            const prop = properties.find((p) => p.id === String(item.itemId));
+            return {
+              property: item.itemName !== '—' ? item.itemName : prop?.name ?? '—',
+              occupancy: Math.round(item.occupancyRate * 10) / 10,
+            };
+          })
       : propertyPerformance.slice(0, 12).map((row) => ({
           property: row.property,
           occupancy: row.occupancy,
@@ -745,8 +784,13 @@ export async function buildAnalyticsSnapshotClient(
 
   const currencyContext = resolveAnalyticsCurrencyContext(scopedProperties);
 
+  const scopeSuffix =
+    selectedListingIds.length > 0
+      ? ` · ${selectedListingIds.length} listing${selectedListingIds.length > 1 ? 's' : ''}`
+      : '';
+
   return {
-    periodLabel,
+    periodLabel: `${periodLabel}${scopeSuffix}`,
     displayCurrency: currencyContext.displayCurrency,
     listingCurrencies: currencyContext.listingCurrencies,
     mixedListingCurrencies: currencyContext.mixedListingCurrencies,
@@ -780,9 +824,11 @@ export async function enrichAnalyticsSnapshotWithLandR(
       ? base.properties
       : await fetchListingProperties(signal, query.ownerId);
   const activeIds = properties.map((property) => property.id).filter(Boolean);
+  // Si l'utilisateur a coché des listings : ne garder QUE ceux-là (recalcul complet scoped).
+  // Ne pas retomber sur tout le portefeuille si un id n'est pas encore dans le directory.
   const effectiveListingIds =
     selectedListingIds.length > 0
-      ? selectedListingIds.filter((id) => activeIds.includes(id))
+      ? selectedListingIds.filter((id) => !activeIds.length || activeIds.includes(id))
       : activeIds;
 
   if (effectiveListingIds.length === 0) return base;
@@ -792,6 +838,7 @@ export async function enrichAnalyticsSnapshotWithLandR(
     listingIds: effectiveListingIds,
     channelName,
     staging: query.staging,
+    ownerId: query.ownerId ?? null,
     signal,
   };
 
@@ -810,16 +857,7 @@ export async function enrichAnalyticsSnapshotWithLandR(
   const portfolioOcc =
     landRCur.totals.averageOccupancyRate > 0 ? landRCur.totals.averageOccupancyRate : occCur;
 
-  const cancelRate =
-    landRCur.totals.totalCancelationsPercentage > 0
-      ? landRCur.totals.totalCancelationsPercentage
-      : landRCur.totals.totalCheckIns + landRCur.totals.totalCancelations > 0
-        ? Math.round(
-            (landRCur.totals.totalCancelations /
-              (landRCur.totals.totalCheckIns + landRCur.totals.totalCancelations)) *
-              1000,
-          ) / 10
-        : base.kpis.cancellationRate;
+  const cancelRate = base.kpis.cancellationRate;
 
   const avgStayCur =
     landRCur.totals.totalCheckIns > 0
@@ -837,19 +875,33 @@ export async function enrichAnalyticsSnapshotWithLandR(
     portfolioAdr: adrCur,
   });
 
-  const occupancyByProperty = landRCur.items.map((item) => {
-    const prop = properties.find((p) => p.id === String(item.itemId));
-    return {
-      property: item.itemName !== '—' ? item.itemName : prop?.name ?? '—',
-      occupancy: Math.round(item.occupancyRate * 10) / 10,
-    };
-  });
+  const occupancyByProperty = landRCur.items
+    .filter(
+      (item) =>
+        selectedListingIds.length === 0 || selectedListingIds.includes(String(item.itemId)),
+    )
+    .map((item) => {
+      const prop = properties.find((p) => p.id === String(item.itemId));
+      return {
+        property: item.itemName !== '—' ? item.itemName : prop?.name ?? '—',
+        occupancy: Math.round(item.occupancyRate * 10) / 10,
+      };
+    });
 
   const revenueTrend = base.summary.revenue.trend;
   const adrTrend = base.summary.averageDailyRate.trend;
 
+  const scopeSuffix =
+    selectedListingIds.length > 0
+      ? ` · ${selectedListingIds.length} listing${selectedListingIds.length > 1 ? 's' : ''}`
+      : '';
+  const periodLabel = base.periodLabel.includes(' listing')
+    ? base.periodLabel
+    : `${base.periodLabel}${scopeSuffix}`;
+
   return {
     ...base,
+    periodLabel,
     kpis: {
       ...base.kpis,
       performanceScore: computePerformanceScore(portfolioOcc, revenueTrend, adrTrend, cancelRate),

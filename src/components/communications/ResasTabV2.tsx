@@ -44,6 +44,13 @@ function last9(phone: string): string {
   return phone.replace(/\D/g, '').slice(-9);
 }
 
+function phoneSourceLabel(source?: InboxResaRow['phoneSource']): string | null {
+  if (source === 'whatsapp') return 'WhatsApp';
+  if (source === 'ota') return 'OTA';
+  if (source === 'admin') return 'Admin';
+  return null;
+}
+
 function frShort(d: string): string {
   return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
@@ -74,6 +81,8 @@ export default function ResasTabV2() {
   const [rows, setRows] = useState<InboxResaRow[]>([]);
   const [waPhones, setWaPhones] = useState<Set<string>>(new Set());
   const [waResaNumbers, setWaResaNumbers] = useState<Set<string>>(new Set());
+  /** phone by reservation_number from WA inbox (fallback si résa sans phone) */
+  const [waPhoneByResa, setWaPhoneByResa] = useState<Map<string, string>>(new Map());
   const [orphanThreads, setOrphanThreads] = useState<Array<{ phone: string; name?: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,14 +112,21 @@ export default function ResasTabV2() {
       setRows(resas);
       const phones = new Set<string>();
       const resaNums = new Set<string>();
+      const phoneByResa = new Map<string, string>();
       if (convRes?.status === 'success') {
         for (const c of convRes.data.conversations as Array<{ phone?: string; name?: string; reservation_number?: string }>) {
           if (c.phone) phones.add(last9(String(c.phone)));
-          if (c.reservation_number) resaNums.add(String(c.reservation_number));
+          if (c.reservation_number) {
+            resaNums.add(String(c.reservation_number));
+            if (c.phone && !phoneByResa.has(String(c.reservation_number))) {
+              phoneByResa.set(String(c.reservation_number), String(c.phone));
+            }
+          }
         }
       }
       setWaPhones(phones);
       setWaResaNumbers(resaNums);
+      setWaPhoneByResa(phoneByResa);
       if (orphansRes?.status === 'success') {
         setOrphanThreads(
           (orphansRes.data.conversations as Array<{ phone?: string; name?: string }>)
@@ -134,24 +150,32 @@ export default function ResasTabV2() {
     (r: InboxResaRow): WaState => {
       const local = sendState[r.id];
       if (local) return local;
-      if (!r.phone) return { kind: 'nonum' };
-      if (waPhones.has(last9(r.phone)) || (r.reservationNumber && waResaNumbers.has(r.reservationNumber))) {
+      const phone =
+        r.phone ||
+        (r.reservationNumber ? waPhoneByResa.get(r.reservationNumber) : undefined) ||
+        '';
+      if (!phone) return { kind: 'nonum' };
+      if (waPhones.has(last9(phone)) || (r.reservationNumber && waResaNumbers.has(r.reservationNumber))) {
         return { kind: 'actif' };
       }
       return { kind: 'jamais' };
     },
-    [sendState, waPhones, waResaNumbers],
+    [sendState, waPhones, waResaNumbers, waPhoneByResa],
   );
 
   const enriched = useMemo(
     () =>
       rows.map((r) => {
-        const wa = waStateFor(r);
+        const waPhoneFallback =
+          !r.phone && r.reservationNumber ? waPhoneByResa.get(r.reservationNumber) : undefined;
+        const phone = r.phone || waPhoneFallback || '';
+        const phoneSource = r.phoneSource || (waPhoneFallback ? 'whatsapp' : null);
+        const wa = waStateFor({ ...r, phone, phoneSource });
         const jm = daysUntil(r.arrivalDate);
         const neverContacted = wa.kind !== 'actif' && !r.ota.exists;
-        return { ...r, wa, jm, urgent: neverContacted && !r.inStay && jm <= 7 };
+        return { ...r, phone, phoneSource, wa, jm, urgent: neverContacted && !r.inStay && jm <= 7 };
       }),
-    [rows, waStateFor],
+    [rows, waStateFor, waPhoneByResa],
   );
 
   const counts = useMemo(
@@ -308,6 +332,14 @@ export default function ResasTabV2() {
                       {r.wa.notWhatsApp ? '✗ pas de WhatsApp' : '✗ envoi refusé'}
                     </StatePill>
                   )}
+                  {r.phone ? (
+                    <Typography sx={{ fontFamily: MONO, fontSize: 10, color: C.text3, fontWeight: 600 }}>
+                      +{r.phone.replace(/\D/g, '')}
+                      {phoneSourceLabel(r.phoneSource) ? (
+                        <Box component="span" sx={{ color: C.text4 }}> · {phoneSourceLabel(r.phoneSource)}</Box>
+                      ) : null}
+                    </Typography>
+                  ) : null}
                 </Stack>
                 <Stack sx={{ gap: 0.375 }}>
                   <Typography sx={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.06em', color: C.text4 }}>
@@ -365,7 +397,10 @@ export default function ResasTabV2() {
                           <MenuItem key={tpl.id} value={tpl.id} sx={{ fontSize: 12.5 }}>{tpl.label}</MenuItem>
                         ))}
                       </TextField>
-                      <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: C.text3, mt: 1.5, mb: 0.25 }}>Numéro (depuis la résa)</Typography>
+                      <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: C.text3, mt: 1.5, mb: 0.25 }}>
+                        Numéro
+                        {phoneSourceLabel(r.phoneSource) ? ` · source ${phoneSourceLabel(r.phoneSource)}` : ' (résa / whitelist)'}
+                      </Typography>
                       <Typography sx={{ fontFamily: MONO, fontSize: 13, fontWeight: 800 }}>+{r.phone.replace(/\D/g, '')}</Typography>
                     </Box>
                     <Box sx={{ flex: 1, minWidth: 280 }}>

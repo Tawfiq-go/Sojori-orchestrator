@@ -4,53 +4,79 @@ import { multiTokens as t, type MultiListingImage } from './multiTypes';
 
 type Props = {
   variant: 'common' | 'type';
-  tag: string;
-  hint: string;
+  tag?: string;
+  hint?: string;
   images: MultiListingImage[];
   onChange: (images: MultiListingImage[]) => void;
   uploading?: boolean;
   onPickFiles?: (files: FileList) => void;
+  /** Moins de padding / pas de bandeau tag+hint */
+  compact?: boolean;
 };
 
-export function PhotoZone({ variant, tag, hint, images, onChange, uploading, onPickFiles }: Props) {
+export function PhotoZone({
+  variant,
+  tag,
+  hint,
+  images,
+  onChange,
+  uploading,
+  onPickFiles,
+  compact = false,
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const isCommon = variant === 'common';
+  const showHeader = Boolean(tag || hint);
 
   return (
     <Box
       sx={{
-        border: `1.5px dashed ${t.borderStrong}`,
-        borderRadius: '11px',
-        p: 1.75,
+        border: `1px solid ${t.borderStrong}`,
+        borderRadius: compact ? '8px' : '11px',
+        p: compact ? 0.85 : 1.75,
         background: t.bg2,
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.1, mb: 1.3, flexWrap: 'wrap' }}>
+      {showHeader ? (
         <Box
-          component="span"
           sx={{
-            fontSize: 10,
-            fontWeight: 800,
-            fontFamily: t.mono,
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            px: 1.1,
-            py: 0.35,
-            borderRadius: '6px',
-            background: isCommon ? t.infoTint : t.primaryTint,
-            color: isCommon ? t.info : t.primaryDeep,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.1,
+            mb: compact ? 0.9 : 1.3,
+            flexWrap: 'wrap',
           }}
         >
-          {tag}
+          {tag ? (
+            <Box
+              component="span"
+              sx={{
+                fontSize: 10,
+                fontWeight: 800,
+                fontFamily: t.mono,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                px: 1.1,
+                py: 0.35,
+                borderRadius: '6px',
+                background: isCommon ? t.infoTint : t.primaryTint,
+                color: isCommon ? t.info : t.primaryDeep,
+              }}
+            >
+              {tag}
+            </Box>
+          ) : null}
+          {hint ? <Typography sx={{ fontSize: 11, color: t.text3 }}>{hint}</Typography> : null}
         </Box>
-        <Typography sx={{ fontSize: 11, color: t.text3 }}>{hint}</Typography>
-      </Box>
+      ) : null}
 
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
-          gap: 1.1,
+          gridTemplateColumns: compact
+            ? 'repeat(auto-fill, minmax(80px, 1fr))'
+            : 'repeat(auto-fill, minmax(96px, 1fr))',
+          gap: compact ? 0.85 : 1.1,
         }}
       >
         {images.map((img, i) => (
@@ -121,7 +147,7 @@ export function PhotoZone({ variant, tag, hint, images, onChange, uploading, onP
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 0.5,
+            gap: 0.35,
             color: t.text3,
             fontSize: 11,
             fontWeight: 600,

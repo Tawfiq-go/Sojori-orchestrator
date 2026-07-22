@@ -137,6 +137,11 @@ class ReservationsService {
     /** Admin : filtre par PM (backend: filterOwnerId répété). */
     filterOwnerId?: string | string[];
     ownerId?: string | null;
+    /**
+     * Analytics Hostaway : ne pas élargir la fenêtre aux cancellationDate
+     * (sinon check-in octobre + annulé en juillet pollue juillet).
+     */
+    strictArrivalWindow?: boolean;
   }): Promise<{ success: boolean; data: Reservation[]; count: number; total: number }> {
     try {
       const queryParams = new URLSearchParams();
@@ -150,6 +155,10 @@ class ReservationsService {
         queryParams.append('dateType', dateType);
         queryParams.append('startDate', startDate);
         queryParams.append('endDate', endDate);
+      }
+
+      if (params.strictArrivalWindow) {
+        queryParams.append('strictArrivalWindow', 'true');
       }
 
       if (params.page != null) {

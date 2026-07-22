@@ -11,10 +11,16 @@ import {
   Paper,
   IconButton,
   Button,
+  FormControl,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
+import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import { hourNumberToTimeInput } from '../../../../utils/listingTimeHelpers';
+import { createEmptyRoomType } from '../../multi/multiTypes';
+import { multiRoomTypeRuOptions } from '../utils/multiRoomRuPropertyTypes';
 import {
   buildRuFeeSummaryLine,
   formatCancellationPolicySummary,
@@ -223,105 +229,364 @@ function LastMinuteDiscountsEditor({ rows = [], onChange }) {
   );
 }
 
-/* ════════════════════ Pricing ════════════════════ */
-export function PricingTab({ values = {}, onChange }) {
+/** Sync roomNumber + count + rooms[] (stock Multi). */
+function applyRoomTypeUnits(rt, index, unitsRaw) {
+  const roomNumber = Math.max(1, Number(unitsRaw) || 1);
+  const name = String(rt.roomTypeName || `Type ${index + 1}`);
+  const existingRooms = Array.isArray(rt.rooms) ? rt.rooms : [];
+  const rooms =
+    existingRooms.length === roomNumber
+      ? existingRooms
+      : Array.from({ length: roomNumber }, (_, ri) => {
+          const old = existingRooms[ri] || {};
+          return {
+            ...old,
+            roomNumber: ri + 1,
+            roomName: old.roomName || `${name} ${ri + 1}`,
+            roomCode: old.roomCode || `RT${index + 1}-${ri + 1}`,
+            enabled: old.enabled !== false,
+          };
+        });
+  return { ...rt, roomNumber, count: roomNumber, rooms };
+}
+
+function draftToConfigRoomType(draft, ranking) {
+  const roomNumber = Math.max(1, Number(draft.roomNumber) || 1);
+  const name = String(draft.roomTypeName || `Type ${ranking + 1}`);
+  return {
+    roomTypeName: name,
+    roomNumber,
+    count: roomNumber,
+    personCapacity: Math.max(1, Number(draft.personCapacity) || 2),
+    personCapacityMax: Math.max(
+      Number(draft.personCapacity) || 2,
+      Number(draft.personCapacityMax) || Number(draft.personCapacity) || 2,
+    ),
+    bedroomsNumber: Math.max(0, Number(draft.bedroomsNumber) || 1),
+    bedsNumber: Math.max(0, Number(draft.bedsNumber) || 1),
+    bathroomsNumber: Math.max(0, Number(draft.bathroomsNumber) || 1),
+    surface: Number(draft.surface) || 0,
+    basePrice: Number(draft.basePrice) || 0,
+    roomTypeImages: Array.isArray(draft.roomTypeImages) ? draft.roomTypeImages : [],
+    rooms: Array.from({ length: roomNumber }, (_, ri) => ({
+      roomNumber: ri + 1,
+      roomName: `${name} ${ri + 1}`,
+      roomCode: `RT${ranking + 1}-${ri + 1}`,
+      enabled: true,
+    })),
+  };
+}
+
+/* ════════════════════ Pricing / Config Rooms ════════════════════ */
+export function PricingTab({ values = {}, onChange, roomTypeConfigs = [], propertyTypes = [] }) {
   const upd = (k, v) => onChange?.({ ...values, [k]: v });
   const currency = values.currencyCode || 'MAD';
   const isMulti = values.propertyUnit === 'Multi';
   const roomTypes = Array.isArray(values.roomTypes) ? values.roomTypes : [];
+  /** Multi rooms : ListPropTypes via RoomTypeConfig (Studio, One Bedroom…) — pas PropertyType Hotel/Riad. */
+  const roomRuTypes = isMulti
+    ? multiRoomTypeRuOptions({
+        roomTypeConfigs: Array.isArray(roomTypeConfigs) ? roomTypeConfigs : [],
+        propertyTypes: Array.isArray(propertyTypes) ? propertyTypes : [],
+      })
+    : [];
+  const totalUnits = roomTypes.reduce(
+    (s, rt) => s + Math.max(1, Number(rt.roomNumber) || Number(rt.count) || 1),
+    0,
+  );
 
-  const patchRoomTypePrice = (index, price) => {
-    const next = roomTypes.map((rt, i) =>
-      i === index ? { ...rt, basePrice: price } : { ...rt },
-    );
+  const patchRoomType = (index, patch) => {
+    const next = roomTypes.map((rt, i) => {
+      if (i !== index) return { ...rt };
+      let merged = { ...rt, ...patch };
+      if (patch.roomNumber != null || patch.count != null) {
+        merged = applyRoomTypeUnits(
+          merged,
+          i,
+          patch.roomNumber != null ? patch.roomNumber : patch.count,
+        );
+      }
+      if (patch.personCapacity != null) {
+        const cap = Math.max(1, Number(patch.personCapacity) || 1);
+        merged.personCapacity = cap;
+        if (merged.personCapacityMax == null || Number(merged.personCapacityMax) < cap) {
+          merged.personCapacityMax = cap;
+        }
+      }
+      return merged;
+    });
     onChange?.({ ...values, roomTypes: next });
+  };
+
+  const patchRoomRuPropertyType = (index, propertyTypeMongoId) => {
+    const selected = roomRuTypes.find((t) => String(t._id) === String(propertyTypeMongoId));
+    const rt = roomTypes[index] || {};
+    const prev = roomRuTypes.find(
+      (t) => Number(t.rentalPropertyTypeId) === Number(rt.rentalPropertyTypeId),
+    );
+    const nameStillDefault =
+      !rt.roomTypeName ||
+      (prev && rt.roomTypeName === prev.name) ||
+      /^Type\s+\d+$/i.test(String(rt.roomTypeName));
+    patchRoomType(index, {
+      propertyTypeId: propertyTypeMongoId || undefined,
+      rentalPropertyTypeId: selected?.rentalPropertyTypeId,
+      ...(selected && nameStillDefault ? { roomTypeName: selected.name } : {}),
+    });
+  };
+
+  const addRoomType = () => {
+    const draft = createEmptyRoomType({
+      roomTypeName: `Type ${roomTypes.length + 1}`,
+      roomNumber: 1,
+      basePrice: 500,
+    });
+    onChange?.({
+      ...values,
+      roomTypes: [...roomTypes, draftToConfigRoomType(draft, roomTypes.length)],
+    });
+  };
+
+  const duplicateRoomType = (index) => {
+    const src = roomTypes[index];
+    if (!src) return;
+    const draft = createEmptyRoomType({
+      roomTypeName: `${src.roomTypeName || 'Type'} (copie)`,
+      roomNumber: Math.max(1, Number(src.roomNumber) || 1),
+      personCapacity: src.personCapacity,
+      personCapacityMax: src.personCapacityMax,
+      bedroomsNumber: src.bedroomsNumber,
+      bedsNumber: src.bedsNumber,
+      bathroomsNumber: src.bathroomsNumber,
+      surface: src.surface,
+      basePrice: src.basePrice,
+    });
+    const next = [...roomTypes];
+    next.splice(index + 1, 0, draftToConfigRoomType(draft, index + 1));
+    onChange?.({ ...values, roomTypes: next });
+  };
+
+  const removeRoomType = (index) => {
+    if (roomTypes.length <= 1) return;
+    onChange?.({
+      ...values,
+      roomTypes: roomTypes.filter((_, i) => i !== index),
+    });
   };
 
   if (isMulti) {
     return (
       <Box>
         <RuFormLegend />
-        <Card title="💰 Prix par type de chambre" meta={`${roomTypes.length} types`}>
-          <Typography sx={{ fontSize: 12.5, color: T.text2, mb: 1.75, lineHeight: 1.45 }}>
-            Chaque <b>RoomType</b> a son tarif (poussé vers la Property RU correspondante).
-            Pas de prix unique listing — Standard / Suite / Palace peuvent différer.
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-            {roomTypes.map((rt, i) => (
-              <Box
-                key={String(rt._id || rt.roomTypeName || i)}
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: '1.4fr 1fr auto' },
-                  gap: 1.25,
-                  alignItems: 'center',
-                  p: 1.25,
-                  borderRadius: '10px',
-                  border: `1px solid ${T.border}`,
-                  bgcolor: T.bg2,
-                }}
-              >
-                <Box>
-                  <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>
-                    {rt.roomTypeName || `Type ${i + 1}`}
-                  </Typography>
-                  <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
-                    ×{Math.max(1, Number(rt.roomNumber) || 1)} unités
-                  </Typography>
-                </Box>
-                <Field label="Prix / nuit" required ruField="basePrice">
-                  <MoneyInput
-                    value={rt.basePrice}
-                    onChange={(v) => patchRoomTypePrice(i, v)}
-                    currency={currency}
-                  />
-                </Field>
-                <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.primaryDeep, textAlign: 'right' }}>
-                  {Number(rt.basePrice) || 0} {currency}
-                </Typography>
-              </Box>
+        <Card
+          title="🛏 Config Rooms"
+          meta={`${roomTypes.length} types · ${totalUnits} unités`}
+        >
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            alignItems={{ sm: 'center' }}
+            gap={1}
+            sx={{ mb: 1.25 }}
+          >
+            <Field label="Devise" required ruField="currencyCode">
+              <SelectField
+                value={values.currencyCode || ''}
+                onChange={(v) => upd('currencyCode', v)}
+                options={[
+                  { value: 'EUR', label: '€ EUR' },
+                  { value: 'MAD', label: 'DH MAD' },
+                  { value: 'USD', label: '$ USD' },
+                  { value: 'GBP', label: '£ GBP' },
+                ]}
+              />
+            </Field>
+            <Box sx={{ flex: 1 }} />
+            <Button
+              size="small"
+              startIcon={<AddIcon sx={{ fontSize: 16 }} />}
+              onClick={addRoomType}
+              sx={{ textTransform: 'none', fontWeight: 700, alignSelf: { xs: 'stretch', sm: 'flex-end' } }}
+            >
+              Ajouter un type
+            </Button>
+          </Stack>
+
+          <Box
+            sx={{
+              display: { xs: 'none', md: 'grid' },
+              gridTemplateColumns: roomRuTypes.length
+                ? 'minmax(150px, 1.2fr) minmax(140px, 1.1fr) 128px 128px minmax(110px, 130px) 72px'
+                : 'minmax(160px, 1.5fr) 132px 132px minmax(120px, 140px) 72px',
+              gap: 1.25,
+              px: 1,
+              mb: 0.5,
+            }}
+          >
+            {(roomRuTypes.length
+              ? ['Type RU', 'Nom OTA', 'Unités', 'Pers.', 'Prix / nuit', '']
+              : ['Nom', 'Unités', 'Pers.', 'Prix / nuit', '']
+            ).map((h) => (
+              <Typography key={h || 'a'} sx={{ fontSize: 10.5, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {h}
+              </Typography>
             ))}
+          </Box>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+            {roomTypes.map((rt, i) => {
+              const units = Math.max(1, Number(rt.roomNumber) || Number(rt.count) || 1);
+              const selectedPt =
+                roomRuTypes.find((t) => String(t._id) === String(rt.propertyTypeId)) ||
+                roomRuTypes.find(
+                  (t) => Number(t.rentalPropertyTypeId) === Number(rt.rentalPropertyTypeId),
+                );
+              const ptSelectValue = selectedPt ? String(selectedPt._id) : '';
+              return (
+                <Box
+                  key={String(rt._id || rt._key || rt.roomTypeName || i)}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: '1fr 1fr',
+                      md: roomRuTypes.length
+                        ? 'minmax(150px, 1.2fr) minmax(140px, 1.1fr) 128px 128px minmax(110px, 130px) 72px'
+                        : 'minmax(160px, 1.5fr) 132px 132px minmax(120px, 140px) 72px',
+                    },
+                    gap: 1.25,
+                    alignItems: 'center',
+                    p: 1.1,
+                    borderRadius: '10px',
+                    border: `1px solid ${T.border}`,
+                    bgcolor: T.bg2,
+                    overflow: 'visible',
+                  }}
+                >
+                  {roomRuTypes.length > 0 ? (
+                    <Box sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }}>
+                      <Typography sx={{ display: { md: 'none' }, fontSize: 10, color: T.text3, mb: 0.25 }}>
+                        Type RU *
+                      </Typography>
+                      <FormControl size="small" fullWidth>
+                        <Select
+                          value={ptSelectValue}
+                          displayEmpty
+                          onChange={(e) => patchRoomRuPropertyType(i, e.target.value)}
+                          sx={sxInput['& .MuiOutlinedInput-root']}
+                        >
+                          <MenuItem value="">
+                            <em>Choisir…</em>
+                          </MenuItem>
+                          {roomRuTypes.map((c) => (
+                            <MenuItem key={c._id} value={String(c._id)}>
+                              {c.name}
+                              {c.rentalPropertyTypeId != null ? ` · ${c.rentalPropertyTypeId}` : ''}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Box>
+                  ) : null}
+                  <Box sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }}>
+                    <Typography sx={{ display: { md: 'none' }, fontSize: 10, color: T.text3, mb: 0.25 }}>
+                      Nom OTA
+                    </Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      placeholder={`Type ${i + 1}`}
+                      value={rt.roomTypeName || ''}
+                      onChange={(e) => patchRoomType(i, { roomTypeName: e.target.value })}
+                      sx={sxInput}
+                    />
+                  </Box>
+                  <Box sx={{ overflow: 'visible', minWidth: 0 }}>
+                    <Typography sx={{ display: { md: 'none' }, fontSize: 10, color: T.text3, mb: 0.25 }}>
+                      Unités
+                    </Typography>
+                    <Counter
+                      emphasized
+                      value={units}
+                      min={1}
+                      max={99}
+                      onChange={(v) => patchRoomType(i, { roomNumber: v })}
+                    />
+                  </Box>
+                  <Box sx={{ overflow: 'visible', minWidth: 0 }}>
+                    <Typography sx={{ display: { md: 'none' }, fontSize: 10, color: T.text3, mb: 0.25 }}>
+                      Pers.
+                    </Typography>
+                    <Counter
+                      emphasized
+                      value={Math.max(1, Number(rt.personCapacity) || 2)}
+                      min={1}
+                      max={30}
+                      onChange={(v) => patchRoomType(i, { personCapacity: v })}
+                    />
+                  </Box>
+                  <Box>
+                    <Typography sx={{ display: { md: 'none' }, fontSize: 10, color: T.text3, mb: 0.25 }}>
+                      Prix / nuit *
+                    </Typography>
+                    <MoneyInput
+                      value={rt.basePrice}
+                      onChange={(v) => patchRoomType(i, { basePrice: v })}
+                      currency={currency}
+                    />
+                  </Box>
+                  <Stack direction="row" justifyContent="flex-end" sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }}>
+                    <IconButton
+                      size="small"
+                      title="Dupliquer"
+                      onClick={() => duplicateRoomType(i)}
+                      sx={{ color: T.text2 }}
+                    >
+                      <ContentCopyOutlinedIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      title="Supprimer"
+                      disabled={roomTypes.length <= 1}
+                      onClick={() => removeRoomType(i)}
+                      sx={{ color: roomTypes.length <= 1 ? T.text3 : '#b91c1c' }}
+                    >
+                      <DeleteOutlinedIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Stack>
+                </Box>
+              );
+            })}
             {roomTypes.length === 0 && (
-              <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
-                Aucun type — ajoutez-en dans Infos bâtiment.
+              <Typography sx={{ fontSize: 12.5, color: T.text3, py: 1 }}>
+                Aucun type — cliquez « Ajouter un type ».
               </Typography>
             )}
           </Box>
-        </Card>
 
-        <Card title="Devise & pricing dynamique">
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
-            <Field label="Devise" required ruField="currencyCode">
-              <SelectField value={values.currencyCode || ''} onChange={v => upd('currencyCode', v)}
-                options={[{ value: 'EUR', label: '€ EUR' }, { value: 'MAD', label: 'DH MAD' }, { value: 'USD', label: '$ USD' }, { value: 'GBP', label: '£ GBP' }]} />
-            </Field>
-          </Box>
           <Box sx={{ mt: 1.5 }}>
             <ToggleRow
-              title="Activer le pricing dynamique"
-              desc="Règles calendrier — une ligne par RoomType si le moteur le permet."
+              title="Pricing dynamique"
+              desc="Règles calendrier par type"
               checked={!!values.dynamicPricing}
-              onChange={v => upd('dynamicPricing', v)}
+              onChange={(v) => upd('dynamicPricing', v)}
             />
           </Box>
         </Card>
 
-        <Card>
-          <Field label="Remises long séjour" ruField="longStayDiscounts" fullWidth>
+        <Card title="Remises">
+          <Field label="Long séjour" ruField="longStayDiscounts" fullWidth>
             <LongStayDiscountsEditor
               rows={values.longStayDiscounts || []}
               onChange={(rows) => upd('longStayDiscounts', rows)}
             />
           </Field>
-        </Card>
-
-        <Card>
-          <Field label="Remises last minute" ruField="lastMinuteDiscount" fullWidth>
-            <LastMinuteDiscountsEditor
-              rows={values.lastMinuteDiscount || []}
-              onChange={(rows) => upd('lastMinuteDiscount', rows)}
-            />
-          </Field>
+          <Box sx={{ mt: 1.5 }}>
+            <Field label="Last minute" ruField="lastMinuteDiscount" fullWidth>
+              <LastMinuteDiscountsEditor
+                rows={values.lastMinuteDiscount || []}
+                onChange={(rows) => upd('lastMinuteDiscount', rows)}
+              />
+            </Field>
+          </Box>
         </Card>
       </Box>
     );

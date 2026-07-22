@@ -1325,8 +1325,9 @@ export const listingsService = {
     }
   },
 
-  /** GET /room-type-config/get — types de logement (Two Bedroom, etc.). */
-  async getRoomTypeConfigs(): Promise<Array<{ _id: string; type: string }>> {
+  async getRoomTypeConfigs(): Promise<
+    Array<{ _id: string; type: string; rentalPropertyTypeId?: number }>
+  > {
     try {
       const response = await apiClient.get(`${LISTING_API_BASE_URL}/room-type-config/get`);
       const payload = asRecord(response.data);
@@ -1335,13 +1336,49 @@ export const listingsService = {
       if (!Array.isArray(raw)) return [];
       return raw.map((row, index) => {
         const r = asRecord(row);
+        const ruId = r.rentalPropertyTypeId;
         return {
           _id: asString(r._id || r.id || `rtc-${index}`),
           type: asString(r.type || r.name || r.roomTypeName || 'Type'),
+          ...(ruId != null && Number.isFinite(Number(ruId))
+            ? { rentalPropertyTypeId: Number(ruId) }
+            : {}),
         };
       });
     } catch (error) {
       console.warn('[listings] room-type-config/get unavailable:', error);
+      return [];
+    }
+  },
+
+  /** GET /propertyTypes — dico RU PropertyType (Apartment, Hotel, Private room…). */
+  async getPropertyTypes(): Promise<
+    Array<{ _id: string; name: string; rentalPropertyTypeId?: number; manageRoomType?: boolean }>
+  > {
+    try {
+      const response = await apiClient.get(`${LISTING_API_BASE_URL}/propertyTypes`);
+      const payload = asRecord(response.data);
+      if (payload.success === false) return [];
+      const raw = payload.data ?? payload.propertyTypes ?? payload;
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray((raw as Record<string, unknown>)?.data)
+          ? ((raw as Record<string, unknown>).data as unknown[])
+          : [];
+      return list.map((row, index) => {
+        const r = asRecord(row);
+        const ruId = r.rentalPropertyTypeId;
+        return {
+          _id: asString(r._id || r.id || `pt-${index}`),
+          name: asString(r.name || r.type || 'Type'),
+          manageRoomType: Boolean(r.manageRoomType),
+          ...(ruId != null && Number.isFinite(Number(ruId))
+            ? { rentalPropertyTypeId: Number(ruId) }
+            : {}),
+        };
+      });
+    } catch (error) {
+      console.warn('[listings] propertyTypes unavailable:', error);
       return [];
     }
   },

@@ -15,6 +15,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -47,6 +48,12 @@ const OrchestrationOpsCards = lazyWithReload(() =>
   import('../features/dashboardOps/OrchestrationOpsCards').then((m) => ({ default: m.default }))
 );
 import { ListingCheckboxFilter } from '../components/dashboard/ListingCheckboxFilter';
+import {
+  MonthPickerChip,
+  stepMonthKey,
+  useMonthPickerState,
+} from '../components/dashboard/MonthPickerChip';
+import { withPropertyShortLabels } from '../utils/propertyShortLabel';
 import {
   EMPTY_DASHBOARD_SNAPSHOT,
   applyDashboardExtrasProgressively,
@@ -88,6 +95,9 @@ const currency = new Intl.NumberFormat('fr-FR', {
 
 const SCROLL_LIST_MAX_HEIGHT = 320;
 const VISIBLE_LIST_HINT = '4 visibles · scroll';
+/** Au-delà : pas de % sur les barres (illisibles) — hover = nom + %. */
+const OCCUPANCY_BAR_LABEL_MAX = 12;
+const OCCUPANCY_CHART_HINT = 'initiales · % sur barres si ≤12 · hover = nom + %';
 
 export function DashboardPage() {
   return <DashboardPageContent />;
@@ -109,35 +119,13 @@ function DashboardPageContent() {
   const [period, setPeriod] = useState<DashboardPeriod>('Mois');
   /** Mois calendaire choisi (YYYY-MM) — '' = mois en cours. */
   const [selectedMonth, setSelectedMonth] = useState('');
-  const monthOptions = useMemo(() => {
-    const now = new Date();
-    const mk = (offset: number) => {
-      const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-      return { key, label: label.charAt(0).toUpperCase() + label.slice(1) };
-    };
-    return {
-      current: mk(0),
-      // Le pilotage se fait vers l'avant : les mois à venir d'abord (déjà réservé)
-      future: Array.from({ length: 12 }, (_, i) => mk(i + 1)),
-      past: Array.from({ length: 12 }, (_, i) => mk(-(i + 1))),
-    };
-  }, []);
-  const monthLabelByKey = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const m of [monthOptions.current, ...monthOptions.future, ...monthOptions.past]) map.set(m.key, m.label);
-    return map;
-  }, [monthOptions]);
+  const { options: monthOptions, labelByKey: monthLabelByKey } = useMonthPickerState();
   /** ‹ › : pas d'un mois depuis le mois affiché ('' = mois courant). */
   const stepMonth = useCallback(
     (delta: number) => {
-      const base = selectedMonth || monthOptions.current.key;
-      const [y, m] = base.split('-').map(Number);
-      const d = new Date(y, m - 1 + delta, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (!monthLabelByKey.has(key)) return;
-      setSelectedMonth(key === monthOptions.current.key ? '' : key);
+      const next = stepMonthKey(selectedMonth, delta, monthOptions, monthLabelByKey);
+      if (next === null) return;
+      setSelectedMonth(next);
       setPeriod('Mois');
     },
     [selectedMonth, monthOptions, monthLabelByKey],
@@ -373,7 +361,8 @@ function DashboardPageContent() {
 
           const fastQuery = { ...fastQueryBase, listingIdsHint };
 
-          if (listingIdsHint.length > 0) {
+          // Charts même sans directory (ownerId suffit côté reservations après fix Admin).
+          if (listingIdsHint.length > 0 || requestOwnerId) {
             void fetchDashboardV1Charts(fastQuery)
               .then(async (charts) => {
                 if (cancelled || !charts) return null;
@@ -514,7 +503,7 @@ function DashboardPageContent() {
       snapshot.occupancyByProperty.length <= 1 && snapshot.properties.length > 1
         ? ' · détail par listing en cours (directory timeout)'
         : '';
-    return `Nuits réservées ÷ nuits disponibles · ${scope} · période du filtre · ${VISIBLE_LIST_HINT}${detail}`;
+    return `Nuits réservées ÷ nuits disponibles · ${scope} · période du filtre · ${OCCUPANCY_CHART_HINT}${detail}`;
   }, [
     snapshot.kpis.occupancyRate.value,
     snapshot.occupancyByProperty.length,
@@ -534,7 +523,7 @@ function DashboardPageContent() {
   }, [snapshot.occupancyByProperty, selectedPropertyIds, listingOptions]);
 
   const namedOccupancyByProperty = useMemo(
-    () => displayedOccupancyByProperty.map(withRealName),
+    () => withPropertyShortLabels(displayedOccupancyByProperty.map(withRealName)),
     [displayedOccupancyByProperty, withRealName],
   );
 
@@ -746,7 +735,10 @@ function DashboardPageContent() {
           '& > *': { minWidth: 0 },
         }}
       >
-        <Panel title="Revenus par jour / semaine / mois" desc="Timeline · revenu (MAD) à gauche · réservations à droite">
+        <Panel
+          title="Revenus par jour / semaine / mois"
+          desc="Timeline · revenu (MAD) à gauche · arrivées (check-in) à droite"
+        >
           <StableChart height={320}>
             {({ width, height }: { width: number; height: number }) => (
               <LineChart width={width} height={height} data={snapshot.revenueChart}>
@@ -760,7 +752,7 @@ function DashboardPageContent() {
                 <YAxis
                   yAxisId="bookings"
                   orientation="right"
-                  name="Réservations"
+                  name="Arrivées"
                   allowDecimals={false}
                 />
                 <Tooltip
@@ -782,7 +774,7 @@ function DashboardPageContent() {
                   yAxisId="bookings"
                   type="monotone"
                   dataKey="bookings"
-                  name="Réservations"
+                  name="Arrivées"
                   stroke="#8b5cf6"
                   strokeWidth={2}
                   dot={false}
@@ -840,30 +832,48 @@ function DashboardPageContent() {
           }
         >
           <StableChart height={320}>
-            {({ width, height }: { width: number; height: number }) => (
-              <BarChart width={width} height={height} data={namedOccupancyByProperty}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
-                <XAxis dataKey="property" hide />
-                <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
-                <Tooltip formatter={(value: number) => `${value}%`} />
-                <Bar dataKey="occupancy" radius={[8, 8, 0, 0]} fill="#10b981" />
-              </BarChart>
-            )}
-          </StableChart>
-          <ScrollableList>
-            {namedOccupancyByProperty.map((property, index) => (
-              <Stack
-                key={property.listingId ?? `${property.property}-${index}`}
-                direction="row"
-                sx={{ justifyContent: 'space-between' }}
+            {({ width, height }: { width: number; height: number }) => {
+              const showBarPct = namedOccupancyByProperty.length <= OCCUPANCY_BAR_LABEL_MAX;
+              return (
+              <BarChart
+                width={width}
+                height={height}
+                data={namedOccupancyByProperty}
+                margin={{ top: showBarPct ? 22 : 8, right: 8, left: 0, bottom: 24 }}
               >
-                <Typography variant="body2">{property.property}</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  {property.occupancy}%{property.adr ? ` · ADR ${property.adr} MAD` : ''}
-                </Typography>
-              </Stack>
-            ))}
-          </ScrollableList>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
+                <XAxis
+                  dataKey="shortLabel"
+                  interval={0}
+                  angle={0}
+                  textAnchor="middle"
+                  height={28}
+                  tick={{ fontSize: 12, fill: t.text2 }}
+                  minTickGap={4}
+                />
+                <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(16,185,129,0.08)' }}
+                  formatter={(value: number) => [`${Number(value).toFixed(1)} %`, 'Occupation']}
+                  labelFormatter={(_label, payload) => {
+                    const row = payload?.[0]?.payload as { property?: string } | undefined;
+                    return row?.property || String(_label);
+                  }}
+                />
+                <Bar dataKey="occupancy" radius={[8, 8, 0, 0]} fill="#10b981">
+                  {showBarPct ? (
+                    <LabelList
+                      dataKey="occupancy"
+                      position="top"
+                      formatter={(v: number) => `${Number(v).toFixed(1)}%`}
+                      style={{ fontSize: 11, fontWeight: 700, fill: t.text2 }}
+                    />
+                  ) : null}
+                </Bar>
+              </BarChart>
+              );
+            }}
+          </StableChart>
         </Panel>
 
         <Panel title="Arrivées & départs" desc={`Prochains mouvements · ${VISIBLE_LIST_HINT}`}>
@@ -978,83 +988,6 @@ function DashboardPageContent() {
         </>
       )}
     </DashboardWrapper>
-  );
-}
-
-function MonthPickerChip({
-  options,
-  value,
-  onChange,
-  onStep,
-}: {
-  options: {
-    current: { key: string; label: string };
-    future: Array<{ key: string; label: string }>;
-    past: Array<{ key: string; label: string }>;
-  };
-  value: string;
-  onChange: (key: string) => void;
-  onStep: (delta: number) => void;
-}) {
-  const stepSx = {
-    border: '1.5px solid rgba(20,17,10,0.14)',
-    bgcolor: '#fff',
-    borderRadius: '99px',
-    minWidth: 0,
-    width: 30,
-    height: 30,
-    p: 0,
-    fontSize: 14,
-    fontWeight: 800,
-    color: 'text.secondary',
-    '&:hover': { borderColor: '#F4CF5E', bgcolor: 'rgba(244,207,94,0.14)', color: '#c79b22' },
-  } as const;
-  return (
-    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-      <Button sx={stepSx} onClick={() => onStep(-1)} aria-label="Mois précédent">
-        ‹
-      </Button>
-      <Box
-        component="select"
-        value={value}
-        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
-        aria-label="Choisir un mois"
-        sx={{
-          border: '1.5px solid',
-          borderColor: value ? '#F4CF5E' : 'rgba(20,17,10,0.14)',
-          bgcolor: value ? 'rgba(244,207,94,0.14)' : '#fff',
-          color: value ? '#c79b22' : 'inherit',
-          borderRadius: '99px',
-          px: 1.75,
-          py: 0.75,
-          fontSize: 12.5,
-          fontWeight: 700,
-          fontFamily: 'inherit',
-          cursor: 'pointer',
-          appearance: 'none',
-          maxWidth: 190,
-        }}
-      >
-        <option value="">📅 {options.current.label} (en cours)</option>
-        <optgroup label="📈 À venir — déjà réservé">
-          {options.future.map((m) => (
-            <option key={m.key} value={m.key}>
-              {m.label}
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="🕓 Mois passés">
-          {options.past.map((m) => (
-            <option key={m.key} value={m.key}>
-              {m.label}
-            </option>
-          ))}
-        </optgroup>
-      </Box>
-      <Button sx={stepSx} onClick={() => onStep(1)} aria-label="Mois suivant">
-        ›
-      </Button>
-    </Stack>
   );
 }
 

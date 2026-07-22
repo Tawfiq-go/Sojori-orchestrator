@@ -101,6 +101,12 @@ export function ListingFormV2Page() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: propertyTypes = [] } = useQuery({
+    queryKey: ['property-types'],
+    queryFn: () => listingsService.getPropertyTypes(),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { mutate: saveListing, isPending: isSaving } = useMutation({
     mutationFn: async (values: Record<string, unknown>) => {
       await listingsService.updateListingProperty(
@@ -187,6 +193,7 @@ export function ListingFormV2Page() {
         isSaving={isSaving}
         listingStructure={listingStructure ?? null}
         roomTypeConfigs={roomTypeConfigs}
+        propertyTypes={propertyTypes}
       />
     </DashboardWrapper>
   );

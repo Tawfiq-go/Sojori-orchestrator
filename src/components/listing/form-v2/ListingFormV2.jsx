@@ -38,6 +38,7 @@ export default function ListingFormV2({
   onImagesPersisted,
   listingStructure = null,
   roomTypeConfigs = [],
+  propertyTypes = [],
 }) {
   const { user } = useAuth();
   const { isActive: simulationActive } = usePmSimulation();
@@ -185,7 +186,15 @@ export default function ListingFormV2({
                                                             onRoomTypesChange={(rts) => setValues((v) => ({ ...v, roomTypes: rts }))} />;
       if (tabKey === 'amenities')    return <AmenitiesTab   {...common} listingId={listingId} />;
       if (tabKey === 'ru-import')    return isAdmin ? <RuImportDataTab {...common} /> : null;
-      if (tabKey === 'pricing')      return <PricingTab     {...common} />;
+      if (tabKey === 'pricing') {
+        return (
+          <PricingTab
+            {...common}
+            roomTypeConfigs={roomTypeConfigs}
+            propertyTypes={propertyTypes}
+          />
+        );
+      }
       if (tabKey === 'availability') return <AvailabilityTab {...common} />;
       if (tabKey === 'fees')         return <FeesTab        {...common} />;
       if (tabKey === 'ota' || tabKey === 'distribution') {
@@ -195,13 +204,13 @@ export default function ListingFormV2({
         return <DirectBookingTab {...common} listingId={listingId} />;
       }
       if (tabKey === 'rooms') {
-        // Multi : types/stock dans Infos bâtiment, photos dans Photos, prix dans Pricing
+        // Multi : types/stock/prix dans Config Rooms, photos dans Photos
         if (values.propertyUnit === 'Multi') {
           return (
             <Box sx={{ p: 2 }}>
               <Typography sx={{ fontSize: 13, color: '#55504a', lineHeight: 1.5 }}>
-                Les types Multi sont gérés dans <b>Infos bâtiment</b> (stock / capacité),{' '}
-                <b>Photos</b> et <b>Pricing (par type)</b> — pour éviter les doublons.
+                Les types Multi (nom, unités, capacité, prix) se gèrent dans <b>Config Rooms</b>.
+                Photos bâtiment / types → onglet <b>Photos</b>.
               </Typography>
             </Box>
           );
@@ -229,10 +238,23 @@ export default function ListingFormV2({
       tabsStatus={{
         general:      { tone: 'success', label: '✓' },
         location:     { tone: 'success', label: '✓' },
-        photos:       {
-          tone: (values.listingImages || []).length ? 'success' : 'warning',
-          label: `${(values.listingImages || []).filter((i) => i?.url).length}`,
-        },
+        photos: (() => {
+          const building = (values.listingImages || []).filter((i) => i?.url).length;
+          const types = (values.roomTypes || []).reduce((sum, rt) => {
+            const imgs = Array.isArray(rt.roomTypeImages) ? rt.roomTypeImages : [];
+            return sum + imgs.filter((i) => i?.url).length;
+          }, 0);
+          if (values.propertyUnit === 'Multi') {
+            return {
+              tone: building + types > 0 ? 'success' : 'warning',
+              label: `${building}+${types}`,
+            };
+          }
+          return {
+            tone: building ? 'success' : 'warning',
+            label: `${building}`,
+          };
+        })(),
         amenities:    { tone: 'success', label: '✓' },
         license:      { tone: 'warning', label: '⚠' },
       }}

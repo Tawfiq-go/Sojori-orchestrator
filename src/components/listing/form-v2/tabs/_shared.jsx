@@ -227,12 +227,73 @@ export function ToggleRow({
   );
 }
 
-export function Counter({ value, onChange, min = 0, max = 99 }) {
+export function Counter({ value, onChange, min = 0, max = 99, emphasized = false }) {
   return (
-    <Stack direction="row" sx={{ alignItems: 'center', border: `1px solid ${T.border}`, borderRadius: 1, bgcolor: T.bg1, width: 'fit-content' }}>
-      <IconButton size="small" onClick={() => onChange?.(Math.max(min, value - 1))} sx={{ width: 32, height: 32, color: T.text2 }}>−</IconButton>
-      <Box sx={{ px: 1.75, fontFamily: '"Geist Mono", monospace', fontWeight: 700, fontSize: 13, minWidth: 50, textAlign: 'center' }}>{value}</Box>
-      <IconButton size="small" onClick={() => onChange?.(Math.min(max, value + 1))} sx={{ width: 32, height: 32, color: T.text2 }}>+</IconButton>
+    <Stack
+      direction="row"
+      sx={{
+        alignItems: 'center',
+        border: emphasized ? `1.5px solid ${T.borderStrong || T.border}` : `1px solid ${T.border}`,
+        borderRadius: emphasized ? '8px' : 1,
+        bgcolor: emphasized ? '#fff' : T.bg1,
+        width: 'fit-content',
+        minWidth: emphasized ? 118 : undefined,
+        boxShadow: emphasized ? '0 1px 2px rgba(0,0,0,0.06)' : undefined,
+        overflow: 'visible',
+        flexShrink: 0,
+      }}
+    >
+      <IconButton
+        size="small"
+        aria-label="Diminuer"
+        onClick={() => onChange?.(Math.max(min, value - 1))}
+        disabled={value <= min}
+        sx={{
+          width: emphasized ? 34 : 32,
+          height: emphasized ? 34 : 32,
+          color: T.text,
+          fontWeight: 800,
+          fontSize: emphasized ? 18 : 16,
+          borderRadius: emphasized ? '7px 0 0 7px' : undefined,
+          '&:hover': { bgcolor: T.bg2 },
+          '&.Mui-disabled': { color: T.text3, opacity: 0.45 },
+        }}
+      >
+        −
+      </IconButton>
+      <Box
+        sx={{
+          px: emphasized ? 1.25 : 1.75,
+          fontFamily: '"Geist Mono", monospace',
+          fontWeight: 800,
+          fontSize: emphasized ? 14 : 13,
+          minWidth: emphasized ? 36 : 50,
+          textAlign: 'center',
+          color: T.text,
+          lineHeight: 1,
+        }}
+      >
+        {value}
+      </Box>
+      <IconButton
+        size="small"
+        aria-label="Augmenter"
+        onClick={() => onChange?.(Math.min(max, value + 1))}
+        disabled={value >= max}
+        sx={{
+          width: emphasized ? 34 : 32,
+          height: emphasized ? 34 : 32,
+          color: emphasized ? T.primaryDeep || T.text : T.text,
+          bgcolor: emphasized ? T.primaryTint : 'transparent',
+          fontWeight: 800,
+          fontSize: emphasized ? 18 : 16,
+          borderRadius: emphasized ? '0 7px 7px 0' : undefined,
+          '&:hover': { bgcolor: emphasized ? T.primary : T.bg2, color: emphasized ? '#fff' : T.text },
+          '&.Mui-disabled': { color: T.text3, opacity: 0.45, bgcolor: 'transparent' },
+        }}
+      >
+        +
+      </IconButton>
     </Stack>
   );
 }

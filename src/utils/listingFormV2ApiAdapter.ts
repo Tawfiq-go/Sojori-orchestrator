@@ -415,6 +415,18 @@ function cleanRoomTypeRowForApi(row: UnknownRecord): UnknownRecord {
   } else {
     out.roomTypeConfigId = configId;
   }
+  const propertyTypeId = asString(out.propertyTypeId).trim();
+  if (!isMongoObjectId(propertyTypeId)) {
+    delete out.propertyTypeId;
+  } else {
+    out.propertyTypeId = propertyTypeId;
+  }
+  const ruPt = asNumber(out.rentalPropertyTypeId);
+  if (ruPt == null || !Number.isFinite(ruPt)) {
+    delete out.rentalPropertyTypeId;
+  } else {
+    out.rentalPropertyTypeId = ruPt;
+  }
   return out;
 }
 
