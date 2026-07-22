@@ -56,6 +56,8 @@ export type LedgerEntry = {
   invoiceUrls?: string[];
   source?: LedgerSource;
   recurringTemplateId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type ExpenseCategory = {
@@ -81,6 +83,8 @@ export type RecurringTemplate = {
   dayOfWeek?: number;
   enabled?: boolean;
   nextRunAt?: string;
+  /** Présent uniquement dans la réponse de création (lignes de rattrapage). */
+  catchUpCreated?: number;
 };
 
 export type ProfitReportStatus = 'draft' | 'published' | 'archived';

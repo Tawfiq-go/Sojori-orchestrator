@@ -264,6 +264,9 @@ const FinancesReportsPage = lazyWithReload(() =>
 const FinancesReportDetailPage = lazyWithReload(() =>
   import('./features/finances/pages/FinancesReportDetailPage').then((module) => ({ default: module.default }))
 );
+const FinancesBrandingPage = lazyWithReload(() =>
+  import('./features/finances/pages/FinancesBrandingPage').then((module) => ({ default: module.default }))
+);
 const LandlordCreatePage = lazyWithReload(() =>
   import('./pages/LandlordAdminPages').then((module) => ({ default: module.LandlordCreatePage }))
 );
@@ -483,6 +486,7 @@ function App() {
               <Route path="/finances/ledger" element={<LazyRoute><FinancesLedgerPage /></LazyRoute>} />
               <Route path="/finances/reports" element={<LazyRoute><FinancesReportsPage /></LazyRoute>} />
               <Route path="/finances/reports/:id" element={<LazyRoute><FinancesReportDetailPage /></LazyRoute>} />
+              <Route path="/finances/branding" element={<LazyRoute><FinancesBrandingPage /></LazyRoute>} />
 
               <Route path="/forbidden" element={<ForbiddenPage />} />
 

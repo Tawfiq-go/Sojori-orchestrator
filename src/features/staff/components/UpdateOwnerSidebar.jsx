@@ -229,20 +229,7 @@ const CREATE_EMPTY_PM_PROFILE = {
   verified: false,
   published: false,
   responseTime: '',
-  distributionChannels: {
-    sojori: true,
-    directBooking: true,
-    whatsapp: true,
-    marketplace: true,
-  },
 };
-
-const PM_DISTRIBUTION_CHANNEL_ROWS = [
-  { key: 'sojori', icon: '🏠', title: 'Sojori marketplace', desc: 'Catalogue sojori.com et réservations marketplace' },
-  { key: 'directBooking', icon: '🌐', title: 'Direct booking', desc: 'Site marque blanche du PM (ex. daraway.com)' },
-  { key: 'whatsapp', icon: '💬', title: 'WhatsApp', desc: 'Recherche et réservation via le flow WhatsApp' },
-  { key: 'marketplace', icon: '👥', title: 'Autres PMs', desc: 'Partage inter-PMs sur la vitrine publique' },
-];
 
 const CREATE_INITIAL_VALUES = {
   firstName: '',
@@ -273,12 +260,10 @@ const CREATE_INITIAL_VALUES = {
 
 const OWNER_TABS = [
   { id: 'compte', label: 'Compte' },
-  { id: 'canaux-distribution', label: 'Canaux distribution' },
   { id: 'entreprise', label: 'Entreprise RU' },
   { id: 'webhooks-ru', label: 'Webhooks RU' },
   { id: 'sojori-web', label: 'Site sojori-vente' },
   { id: 'orchestration', label: 'Orchestration' },
-  { id: 'rapports-pl', label: 'Rapports P&L' },
   { id: 'config-ia', label: 'Config IA' },
 ];
 
@@ -396,7 +381,7 @@ const UpdateOwnerSidebar = ({
   const visibleTabs = useMemo(() => {
     if (isPmSelfService) {
       return OWNER_TABS.filter((tab) =>
-        ['compte', 'entreprise', 'sojori-web', 'rapports-pl'].includes(tab.id),
+        ['compte', 'entreprise', 'sojori-web'].includes(tab.id),
       ).map((tab) =>
         tab.id === 'entreprise' ? { ...tab, label: 'Entreprise' } : tab,
       );
@@ -712,27 +697,6 @@ const UpdateOwnerSidebar = ({
       toast.info('Logo vitrine ajouté — cliquez Enregistrer pour sauvegarder');
     } catch (err) {
       toast.error(`Échec upload logo vitrine : ${err?.message || ''}`);
-    } finally {
-      setUploadingImages(false);
-    }
-  };
-
-  /** Logo image PDF P&L uniquement (pmProfile.logoImage — pas la galerie vitrine). */
-  const handlePmPlLogoUpload = async (fileList, setFieldValue) => {
-    const file = fileList?.[0];
-    if (!file) return;
-    setUploadingImages(true);
-    try {
-      const result = await dispatch(uploadImageToAPI({ file, folder: 'other' })).unwrap();
-      const url = normalizePmImageUrl(result?.url || result);
-      if (!url) {
-        toast.error('Échec upload logo (URL manquante)');
-        return;
-      }
-      setFieldValue('pmProfile.logoImage', url);
-      toast.info('Logo P&L ajouté — cliquez Enregistrer pour sauvegarder');
-    } catch (err) {
-      toast.error(`Échec upload logo : ${err?.message || ''}`);
     } finally {
       setUploadingImages(false);
     }
@@ -1523,12 +1487,6 @@ const UpdateOwnerSidebar = ({
           verified: owner?.pmProfile?.verified || false,
           published: owner?.pmProfile?.published || false,
           responseTime: owner?.pmProfile?.responseTime || '',
-          distributionChannels: {
-            sojori: owner?.pmProfile?.distributionChannels?.sojori !== false,
-            directBooking: owner?.pmProfile?.distributionChannels?.directBooking !== false,
-            whatsapp: owner?.pmProfile?.distributionChannels?.whatsapp !== false,
-            marketplace: owner?.pmProfile?.distributionChannels?.marketplace !== false,
-          },
         };
         })(),
       };
@@ -2378,206 +2336,6 @@ const UpdateOwnerSidebar = ({
                   )}
                 />
               ) : null}
-
-              <TabPanel
-                active={activeTab}
-                id="rapports-pl"
-                render={() => (
-                  <>
-                <div className="owner-form-hint" style={{ marginBottom: 12 }}>
-                  <b>Source des en-têtes PDF/HTML</b> — Finances → Rapports P&L utilisent ces infos via « ↻ Profil ».
-                  Logo image ci-dessous (<code>logoImage</code>) — distinct de la galerie vitrine et du badge initiales.
-                </div>
-
-                <div className="owner-pl-preview">
-                  <OwnerPmLogoImage
-                    images={values.pmProfile.logoImage ? [values.pmProfile.logoImage] : []}
-                    className="owner-pl-preview-logo"
-                    emptyLabel={
-                      (values.pmProfile.publicName || `${values.firstName} ${values.lastName}`)
-                        .trim()
-                        .charAt(0)
-                        .toUpperCase() || '?'
-                    }
-                  />
-                  <div className="owner-pl-preview-text">
-                    <div className="owner-pl-preview-name">
-                      {values.pmProfile.publicName ||
-                        `${values.firstName} ${values.lastName}`.trim() ||
-                        'Nom société'}
-                    </div>
-                    {values.pmProfile.tagline ? (
-                      <div className="owner-pl-preview-line">{values.pmProfile.tagline}</div>
-                    ) : null}
-                    {values.email ? <div className="owner-pl-preview-line">{values.email}</div> : null}
-                    {values.phone ? <div className="owner-pl-preview-line">{values.phone}</div> : null}
-                    {[values.address, values.postalCode, values.city, values.country]
-                      .filter(Boolean)
-                      .join(', ') ? (
-                      <div className="owner-pl-preview-line">
-                        {[values.address, values.postalCode, values.city, values.country]
-                          .filter(Boolean)
-                          .join(', ')}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="form-section full" style={{ marginTop: 14 }}>
-                  <div className="form-section-h">Logo image (PDF P&L)</div>
-                  <div className="owner-pl-logo-row">
-                    <OwnerPmLogoImage
-                      images={values.pmProfile.logoImage ? [values.pmProfile.logoImage] : []}
-                      className="owner-pl-logo-thumb"
-                      emptyLabel="Aucun"
-                    />
-                    <label className="btn btn-ghost owner-photo-btn">
-                      {uploadingImages ? 'Envoi…' : '+ Ajouter / remplacer logo'}
-                      <input
-                        hidden
-                        type="file"
-                        accept="image/*"
-                        disabled={uploadingImages}
-                        onChange={(e) => {
-                          handlePmPlLogoUpload(e.target.files, setFieldValue);
-                          e.target.value = '';
-                        }}
-                      />
-                    </label>
-                    {values.pmProfile.logoImage ? (
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => setFieldValue('pmProfile.logoImage', '')}
-                      >
-                        Retirer logo
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="owner-form-hint" style={{ marginTop: 8 }}>
-                    PNG ou JPG · fond transparent recommandé. Sans image, le PDF utilise les initiales (
-                    <code>logoText</code>) ou la 1re lettre du nom.
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14 }}>
-                  <div className="field">
-                    <div className="field-label">Nom société / marque</div>
-                    <input
-                      className="input"
-                      name="pmProfile.publicName"
-                      value={values.pmProfile.publicName}
-                      onChange={handleChange}
-                      placeholder="Raison sociale sur le PDF"
-                    />
-                  </div>
-                  <div className="field">
-                    <div className="field-label">Slogan</div>
-                    <input
-                      className="input"
-                      name="pmProfile.tagline"
-                      value={values.pmProfile.tagline}
-                      onChange={handleChange}
-                      placeholder="Optionnel"
-                    />
-                  </div>
-                  <div className="field">
-                    <div className="field-label">Email</div>
-                    {isCreate ? (
-                      <input
-                        className="input"
-                        name="email"
-                        type="email"
-                        value={values.email}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                      />
-                    ) : (
-                      <>
-                        <input className="input" name="email" value={values.email} readOnly disabled />
-                        <span className="owner-form-hint" style={{ display: 'block', marginTop: 6, padding: '6px 8px' }}>
-                          Modifiable côté compte utilisateur / admin comptes.
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  <div className="field">
-                    <div className="field-label">Téléphone</div>
-                    <input
-                      className="input"
-                      name="phone"
-                      value={values.phone}
-                      onChange={handleChange}
-                      placeholder="+212…"
-                    />
-                  </div>
-                  <div className="field" style={{ gridColumn: '1 / -1' }}>
-                    <div className="field-label">Adresse</div>
-                    <input
-                      className="input"
-                      name="address"
-                      value={values.address}
-                      onChange={handleChange}
-                      placeholder="Rue, numéro"
-                    />
-                  </div>
-                  <div className="field">
-                    <div className="field-label">Code postal</div>
-                    <input
-                      className="input"
-                      name="postalCode"
-                      value={values.postalCode}
-                      onChange={handleChange}
-                    />
-                  </div>
-                  <div className="field">
-                    <div className="field-label">Ville</div>
-                    <input className="input" name="city" value={values.city} onChange={handleChange} />
-                  </div>
-                  <div className="field">
-                    <div className="field-label">Pays</div>
-                    <input className="input" name="country" value={values.country} onChange={handleChange} />
-                  </div>
-                </div>
-                  </>
-                )}
-              />
-
-              <TabPanel
-                active={activeTab}
-                id="canaux-distribution"
-                render={() => (
-                  <>
-                    <div className="owner-form-hint" style={{ marginBottom: 12 }}>
-                      <b>Autorisations canal (niveau PM)</b> — activez les canaux que ce property manager
-                      peut utiliser. La granularité par annonce se configure ensuite dans chaque listing
-                      (onglet <b>Direct booking</b>).
-                    </div>
-                    {PM_DISTRIBUTION_CHANNEL_ROWS.map((row) => {
-                      const dc = values.pmProfile?.distributionChannels || {};
-                      const checked = dc[row.key] !== false;
-                      return (
-                        <div key={row.key} className="admin-row" style={{ marginBottom: 10 }}>
-                          <span style={{ fontSize: 18 }}>{row.icon}</span>
-                          <div style={{ flex: 1 }}>
-                            <div className="nm">{row.title}</div>
-                            <div className="ds">{row.desc}</div>
-                          </div>
-                          <div
-                            className={`toggle${checked ? ' on' : ''}`}
-                            onClick={() => {
-                              setFieldValue(`pmProfile.distributionChannels.${row.key}`, !checked);
-                            }}
-                            onKeyDown={() => {}}
-                            role="switch"
-                            aria-checked={checked}
-                          />
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-              />
 
               <TabPanel
                 active={activeTab}

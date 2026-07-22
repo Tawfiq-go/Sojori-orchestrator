@@ -125,6 +125,7 @@ export const DEFAULT_LANDLORD_DASHBOARD_GRANTS: FeatureGrant[] = [
   { feature: 'reservations', actions: ['get'] },
   { feature: 'finances/ledger', actions: ['get'] },
   { feature: 'finances/reports', actions: ['get'] },
+  { feature: 'finances/branding', actions: ['get'] },
 ];
 
 export const LANDLORD_READ_ALL_GRANTS: FeatureGrant[] = [{ feature: '*', actions: ['get'] }];

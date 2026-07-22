@@ -13,6 +13,16 @@ export function formatShortDate(value?: string | Date | null): string {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
 }
 
+/** Date + heure:minutes (ex. 20/07 14:32). */
+export function formatShortDateTime(value?: string | Date | null): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  const day = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+  const hm = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${day} ${hm}`;
+}
+
 export function formatPeriod(start?: string, end?: string): string {
   if (!start || !end) return '—';
   const s = new Date(start);

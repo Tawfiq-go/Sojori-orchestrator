@@ -1,9 +1,10 @@
-export type RecurringFrequency = 'monthly' | 'weekly' | 'yearly';
+export type RecurringFrequency = 'monthly' | 'weekly' | 'yearly' | 'per_stay';
 
 export const FREQUENCY_OPTIONS: { value: RecurringFrequency; label: string }[] = [
   { value: 'monthly', label: 'Chaque mois' },
   { value: 'weekly', label: 'Chaque semaine' },
   { value: 'yearly', label: 'Chaque année' },
+  { value: 'per_stay', label: 'Par séjour' },
 ];
 
 /** 0 = dimanche … 6 = samedi (convention JS Date). */
@@ -30,6 +31,8 @@ export function describeRecurringSchedule(input: {
       return `Chaque ${WEEKDAY_BY_VALUE[input.dayOfWeek ?? 1] ?? 'semaine'}`;
     case 'yearly':
       return 'Chaque année (même date calendaire)';
+    case 'per_stay':
+      return 'À chaque séjour terminé (checkout)';
     default:
       if (input.lastDayOfMonth) return 'Chaque fin de mois';
       return `Le ${input.dayOfMonth ?? 1} de chaque mois`;

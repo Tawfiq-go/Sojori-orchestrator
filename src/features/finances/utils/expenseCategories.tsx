@@ -4,14 +4,28 @@ import { SearchSelect, type SearchSelectOption } from './financesSearchSelect';
 
 const KIND_LABELS: Record<string, string> = {
   expense: 'Charges & dépenses',
-  service: 'Services',
+  service: 'Services (marge guest)',
   extra: 'Extras locatifs',
 };
 
-export function groupExpenseCategories(categories: ExpenseCategory[]) {
+/** Priorité d’affichage dans Charges (ex. Ménage avant Internet…). */
+const EXPENSE_NAME_PRIORITY = ['ménage', 'ménage checkout', 'internet', 'électricité', 'eau', 'autre'];
+
+function expenseSortKey(name: string): [number, string] {
+  const n = name.trim().toLowerCase();
+  const idx = EXPENSE_NAME_PRIORITY.indexOf(n);
+  return [idx === -1 ? 999 : idx, n];
+}
+
+export function groupExpenseCategories(
+  categories: ExpenseCategory[],
+  kinds?: Array<'expense' | 'extra' | 'service'>,
+) {
+  const allowed = kinds?.length ? new Set(kinds) : null;
   const byKind = new Map<string, ExpenseCategory[]>();
   for (const c of categories) {
-    const kind = c.kind || 'expense';
+    const kind = (c.kind || 'expense') as 'expense' | 'extra' | 'service';
+    if (allowed && !allowed.has(kind)) continue;
     const list = byKind.get(kind) || [];
     list.push(c);
     byKind.set(kind, list);
@@ -22,12 +36,20 @@ export function groupExpenseCategories(categories: ExpenseCategory[]) {
     .map((k) => ({
       kind: k,
       label: KIND_LABELS[k] || k,
-      items: (byKind.get(k) || []).sort((a, b) => a.name.localeCompare(b.name, 'fr')),
+      items: (byKind.get(k) || []).sort((a, b) => {
+        const [pa, sa] = expenseSortKey(a.name);
+        const [pb, sb] = expenseSortKey(b.name);
+        if (pa !== pb) return pa - pb;
+        return sa.localeCompare(sb, 'fr');
+      }),
     }));
 }
 
-export function categoriesToSearchOptions(categories: ExpenseCategory[]): SearchSelectOption[] {
-  const groups = groupExpenseCategories(categories);
+export function categoriesToSearchOptions(
+  categories: ExpenseCategory[],
+  kinds?: Array<'expense' | 'extra' | 'service'>,
+): SearchSelectOption[] {
+  const groups = groupExpenseCategories(categories, kinds);
   const out: SearchSelectOption[] = [];
   for (const g of groups) {
     for (const c of g.items) {
@@ -48,6 +70,9 @@ type CategorySelectProps = {
   required?: boolean;
   placeholder?: string;
   disabled?: boolean;
+  /** Filtre par kind — pour une dépense / récurrence : `['expense']` (exclut « Ménage payant »). */
+  kinds?: Array<'expense' | 'extra' | 'service'>;
+  error?: string;
 };
 
 export function CategorySelect({
@@ -57,10 +82,17 @@ export function CategorySelect({
   required,
   placeholder = 'Choisir une catégorie…',
   disabled,
+  kinds,
+  error,
 }: CategorySelectProps) {
-  const options = useMemo(() => categoriesToSearchOptions(categories), [categories]);
+  const options = useMemo(() => categoriesToSearchOptions(categories, kinds), [categories, kinds]);
+  const filteredCats = useMemo(() => {
+    if (!kinds?.length) return categories;
+    const allow = new Set(kinds);
+    return categories.filter((c) => allow.has((c.kind || 'expense') as 'expense' | 'extra' | 'service'));
+  }, [categories, kinds]);
 
-  if (!categories.length) {
+  if (!filteredCats.length) {
     return (
       <div className="inote warn" style={{ margin: 0 }}>
         <span className="i">⚠️</span>
@@ -75,10 +107,12 @@ export function CategorySelect({
       value={value}
       required={required}
       disabled={disabled}
+      error={error}
+      showCheck
       placeholder={placeholder}
-      searchPlaceholder="Internet, électricité, loyer…"
-      emptyMessage="Aucune catégorie — essayez un autre mot-clé"
-      onChange={(id) => onChange(id, categories.find((c) => c._id === id))}
+      searchPlaceholder="Ménage, internet, électricité…"
+      emptyMessage="Aucune catégorie — essayez « ménage »"
+      onChange={(id) => onChange(id, filteredCats.find((c) => c._id === id))}
     />
   );
 }

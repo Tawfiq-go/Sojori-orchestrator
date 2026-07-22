@@ -11,7 +11,7 @@ import { landlordListingCount } from '../utils/landlordListing';
 
 export function FinancesLandlordsPage() {
   return (
-    <DashboardWrapper breadcrumb={['Finances', 'Propriétaires']}>
+    <DashboardWrapper breadcrumb={['Finances', 'Propriétaires']} hidePageHeader>
       <FinancesModule>
         <FinancesLandlordsPageContent />
       </FinancesModule>
@@ -82,9 +82,8 @@ function FinancesLandlordsPageContent() {
     <>
         <div className="ph">
           <div>
-            <div className="eyebrow">Finances · /finances/landlords</div>
             <h1>Propriétaires</h1>
-            <p className="sub">Les propriétaires de vos biens, leur contrat de gestion et leurs accès en lecture.</p>
+            <p className="sub">Contrats de gestion et accès lecture sur vos biens.</p>
           </div>
           {canWrite && (
             <div className="ph-actions">
@@ -96,7 +95,7 @@ function FinancesLandlordsPageContent() {
         </div>
 
         {needsOwnerPick && (
-          <div className="inote info" style={{ marginBottom: 16 }}>
+          <div className="inote info">
             <span className="i">ℹ️</span>
             Sélectionnez un <b>propriétaire PM</b> dans la barre du haut pour afficher ses propriétaires immobiliers.
           </div>
@@ -104,7 +103,7 @@ function FinancesLandlordsPageContent() {
 
         <div className="kpis">
           <div className="kpi">
-            <div className="k">👤 Propriétaires actifs</div>
+            <div className="k">👤 Actifs</div>
             <div className="v">{kpis.active}</div>
           </div>
           <div className="kpi gold">
@@ -112,7 +111,7 @@ function FinancesLandlordsPageContent() {
             <div className="v">{kpis.percent}</div>
           </div>
           <div className="kpi">
-            <div className="k">🏡 Listings rattachés</div>
+            <div className="k">🏡 Listings</div>
             <div className="v">{kpis.listingsCount}</div>
           </div>
         </div>

@@ -20,12 +20,13 @@ type Props = {
 
 export function RecurringScheduleFields({ value, onChange, showHint = true }: Props) {
   const preview = describeRecurringSchedule(value);
+  const isPerStay = value.frequency === 'per_stay';
 
   return (
     <>
       <div className="fgrp">
         <div className="flabel">Fréquence</div>
-        <div className="seg">
+        <div className="seg" style={{ flexWrap: 'wrap' }}>
           {FREQUENCY_OPTIONS.map((o) => (
             <button
               key={o.value}
@@ -33,7 +34,13 @@ export function RecurringScheduleFields({ value, onChange, showHint = true }: Pr
               className={value.frequency === o.value ? 'on' : ''}
               onClick={() => onChange({ frequency: o.value })}
             >
-              {o.value === 'weekly' ? 'Semaine' : o.value === 'yearly' ? 'Année' : 'Mois'}
+              {o.value === 'weekly'
+                ? 'Semaine'
+                : o.value === 'yearly'
+                  ? 'Année'
+                  : o.value === 'per_stay'
+                    ? 'Par séjour'
+                    : 'Mois'}
             </button>
           ))}
         </div>
@@ -98,9 +105,25 @@ export function RecurringScheduleFields({ value, onChange, showHint = true }: Pr
         <p className="fhint">Même date calendaire chaque année (jour et mois de la première génération).</p>
       )}
 
-      {showHint && (
+      {isPerStay && (
+        <div className="inote info" style={{ marginBottom: 12 }}>
+          <span className="i">ℹ️</span>
+          <b>Par séjour</b> — une ligne journal à chaque réservation <b>Completed</b> (checkout), déjà liée à la
+          résa + listing. Indépendant du ménage orchestration.
+          <br />
+          Catégorie conseillée : <b>Ménage</b> ou <b>Ménage checkout</b> (groupe Charges) — pas « Ménage payant »
+          (service guest avec marge).
+        </div>
+      )}
+
+      {showHint && !isPerStay && (
         <p className="fhint">
           Planification : <strong>{preview}</strong> — une ligne journal par listing à chaque échéance.
+        </p>
+      )}
+      {showHint && isPerStay && (
+        <p className="fhint">
+          Planification : <strong>{preview}</strong> — une ligne par résa terminée sur les listings sélectionnés.
         </p>
       )}
     </>

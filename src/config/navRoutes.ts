@@ -101,6 +101,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'finances/landlords': '/finances/landlords',
   'finances/ledger': '/finances/ledger',
   'finances/reports': '/finances/reports',
+  'finances/branding': '/finances/branding',
   revenue: '/finances/ledger',
   statements: '/finances/reports',
 
