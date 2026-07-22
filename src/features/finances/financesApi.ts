@@ -162,6 +162,29 @@ export async function generateRecurringNow(id: string, scope?: OwnerScope) {
   }
 }
 
+export async function catchUpRecurringTemplate(
+  id: string,
+  opts: { catchUpDates?: string[]; catchUpLastMonths?: number },
+  scope?: OwnerScope,
+) {
+  try {
+    const { data } = await apiClient.post<
+      ApiList<{ created: number; dates: string[]; stays?: number }>
+    >(
+      `${BASE}/expense-recurring/${encodeURIComponent(id)}/catch-up`,
+      {
+        ...(opts.catchUpDates?.length ? { catchUpDates: opts.catchUpDates } : {}),
+        ...(opts.catchUpLastMonths != null ? { catchUpLastMonths: opts.catchUpLastMonths } : {}),
+      },
+      { params: withOwnerParams({}, scope) },
+    );
+    if (!data.success) throw new Error(data.error || data.message || 'Catch-up failed');
+    return data.data;
+  } catch (e) {
+    throwApiError(e, 'Rattrapage impossible');
+  }
+}
+
 export async function listProfitReports(scope?: OwnerScope): Promise<ProfitReport[]> {
   return apiGet(`${BASE}/profit-reports`, withOwnerParams({}, scope));
 }
@@ -191,6 +214,16 @@ export async function publishProfitReport(id: string, scope?: OwnerScope) {
     { params: withOwnerParams({}, scope) },
   );
   if (!data.success) throw new Error(data.error || 'Publish failed');
+  return data.data;
+}
+
+export async function regenerateProfitReport(id: string, scope?: OwnerScope) {
+  const { data } = await apiClient.post<ApiList<ProfitReport>>(
+    `${BASE}/profit-reports/${id}/regenerate`,
+    {},
+    { params: withOwnerParams({}, scope) },
+  );
+  if (!data.success) throw new Error(data.error || 'Regenerate failed');
   return data.data;
 }
 

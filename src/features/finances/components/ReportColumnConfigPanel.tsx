@@ -17,6 +17,40 @@ function toggleKey(keys: string[], key: string, catalog: ProfitReportColumnDef[]
   return sortColumnKeys(next, catalog);
 }
 
+function ColumnChip({
+  col,
+  active,
+  disabled,
+  onToggle,
+}: {
+  col: ProfitReportColumnDef;
+  active: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`chip chip-with-hint ${active ? 'on' : ''}`}
+      disabled={disabled}
+      onClick={onToggle}
+      title={col.hint}
+    >
+      <span className="chip-label">{col.label}</span>
+      <span
+        className="chip-i"
+        title={col.hint}
+        aria-label={col.hint}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        role="note"
+      >
+        i
+      </span>
+    </button>
+  );
+}
+
 export function ReportColumnConfigPanel({ value, disabled, onChange }: Props) {
   return (
     <div className="report-col-config">
@@ -24,20 +58,18 @@ export function ReportColumnConfigPanel({ value, disabled, onChange }: Props) {
         <div className="flabel">Colonnes réservations</div>
         <div className="chips">
           {PROFIT_REPORT_RESERVATION_COLUMNS.map((col) => (
-            <button
+            <ColumnChip
               key={col.key}
-              type="button"
-              className={`chip ${value.reservations.includes(col.key) ? 'on' : ''}`}
+              col={col}
+              active={value.reservations.includes(col.key)}
               disabled={disabled}
-              onClick={() =>
+              onToggle={() =>
                 onChange({
                   ...value,
                   reservations: toggleKey(value.reservations, col.key, PROFIT_REPORT_RESERVATION_COLUMNS),
                 })
               }
-            >
-              {col.label}
-            </button>
+            />
           ))}
         </div>
       </div>
@@ -45,25 +77,24 @@ export function ReportColumnConfigPanel({ value, disabled, onChange }: Props) {
         <div className="flabel">Colonnes dépenses &amp; extras</div>
         <div className="chips">
           {PROFIT_REPORT_LEDGER_COLUMNS.map((col) => (
-            <button
+            <ColumnChip
               key={col.key}
-              type="button"
-              className={`chip ${value.ledger.includes(col.key) ? 'on' : ''}`}
+              col={col}
+              active={value.ledger.includes(col.key)}
               disabled={disabled}
-              onClick={() =>
+              onToggle={() =>
                 onChange({
                   ...value,
                   ledger: toggleKey(value.ledger, col.key, PROFIT_REPORT_LEDGER_COLUMNS),
                 })
               }
-            >
-              {col.label}
-            </button>
+            />
           ))}
         </div>
       </div>
       <p className="sub" style={{ margin: '10px 0 0', fontSize: 11 }}>
-        La configuration est enregistrée dans le rapport (snapshot) — elle reste figée à la publication.
+        Survole le <b>i</b> pour l’explication. La config est enregistrée dans le rapport (snapshot) — figée à la
+        publication. « Réinitialiser » = détail compact (~14 colonnes).
       </p>
     </div>
   );

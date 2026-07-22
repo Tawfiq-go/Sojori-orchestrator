@@ -211,6 +211,9 @@ export function useDashboardChrome() {
     if (path.startsWith('/finances/ledger')) {
       return 'finances/ledger';
     }
+    if (path.startsWith('/finances/branding')) {
+      return 'finances/branding';
+    }
     if (path.startsWith('/finances/reports')) {
       return 'finances/reports';
     }
@@ -297,6 +300,10 @@ export function useDashboardChrome() {
         role: user.role,
         email: user.email ?? '',
         avatar: user.avatar,
+        // Requis pour sidebar Landlord/Worker (navGroupsForRole filtre sur grants).
+        featureGrants: (user as { featureGrants?: unknown[] }).featureGrants,
+        ownerAccess: !!(user as { ownerAccess?: boolean }).ownerAccess,
+        ownerId: (user as { ownerId?: string }).ownerId,
       };
     })();
   return {

@@ -16,6 +16,10 @@ type SearchSelectProps = {
   emptyMessage?: string;
   required?: boolean;
   disabled?: boolean;
+  /** Affiche bordure rouge + message sous le champ */
+  error?: string;
+  /** Case à cocher visuelle à gauche (catégorie, etc.) */
+  showCheck?: boolean;
 };
 
 export function SearchSelect({
@@ -27,12 +31,15 @@ export function SearchSelect({
   emptyMessage = 'Aucun résultat',
   required,
   disabled,
+  error,
+  showCheck = false,
 }: SearchSelectProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
   const selected = options.find((o) => o.value === value);
+  const hasValue = Boolean(selected);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -74,17 +81,39 @@ export function SearchSelect({
     <div className={`fin-search ${open ? 'open' : ''}`} ref={rootRef}>
       <button
         type="button"
-        className={`fin fin-search-trigger ${!selected ? 'placeholder' : ''}`}
+        className={[
+          'fin',
+          'fin-search-trigger',
+          !hasValue ? 'placeholder' : 'has-value',
+          open ? 'open-trigger' : '',
+          error ? 'is-invalid' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         disabled={disabled}
         onClick={() => !disabled && setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-invalid={Boolean(error)}
       >
-        <span>{selected?.label || placeholder}</span>
+        {showCheck ? (
+          <span className="fin-search-check" aria-hidden>
+            {hasValue ? '✓' : ''}
+          </span>
+        ) : null}
+        <span className="fin-search-label">{selected?.label || placeholder}</span>
         <span className="fin-search-caret">▾</span>
       </button>
+      {error ? <p className="fin-search-error">{error}</p> : null}
       {required && !value && (
-        <input tabIndex={-1} required value="" onChange={() => {}} style={{ opacity: 0, height: 0, position: 'absolute' }} />
+        <input
+          tabIndex={-1}
+          required
+          value=""
+          onChange={() => {}}
+          aria-hidden
+          style={{ opacity: 0, height: 0, position: 'absolute', pointerEvents: 'none' }}
+        />
       )}
       {open && (
         <div className="fin-search-panel">
@@ -113,8 +142,15 @@ export function SearchSelect({
                       className={`fin-search-opt ${opt.value === value ? 'on' : ''}`}
                       onClick={() => pick(opt)}
                     >
-                      <span>{opt.label}</span>
-                      {opt.hint ? <span className="fin-search-hint">{opt.hint}</span> : null}
+                      {showCheck ? (
+                        <span className="fin-search-check" aria-hidden>
+                          {opt.value === value ? '✓' : ''}
+                        </span>
+                      ) : null}
+                      <span className="fin-search-opt-body">
+                        <span>{opt.label}</span>
+                        {opt.hint ? <span className="fin-search-hint">{opt.hint}</span> : null}
+                      </span>
                     </button>
                   ))}
                 </div>

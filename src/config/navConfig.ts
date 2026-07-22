@@ -1,5 +1,6 @@
 import { Roles } from '../constants/roles';
 import {
+  DEFAULT_LANDLORD_DASHBOARD_GRANTS,
   grantAllows,
   isWorkerAdminAccess,
   type FeatureGrant,
@@ -213,6 +214,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         label: 'Rapports P&L',
         iconType: 'document',
         iconColor: '#93C47D',
+      },
+      {
+        id: 'finances/branding',
+        label: 'En-tête & logo P&L',
+        iconType: 'document',
+        iconColor: '#B8851A',
+        roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
       },
     ],
   },
@@ -447,7 +455,13 @@ export function navGroupsForRole(
         )
         .filter((item) => !item.sub || item.sub.length > 0);
 
-    return navGroupsForWorker(workerGrants ?? [], false)
+    // Grants manquants (chrome/layout) → défaut création : dashboard + résas + finances lecture.
+    const grants =
+      Array.isArray(workerGrants) && workerGrants.length > 0
+        ? workerGrants
+        : [...DEFAULT_LANDLORD_DASHBOARD_GRANTS];
+
+    return navGroupsForWorker(grants, false)
       .map((g) => ({ ...g, items: stripPmOnly(g.items) }))
       .filter((g) => g.items.length > 0);
   }

@@ -66,11 +66,12 @@ export async function printProfitReportHtml(html: string): Promise<void> {
   window.setTimeout(() => {
     try {
       win.focus();
+      // A4 portrait — éviter « Ajuster à la page » / paysage côté navigateur
       win.print();
     } catch {
       cleanup();
       throw new Error('Impression refusée par le navigateur');
     }
     window.setTimeout(cleanup, 120_000);
-  }, 350);
+  }, 450);
 }

@@ -12,6 +12,7 @@ import {
   patchProfitReportColumnConfig,
   patchProfitReportHeader,
   publishProfitReport,
+  regenerateProfitReport,
 } from '../financesApi';
 import { getOneListing } from '../../listing/services/serverApi.listing';
 import { ReportColumnConfigPanel } from '../components/ReportColumnConfigPanel';
@@ -50,8 +51,10 @@ export function FinancesReportDetailPage() {
   const [report, setReport] = useState<ProfitReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [savingCols, setSavingCols] = useState(false);
   const [savingHeader, setSavingHeader] = useState(false);
+  const [savingBrand, setSavingBrand] = useState(false);
   const [loadingHeaderDefault, setLoadingHeaderDefault] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [columnDraft, setColumnDraft] = useState(normalizeColumnConfig());
@@ -95,6 +98,22 @@ export function FinancesReportDetailPage() {
     }
   };
 
+  const onRegenerate = async () => {
+    if (!id || regenerating) return;
+    setRegenerating(true);
+    try {
+      const updated = await regenerateProfitReport(id, { ownerId });
+      setReport(updated);
+      setColumnDraft(normalizeColumnConfig(updated?.snapshot?.columnConfig));
+      setHeaderDraft(normalizeProfitReportHeader(updated?.snapshot?.header));
+      toast.success('Rapport régénéré');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Régénération impossible');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   const onSaveColumns = async () => {
     if (!id) return;
     setSavingCols(true);
@@ -115,30 +134,57 @@ export function FinancesReportDetailPage() {
     try {
       const defaults = await fetchDefaultPmReportHeader({ ownerId });
       if (!defaults) {
-        toast.warn('Profil PM introuvable — complétez la fiche propriétaire');
+        toast.warn('Marque PDF introuvable — configurez Finances → Marque PDF');
         return;
       }
       setHeaderDraft(normalizeProfitReportHeader(defaults));
-      toast.info('En-tête chargé depuis le profil PM');
+      toast.info('Marque PDF rechargée (pas encore enregistrée sur ce rapport)');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Chargement profil PM impossible');
+      toast.error(e instanceof Error ? e.message : 'Chargement marque impossible');
     } finally {
       setLoadingHeaderDefault(false);
     }
   };
 
-  const onSaveHeader = async () => {
+  const onSaveHeaderReport = async () => {
     if (!id) return;
     setSavingHeader(true);
     try {
       const updated = await patchProfitReportHeader(id, headerDraft, { ownerId });
       setReport(updated);
       setHeaderDraft(normalizeProfitReportHeader(updated?.snapshot?.header));
-      toast.success('En-tête enregistré');
+      toast.success('En-tête enregistré pour ce rapport');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Enregistrement en-tête impossible');
     } finally {
       setSavingHeader(false);
+    }
+  };
+
+  const onSaveHeaderBrand = async () => {
+    if (!id || !ownerId) return;
+    setSavingBrand(true);
+    try {
+      const company = (headerDraft.companyName || headerDraft.publicName || '').trim();
+      const { updateOwner } = await import('../../staff/services/serverApi.task');
+      await updateOwner(ownerId, {
+        phone: headerDraft.phone || '',
+        address: headerDraft.address || '',
+        pmProfile: {
+          publicName: company,
+          tagline: headerDraft.tagline || '',
+          logoImage: headerDraft.logoUrl || '',
+          logoText: headerDraft.logoText || company.charAt(0).toUpperCase() || '',
+        },
+      });
+      const updated = await patchProfitReportHeader(id, headerDraft, { ownerId });
+      setReport(updated);
+      setHeaderDraft(normalizeProfitReportHeader(updated?.snapshot?.header));
+      toast.success('Marque PM mise à jour + en-tête de ce rapport');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Mise à jour marque impossible');
+    } finally {
+      setSavingBrand(false);
     }
   };
 
@@ -237,14 +283,35 @@ export function FinancesReportDetailPage() {
         reservationOverlay[String(row.reservationId || '')] ||
         reservationOverlay[`num:${String(row.reservationNumber || '')}`];
       if (!fresh) return row;
+      const pick = (key: string) =>
+        fresh[key] !== undefined && fresh[key] !== null ? fresh[key] : row[key];
       return {
         ...row,
-        adults: row.adults ?? fresh.adults,
-        children: row.children ?? fresh.children,
-        numberOfGuests: row.numberOfGuests ?? fresh.numberOfGuests,
-        alreadyPaid: row.alreadyPaid ?? fresh.alreadyPaid,
-        paymentStatus: row.paymentStatus ?? fresh.paymentStatus,
+        adults: pick('adults'),
+        children: pick('children'),
+        numberOfGuests: pick('numberOfGuests'),
+        alreadyPaid: pick('alreadyPaid'),
+        balanceDue: pick('balanceDue'),
+        paymentStatus: pick('paymentStatus'),
+        paymentStatusRaw: pick('paymentStatusRaw'),
+        accommodationAmount: pick('accommodationAmount'),
+        channelTotal: pick('channelTotal'),
+        cleaningFee: pick('cleaningFee'),
+        cleaningFeeOnSite: pick('cleaningFeeOnSite'),
+        cityTax: pick('cityTax'),
+        cityTaxOnSite: pick('cityTaxOnSite'),
+        otherTaxes: pick('otherTaxes'),
+        taxesTotal: pick('taxesTotal'),
+        otherFees: pick('otherFees'),
+        feesTotal: pick('feesTotal'),
+        paidAtArrival: pick('paidAtArrival'),
+        otaCommissionPercent: pick('otaCommissionPercent'),
+        grossRevenue: pick('grossRevenue'),
+        otaCommission: pick('otaCommission'),
+        netRevenue: pick('netRevenue'),
+        channelName: row.channelName || fresh.channelName || '',
         listingName: row.listingName || fresh.listingName || '',
+        ledgerExtras: row.ledgerExtras ?? fresh.ledgerExtras ?? 0,
       };
     });
   }, [snapshotReservations, reservationOverlay]);
@@ -294,14 +361,57 @@ export function FinancesReportDetailPage() {
       if (n == null || n === '') return '—';
       return String(n);
     }
-    if (key === 'alreadyPaid') {
-      const n = row.alreadyPaid;
+    if (key === 'paymentStatus') {
+      const s = String(row.paymentStatus || row.paymentStatusRaw || '').trim();
+      if (!s) return '—';
+      const paid = /^(payé|paid)$/i.test(s);
+      const unpaid = /unpaid|non\s*payé/i.test(s);
+      const cls = paid ? 'pay-ok' : unpaid ? 'pay-ko' : 'pay-other';
+      return (
+        <span
+          className={`pay-dot ${cls}`}
+          title={paid ? 'Payé' : unpaid ? 'Non payé' : s}
+          aria-label={paid ? 'Payé' : unpaid ? 'Non payé' : s}
+        />
+      );
+    }
+    if (key === 'otaCommission') {
+      const money = formatProfitReportCell('money', row.otaCommission, currency);
+      const pct = row.otaCommissionPercent;
+      if (pct == null || pct === '' || !Number.isFinite(Number(pct))) return money;
+      return (
+        <span className="ota-comm-cell">
+          {money}
+          <span className="ota-pct">{Number(pct).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} %</span>
+        </span>
+      );
+    }
+    if (key === 'cleaningFee' || key === 'cityTax' || key === 'paidAtArrival') {
+      const n = row[key];
+      if (n == null || n === '' || Number(n) === 0) {
+        return <span className="amt-muted">—</span>;
+      }
+      const money = formatProfitReportCell('money', n, currency);
+      let onSite = false;
+      if (key === 'cleaningFee') onSite = !!row.cleaningFeeOnSite;
+      else if (key === 'cityTax') onSite = !!row.cityTaxOnSite;
+      else onSite = Number(n) > 0; // Sur place = toujours à collecter
+      return (
+        <span
+          className={onSite ? 'amt-onsite' : 'amt-ota-paid'}
+          title={onSite ? 'À collecter sur place' : 'Payé via OTA (inclus canal)'}
+        >
+          {money}
+        </span>
+      );
+    }
+    if (type === 'percent') {
+      return formatProfitReportCell('percent', row[key], currency);
+    }
+    if (type === 'money') {
+      const n = row[key];
       if (n == null || n === '') return '—';
       return formatProfitReportCell('money', n, currency);
-    }
-    if (key === 'paymentStatus') {
-      const s = String(row.paymentStatus || '').trim();
-      return s || '—';
     }
     return formatProfitReportCell(type, row[key], currency);
   };
@@ -411,7 +521,7 @@ export function FinancesReportDetailPage() {
 
   if (loading) {
     return (
-      <DashboardWrapper breadcrumb={['Finances', 'Rapports P&L', '…']}>
+      <DashboardWrapper breadcrumb={['Finances', 'Rapports P&L', '…']} hidePageHeader>
         <FinancesModule>
           <div className="empty">
             <div className="spinner" />
@@ -423,7 +533,7 @@ export function FinancesReportDetailPage() {
 
   if (!report) {
     return (
-      <DashboardWrapper breadcrumb={['Finances', 'Rapports P&L']}>
+      <DashboardWrapper breadcrumb={['Finances', 'Rapports P&L']} hidePageHeader>
         <FinancesModule>
           <div className="empty">
             <div className="t">Rapport introuvable</div>
@@ -469,25 +579,39 @@ export function FinancesReportDetailPage() {
   };
 
   return (
-    <DashboardWrapper breadcrumb={['Finances', 'Rapports P&L', report.name]}>
+    <DashboardWrapper breadcrumb={['Finances', 'Rapports P&L', report.name]} hidePageHeader>
       <FinancesModule>
-        <button type="button" className="btn btn-ghost" style={{ marginBottom: 16 }} onClick={() => navigate('/finances/reports')}>
-          ← Retour aux rapports
-        </button>
-
-        <div className="ph" style={{ alignItems: 'center' }}>
+        <div className="ph report-detail-toolbar">
           <div>
-            <div className="eyebrow">Finances · /finances/reports/{report._id}</div>
             <h1>{report.name}</h1>
             <p className="sub">
               {formatPeriod(report.periodStart, report.periodEnd)} · {report.listingIds?.length ?? 0} listing(s) · {currency}
             </p>
           </div>
           <div className="ph-actions">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => navigate('/finances/reports')}
+              title="Retour à la liste des rapports"
+            >
+              ✕ Fermer
+            </button>
             <span className={`bdg ${isDraft ? 'gold' : 'green'} lg`} style={{ marginRight: 4 }}>
               <span className="dot" />
               {isDraft ? 'Brouillon' : 'Publié'}
             </span>
+            {canWrite && (
+              <button
+                type="button"
+                className="btn btn-ghost pm-only"
+                disabled={regenerating}
+                onClick={() => void onRegenerate()}
+                title="Recalcule réservations, dépenses et totaux (conserve colonnes et en-tête)"
+              >
+                {regenerating ? '…' : '↻ Régénérer'}
+              </button>
+            )}
             {canWrite && isDraft && (
               <>
                 <button type="button" className="btn btn-ghost pm-only" onClick={() => setConfigOpen((o) => !o)}>
@@ -522,8 +646,8 @@ export function FinancesReportDetailPage() {
           <div className="inote gold" style={{ marginBottom: 12 }}>
             <span className="i">📝</span>
             <div>
-              <b>Brouillon</b> — en-tête PDF repliable ci-dessous, colonnes via ⚙. <b>Publier</b> fige tout ; pas
-              d&apos;envoi email auto.
+              <b>Brouillon</b> — en-tête PDF : <b>Ce rapport</b> (override) ou <b>Marque PM</b> (défaut). Colonnes via
+              ⚙. <b>Publier</b> fige le snapshot (en-tête inclus) ; pas d&apos;envoi email auto.
             </div>
           </div>
         )}
@@ -534,9 +658,11 @@ export function FinancesReportDetailPage() {
               value={headerDraft}
               onChange={setHeaderDraft}
               onLoadDefault={() => void onLoadHeaderDefault()}
-              onSave={() => void onSaveHeader()}
+              onSaveReport={() => void onSaveHeaderReport()}
+              onSaveBrand={() => void onSaveHeaderBrand()}
               loadingDefault={loadingHeaderDefault}
               saving={savingHeader}
+              savingBrand={savingBrand}
             />
           ) : (
             <ReportHeaderSection value={normalizeProfitReportHeader(report.snapshot?.header)} disabled onChange={() => {}} />

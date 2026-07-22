@@ -140,6 +140,7 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   if (path.startsWith('/chatbot/whitelist') || path.startsWith('/chatbot')) return 'chatbot/whitelist';
   if (path.startsWith('/finances/landlords')) return 'finances/landlords';
   if (path.startsWith('/finances/ledger')) return 'finances/ledger';
+  if (path.startsWith('/finances/branding')) return 'finances/branding';
   if (path.startsWith('/finances/reports')) return 'finances/reports';
   if (
     path.startsWith('/orchestration/ops') ||

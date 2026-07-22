@@ -3,23 +3,22 @@ import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../../../components/DashboardWrapper';
 import { FinancesModule, useFinancesAccess } from '../FinancesModule';
 import {
-  createLedgerBundle,
   createLedgerEntry,
   createRecurringTemplate,
   deleteLedgerEntry,
-  generateRecurringNow,
   listExpenseCategories,
   listLedgerEntries,
   listRecurringTemplates,
   patchLedgerEntry,
   runDueRecurringTemplates,
+  catchUpRecurringTemplate,
 } from '../financesApi';
 import { useFinancesOwnerScope } from '../useFinancesOwnerScope';
 import { getListings, getOneListing } from '../../listing/services/serverApi.listing';
 import type { ExpenseCategory, LandlordAccount, LedgerEntry, RecurringTemplate } from '../types';
-import { formatMoney, formatShortDate, ledgerSourceBadge, paidByLabel } from '../utils/format';
+import { formatShortDateTime, ledgerSourceBadge, paidByLabel } from '../utils/format';
 import { listLandlords } from '../landlordApi';
-import { CategorySelect, categoryNameById } from '../utils/expenseCategories.tsx';
+import { CategorySelect } from '../utils/expenseCategories.tsx';
 import { SearchSelect } from '../utils/financesSearchSelect.tsx';
 import {
   RecurringAssociationFields,
@@ -32,10 +31,13 @@ import {
   type RecurringScheduleValue,
 } from '../components/RecurringScheduleFields';
 import {
+  proposeCatchUpOptions,
+  RecurringCatchUpFields,
+} from '../components/RecurringCatchUpFields';
+import {
   describeRecurringSchedule,
-  formatNextRunAt,
 } from '../utils/recurringSchedule.tsx';
-import { buildRecurringScopeBody, describeRecurringScope } from '../utils/recurringScope.tsx';
+import { buildRecurringScopeBody } from '../utils/recurringScope.tsx';
 import { LedgerAttachmentUpload } from '../components/LedgerAttachmentUpload';
 import { ReservationSearchSelect } from '../components/ReservationSearchSelect';
 import {
@@ -47,7 +49,7 @@ type ListingRow = { _id?: string; id?: string; name?: string; title?: string };
 
 export function FinancesLedgerPage() {
   return (
-    <DashboardWrapper breadcrumb={['Finances', 'Dépenses & extras']}>
+    <DashboardWrapper breadcrumb={['Finances', 'Dépenses & extras']} hidePageHeader>
       <FinancesModule>
         <FinancesLedgerPageContent />
       </FinancesModule>
@@ -72,12 +74,10 @@ function FinancesLedgerPageContent() {
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'whatsapp' | 'manual' | 'recurring'>('all');
   const [runDueLoading, setRunDueLoading] = useState(false);
-  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [catchUpStayLoading, setCatchUpStayLoading] = useState(false);
 
   const [expenseOpen, setExpenseOpen] = useState(false);
-  const [bundleOpen, setBundleOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
-  const [recurringPanelOpen, setRecurringPanelOpen] = useState(false);
   const [attachEntry, setAttachEntry] = useState<LedgerEntry | null>(null);
   const [editEntry, setEditEntry] = useState<LedgerEntry | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -171,11 +171,12 @@ function FinancesLedgerPageContent() {
     setLoading(true);
     const scope = { ownerId };
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    // Fenêtre large pour voir le rattrapage des récurrences (6 mois + mois courant)
+    const start = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString().slice(0, 10);
     const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
 
     const [entriesRes, catsRes, recRes, landlordsRes] = await Promise.allSettled([
-      listLedgerEntries({ startDate: start, endDate: end, limit: 200 }, scope),
+      listLedgerEntries({ startDate: start, endDate: end, limit: 500 }, scope),
       listExpenseCategories(scope),
       listRecurringTemplates(scope),
       canWrite ? listLandlords('', ownerId) : Promise.resolve([]),
@@ -261,10 +262,6 @@ function FinancesLedgerPageContent() {
     setExpenseOpen(true);
   };
 
-  const openBundle = () => {
-    ensureDrawerData();
-    setBundleOpen(true);
-  };
   const openRecurring = () => {
     ensureDrawerData();
     setRecurringOpen(true);
@@ -318,6 +315,11 @@ function FinancesLedgerPageContent() {
     [recurring],
   );
 
+  const perStayTemplates = useMemo(
+    () => activeRecurring.filter((r) => r.frequency === 'per_stay'),
+    [activeRecurring],
+  );
+
   const handleRunDue = async () => {
     if (needsOwnerPick) {
       toast.warn('Sélectionnez un propriétaire PM dans la barre du haut');
@@ -340,18 +342,39 @@ function FinancesLedgerPageContent() {
     }
   };
 
-  const handleGenerateNow = async (id: string) => {
-    if (needsOwnerPick || generatingId) return;
-    setGeneratingId(id);
+  /** Rattrapage des règles « par séjour » via les mêmes résas que le P&L (3 mois). */
+  const handleCatchUpPerStay = async () => {
+    if (needsOwnerPick) {
+      toast.warn('Sélectionnez un propriétaire PM dans la barre du haut');
+      return;
+    }
+    if (!perStayTemplates.length) {
+      toast.warn('Aucune règle « par séjour » active');
+      return;
+    }
+    setCatchUpStayLoading(true);
     try {
-      const out = await generateRecurringNow(id, { ownerId });
-      const created = out?.created ?? 0;
-      toast.success(created > 0 ? 'Ligne générée dans le journal' : 'Rien à générer');
+      let created = 0;
+      let stays = 0;
+      for (const tpl of perStayTemplates) {
+        const id = String(tpl._id || '');
+        if (!id) continue;
+        const out = await catchUpRecurringTemplate(id, { catchUpLastMonths: 3 }, { ownerId });
+        created += out?.created ?? 0;
+        stays += out?.stays ?? 0;
+      }
+      toast.success(
+        created > 0
+          ? `Rattrapage : ${created} ligne${created > 1 ? 's' : ''} créée${created > 1 ? 's' : ''} (${stays} séjour${stays > 1 ? 's' : ''} scannés)`
+          : stays > 0
+            ? `Aucune nouvelle ligne (${stays} séjour${stays > 1 ? 's' : ''} déjà couverts ou hors listings)`
+            : 'Aucun séjour trouvé sur 3 mois pour ces listings',
+      );
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur');
     } finally {
-      setGeneratingId(null);
+      setCatchUpStayLoading(false);
     }
   };
 
@@ -359,17 +382,13 @@ function FinancesLedgerPageContent() {
     <>
         <div className="ph">
           <div>
-            <div className="eyebrow">Finances · /finances/ledger</div>
             <h1>Dépenses &amp; extras</h1>
-            <p className="sub">Toutes les dépenses et recettes additionnelles, par listing et par réservation.</p>
+            <p className="sub">Par listing et par réservation.</p>
           </div>
           {canWrite && (
             <div className="ph-actions">
               <button type="button" className="btn btn-ghost pm-only" onClick={openRecurring}>
                 🔁 Récurrences
-              </button>
-              <button type="button" className="btn btn-ghost pm-only" onClick={openBundle}>
-                ✨ Service avec marge
               </button>
               <button type="button" className="btn btn-prim pm-only" onClick={openExpense}>
                 + Dépense / Extra
@@ -379,7 +398,7 @@ function FinancesLedgerPageContent() {
         </div>
 
         {needsOwnerPick && (
-          <div className="inote info" style={{ marginBottom: 16 }}>
+          <div className="inote info">
             <span className="i">ℹ️</span>
             Sélectionnez un <b>propriétaire PM</b> dans la barre du haut pour charger le journal des dépenses.
           </div>
@@ -445,86 +464,37 @@ function FinancesLedgerPageContent() {
         </div>
 
         {!loading && activeRecurring.length > 0 && (
-          <div className={`card recurring-panel${recurringPanelOpen ? ' is-open' : ''}`} style={{ marginBottom: 12 }}>
-            <div className="card-h recurring-panel-h">
-              <button
-                type="button"
-                className="recurring-panel-toggle"
-                aria-expanded={recurringPanelOpen}
-                onClick={() => setRecurringPanelOpen((o) => !o)}
-              >
-                <span className="recurring-chevron" aria-hidden>
-                  {recurringPanelOpen ? '▼' : '▶'}
-                </span>
-                <span className="ct">🔁 Dépenses récurrentes</span>
-                <span className="bdg gray">{activeRecurring.length}</span>
-                {!recurringPanelOpen ? (
-                  <span className="sub recurring-panel-summary">
-                    {activeRecurring
-                      .slice(0, 3)
-                      .map((r) => r.name)
-                      .join(' · ')}
-                    {activeRecurring.length > 3 ? ` · +${activeRecurring.length - 3}` : ''}
-                  </span>
-                ) : null}
-              </button>
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div className="card-h" style={{ alignItems: 'center' }}>
+              <span className="ct">🔁 Dépenses récurrentes</span>
+              <span className="bdg gray">
+                {activeRecurring.length} active{activeRecurring.length > 1 ? 's' : ''}
+              </span>
+              <div style={{ flex: 1 }} />
               {canWrite ? (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  disabled={runDueLoading || needsOwnerPick}
-                  onClick={() => void handleRunDue()}
-                >
-                  {runDueLoading ? '…' : 'Générer dues'}
-                </button>
+                <>
+                  {perStayTemplates.length > 0 ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={catchUpStayLoading || needsOwnerPick}
+                      onClick={() => void handleCatchUpPerStay()}
+                      title="Crée les lignes manquantes pour les checkouts des 3 derniers mois (même source que le P&L)"
+                    >
+                      {catchUpStayLoading ? '…' : 'Rattraper séjours (3 mois)'}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={runDueLoading || needsOwnerPick}
+                    onClick={() => void handleRunDue()}
+                  >
+                    {runDueLoading ? '…' : 'Générer dues'}
+                  </button>
+                </>
               ) : null}
             </div>
-            {recurringPanelOpen ? (
-              <div className="recurring-panel-body">
-                <p className="sub recurring-panel-hint">
-                  Les modèles n&apos;apparaissent dans le journal qu&apos;après génération (cron ou bouton ci-dessus).
-                </p>
-                <ul className="recurring-compact-list">
-                  {activeRecurring.map((r) => {
-                    const scope = describeRecurringScope({
-                      scopeType: r.scopeType,
-                      listingIds: r.listingIds,
-                      landlordId: r.landlordId,
-                      landlords,
-                    });
-                    const schedule = describeRecurringSchedule(r);
-                    const next = r.nextRunAt ? formatNextRunAt(r.nextRunAt) : '';
-                    return (
-                      <li key={r._id} className="recurring-compact-row">
-                        <span className="recurring-compact-name" title={r.name}>
-                          {r.name}
-                        </span>
-                        <span
-                          className="recurring-compact-meta"
-                          title={`${categoryNameById(categories, r.categoryId)} · ${scope} · ${schedule}${next ? ` · ${next}` : ''}`}
-                        >
-                          {categoryNameById(categories, r.categoryId)} · {scope} · {schedule}
-                          {next ? ` · proch. ${next}` : ''}
-                        </span>
-                        <span className="amt neg recurring-compact-amt">
-                          −{Number(r.amount).toLocaleString('fr-FR')}
-                        </span>
-                        {canWrite ? (
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            disabled={!!generatingId || needsOwnerPick}
-                            onClick={() => void handleGenerateNow(r._id)}
-                          >
-                            {generatingId === r._id ? '…' : 'Générer'}
-                          </button>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
           </div>
         )}
 
@@ -537,7 +507,7 @@ function FinancesLedgerPageContent() {
             <table className="ledger-table">
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th>Créé le</th>
                   <th>Réf.</th>
                   <th>Libellé</th>
                   <th>Type</th>
@@ -569,7 +539,9 @@ function FinancesLedgerPageContent() {
                 ) : (
                   filtered.map((row) => (
                     <tr key={row._id}>
-                      <td className="mono">{formatShortDate(row.date)}</td>
+                      <td className="mono" title={row.createdAt || row.date}>
+                        {formatShortDateTime(row.createdAt || row.date)}
+                      </td>
                       <td className="mono ledger-truncate" title={row.entryCode || row._id}>
                         {row.entryCode ? (
                           <span className="bdg info">{row.entryCode}</span>
@@ -678,19 +650,6 @@ function FinancesLedgerPageContent() {
             }}
           />
         )}
-        {bundleOpen && (
-          <BundleDrawer
-            listings={listings}
-            categories={categories}
-            ownerId={ownerId}
-            needsOwnerPick={needsOwnerPick}
-            onClose={() => setBundleOpen(false)}
-            onSaved={() => {
-              setBundleOpen(false);
-              void load();
-            }}
-          />
-        )}
         {recurringOpen && (
           <RecurringDrawer
             categories={categories}
@@ -771,6 +730,7 @@ function ExpenseDrawer({
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [categoryId, setCategoryId] = useState('');
+  const [categoryError, setCategoryError] = useState('');
   const [paidBy, setPaidBy] = useState<'pm' | 'landlord' | 'guest'>('pm');
   const [listingId, setListingId] = useState('');
   const [reservationId, setReservationId] = useState('');
@@ -786,6 +746,12 @@ function ExpenseDrawer({
     lastDayOfMonth: false,
     dayOfWeek: 1,
   });
+  const catchUpDefaults = useMemo(() => proposeCatchUpOptions(schedule, 6).map((o) => o.isoDate), [schedule]);
+  const [catchUpDates, setCatchUpDates] = useState<string[]>(catchUpDefaults);
+  const [perStayMonths, setPerStayMonths] = useState(6);
+  useEffect(() => {
+    setCatchUpDates(catchUpDefaults);
+  }, [catchUpDefaults]);
   const [invoiceUrls, setInvoiceUrls] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -809,6 +775,9 @@ function ExpenseDrawer({
 
   const patchSchedule = (patch: Partial<RecurringScheduleValue>) => {
     setSchedule((prev) => ({ ...prev, ...patch }));
+    if (patch.frequency === 'per_stay') {
+      setAssociation((prev) => ({ ...prev, scopeType: 'listing' }));
+    }
   };
 
   const onSubmit = async (e: FormEvent) => {
@@ -831,11 +800,13 @@ function ExpenseDrawer({
       return;
     }
     if (entryMode === 'once' && !categoryId) {
-      toast.warn('Sélectionnez une catégorie (ex. « Autre » si aucune ne convient)');
+      setCategoryError('Sélectionnez une catégorie (ex. Ménage ou Autre)');
+      toast.warn('Sélectionnez une catégorie');
       return;
     }
     if (entryMode === 'recurring') {
       if (!categoryId) {
+        setCategoryError('Sélectionnez une catégorie — champ obligatoire');
         toast.warn('Sélectionnez une catégorie');
         return;
       }
@@ -845,12 +816,14 @@ function ExpenseDrawer({
         return;
       }
     }
+    setCategoryError('');
     setSaving(true);
     try {
       const cat = categories.find((c) => c._id === categoryId);
       const scope = { ownerId };
       if (entryMode === 'recurring') {
-        await createRecurringTemplate(
+        const isPerStay = schedule.frequency === 'per_stay';
+        const created = await createRecurringTemplate(
           {
             type,
             name: name.trim() || cat?.name || 'Récurrent',
@@ -860,10 +833,22 @@ function ExpenseDrawer({
             paidBy: paidBy === 'guest' ? 'pm' : paidBy,
             ...buildRecurringScopeBody(association),
             ...buildRecurringApiBody(schedule),
+            ...(isPerStay
+              ? { catchUpLastMonths: perStayMonths, catchUpPerStay: perStayMonths > 0 }
+              : { catchUpDates }),
           },
           scope,
         );
-        toast.success(`Récurrence créée — ${describeRecurringSchedule(schedule)}`);
+        const n = created?.catchUpCreated ?? 0;
+        toast.success(
+          n > 0
+            ? isPerStay
+              ? `Règle par séjour créée — ${n} ligne${n > 1 ? 's' : ''} (résas déjà liées).`
+              : `Récurrence créée — ${n} ligne${n > 1 ? 's' : ''} de rattrapage. Liez-les aux résas dans le journal.`
+            : isPerStay
+              ? 'Règle par séjour créée — les prochaines résas Completed généreront la ligne.'
+              : `Récurrence créée — ${describeRecurringSchedule(schedule)}`,
+        );
       } else {
         const created = await createLedgerEntry(
           {
@@ -938,12 +923,16 @@ function ExpenseDrawer({
             </div>
             <div className="frow c2">
               <div className="fgrp">
-                <div className="flabel">Montant</div>
+                <div className="flabel">
+                  Montant <span className="req">*</span>
+                </div>
                 <input className="fin" value={amount} onChange={(e) => setAmount(e.target.value)} />
               </div>
               {entryMode === 'once' ? (
                 <div className="fgrp">
-                  <div className="flabel">Date</div>
+                  <div className="flabel">
+                    Date <span className="req">*</span>
+                  </div>
                   <input className="fin" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
               ) : (
@@ -961,13 +950,17 @@ function ExpenseDrawer({
                 categories={categories}
                 value={categoryId}
                 required
+                kinds={type === 'extra' ? ['extra', 'expense'] : ['expense']}
+                placeholder={type === 'extra' ? 'Choisir une catégorie…' : 'Ex. Ménage, Internet…'}
+                error={categoryError}
                 onChange={(id, cat) => {
                   setCategoryId(id);
+                  setCategoryError('');
                   if (cat && !name.trim()) setName(cat.name);
                 }}
               />
               <p className="sub" style={{ margin: '6px 0 0', fontSize: 12 }}>
-                Obligatoire — choisissez « Autre » dans la liste si besoin, puis précisez le libellé.
+                Charges uniquement — « Ménage » (pas « Ménage payant », réservé au service guest).
               </p>
             </div>
             <div className="fgrp">
@@ -983,6 +976,13 @@ function ExpenseDrawer({
             {entryMode === 'recurring' && (
               <>
                 <RecurringScheduleFields value={schedule} onChange={patchSchedule} />
+                <RecurringCatchUpFields
+                  schedule={schedule}
+                  selectedDates={catchUpDates}
+                  onChange={setCatchUpDates}
+                  perStayMonths={perStayMonths}
+                  onPerStayMonthsChange={setPerStayMonths}
+                />
                 <RecurringAssociationFields
                   value={association}
                   onChange={patchAssociation}
@@ -1014,7 +1014,9 @@ function ExpenseDrawer({
             )}
             {entryMode === 'once' && (
               <div className="fgrp">
-                <div className="flabel">Listing</div>
+                <div className="flabel">
+                  Listing <span className="req">*</span>
+                </div>
                 {listingsLoading && listingOptions.length === 0 ? (
                   <div className="inote info" style={{ margin: 0 }}>
                     <span className="i">ℹ️</span>
@@ -1069,181 +1071,6 @@ function ExpenseDrawer({
   );
 }
 
-function pickBundleLineCategories(categories: ExpenseCategory[]) {
-  const other = categories.find((c) => c.slug === 'other' || c.name === 'Autre');
-  const extra =
-    categories.find((c) => c.kind === 'extra') ||
-    categories.find((c) => c.kind === 'service') ||
-    other;
-  const expense =
-    categories.find((c) => c.kind === 'expense' && c.slug !== 'other') || other;
-  return { extra, expense };
-}
-
-function BundleDrawer({
-  listings,
-  categories,
-  ownerId,
-  needsOwnerPick,
-  onClose,
-  onSaved,
-}: {
-  listings: ListingRow[];
-  categories: ExpenseCategory[];
-  ownerId: string | null;
-  needsOwnerPick: boolean;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [inAmount, setInAmount] = useState('300');
-  const [outAmount, setOutAmount] = useState('200');
-  const [supplier, setSupplier] = useState('');
-  const [listingId, setListingId] = useState('');
-  const [name, setName] = useState('Service avec marge');
-  const [saving, setSaving] = useState(false);
-  const margin = (Number(inAmount) || 0) - (Number(outAmount) || 0);
-
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (needsOwnerPick) {
-      toast.warn('Sélectionnez un propriétaire PM dans la barre du haut');
-      return;
-    }
-    if (!listingId) {
-      toast.warn('Sélectionnez un listing');
-      return;
-    }
-    const { extra: extraCat, expense: expenseCat } = pickBundleLineCategories(categories);
-    if (!extraCat?._id || !expenseCat?._id) {
-      toast.warn('Catégories manquantes — rechargez la page ou sélectionnez le PM');
-      return;
-    }
-    setSaving(true);
-    try {
-      await createLedgerBundle(
-        {
-          name,
-          listingId,
-          lines: [
-            {
-              type: 'extra',
-              amount: Number(inAmount) || 0,
-              transactionRole: 'revenue',
-              paidBy: 'guest',
-              collectedBy: 'pm',
-              categoryId: extraCat._id,
-              categoryLabel: extraCat.name,
-            },
-            {
-              type: 'expense',
-              amount: Number(outAmount) || 0,
-              transactionRole: 'cost',
-              paidBy: 'pm',
-              supplier,
-              categoryId: expenseCat._id,
-              categoryLabel: expenseCat.name,
-            },
-          ],
-        },
-        { ownerId },
-      );
-      toast.success('Service créé (extra + dépense)');
-      onSaved();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="scrim on" onClick={onClose} role="presentation" />
-      <aside className="drawer on">
-        <form noValidate onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div className="dr-h">
-            <div className="dt">
-              <h2>Service avec marge</h2>
-              <div className="ds">Extra client + dépense prestataire liés.</div>
-            </div>
-            <button type="button" className="dr-close" onClick={onClose}>
-              ✕
-            </button>
-          </div>
-          <div className="dr-b">
-            <div className="fgrp">
-              <input className="fin" value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="frow c2">
-              <div className="fgrp">
-                <div className="flabel" style={{ color: 'var(--su)' }}>
-                  ✨ Encaissé du client
-                </div>
-                <input className="fin" value={inAmount} onChange={(e) => setInAmount(e.target.value)} />
-              </div>
-              <div className="fgrp">
-                <div className="flabel" style={{ color: 'var(--rose)' }}>
-                  💸 Payé au prestataire
-                </div>
-                <input className="fin" value={outAmount} onChange={(e) => setOutAmount(e.target.value)} />
-              </div>
-            </div>
-            <div className="margin-box">
-              <div className="leg">
-                <div className="l">Encaissé</div>
-                <div className="v" style={{ color: 'var(--su)' }}>
-                  +{Number(inAmount).toLocaleString('fr-FR')} MAD
-                </div>
-              </div>
-              <span className="eq">−</span>
-              <div className="leg">
-                <div className="l">Payé</div>
-                <div className="v" style={{ color: 'var(--rose)' }}>
-                  {Number(outAmount).toLocaleString('fr-FR')} MAD
-                </div>
-              </div>
-              <span className="eq">=</span>
-              <div className="res">
-                <div className="l">Marge</div>
-                <div className="v" style={{ color: margin >= 0 ? 'var(--su)' : 'var(--rose)' }}>
-                  {formatMoney(margin)}
-                </div>
-              </div>
-            </div>
-            <div className="fgrp" style={{ marginTop: 16 }}>
-              <div className="flabel">Fournisseur</div>
-              <input className="fin" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
-            </div>
-            <div className="fgrp">
-              <div className="flabel">Listing</div>
-              <select className="fin" value={listingId} onChange={(e) => setListingId(e.target.value)} required>
-                <option value="">Choisir…</option>
-                {listings.map((l) => {
-                  const id = String(l._id || l.id);
-                  return (
-                    <option key={id} value={id}>
-                      {l.name || l.title || id}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-          </div>
-          <div className="dr-f">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>
-              Annuler
-            </button>
-            <div style={{ flex: 1 }} />
-            <button type="submit" className="btn btn-prim" disabled={saving}>
-              Créer le service
-            </button>
-          </div>
-        </form>
-      </aside>
-    </>
-  );
-}
-
 function RecurringDrawer({
   categories,
   listings,
@@ -1266,6 +1093,7 @@ function RecurringDrawer({
   onSaved: () => void;
 }) {
   const [categoryId, setCategoryId] = useState('');
+  const [categoryError, setCategoryError] = useState('');
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [paidBy, setPaidBy] = useState<'pm' | 'landlord'>('landlord');
@@ -1280,6 +1108,12 @@ function RecurringDrawer({
     lastDayOfMonth: false,
     dayOfWeek: 1,
   });
+  const catchUpDefaults = useMemo(() => proposeCatchUpOptions(schedule, 6).map((o) => o.isoDate), [schedule]);
+  const [catchUpDates, setCatchUpDates] = useState<string[]>(catchUpDefaults);
+  const [perStayMonths, setPerStayMonths] = useState(6);
+  useEffect(() => {
+    setCatchUpDates(catchUpDefaults);
+  }, [catchUpDefaults]);
   const [saving, setSaving] = useState(false);
 
   const patchAssociation = (patch: Partial<RecurringAssociationValue>) => {
@@ -1298,9 +1132,11 @@ function RecurringDrawer({
       return;
     }
     if (!categoryId) {
+      setCategoryError('Sélectionnez une catégorie — champ obligatoire');
       toast.warn('Sélectionnez une catégorie');
       return;
     }
+    setCategoryError('');
     const amountNum = Number(amount);
     if (!amount.trim() || Number.isNaN(amountNum) || amountNum <= 0) {
       toast.warn('Indiquez un montant valide');
@@ -1311,10 +1147,15 @@ function RecurringDrawer({
       toast.warn(assocErr);
       return;
     }
+    if (schedule.frequency === 'per_stay' && association.scopeType !== 'listing') {
+      toast.warn('Par séjour : choisissez le rattachement Listing(s)');
+      return;
+    }
     const cat = categories.find((c) => c._id === categoryId);
     setSaving(true);
     try {
-      await createRecurringTemplate(
+      const isPerStay = schedule.frequency === 'per_stay';
+      const created = await createRecurringTemplate(
         {
           name: name.trim() || cat?.name || 'Récurrent',
           amount: amountNum,
@@ -1323,10 +1164,22 @@ function RecurringDrawer({
           paidBy,
           ...buildRecurringScopeBody(association),
           ...buildRecurringApiBody(schedule),
+          ...(isPerStay
+            ? { catchUpLastMonths: perStayMonths, catchUpPerStay: perStayMonths > 0 }
+            : { catchUpDates }),
         },
         { ownerId },
       );
-      toast.success('Récurrence créée');
+      const n = created?.catchUpCreated ?? 0;
+      toast.success(
+        n > 0
+          ? isPerStay
+            ? `Règle par séjour créée — ${n} ligne${n > 1 ? 's' : ''} (résas déjà liées).`
+            : `Récurrence créée — ${n} ligne${n > 1 ? 's' : ''} de rattrapage. Liez-les aux résas dans le journal.`
+          : isPerStay
+            ? 'Règle par séjour créée — les prochaines résas Completed généreront la ligne.'
+            : 'Récurrence créée',
+      );
       onSaved();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur');
@@ -1350,56 +1203,50 @@ function RecurringDrawer({
           </div>
           <div className="dr-b">
             {recurring.length > 0 && (
-              <div className="card" style={{ marginBottom: 18 }}>
-                <div className="card-h">
-                  <span className="ct">Actives</span>
-                  <span className="sub">{recurring.length}</span>
-                </div>
-                <table>
-                  <tbody>
-                    {recurring.map((r) => (
-                      <tr key={r._id}>
-                        <td>
-                          <div className="cell-main">{r.name}</div>
-                          <div className="cell-sub">
-                            {categoryNameById(categories, r.categoryId)} ·{' '}
-                            {describeRecurringScope({
-                              scopeType: r.scopeType,
-                              listingIds: r.listingIds,
-                              landlordId: r.landlordId,
-                              landlords,
-                            })}{' '}
-                            · {describeRecurringSchedule(r)}
-                            {r.nextRunAt ? ` · prochaine : ${formatNextRunAt(r.nextRunAt)}` : ''}
-                          </div>
-                        </td>
-                        <td className="num amt neg">−{Number(r.amount).toLocaleString('fr-FR')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="inote info" style={{ marginBottom: 16 }}>
+                <span className="i">🔁</span>
+                <b>
+                  {(() => {
+                    const n = recurring.filter((r) => r.enabled !== false).length;
+                    return `${n} active${n > 1 ? 's' : ''}`;
+                  })()}
+                </b>
+                {' — '}
+                les modèles ne sont pas listés ici. Les lignes apparaissent dans le journal après génération.
               </div>
             )}
             <div className="flabel">Nouvelle récurrence</div>
             <div className="fgrp">
-              <div className="flabel">Catégorie</div>
-              <CategorySelect
-                categories={categories}
-                value={categoryId}
-                onChange={(id, cat) => {
-                  setCategoryId(id);
-                  if (cat && !name.trim()) setName(cat.name);
-                }}
-              />
-            </div>
-            <div className="fgrp">
-              <div className="flabel">Libellé (optionnel)</div>
+              <div className="flabel">
+                Libellé <span className="opt">(optionnel)</span>
+              </div>
               <input
                 className="fin"
-                placeholder="Ex. Fibre Majorelle — laissez vide pour reprendre la catégorie"
+                placeholder="Ex. Fibre Orange — laissez vide pour reprendre la catégorie"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
+            </div>
+            <div className="fgrp">
+              <div className="flabel">
+                Catégorie <span className="req">*</span>
+              </div>
+              <CategorySelect
+                categories={categories}
+                value={categoryId}
+                required
+                kinds={['expense']}
+                placeholder="Ex. Ménage, Internet…"
+                error={categoryError}
+                onChange={(id, cat) => {
+                  setCategoryId(id);
+                  setCategoryError('');
+                  if (cat && !name.trim()) setName(cat.name);
+                }}
+              />
+              <p className="sub" style={{ margin: '6px 0 0', fontSize: 12 }}>
+                Choisissez <b>Ménage</b> pour le coût par séjour — pas « Ménage payant ».
+              </p>
             </div>
             <div className="fgrp">
               <div className="flabel">
@@ -1407,14 +1254,26 @@ function RecurringDrawer({
               </div>
               <input
                 className="fin"
-                placeholder="Ex. 350"
+                placeholder="Ex. 280"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
               />
             </div>
             <RecurringScheduleFields
               value={schedule}
-              onChange={(patch) => setSchedule((prev) => ({ ...prev, ...patch }))}
+              onChange={(patch) => {
+                setSchedule((prev) => ({ ...prev, ...patch }));
+                if (patch.frequency === 'per_stay') {
+                  setAssociation((prev) => ({ ...prev, scopeType: 'listing' }));
+                }
+              }}
+            />
+            <RecurringCatchUpFields
+              schedule={schedule}
+              selectedDates={catchUpDates}
+              onChange={setCatchUpDates}
+              perStayMonths={perStayMonths}
+              onPerStayMonthsChange={setPerStayMonths}
             />
             <RecurringAssociationFields
               value={association}
@@ -1426,7 +1285,7 @@ function RecurringDrawer({
             <div className="inote info" style={{ marginBottom: 12 }}>
               <span className="i">ℹ️</span>
               Pas de justificatif sur le modèle : ajoutez PDF/image sur chaque ligne du journal une fois
-              l&apos;échéance générée (bouton 📎).
+              l&apos;échéance générée (bouton 📎). Puis associez une réservation si besoin.
             </div>
             <div className="fgrp">
               <div className="flabel">Payé par</div>
@@ -1490,6 +1349,7 @@ function EntryEditDrawer({
   const [amount, setAmount] = useState(String(entry.amount ?? ''));
   const [date, setDate] = useState(entryDateInputValue(entry.date));
   const [categoryId, setCategoryId] = useState(entry.categoryId ? String(entry.categoryId) : '');
+  const [categoryError, setCategoryError] = useState('');
   const [paidBy, setPaidBy] = useState<'pm' | 'landlord' | 'guest'>(entry.paidBy || 'pm');
   const [listingId, setListingId] = useState(entry.listingId ? String(entry.listingId) : '');
   const [reservationId, setReservationId] = useState(entry.reservationId ? String(entry.reservationId) : '');
@@ -1502,6 +1362,7 @@ function EntryEditDrawer({
     setAmount(String(entry.amount ?? ''));
     setDate(entryDateInputValue(entry.date));
     setCategoryId(entry.categoryId ? String(entry.categoryId) : '');
+    setCategoryError('');
     setPaidBy(entry.paidBy || 'pm');
     setListingId(entry.listingId ? String(entry.listingId) : '');
     setReservationId(entry.reservationId ? String(entry.reservationId) : '');
@@ -1544,9 +1405,11 @@ function EntryEditDrawer({
       return;
     }
     if (!categoryId) {
-      toast.warn('Sélectionnez une catégorie (ex. « Autre » si aucune ne convient)');
+      setCategoryError('Sélectionnez une catégorie (ex. Ménage ou Autre)');
+      toast.warn('Sélectionnez une catégorie');
       return;
     }
+    setCategoryError('');
     setSaving(true);
     try {
       const cat = categories.find((c) => c._id === categoryId);
@@ -1599,16 +1462,6 @@ function EntryEditDrawer({
               </div>
               <input className="fin" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-            <div className="frow c2">
-              <div className="fgrp">
-                <div className="flabel">Montant</div>
-                <input className="fin" value={amount} onChange={(e) => setAmount(e.target.value)} />
-              </div>
-              <div className="fgrp">
-                <div className="flabel">Date</div>
-                <input className="fin" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-            </div>
             <div className="fgrp">
               <div className="flabel">
                 Catégorie <span className="req">*</span>
@@ -1617,11 +1470,29 @@ function EntryEditDrawer({
                 categories={categories}
                 value={categoryId}
                 required
+                kinds={entry.type === 'extra' ? ['extra', 'expense'] : ['expense']}
+                placeholder="Ex. Ménage, Internet…"
+                error={categoryError}
                 onChange={(id, cat) => {
                   setCategoryId(id);
+                  setCategoryError('');
                   if (cat && !name.trim()) setName(cat.name);
                 }}
               />
+            </div>
+            <div className="frow c2">
+              <div className="fgrp">
+                <div className="flabel">
+                  Montant <span className="req">*</span>
+                </div>
+                <input className="fin" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              </div>
+              <div className="fgrp">
+                <div className="flabel">
+                  Date <span className="req">*</span>
+                </div>
+                <input className="fin" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
             </div>
             <div className="fgrp">
               <div className="flabel">Payé par</div>
@@ -1652,7 +1523,9 @@ function EntryEditDrawer({
               />
             </div>
             <div className="fgrp">
-              <div className="flabel">Listing</div>
+              <div className="flabel">
+                Listing <span className="req">*</span>
+              </div>
               {listingsLoading && listingOptions.length === 0 ? (
                 <div className="inote info" style={{ margin: 0 }}>
                   <span className="i">ℹ️</span>

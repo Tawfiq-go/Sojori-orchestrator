@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../../../components/DashboardWrapper';
 import { FinancesModule, useFinancesAccess } from '../FinancesModule';
@@ -15,7 +15,7 @@ import { defaultProfitReportColumnConfig } from '../utils/profitReportColumns';
 
 export function FinancesReportsPage() {
   return (
-    <DashboardWrapper breadcrumb={['Finances', 'Rapports P&L']}>
+    <DashboardWrapper breadcrumb={['Finances', 'Rapports P&L']} hidePageHeader>
       <FinancesModule>
         <FinancesReportsPageContent />
       </FinancesModule>
@@ -60,11 +60,14 @@ function FinancesReportsPageContent() {
   }, [rows, search]);
 
   const handleDelete = async (row: ProfitReport) => {
-    if (row.status !== 'draft') {
-      toast.warn('Seuls les brouillons peuvent être supprimés');
+    const label = row.status === 'published' ? 'publié' : 'brouillon';
+    if (
+      !window.confirm(
+        `Supprimer le rapport ${label} « ${row.name} » ?\nIl disparaîtra de la liste (non récupérable ici).`,
+      )
+    ) {
       return;
     }
-    if (!window.confirm(`Supprimer le brouillon « ${row.name} » ?`)) return;
     setDeletingId(row._id);
     try {
       await deleteProfitReport(row._id, { ownerId });
@@ -81,12 +84,17 @@ function FinancesReportsPageContent() {
     <>
         <div className="ph">
           <div>
-            <div className="eyebrow">Finances · /finances/reports</div>
             <h1>Rapports P&amp;L</h1>
-            <p className="sub">Compte de résultat par propriétaire et par période. Brouillon modifiable, publication figée (snapshot).</p>
+            <p className="sub">
+              Vue <b>PM</b> (tous listings choisis) ou <b>propriétaire</b> (contrat + annonces du bailleur) — brouillon
+              modifiable, publication figée.
+            </p>
           </div>
           {canWrite && (
             <div className="ph-actions">
+              <Link className="btn btn-ghost pm-only" to="/finances/branding">
+                En-tête & logo P&L
+              </Link>
               <button type="button" className="btn btn-prim pm-only" onClick={() => setWizardOpen(true)}>
                 + Générer un rapport
               </button>
@@ -104,7 +112,7 @@ function FinancesReportsPageContent() {
         )}
 
         {needsOwnerPick && (
-          <div className="inote info" style={{ marginBottom: 16 }}>
+          <div className="inote info">
             <span className="i">ℹ️</span>
             Sélectionnez un <b>propriétaire PM</b> dans la barre du haut pour afficher les rapports P&amp;L.
           </div>
@@ -147,11 +155,18 @@ function FinancesReportsPageContent() {
               <tbody>
                 {filtered.map((row) => {
                   const net = row.snapshot?.grandTotal ?? row.snapshot?.metrics?.find((m) => m.key === 'net_to_landlord')?.value;
+                  const scopeLabel = row.landlordId ? 'Propriétaire' : 'PM';
                   return (
                     <tr key={row._id} className="clk" onClick={() => navigate(`/finances/reports/${row._id}`)}>
                       <td>
                         <div className="cell-main">{row.name}</div>
-                        <div className="cell-sub">{row.status === 'published' && row.publishedAt ? `publié le ${formatShortDate(row.publishedAt)}` : 'brouillon'}</div>
+                        <div className="cell-sub">
+                          {scopeLabel}
+                          {' · '}
+                          {row.status === 'published' && row.publishedAt
+                            ? `publié le ${formatShortDate(row.publishedAt)}`
+                            : 'brouillon'}
+                        </div>
                       </td>
                       <td className="mono">{formatPeriod(row.periodStart, row.periodEnd)}</td>
                       <td className="num">
@@ -167,11 +182,11 @@ function FinancesReportsPageContent() {
                         {net != null ? Number(net).toLocaleString('fr-FR') : '—'}
                       </td>
                       <td className="ledger-actions-cell" onClick={(e) => e.stopPropagation()}>
-                        {canWrite && row.status === 'draft' ? (
+                        {canWrite ? (
                           <button
                             type="button"
                             className="btn btn-ghost btn-sm ledger-action-btn"
-                            title="Supprimer le brouillon"
+                            title={row.status === 'published' ? 'Supprimer le rapport publié' : 'Supprimer le brouillon'}
                             disabled={deletingId === row._id}
                             onClick={() => void handleDelete(row)}
                           >
@@ -217,6 +232,8 @@ function ReportWizard({
   onCreated: (id: string) => void;
 }) {
   const [name, setName] = useState('');
+  /** pm = tous listings du compte ; landlord = bailleur + ses annonces */
+  const [scope, setScope] = useState<'pm' | 'landlord'>('landlord');
   const [landlordId, setLandlordId] = useState('');
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
@@ -233,10 +250,10 @@ function ReportWizard({
     [landlords, landlordId],
   );
 
-  const landlordListings = useMemo(
-    () => listingsForLandlord(listings, selectedLandlord),
-    [listings, selectedLandlord],
-  );
+  const selectableListings = useMemo(() => {
+    if (scope === 'pm') return listings;
+    return listingsForLandlord(listings, selectedLandlord);
+  }, [scope, listings, selectedLandlord]);
 
   useEffect(() => {
     if (needsOwnerPick || !ownerId) {
@@ -277,17 +294,31 @@ function ReportWizard({
   }, [ownerId, needsOwnerPick]);
 
   useEffect(() => {
+    if (scope === 'pm') {
+      setLandlordId('');
+      const ids = listings.map((l) => String(l._id || l.id)).filter(Boolean);
+      setListingIds(ids);
+      return;
+    }
     if (!selectedLandlord) {
       setListingIds([]);
       return;
     }
-    const ids = listingsForLandlord(listings, selectedLandlord).map((l) => String(l._id || l.id)).filter(Boolean);
+    const ids = listingsForLandlord(listings, selectedLandlord)
+      .map((l) => String(l._id || l.id))
+      .filter(Boolean);
     setListingIds(ids);
-  }, [landlordId, selectedLandlord, listings]);
+  }, [scope, landlordId, selectedLandlord, listings]);
 
   const toggleListing = (id: string) => {
     setListingIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
+
+  const selectAllListings = () => {
+    setListingIds(selectableListings.map((l) => String(l._id || l.id)).filter(Boolean));
+  };
+
+  const clearListings = () => setListingIds([]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -295,8 +326,8 @@ function ReportWizard({
       toast.warn('Sélectionnez un propriétaire PM dans la barre du haut');
       return;
     }
-    if (!landlordId) {
-      toast.warn('Sélectionnez un propriétaire');
+    if (scope === 'landlord' && !landlordId) {
+      toast.warn('Sélectionnez un propriétaire bailleur');
       return;
     }
     if (!listingIds.length) {
@@ -308,7 +339,7 @@ function ReportWizard({
       const report = await generateProfitReport(
         {
           name,
-          landlordId,
+          ...(scope === 'landlord' && landlordId ? { landlordId } : {}),
           periodStart,
           periodEnd,
           listingIds,
@@ -317,7 +348,7 @@ function ReportWizard({
         },
         { ownerId },
       );
-      toast.success('Brouillon généré');
+      toast.success(scope === 'pm' ? 'Brouillon PM généré' : 'Brouillon propriétaire généré');
       onCreated(report?._id || '');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur');
@@ -348,6 +379,33 @@ function ReportWizard({
                 </div>
               ) : (
                 <>
+                  <div className="fgrp">
+                    <div className="flabel">
+                      Périmètre <span className="req">*</span>
+                    </div>
+                    <div className="chips" style={{ marginBottom: 4 }}>
+                      <button
+                        type="button"
+                        className={`chip ${scope === 'landlord' ? 'on' : ''}`}
+                        onClick={() => setScope('landlord')}
+                      >
+                        Propriétaire (bailleur)
+                      </button>
+                      <button
+                        type="button"
+                        className={`chip ${scope === 'pm' ? 'on' : ''}`}
+                        onClick={() => setScope('pm')}
+                      >
+                        PM (compte)
+                      </button>
+                    </div>
+                    <p className="sub" style={{ margin: '4px 0 0', fontSize: 11 }}>
+                      {scope === 'landlord'
+                        ? 'Contrat du bailleur + listings liés à son compte. Visible côté propriétaire une fois publié.'
+                        : 'Sans bailleur : tous les listings du PM (ou une sélection). Commission contrat proprio = 0.'}
+                    </p>
+                  </div>
+
                   <div className="frow c2">
                     <div className="fgrp">
                       <div className="flabel">
@@ -355,24 +413,33 @@ function ReportWizard({
                       </div>
                       <input className="fin" value={name} onChange={(e) => setName(e.target.value)} required />
                     </div>
-                    <div className="fgrp">
-                      <div className="flabel">
-                        Propriétaire <span className="req">*</span>
+                    {scope === 'landlord' ? (
+                      <div className="fgrp">
+                        <div className="flabel">
+                          Propriétaire <span className="req">*</span>
+                        </div>
+                        <select
+                          className="fin"
+                          value={landlordId}
+                          onChange={(e) => setLandlordId(e.target.value)}
+                          required
+                        >
+                          <option value="">— Choisir —</option>
+                          {landlords.map((l) => (
+                            <option key={l._id} value={l._id}>
+                              {personName(l.firstName, l.lastName, l.email)}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      <select
-                        className="fin"
-                        value={landlordId}
-                        onChange={(e) => setLandlordId(e.target.value)}
-                        required
-                      >
-                        <option value="">— Choisir —</option>
-                        {landlords.map((l) => (
-                          <option key={l._id} value={l._id}>
-                            {personName(l.firstName, l.lastName, l.email)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    ) : (
+                      <div className="fgrp">
+                        <div className="flabel">Compte</div>
+                        <div className="fin" style={{ display: 'flex', alignItems: 'center', opacity: 0.85 }}>
+                          Vue PM — pas de bailleur
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="frow c2">
                     <div className="fgrp">
@@ -401,25 +468,38 @@ function ReportWizard({
                     </div>
                   </div>
                   <div className="fgrp">
-                    <div className="flabel">
-                      Listings <span className="req">*</span>{' '}
-                      <span className="sub" style={{ fontWeight: 400 }}>
-                        ({listingIds.length} sélectionné{listingIds.length > 1 ? 's' : ''})
+                    <div className="flabel" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span>
+                        Listings <span className="req">*</span>{' '}
+                        <span className="sub" style={{ fontWeight: 400 }}>
+                          ({listingIds.length} sélectionné{listingIds.length > 1 ? 's' : ''})
+                        </span>
                       </span>
+                      {selectableListings.length > 0 && (
+                        <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={selectAllListings}>
+                            Tout
+                          </button>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={clearListings}>
+                            Aucun
+                          </button>
+                        </span>
+                      )}
                     </div>
-                    {!landlordId ? (
+                    {scope === 'landlord' && !landlordId ? (
                       <div className="inote info" style={{ margin: 0 }}>
                         <span className="i">ℹ️</span>
-                        Choisissez d&apos;abord un propriétaire — les annonces rattachées à son compte s&apos;affichent ici.
+                        Choisissez d&apos;abord un propriétaire — les annonces rattachées à son compte s&apos;affichent
+                        ici.
                       </div>
                     ) : listingsLoading ? (
                       <div className="inote info" style={{ margin: 0 }}>
                         <span className="i">ℹ️</span>
                         Chargement des listings…
                       </div>
-                    ) : landlordListings.length ? (
+                    ) : selectableListings.length ? (
                       <div className="chips">
-                        {landlordListings.map((l) => {
+                        {selectableListings.map((l) => {
                           const id = String(l._id || l.id);
                           return (
                             <button
@@ -436,7 +516,9 @@ function ReportWizard({
                     ) : (
                       <div className="inote warn" style={{ margin: 0 }}>
                         <span className="i">⚠️</span>
-                        Aucune annonce rattachée à ce propriétaire — éditez sa fiche (onglet Annonces) pour lier des listings.
+                        {scope === 'landlord'
+                          ? 'Aucune annonce rattachée à ce propriétaire — éditez sa fiche (onglet Annonces) pour lier des listings.'
+                          : 'Aucun listing sur ce compte PM.'}
                       </div>
                     )}
                   </div>

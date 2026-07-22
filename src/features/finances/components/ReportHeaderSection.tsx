@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { ReportLogoPreview } from './ReportLogoPreview';
 import { uploadReportLogo } from '../services/reportLogoUpload';
@@ -8,10 +9,15 @@ type Props = {
   value: ProfitReportHeader;
   onChange: (next: ProfitReportHeader) => void;
   disabled?: boolean;
+  /** Recharge la marque PM par défaut dans le brouillon (sans enregistrer). */
   onLoadDefault?: () => void | Promise<void>;
-  onSave?: () => void | Promise<void>;
+  /** Enregistre uniquement sur ce rapport (snapshot). */
+  onSaveReport?: () => void | Promise<void>;
+  /** Enregistre aussi comme marque PM par défaut. */
+  onSaveBrand?: () => void | Promise<void>;
   loadingDefault?: boolean;
   saving?: boolean;
+  savingBrand?: boolean;
   defaultOpen?: boolean;
 };
 
@@ -37,9 +43,11 @@ export function ReportHeaderSection({
   onChange,
   disabled,
   onLoadDefault,
-  onSave,
+  onSaveReport,
+  onSaveBrand,
   loadingDefault,
   saving,
+  savingBrand,
   defaultOpen = false,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen);
@@ -50,6 +58,7 @@ export function ReportHeaderSection({
   const summaryBits = [value.email, value.phone].filter(Boolean);
   const summary = summaryBits.length ? summaryBits.join(' · ') : 'nom, email, logo…';
   const hasLogo = Boolean(value.logoUrl?.trim());
+  const busy = Boolean(loadingDefault || saving || savingBrand);
 
   const onLogoFile = async (files: FileList | null) => {
     const file = files?.[0];
@@ -87,27 +96,39 @@ export function ReportHeaderSection({
             </span>
           </span>
         </button>
-        {!disabled && (onLoadDefault || onSave) ? (
+        {!disabled && (onLoadDefault || onSaveReport || onSaveBrand) ? (
           <div className="report-header-bar-actions">
             {onLoadDefault ? (
               <button
                 type="button"
                 className="btn btn-ghost btn-xs"
-                disabled={loadingDefault || saving}
-                title="Charger nom, contacts et logo depuis le profil PM"
+                disabled={busy}
+                title="Recharger la marque PDF par défaut (Finances → Marque PDF)"
                 onClick={() => void onLoadDefault()}
               >
-                {loadingDefault ? '…' : '↻ Profil'}
+                {loadingDefault ? '…' : '↻ Marque'}
               </button>
             ) : null}
-            {onSave ? (
+            {onSaveReport ? (
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs"
+                disabled={busy}
+                title="Garder ces infos uniquement pour ce brouillon"
+                onClick={() => void onSaveReport()}
+              >
+                {saving ? '…' : 'Ce rapport'}
+              </button>
+            ) : null}
+            {onSaveBrand ? (
               <button
                 type="button"
                 className="btn btn-prim btn-xs"
-                disabled={saving || loadingDefault}
-                onClick={() => void onSave()}
+                disabled={busy}
+                title="Enregistrer aussi comme marque PDF par défaut du PM"
+                onClick={() => void onSaveBrand()}
               >
-                {saving ? '…' : 'Enregistrer'}
+                {savingBrand ? '…' : 'Marque PM'}
               </button>
             ) : null}
           </div>
@@ -162,8 +183,9 @@ export function ReportHeaderSection({
             </div>
           </div>
           <p className="report-header-hint">
-            « Profil » reprend l&apos;onglet <b>Équipe → Owners → Rapports P&L</b>. Logo custom possible ici
-            uniquement pour ce rapport. L&apos;emplacement de stockage n&apos;est pas affiché.
+            <b>Ce rapport</b> = override temporaire. <b>Marque PM</b> = met à jour le défaut dans{' '}
+            <Link to="/finances/branding">Finances → En-tête & logo P&L</Link>. « ↻ Marque » recharge le
+            défaut sans enregistrer.
           </p>
 
           <div className="report-header-fields-compact">
