@@ -704,6 +704,7 @@ const OWNER_QUICK_ACTIONS = [
   { emoji: '💬', label: 'WhatsApp', to: '/communications?section=guest&tab=whatsapp' },
   { emoji: '📅', label: 'Calendrier', to: '/calendar?view=multi' },
   { emoji: '✅', label: 'Tâches', to: '/tasks' },
+  { emoji: '🧭', label: 'Cockpit IA', to: '/orchestration/cockpit' },
   { emoji: '🎛', label: 'Plans d’orchestration', to: '/orchestration/plans' },
   { emoji: '📈', label: 'Prix dynamique', to: '/dynamic-pricing/portefeuille' },
   { emoji: '☀️', label: 'Plan de journée', to: '/orchestration/day-plan' },
