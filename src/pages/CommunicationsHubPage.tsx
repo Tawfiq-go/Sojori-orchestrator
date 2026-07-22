@@ -7,6 +7,7 @@ import WhatsAppTabV2 from '../components/communications/WhatsAppTabV2';
 import BookingWhatsAppTabV2 from '../components/communications/BookingWhatsAppTabV2';
 import StaffWhatsAppTabV2 from '../components/communications/StaffWhatsAppTabV2';
 import MessagesOTATabV2 from '../components/communications/MessagesOTATabV2';
+import ResasTabV2 from '../components/communications/ResasTabV2';
 import LeadsTabV2 from '../components/communications/LeadsTabV2';
 import ReviewsTabV2 from '../components/communications/ReviewsTabV2';
 import InboxHubTabs from '../components/unified-inbox/InboxHubTabs';
@@ -244,6 +245,7 @@ export default function CommunicationsHubPage() {
           {activeTab === 'staff' && <StaffWhatsAppTabV2 inboxParty="staff" />}
           {activeTab === 'admin' && <StaffWhatsAppTabV2 inboxParty="admin" />}
           {activeTab === 'ota' && <MessagesOTATabV2 />}
+          {activeTab === 'resas' && <ResasTabV2 />}
           {activeTab === 'leads' && <LeadsTabV2 />}
           {activeTab === 'reviews' && <ReviewsTabV2 />}
         </Box>
