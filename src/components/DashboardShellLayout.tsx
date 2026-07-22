@@ -10,6 +10,8 @@ import { useAuth } from '../hooks/useAuth';
 import { toLegacyAuthUser } from '../utils/legacyAuthUser';
 import { canSelectOwnerInAdminFilter } from '../utils/taskScope.utils';
 import { NotificationProvider } from '../features/notifications';
+import { LandlordReadOnlyBanner } from './LandlordReadOnlyBanner';
+import { useWriteAccess } from '../hooks/useWriteAccess';
 
 /** Layout persistant : sidebar + topbar ne se remontent pas à chaque changement de route. */
 export const DashboardShellContext = createContext(false);
@@ -58,6 +60,7 @@ function DashboardShellInner({
   const mainRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const listingCompact = compactMain || isListingCataloguePath(location.pathname);
+  const { isLandlord } = useWriteAccess();
 
   const setBreadcrumbIfChanged = useCallback((items: string[]) => {
     setBreadcrumb((prev) => {
@@ -96,6 +99,7 @@ function DashboardShellInner({
         mainRef={mainRef}
         persistent
       >
+        {isLandlord ? <LandlordReadOnlyBanner /> : null}
         {children}
       </DashboardLayout>
     </PageChromeContext.Provider>

@@ -64,14 +64,14 @@ export const can = (action = 'get', keyOverride = null) => {
     const user = store.getState?.().auth?.user;
     if (!user) return false;
 
-
     if ([Roles.SuperAdmin, Roles.Admin, Roles.Owner].includes(user.role)) return true;
 
+    // Landlord = lecture seule stricte
+    if (user.role === Roles.Landlord && action !== 'get') return false;
 
     const path = normalize(window.location?.pathname || '');
     const matched = findRouteByPath(path);
     const featureKey = keyOverride || featureKeyOf(matched) || path;
-
 
     if (matched?.Scope && Array.isArray(matched.Scope)) {
         if (!matched.Scope.includes(user.role)) return false;
@@ -79,9 +79,8 @@ export const can = (action = 'get', keyOverride = null) => {
 
     const grants = Array.isArray(user.featureGrants) ? user.featureGrants : [];
 
-    if (grants.some((g) => g?.feature === '*' || (g?.actions || []).includes('*')))
-        return true;
-
+    // Admin worker = actions:'*' uniquement (pas feature:'*' + get)
+    if (grants.some((g) => (g?.actions || []).includes('*'))) return true;
 
     return grants.some(
         (g) =>

@@ -29,6 +29,7 @@ export function FinancesModule({ children }: Props) {
 export function useFinancesAccess() {
   const { user } = useAuth();
   const isLandlord = user?.role === Roles.Landlord;
+  // Aligné writeAccess : Landlord + Worker sans écriture finances
   const canWrite = !isLandlord && user?.role !== Roles.Worker;
   return { isLandlord, canWrite, user };
 }

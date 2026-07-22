@@ -17,6 +17,7 @@ import { DashboardWrapper } from '../components/DashboardWrapper';
 import { GuestInfoTab } from '../components/reservation/GuestInfoTab';
 import { FinancierTab } from '../components/reservation/FinancierTab';
 import { MessagesTab } from '../components/reservation/MessagesTab';
+import { useWriteAccess } from '../hooks/useWriteAccess';
 
 const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a',
@@ -79,6 +80,7 @@ export function ReservationSejourPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { canWrite, readOnly } = useWriteAccess('reservations');
 
   // Initialize tab from URL (?tab=guest-info legacy → séjour)
   const rawTab = searchParams.get('tab') || 'sejour';
@@ -125,6 +127,7 @@ export function ReservationSejourPage() {
   }, [id]);
 
   const enterEditMode = () => {
+    if (readOnly) return;
     if (reservationDetails) {
       setEditedData({ ...reservationDetails });
     }
@@ -251,9 +254,9 @@ export function ReservationSejourPage() {
       return (
         <GuestInfoTab
           reservationDetails={reservationDetails}
-          isEditMode={isEditMode}
+          isEditMode={isEditMode && canWrite}
           editedData={editedData}
-          onEditedDataChange={setEditedData}
+          onEditedDataChange={canWrite ? setEditedData : undefined}
           reservationId={reservationDetails?._id}
           onRefresh={refreshReservation}
         />
@@ -263,9 +266,9 @@ export function ReservationSejourPage() {
       return (
         <FinancierTab
           reservationDetails={reservationDetails}
-          isEditMode={isEditMode}
+          isEditMode={isEditMode && canWrite}
           editedData={editedData}
-          onEditedDataChange={setEditedData}
+          onEditedDataChange={canWrite ? setEditedData : undefined}
         />
       );
     }
@@ -298,7 +301,7 @@ export function ReservationSejourPage() {
     </Tabs>
   );
 
-  const actionButtons = isEditMode ? (
+  const actionButtons = readOnly ? null : isEditMode ? (
     <Stack direction="row" sx={{ gap: 0.5, flexShrink: 0 }}>
       <Button
         size="small"
@@ -391,10 +394,12 @@ export function ReservationSejourPage() {
           </Typography>
         </Box>
         <Stack direction="row" sx={{ alignItems: 'center', gap: 0.25, flexShrink: 0, borderRight: `1px solid ${T.border}`, pr: 0.5, mr: 0.25 }}>
-          <Tooltip title={isEditMode ? 'Quitter édition' : 'Modifier'}>
-            <IconButton size="small" onClick={() => (isEditMode ? exitEditMode() : enterEditMode())} sx={{ color: isEditMode ? T.primary : T.text2, width: 28, height: 28 }}>
+          <Tooltip title={readOnly ? 'Lecture seule' : isEditMode ? 'Quitter édition' : 'Modifier'}>
+            <span>
+            <IconButton size="small" onClick={() => (isEditMode ? exitEditMode() : enterEditMode())} disabled={readOnly} sx={{ color: isEditMode ? T.primary : T.text2, width: 28, height: 28 }}>
               <Edit sx={{ fontSize: 17 }} />
             </IconButton>
+            </span>
           </Tooltip>
           <Tooltip title="Calendrier"><IconButton size="small" sx={{ color: T.text2, width: 28, height: 28 }}><CalendarToday sx={{ fontSize: 17 }} /></IconButton></Tooltip>
           <Tooltip title="Profil voyageur"><IconButton size="small" sx={{ color: T.text2, width: 28, height: 28 }}><Person sx={{ fontSize: 17 }} /></IconButton></Tooltip>

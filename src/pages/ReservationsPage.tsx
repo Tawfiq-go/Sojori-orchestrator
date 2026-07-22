@@ -36,6 +36,7 @@ import { blurActiveElement } from '../utils/domFocus';
 import { logResaGuest, reservationStaySummary } from '../utils/resaGuestActionDebug';
 import { formatGuestCountryDisplay } from '../utils/guestCountryDisplay';
 import { ReservationStayActions, type StayFieldPatch } from '../components/reservations/ReservationStayActions';
+import { useWriteAccess } from '../hooks/useWriteAccess';
 import {
   ReservationRegistrationActions,
   type RegistrationFieldPatch,
@@ -236,6 +237,7 @@ export function ReservationsPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { scopeFetchReady, requestOwnerId, ownerScopeAll } = useAdminOwnerApiScope();
+  const { canWrite } = useWriteAccess('reservations');
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -507,9 +509,10 @@ export function ReservationsPage() {
     setPage(0);
   };
   const openCreateModal = useCallback(() => {
+    if (!canWrite) return;
     blurActiveElement();
     startTransition(() => setIsModalOpen(true));
-  }, []);
+  }, [canWrite]);
 
   // ?action=new (raccourci header) → ouvre la création — réactif au changement
   // d'URL (fonctionne aussi quand on est déjà sur /reservations)
@@ -613,6 +616,7 @@ export function ReservationsPage() {
               }}
               sx={{ flex: 1, minWidth: 180, maxWidth: 320 }}
             />
+            {canWrite ? (
             <Button
               variant="contained"
               size="small"
@@ -629,6 +633,7 @@ export function ReservationsPage() {
             >
               ➕ Ajouter
             </Button>
+            ) : null}
             <FormControl size="small" sx={{ minWidth: 180 }}>
               <Select multiple displayEmpty value={selectedListings}
                 onChange={(e) => setSelectedListings(e.target.value as string[])}

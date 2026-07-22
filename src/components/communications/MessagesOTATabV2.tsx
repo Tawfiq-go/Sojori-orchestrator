@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
@@ -8,6 +8,10 @@ import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
 import messagesService from '../../services/messagesService';
+import {
+  fetchInboxResas,
+  initiateWhatsAppForResa,
+} from '../../services/inboxResasService';
 import type { Thread } from '../../types/unifiedInbox.types';
 import { useInboxOTAConversation } from '../../hooks/useInboxOTAConversation';
 import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
@@ -46,7 +50,7 @@ import {
   invalidateOtaInboxCache,
   setCachedOtaInbox,
 } from '../../utils/otaInboxCache';
-
+import { last9Phone, resasInboxUrl, waInboxUrl } from '../../utils/commsDeepLinks';
 const OTA_INBOX_PAGE_SIZE = 50;
 
 function inboxCursorFromRows(rows: OtaThreadRow[]): string | undefined {
@@ -73,6 +77,7 @@ function mapApiThreads(response: unknown): OtaThreadRow[] {
 }
 
 export default function MessagesOTATabV2() {
+  const navigate = useNavigate();
   /** Liste inbox : actives seulement (Tout / canaux) */
   const [inboxRows, setInboxRows] = useState<OtaThreadRow[]>(() => getCachedOtaInbox() ?? []);
   /** Résultats recherche BD (avancée = toutes resa ; non répondu = actives seulement) */
@@ -102,6 +107,11 @@ export default function MessagesOTATabV2() {
   const [composerDraft, setComposerDraft] = useState('');
   const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
+  const [whatsappGuest, setWhatsappGuest] = useState<{
+    kind: 'loading' | 'actif' | 'jamais' | 'nonum';
+    phone: string;
+  } | null>(null);
+  const [initiatingWhatsApp, setInitiatingWhatsApp] = useState(false);
 
   const inbox = useInboxOTAConversation();
 
@@ -329,6 +339,151 @@ export default function MessagesOTATabV2() {
     }
   }, [inbox.tasks, inbox.activeRow]);
 
+  useEffect(() => {
+    const row = inbox.activeRow;
+    if (!row) {
+      setWhatsappGuest(null);
+      return;
+    }
+    const phoneDigits = String(
+      inbox.reservation?.guestPhone || row.guestPhone || '',
+    ).replace(/\D/g, '');
+    const resaNum = String(
+      inbox.reservation?.reservationNumber || row.reservationNumber || '',
+    ).trim();
+    if (!phoneDigits && !resaNum) {
+      setWhatsappGuest({ kind: 'nonum', phone: '' });
+      return;
+    }
+
+    let cancelled = false;
+    setWhatsappGuest({ kind: 'loading', phone: phoneDigits });
+
+    void (async () => {
+      try {
+        const search = phoneDigits || resaNum;
+        const convRes = await messagesService.getConversations({
+          search,
+          limit: 40,
+          hasReservation: true,
+          owner_id: requestOwnerId || undefined,
+          silent: true,
+        });
+        if (cancelled) return;
+        const list =
+          convRes?.status === 'success'
+            ? (convRes.data.conversations as Array<{
+                phone?: string;
+                reservation_number?: string;
+                reservation_id?: string;
+              }>)
+            : [];
+        const phoneTail = last9Phone(phoneDigits);
+        const resaNeedle = resaNum.toUpperCase();
+        const match = list.find((c) => {
+          if (phoneTail.length >= 9 && last9Phone(String(c.phone || '')) === phoneTail) {
+            return true;
+          }
+          if (!resaNeedle) return false;
+          const num = String(c.reservation_number || c.reservation_id || '')
+            .trim()
+            .toUpperCase();
+          return num === resaNeedle;
+        });
+        if (match) {
+          setWhatsappGuest({
+            kind: 'actif',
+            phone: String(match.phone || phoneDigits).replace(/\D/g, ''),
+          });
+          return;
+        }
+        setWhatsappGuest({
+          kind: phoneDigits ? 'jamais' : 'nonum',
+          phone: phoneDigits,
+        });
+      } catch {
+        if (cancelled) return;
+        setWhatsappGuest({
+          kind: phoneDigits ? 'jamais' : 'nonum',
+          phone: phoneDigits,
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    inbox.activeRow,
+    inbox.reservation?.guestPhone,
+    inbox.reservation?.reservationNumber,
+    requestOwnerId,
+  ]);
+
+  const openWhatsAppForActive = useCallback(() => {
+    const row = inbox.activeRow;
+    const phone =
+      whatsappGuest?.phone ||
+      inbox.reservation?.guestPhone ||
+      row?.guestPhone ||
+      '';
+    const reservationNumber =
+      inbox.reservation?.reservationNumber || row?.reservationNumber || '';
+    if (whatsappGuest?.kind === 'nonum' || (!phone && !reservationNumber)) {
+      navigate(resasInboxUrl({ reservationNumber: reservationNumber || undefined }));
+      return;
+    }
+    if (whatsappGuest?.kind === 'jamais') {
+      navigate(
+        resasInboxUrl({
+          reservationNumber: reservationNumber || undefined,
+          q: reservationNumber || phone,
+        }),
+      );
+      return;
+    }
+    navigate(waInboxUrl({ phone, reservationNumber }));
+  }, [inbox.activeRow, inbox.reservation, whatsappGuest, navigate]);
+
+  const initiateWhatsAppForActive = useCallback(async () => {
+    const reservationNumber = String(
+      inbox.reservation?.reservationNumber || inbox.activeRow?.reservationNumber || '',
+    ).trim();
+    if (!reservationNumber) {
+      navigate(resasInboxUrl());
+      return;
+    }
+    setInitiatingWhatsApp(true);
+    try {
+      const rows = await fetchInboxResas(requestOwnerId || undefined);
+      const match = rows.find(
+        (r) => String(r.reservationNumber || '').toUpperCase() === reservationNumber.toUpperCase(),
+      );
+      if (!match) {
+        navigate(resasInboxUrl({ reservationNumber, q: reservationNumber }));
+        return;
+      }
+      const result = await initiateWhatsAppForResa(match.id);
+      if (result.success) {
+        const phone = (match.phone || whatsappGuest?.phone || '').replace(/\D/g, '');
+        setWhatsappGuest({ kind: 'actif', phone });
+        navigate(waInboxUrl({ phone, reservationNumber }));
+        return;
+      }
+      navigate(resasInboxUrl({ reservationNumber, q: reservationNumber }));
+    } catch {
+      navigate(resasInboxUrl({ reservationNumber, q: reservationNumber }));
+    } finally {
+      setInitiatingWhatsApp(false);
+    }
+  }, [
+    inbox.activeRow,
+    inbox.reservation,
+    requestOwnerId,
+    whatsappGuest?.phone,
+    navigate,
+  ]);
+
   const handleChannelFilterChange = (filter: OtaChannelFilter) => {
     setOtaChannelFilter(filter);
     if (searchMode === 'global' && searchTerm.trim().length >= GLOBAL_SEARCH_MIN_LEN) {
@@ -484,52 +639,96 @@ export default function MessagesOTATabV2() {
 
   const [searchParams] = useSearchParams();
   const deepLinkThread = searchParams.get('thread');
+  const deepLinkReservation =
+    searchParams.get('reservation') || searchParams.get('res') || null;
   const otaDeepLinkedRef = useRef<string | null>(null);
   const otaDeepLinkFetchRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!deepLinkThread || !scopeFetchReady) return;
-    if (otaDeepLinkedRef.current === deepLinkThread) return;
+    if (!scopeFetchReady) return;
+    const linkKey = deepLinkThread
+      ? `thread:${deepLinkThread.trim()}`
+      : deepLinkReservation
+        ? `res:${deepLinkReservation.trim().toUpperCase()}`
+        : null;
+    if (!linkKey) return;
+    if (otaDeepLinkedRef.current === linkKey) return;
 
-    const key = deepLinkThread.trim();
-    const fromList =
-      findOtaThreadByLinkKey(otaBaseRows, key) ?? findOtaThreadByLinkKey(inboxRows, key);
+    const byReservation = (rows: OtaThreadRow[]) => {
+      if (!deepLinkReservation) return undefined;
+      const needle = deepLinkReservation.trim().toUpperCase();
+      return rows.find(
+        (r) => String(r.reservationNumber || '').trim().toUpperCase() === needle,
+      );
+    };
 
-    if (fromList) {
-      otaDeepLinkedRef.current = key;
-      setComposerDraft('');
-      setAiSourceDraft('');
-      void inbox.selectOtaThread(fromList);
+    if (deepLinkThread) {
+      const key = deepLinkThread.trim();
+      const fromList =
+        findOtaThreadByLinkKey(otaBaseRows, key) ?? findOtaThreadByLinkKey(inboxRows, key);
+
+      if (fromList) {
+        otaDeepLinkedRef.current = linkKey;
+        setComposerDraft('');
+        setAiSourceDraft('');
+        void inbox.selectOtaThread(fromList);
+        return;
+      }
+
+      if (loading) return;
+      if (otaDeepLinkFetchRef.current === key) return;
+      otaDeepLinkFetchRef.current = key;
+
+      void (async () => {
+        try {
+          const res = await messagesService.getOTAMessages(key);
+          const row = mapOtaThreadDetailToRow(res);
+          if (!row) return;
+
+          otaDeepLinkedRef.current = linkKey;
+          setInboxRows((prev) => {
+            const exists = prev.some((r) => String(r.threadId) === String(row.threadId));
+            if (exists) return prev;
+            const merged = [row, ...prev];
+            setCachedOtaInbox(merged);
+            return merged;
+          });
+          setComposerDraft('');
+          setAiSourceDraft('');
+          await inbox.selectOtaThread(row);
+        } catch (err) {
+          console.warn('[OTA] deep link: thread introuvable', key, err);
+          otaDeepLinkFetchRef.current = null;
+          // Fallback : code résa dans la liste déjà chargée
+          const byRes = byReservation(otaBaseRows) ?? byReservation(inboxRows);
+          if (byRes) {
+            otaDeepLinkedRef.current = linkKey;
+            setComposerDraft('');
+            setAiSourceDraft('');
+            void inbox.selectOtaThread(byRes);
+          }
+        }
+      })();
       return;
     }
 
+    // Deep link par code résa seul (ex. depuis Résas sans threadId)
     if (loading) return;
-    if (otaDeepLinkFetchRef.current === key) return;
-    otaDeepLinkFetchRef.current = key;
-
-    void (async () => {
-      try {
-        const res = await messagesService.getOTAMessages(key);
-        const row = mapOtaThreadDetailToRow(res);
-        if (!row) return;
-
-        otaDeepLinkedRef.current = key;
-        setInboxRows((prev) => {
-          const exists = prev.some((r) => String(r.threadId) === String(row.threadId));
-          if (exists) return prev;
-          const merged = [row, ...prev];
-          setCachedOtaInbox(merged);
-          return merged;
-        });
-        setComposerDraft('');
-        setAiSourceDraft('');
-        await inbox.selectOtaThread(row);
-      } catch (err) {
-        console.warn('[OTA] deep link: thread introuvable', key, err);
-        otaDeepLinkFetchRef.current = null;
-      }
-    })();
-  }, [deepLinkThread, otaBaseRows, inboxRows, loading, scopeFetchReady, inbox]);
+    const byRes = byReservation(otaBaseRows) ?? byReservation(inboxRows);
+    if (!byRes) return;
+    otaDeepLinkedRef.current = linkKey;
+    setComposerDraft('');
+    setAiSourceDraft('');
+    void inbox.selectOtaThread(byRes);
+  }, [
+    deepLinkThread,
+    deepLinkReservation,
+    otaBaseRows,
+    inboxRows,
+    loading,
+    scopeFetchReady,
+    inbox,
+  ]);
 
   const otaThreadContext = useMemo(
     () => buildOtaThreadContextForAi(inbox.messages),
@@ -656,11 +855,17 @@ export default function MessagesOTATabV2() {
                 setAiSourceDraft(draft);
                 setShowAIModal(true);
               }}
+              whatsappGuestKind={whatsappGuest?.kind ?? null}
+              onOpenWhatsApp={openWhatsAppForActive}
             />
             <ConversationDetails
               thread={activeThread}
               type="ota"
               reservation={inbox.reservation ?? undefined}
+              whatsappGuest={whatsappGuest}
+              onOpenWhatsApp={openWhatsAppForActive}
+              onInitiateWhatsApp={() => void initiateWhatsAppForActive()}
+              initiatingWhatsApp={initiatingWhatsApp}
               onAction={(action) => {
                 if (action === 'view-platform') {
                   console.log('Ouvrir sur', otaPlatform);
