@@ -110,6 +110,8 @@ interface Props {
   onBulkAction: (action: BulkAction, selectedIds: string[]) => void;
   /** Sauvegarde inline config pilote (même schéma que fiche bien) */
   onPatchPilotConfig?: (listingId: string, partial: Partial<PilotPricingConfigDto>) => Promise<void>;
+  /** Admin plateforme : onglet Audit + Data Airbnb. Owner : labels Estimation / Concurrence. */
+  isPlatformAdmin?: boolean;
 }
 
 export default function PortfolioView({
@@ -120,12 +122,17 @@ export default function PortfolioView({
   marketFromCache = false,
   marketFetchedAt = null,
   marketCharts,
+  isPlatformAdmin = false,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exploitableOnly, setExploitableOnly] = useState(true);
   const [tableTab, setTableTab] = useState<PortfolioTableTab>('operational');
   const [airbnbOnly, setAirbnbOnly] = useState(false);
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (!isPlatformAdmin && tableTab === 'audit') setTableTab('operational');
+  }, [isPlatformAdmin, tableTab]);
   const [scopeModal, setScopeModal] = useState<{
     listingId: string;
     listingName: string;
@@ -289,6 +296,7 @@ export default function PortfolioView({
         onAirbnbOnlyChange={setAirbnbOnly}
         airbnbConnectedCount={airbnbConnectedCount}
         onPatchPilotConfig={patchWithScopeGate}
+        isPlatformAdmin={isPlatformAdmin}
       />
 
       <DynamicPriceScopeModal
@@ -446,6 +454,7 @@ function PortfolioTable({
   search, onSearch,
   airbnbOnly, onAirbnbOnlyChange, airbnbConnectedCount,
   onPatchPilotConfig,
+  isPlatformAdmin = false,
 }: {
   rows: PortfolioRow[]; totalCount: number;
   portfolioTotal?: number;
@@ -463,19 +472,29 @@ function PortfolioTable({
   onAirbnbOnlyChange: (v: boolean) => void;
   airbnbConnectedCount: number;
   onPatchPilotConfig?: (listingId: string, partial: Partial<PilotPricingConfigDto>) => Promise<void>;
+  isPlatformAdmin?: boolean;
 }) {
   const bulkSelectEnabled = Boolean(cityScope);
   const [showAirbnbData, setShowAirbnbData] = useState(false);
   const snapshotCols = useMemo(
-    () => (showAirbnbData ? getOperationalSnapshotColumns(false) : []),
-    [showAirbnbData],
+    () => (isPlatformAdmin && showAirbnbData ? getOperationalSnapshotColumns(false) : []),
+    [isPlatformAdmin, showAirbnbData],
+  );
+  const visibleTabs = useMemo(
+    () =>
+      isPlatformAdmin
+        ? TABLE_TABS
+        : TABLE_TABS.filter((t) => t.id !== 'audit'),
+    [isPlatformAdmin],
   );
   const tabNote =
     tableTab === 'audit'
       ? 'Colonnes brutes estimation marché (snapshot AirROI)'
       : tableTab === 'todo'
         ? 'Annonce ou estimation manquante'
-        : 'Réglages pilote §02–§07 · activer « Data Airbnb » pour KPIs snapshot · onglet Audit pour le brut complet';
+        : isPlatformAdmin
+          ? 'Réglages pilote §02–§07 · activer « Data Airbnb » pour KPIs snapshot · onglet Audit pour le brut complet'
+          : 'Estimation marché · concurrence (comps) · réglages prix · sync calendrier';
 
   return (
     <Box sx={{
@@ -504,7 +523,7 @@ function PortfolioTable({
           ) : null}
         </Stack>
         <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
-          {TABLE_TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <Box
               key={t.id}
               component="button"
@@ -555,7 +574,7 @@ function PortfolioTable({
               </Box>
             ) : null}
           </FilterChip>
-          {tableTab === 'operational' ? (
+          {isPlatformAdmin && tableTab === 'operational' ? (
             <FilterChip
               on={showAirbnbData}
               onClick={() => setShowAirbnbData((v) => !v)}
@@ -641,17 +660,17 @@ function PortfolioTable({
                   hintBody="Lien channel manager Sojori ↔ annonce Airbnb. Survol « Airbnb OK » pour voir l’identifiant technique (listing ID)."
                 />
                 <SnapshotHeaderCell
-                  label="MAJ estim."
+                  label={isPlatformAdmin ? 'MAJ estim.' : 'Estimation'}
                   hintTitle="Dernière estimation marché"
-                  hintBody="Date du dernier snapshot / estimate AirROI (prix de marché, comparables, revenue estimate)."
+                  hintBody="Date du dernier snapshot / estimate AirROI (prix de marché, revenue estimate)."
                 />
                 <SnapshotHeaderCell
-                  label="MAJ conc."
+                  label={isPlatformAdmin ? 'MAJ conc.' : 'Concurrence'}
                   hintTitle="Dernière concurrence"
-                  hintBody="Date du dernier GET /listings/comparables (~25 annonces). Cron lundi 04:00 UTC si AUTO concurrence activé."
+                  hintBody="Date du dernier GET /listings/comparables (~25 annonces voisines). Cron lundi si auto activé."
                 />
                 <SnapshotHeaderCell
-                  label="MAJ cal."
+                  label={isPlatformAdmin ? 'MAJ cal.' : 'Calendrier'}
                   hintTitle="Dernière mise à jour calendrier"
                   hintBody="Apply pilote → calendrier Sojori + publication OTA. ⚠ si plus vieille que l’estimation."
                 />

@@ -426,6 +426,18 @@ export default function ConversationThread({
                     <span>{thread.guestsLabel}</span>
                   </>
                 )}
+                {thread.phone && (
+                  <>
+                    <span style={{ color: T.text4 }}>·</span>
+                    <a
+                      href={`tel:${thread.phone.replace(/\s/g, '')}`}
+                      style={{ color: T.primaryDeep, fontWeight: 700, textDecoration: 'none' }}
+                      title="Appeler"
+                    >
+                      📱 {thread.phone}
+                    </a>
+                  </>
+                )}
               </>
             ) : (
               <>

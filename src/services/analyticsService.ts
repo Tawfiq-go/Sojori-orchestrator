@@ -16,6 +16,7 @@ const buildParams = (query: AnalyticsQuery) => ({
   ...(query.listingIds?.length ? { listingIds: query.listingIds } : {}),
   ...(query.customStartDate ? { customStartDate: query.customStartDate } : {}),
   ...(query.customEndDate ? { customEndDate: query.customEndDate } : {}),
+  ...(query.month ? { month: query.month } : {}),
   ...(query.staging !== undefined ? { staging: query.staging } : {}),
   ...(query.ownerId ? { ownerId: query.ownerId } : {}),
 });

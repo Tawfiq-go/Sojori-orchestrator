@@ -7,6 +7,7 @@ import {
 } from '../reservations/ReservationSourceIcon';
 import {
   checkInDaysLabel,
+  flagFromPhone,
   formatInboxDaySeparator,
   formatReservationCreatedDisplay,
   formatStayDateShort,
@@ -265,7 +266,11 @@ export function mapApiItemToOtaThread(item: any): OtaThreadRow {
     source: reservation.source,
     byRentals: reservation.byRentals,
     reservationNumber,
-    guestPhone: reservation.phone || threadData.recipientPhone,
+    guestPhone:
+      reservation.phone ||
+      (Array.isArray(reservation.owner_number) && reservation.owner_number[0]) ||
+      threadData.recipientPhone ||
+      undefined,
     lastMessage: threadData.preview || threadData.lastMessage || '',
     lastMessageTime: threadData.lastMessageAt || threadData.lastMessageDate,
     threadUpdatedAt: threadData.updatedAt,
@@ -296,9 +301,11 @@ function otaRowNeedsReply(row: OtaThreadRow): boolean {
 export function mapOtaRowToThread(row: OtaThreadRow, taskCount?: number): Thread {
   const ch = resolveOtaPlatformChannel(row) ?? otaChannelFromName(row.channel);
   const checkInBadge = checkInDaysLabel(row.checkInDate);
+  const phone = String(row.guestPhone || '').trim() || undefined;
   return {
     id: row.threadId,
     name: row.guestName,
+    phone,
     channel: ch,
     channelColor: otaChannelColor(ch),
     preview: inboxMessagePreview(row.lastMessage) || 'Aucun message',
@@ -317,6 +324,7 @@ export function mapOtaRowToThread(row: OtaThreadRow, taskCount?: number): Thread
     reservationCreatedDisplay: formatReservationCreatedDisplay(row.reservationCreatedAt),
     taskCount,
     messageMatchCount: row.messageMatchCount,
+    guestFlag: flagFromPhone(phone),
   };
 }
 
@@ -336,11 +344,13 @@ export function mapOtaRowToReservation(row: OtaThreadRow): InboxReservationData 
           : normalizeBookingSource(row.channelNameRaw || row.channel);
   const total = row.totalPrice;
   const commission = total != null ? Math.round(total * 0.1) : undefined;
+  const phone = String(row.guestPhone || '').trim() || undefined;
   return {
     reservationNumber: row.reservationNumber,
     listingName: row.listingName,
     bookingSource: source,
     otaPlatform: source,
+    guestPhone: phone,
     reservationStatus:
       row.status?.toLowerCase() === 'confirmed'
         ? 'Confirmée'

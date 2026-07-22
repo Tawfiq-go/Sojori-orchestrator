@@ -162,6 +162,26 @@ export default function ConversationDetails({
                   <Typography component="span">{r.listingName}</Typography>
                 </DtRow>
               )}
+              <DtRow label="Téléphone">
+                {r.guestPhone || thread.phone ? (
+                  <Typography
+                    component="a"
+                    href={`tel:${String(r.guestPhone || thread.phone).replace(/\s/g, '')}`}
+                    sx={{
+                      fontFamily: '"Geist Mono", monospace',
+                      color: T.primaryDeep,
+                      fontWeight: 700,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {r.guestPhone || thread.phone}
+                  </Typography>
+                ) : (
+                  <Typography component="span" sx={{ color: T.text4, fontStyle: 'italic' }}>
+                    Non fourni
+                  </Typography>
+                )}
+              </DtRow>
               <DtRow label="Statut">
                 <StatusPill label={resaStatus} />
               </DtRow>

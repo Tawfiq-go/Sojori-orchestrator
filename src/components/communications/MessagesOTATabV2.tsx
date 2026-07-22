@@ -450,8 +450,14 @@ export default function MessagesOTATabV2() {
   const activeThread: Thread | null = useMemo(() => {
     if (!inbox.activeRow) return null;
     const base = mapOtaRowToThread(inbox.activeRow, inbox.tasks.length);
+    const phone =
+      inbox.reservation?.guestPhone ||
+      inbox.activeRow.guestPhone ||
+      base.phone ||
+      undefined;
     return {
       ...base,
+      phone,
       unread: inbox.activeRow.unreadCount ?? 0,
       listingName:
         inbox.reservation?.listingName ??

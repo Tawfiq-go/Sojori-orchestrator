@@ -54,10 +54,9 @@ export const DETAIL_TABS = [
 
 /**
  * Sidebar Multi (anti-redondance) :
- * - Infos bâtiment → types, stock, capacité
+ * - Infos bâtiment → identité bâtiment uniquement
  * - Photos → listingImages + roomTypeImages
- * - Pricing → basePrice par type
- * Pas d’onglet « Types de chambres » qui re-édite images/stock/prix.
+ * - Config Rooms → nom, stock, capacité, prix par type
  */
 export const DETAIL_TABS_MULTI = [
   { group: 'Bâtiment', items: [
@@ -67,7 +66,7 @@ export const DETAIL_TABS_MULTI = [
     { id: 'amenities',    icon: '✨', label: 'Équipements communs' },
   ]},
   { group: 'Commercial', items: [
-    { id: 'pricing',      icon: '💰', label: 'Pricing (par type)' },
+    { id: 'pricing',      icon: '🛏', label: 'Config Rooms' },
     { id: 'availability', icon: '📅', label: 'Disponibilité & séjour' },
     { id: 'fees',         icon: '💳', label: 'Fees & Deposits' },
   ]},
@@ -570,7 +569,7 @@ export default function ListingFormShell({
             flexDirection: 'column',
             position: 'relative',
           }}>
-            {!isOrchV3 && (
+            {!isOrchV3 && !(propertyUnit === 'Multi' && activeTab === 'photos') && (
             <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center', flexWrap: 'wrap', mb: activeTab === 'amenities' ? 1.25 : 1.5 }}>
               <Typography
                 component="h2"

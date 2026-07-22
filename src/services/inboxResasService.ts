@@ -9,6 +9,8 @@ export interface InboxResaRow {
   reservationNumber: string;
   guestName: string;
   phone: string;
+  /** Provenance : ota | whatsapp | admin — rempli via whitelist si backfill */
+  phoneSource?: 'ota' | 'whatsapp' | 'admin' | null;
   channelName: string;
   listingId: string;
   listingName: string;

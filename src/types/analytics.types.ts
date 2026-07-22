@@ -3,6 +3,7 @@ export const analyticsPeriodOptions = [
   { value: '30d', label: '30j' },
   { value: '3m', label: '3m' },
   { value: '1y', label: '1an' },
+  { value: 'month', label: 'Mois' },
   { value: 'custom', label: 'Custom' },
 ] as const;
 
@@ -17,6 +18,8 @@ export interface AnalyticsQuery {
   listingIds?: string[];
   customStartDate?: string;
   customEndDate?: string;
+  /** Mois calendaire YYYY-MM (passé / en cours / futur) — comme le dashboard. */
+  month?: string;
   staging?: boolean;
   active?: string[];
   /** Admin : propriétaire sélectionné (scope obligatoire). */
