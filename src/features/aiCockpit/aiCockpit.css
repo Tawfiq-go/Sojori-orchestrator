@@ -384,6 +384,84 @@
 .ck-kpi.warn b { color: var(--ck-warn); }
 .ck-kpi.ok b { color: var(--ck-ok); }
 
+/* ── Audit du jour ── */
+
+.ck-audit {
+  background: var(--ck-panel);
+  border: 1px solid var(--ck-line);
+  border-left: 3px solid var(--ck-ok);
+  border-radius: 14px;
+  padding: 10px 14px;
+  box-shadow: 0 1px 2px rgba(20, 17, 10, 0.04);
+  animation: ck-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ck-audit.warn { border-left-color: var(--ck-warn); }
+.ck-audit.high { border-left-color: var(--ck-bad); }
+
+.ck-audit-hdr {
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  color: var(--ck-text);
+}
+
+.ck-audit.ok .ck-audit-hdr { color: var(--ck-ok); }
+.ck-audit.high .ck-audit-hdr { color: var(--ck-bad); }
+.ck-audit.warn .ck-audit-hdr { color: var(--ck-warn); }
+
+.ck-audit-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--ck-text2);
+  padding: 5px 8px;
+  border-radius: 9px;
+  background: var(--ck-panel2);
+  border: 1px solid var(--ck-line);
+}
+
+.ck-audit-item.high {
+  background: rgba(200, 30, 30, 0.06);
+  border-color: rgba(200, 30, 30, 0.22);
+  color: var(--ck-bad);
+  font-weight: 750;
+}
+
+.ck-audit-ico { flex-shrink: 0; }
+
+.ck-audit-lbl { flex: 1; min-width: 0; line-height: 1.35; }
+
+.ck-audit-item button {
+  flex-shrink: 0;
+  border: 1px solid var(--ck-line-strong);
+  background: var(--ck-panel);
+  color: var(--ck-text2);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 4px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ck-audit-item button:hover { color: var(--ck-gold-deep); border-color: var(--ck-gold); }
+
+.ck-audit-item button.primary {
+  background: var(--ck-gold);
+  border-color: var(--ck-gold);
+  color: #fff;
+}
+
+/* Heure par défaut non confirmée = signal visible dans les checklists */
+.ck-check.hour-warn .ck-check-detail { color: var(--ck-warn); }
+
 /* ── Tableau de vol ── */
 
 .ck-board { position: relative; }

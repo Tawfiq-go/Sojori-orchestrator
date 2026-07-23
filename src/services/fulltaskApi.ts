@@ -528,6 +528,9 @@ export type DayPlanStep = {
   estimatedTime?: string;
   /** Prochaine relance client planifiée (ISO) — quand l'heure n'est pas encore choisie. */
   nextRelanceAt?: string;
+  /** État de propreté du bien (source de vérité srv-listing). */
+  listingCleanliness?: 'clean' | 'dirty' | 'in_progress';
+  listingOccupancy?: 'occupied' | 'vacant';
   /** Historique + planification des relances du choose-task (départ/arrivée). */
   relances?: DayPlanStepRelance[];
   /** TaskId du choose-task — « Fixer une heure » / « Relancer maintenant ». */
