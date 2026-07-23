@@ -78,6 +78,23 @@ type CopilotReply = {
   action?: { step: DayPlanStep; action: DayPlanAction } | null;
 };
 
+type AuditItem = {
+  id: string;
+  sev: 'high' | 'warn';
+  icon: string;
+  label: string;
+  step?: DayPlanStep;
+  action?: DayPlanAction;
+  openPanel?: boolean;
+};
+
+/** Chip d'état de propreté du bien (source srv-listing). */
+const CLEAN_CHIP: Record<string, { cls: string; txt: string }> = {
+  clean: { cls: 'ok', txt: '🧼 propre' },
+  dirty: { cls: 'broken', txt: '🧽 SALE' },
+  in_progress: { cls: 'tight', txt: '🧹 ménage en cours' },
+};
+
 /* ─── Copilot local (plan compilé → réponse) ─── */
 
 function norm(s: string): string {
@@ -282,6 +299,72 @@ export default function AiCockpit() {
 
   const targets = useMemo(() => new Set(reply?.targets ?? []), [reply]);
 
+  /* ══ Audit du jour : les problèmes à traiter, pas juste de l'affichage ══ */
+  const auditItems = useMemo<AuditItem[]>(() => {
+    if (!plan) return [];
+    const items: AuditItem[] = [];
+    const arrivalsToday = new Set(
+      plan.steps.filter((s) => s.kind === 'arrival').map((s) => s.reservationId),
+    );
+    for (const s of plan.steps) {
+      if (s.kind === 'arrival' && s.state !== 'done' && s.listingCleanliness === 'dirty') {
+        items.push({
+          id: `dirty:${s.id}`,
+          sev: 'high',
+          icon: '🧽',
+          label: `Bien SALE — arrivée ${s.guestName ?? ''} · ${s.listingName}${plan.steps.some((x) => x.kind === 'cleaning' && x.listingId === s.listingId) ? '' : ' — aucun ménage planifié'}`,
+          step: s,
+          openPanel: Boolean(s.relances?.length),
+          action: s.attention?.actions?.[0],
+        });
+      }
+      if ((s.kind === 'departure' || s.kind === 'arrival') && s.state !== 'done' && s.hourUnknown) {
+        items.push({
+          id: `hour:${s.id}`,
+          sev: 'warn',
+          icon: '⏱',
+          label: `Heure ${s.kind === 'departure' ? 'de départ' : "d'arrivée"} non confirmée (défaut ≈ ${s.estimatedTime ?? '—'}) — ${s.guestName ?? ''} · ${s.listingName}`,
+          step: s,
+          action: s.chooseTaskId
+            ? { type: 'force_slot', label: 'Fixer une heure', taskId: s.chooseTaskId }
+            : undefined,
+          openPanel: Boolean(s.relances?.length),
+        });
+      }
+      if (s.kind === 'cleaning' && s.state !== 'done' && !s.staffName) {
+        items.push({
+          id: `staff:${s.id}`,
+          sev: 'warn',
+          icon: '🧹',
+          label: `Ménage non assigné · ${s.listingName}`,
+          step: s,
+          action: s.taskId ? { type: 'assign', label: 'Assigner un staff', taskId: s.taskId } : undefined,
+        });
+      }
+      if (s.taskType === 'registration' && s.state !== 'done' && arrivalsToday.has(s.reservationId)) {
+        items.push({
+          id: `reg:${s.id}`,
+          sev: 'warn',
+          icon: '📋',
+          label: `Enregistrement en attente — ${s.guestName ?? ''} · ${s.listingName}`,
+          step: s,
+          openPanel: true,
+        });
+      }
+    }
+    for (const c of plan.chains ?? []) {
+      if (c.status === 'broken' && !c.hoursUnknown) {
+        items.push({
+          id: `chain:${c.id}`,
+          sev: 'high',
+          icon: '⚠',
+          label: `Chaîne de turnover cassée (${fmtDuration(c.slackMinutes)} de dépassement) · ${c.listingName}`,
+        });
+      }
+    }
+    return items.sort((a, b) => (a.sev === b.sev ? 0 : a.sev === 'high' ? -1 : 1));
+  }, [plan]);
+
   useEffect(() => {
     if (!reply) return undefined;
     setTyped('');
@@ -477,6 +560,31 @@ export default function AiCockpit() {
         <Kpi value={String(kAttn)} label={kAttn > 0 ? 'décisions requises' : 'décision requise ✓'} tone={kAttn > 0 ? 'warn' : 'ok'} delay={240} />
       </div>
 
+      {/* ══ Audit du jour : problèmes à traiter, avec action directe ══ */}
+      {plan && (
+        <div className={`ck-audit ${auditItems.some((i) => i.sev === 'high') ? 'high' : auditItems.length ? 'warn' : 'ok'}`}>
+          <div className="ck-audit-hdr">
+            {auditItems.length
+              ? `🚨 Audit du jour · ${auditItems.length} point${auditItems.length > 1 ? 's' : ''} à traiter`
+              : '✓ Audit du jour — rien à signaler'}
+          </div>
+          {auditItems.map((it) => (
+            <div key={it.id} className={`ck-audit-item ${it.sev}`}>
+              <span className="ck-audit-ico" aria-hidden>{it.icon}</span>
+              <span className="ck-audit-lbl">{it.label}</span>
+              {it.step && it.openPanel && (
+                <button type="button" onClick={() => setRelanceStep(it.step!)}>Détails</button>
+              )}
+              {it.step && it.action && (
+                <button type="button" className="primary" onClick={() => runAction(it.step!, it.action!)}>
+                  {it.action.label}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ══ Tableau de vol des turnovers ══ */}
       <div className="ck-board" ref={boardRef}>
         <div className="ck-board-title">
@@ -511,10 +619,12 @@ export default function AiCockpit() {
             </div>
             {soloGroups.map((g, i) => {
               const attn = g.steps.find((s) => s.state === 'attention');
+              const soloClean = g.steps.find((s) => s.listingCleanliness)?.listingCleanliness;
+              const soloCleanChip = soloClean ? CLEAN_CHIP[soloClean] : null;
               return (
                 <div
                   key={g.reservationId}
-                  className={`ck-flight ${attn ? 'tight' : 'ok'}`}
+                  className={`ck-flight ${soloClean === 'dirty' ? 'broken' : attn ? 'tight' : 'ok'}`}
                   style={{ animationDelay: `${Math.min(i, 8) * 70}ms` }}
                 >
                   <div className="ck-flight-head">
@@ -522,11 +632,16 @@ export default function AiCockpit() {
                       {g.listingName}
                       {g.guestName ? ` · ${g.guestName}` : ''}
                     </span>
-                    {attn ? (
-                      <span className="ck-flight-chip tight">✋ décision requise</span>
-                    ) : (
-                      <span className="ck-flight-chip ok">✓ en ordre</span>
-                    )}
+                    <span style={{ display: 'inline-flex', gap: 6, flexShrink: 0 }}>
+                      {soloCleanChip && (
+                        <span className={`ck-flight-chip ${soloCleanChip.cls}`}>{soloCleanChip.txt}</span>
+                      )}
+                      {attn ? (
+                        <span className="ck-flight-chip tight">✋ décision requise</span>
+                      ) : (
+                        <span className="ck-flight-chip ok">✓ en ordre</span>
+                      )}
+                    </span>
                   </div>
                   <ChecksList
                     steps={g.steps}
@@ -810,10 +925,12 @@ function ChecksList({
         const isRegistration = s.taskType === 'registration';
         const isCleaningTask = s.kind === 'cleaning' && Boolean(s.taskId);
         const clickable = Boolean(s.relances?.length) || isRegistration || isCleaningTask;
+        /* Heure par défaut non confirmée (ni client ni admin) = problème visible. */
+        const hourWarn = s.hourUnknown && s.state !== 'done';
         return (
           <div
             key={s.id}
-            className={`ck-check ${state} ${clickable ? 'has-rel' : ''}`}
+            className={`ck-check ${state} ${clickable ? 'has-rel' : ''} ${hourWarn ? 'hour-warn' : ''}`}
             title={s.attention?.reason || (clickable ? 'Voir relances & actions' : s.title)}
             onClick={clickable ? () => onOpenRelances(s) : undefined}
           >
@@ -922,6 +1039,11 @@ function FlightRow({
 
   const cta = attentionStep?.attention?.actions?.[0];
 
+  /* État de propreté du bien — visible dès l'en-tête du turnover. */
+  const cleanliness =
+    arrival?.listingCleanliness ?? departure?.listingCleanliness ?? undefined;
+  const cleanChip = cleanliness ? CLEAN_CHIP[cleanliness] : null;
+
   return (
     <div
       className={`ck-flight ${statusChip.cls} ${targeted ? 'is-target' : ''}`}
@@ -930,7 +1052,10 @@ function FlightRow({
     >
       <div className="ck-flight-head">
         <span className="ck-flight-name" title={chain.listingName}>{chain.listingName}</span>
-        <span className={`ck-flight-chip ${statusChip.cls}`}>{statusChip.txt}</span>
+        <span style={{ display: 'inline-flex', gap: 6, flexShrink: 0 }}>
+          {cleanChip && <span className={`ck-flight-chip ${cleanChip.cls}`}>{cleanChip.txt}</span>}
+          <span className={`ck-flight-chip ${statusChip.cls}`}>{statusChip.txt}</span>
+        </span>
       </div>
 
       <div className="ck-strip">
