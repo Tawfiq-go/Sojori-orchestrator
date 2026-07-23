@@ -9,6 +9,7 @@ import {
   cyclePermissionAccess,
   defaultAdminNotifications,
   emptyWhatsappAdmin,
+  waAdminLanguageLabel,
   type WhatsappAdminDesign,
 } from './whatsappAdminTypes';
 import { initials } from './staffDesignConstants';
@@ -213,7 +214,7 @@ export default function WhatsappAdminPageView({
                     {a.username}
                     <span className="admin">{a.banned ? 'BANNI' : 'ACTIF'}</span>
                   </div>
-                  <div className="role">{a.language}</div>
+                  <div className="role">{waAdminLanguageLabel(a.language)}</div>
                 </div>
                 <div className="actions">
                   <button type="button" onClick={() => openEdit(a)}>
@@ -232,7 +233,7 @@ export default function WhatsappAdminPageView({
                       </span>
                     );
                   })}
-                <span className="task-chip active">{a.language}</span>
+                <span className="task-chip active">{waAdminLanguageLabel(a.language)}</span>
               </div>
               <div className="meta-line">
                 <span style={{ textTransform: 'uppercase', fontSize: 9.5, fontWeight: 700 }}>
@@ -316,12 +317,12 @@ export default function WhatsappAdminPageView({
                 <div className="pill-group">
                   {WA_LANGUAGES.map((lg) => (
                     <button
-                      key={lg}
+                      key={lg.value}
                       type="button"
-                      className={`pill-toggle${form.language === lg ? ' on' : ''}`}
-                      onClick={() => patchForm({ language: lg })}
+                      className={`pill-toggle${form.language === lg.value ? ' on' : ''}`}
+                      onClick={() => patchForm({ language: lg.value })}
                     >
-                      {lg}
+                      {lg.label}
                     </button>
                   ))}
                 </div>

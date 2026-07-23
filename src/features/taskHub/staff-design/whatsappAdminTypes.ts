@@ -37,7 +37,31 @@ export const WA_ADMIN_TYPES = [
   { type: 'Task', label: 'Supervision tâches', menuLetter: 'T', abbr: 'TS' },
 ] as const;
 
-export const WA_LANGUAGES = ['French', 'English', 'Francais', 'Arabic'] as const;
+/** Langues WhatsApp Admin (ops) — alignées normalizeAdminLanguageForTemplates. */
+export const WA_LANGUAGES = [
+  { value: 'French', label: 'Français' },
+  { value: 'English', label: 'English' },
+  { value: 'Arabic', label: 'Darija' },
+] as const;
+
+export type WaLanguageValue = (typeof WA_LANGUAGES)[number]['value'];
+
+/** Normalize legacy stored values (Francais, Darija, …) to a WA_LANGUAGES value. */
+export function normalizeWaAdminLanguage(raw: string | null | undefined): WaLanguageValue {
+  const n = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '');
+  if (['english', 'en', 'eng'].includes(n)) return 'English';
+  if (['arabic', 'ar', 'darija', 'dariya', 'arab'].includes(n)) return 'Arabic';
+  return 'French';
+}
+
+export function waAdminLanguageLabel(raw: string | null | undefined): string {
+  const value = normalizeWaAdminLanguage(raw);
+  return WA_LANGUAGES.find((l) => l.value === value)?.label ?? value;
+}
 
 export type TaskNotifyEvent = 'created' | 'cancelled';
 
@@ -257,7 +281,7 @@ export function apiWhatsappAdminToDesign(row: Record<string, unknown>): Whatsapp
     _id: String(row._id),
     username: String(row.username || ''),
     whatsappPhone: String(row.whatsappPhone || ''),
-    language: String(row.language || 'French'),
+    language: normalizeWaAdminLanguage(String(row.language || 'French')),
     listingIds,
     cityIds,
     banned: Boolean(row.banned),

@@ -527,12 +527,12 @@ export default function StaffPageView({
                 <div className="pill-group">
                   {LANG_OPTIONS.map((lg) => (
                     <button
-                      key={lg}
+                      key={lg.value}
                       type="button"
-                      className={`pill-toggle${form.lang === lg ? ' on' : ''}`}
-                      onClick={() => patchForm({ lang: lg as WorkLang })}
+                      className={`pill-toggle${form.lang === lg.value ? ' on' : ''}`}
+                      onClick={() => patchForm({ lang: lg.value as WorkLang })}
                     >
-                      {lg.toUpperCase()}
+                      {lg.label}
                     </button>
                   ))}
                 </div>
