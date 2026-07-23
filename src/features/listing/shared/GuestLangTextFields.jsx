@@ -29,7 +29,7 @@ export const GUEST_LANG_FIELDS = [
 ];
 
 const NON_FR_LANGS = GUEST_LANG_FIELDS.filter((l) => l.key !== 'fr');
-const CACHE_PREFIX = 'sojori:guestLangI18n:v1:';
+const CACHE_PREFIX = 'sojori:guestLangI18n:v2:';
 
 export function emptyGuestLangMap(fill = '') {
   return Object.fromEntries(GUEST_LANG_FIELDS.map((l) => [l.key, fill]));
@@ -233,9 +233,19 @@ export function GuestLangTextFields({
 
       const cached = readCache(fr, targets);
       if (cached) {
-        applyTranslations(cached);
-        setError('');
-        return;
+        const usableCached = Object.fromEntries(
+          Object.entries(cached).filter(([, val]) => {
+            if (typeof val !== 'string' || !val.trim()) return false;
+            const v = val.trim();
+            if (v === fr && (fr.split(/\s+/).length >= 2 || fr.length >= 16)) return false;
+            return true;
+          }),
+        );
+        if (Object.keys(usableCached).length > 0) {
+          applyTranslations(usableCached);
+          setError('');
+          return;
+        }
       }
 
       setLoading(true);
@@ -243,18 +253,27 @@ export function GuestLangTextFields({
       try {
         const res = await translateGuestLangs({ text: fr, targetLangs: targets, sourceLang: 'fr' });
         const translations = res?.data?.translations || {};
-        if (!translations || Object.keys(translations).length === 0) {
+        const usable = Object.fromEntries(
+          Object.entries(translations).filter(([lang, val]) => {
+            if (typeof val !== 'string' || !val.trim()) return false;
+            const v = val.trim();
+            if (v === fr && (fr.split(/\s+/).length >= 2 || fr.length >= 16)) return false;
+            if (lang === 'ar' && v === fr) return false;
+            return true;
+          }),
+        );
+        if (!usable || Object.keys(usable).length === 0) {
           if (!silent) {
-            setError(res?.data?.error || 'Traduction indisponible. Réessayez.');
+            setError(res?.data?.error || 'Traduction indisponible (réponse non traduite). Réessayez.');
           }
           return;
         }
-        writeCache(fr, targets, translations);
-        const next = applyTranslations(translations);
+        writeCache(fr, targets, usable);
+        const next = applyTranslations(usable);
         // Ensure translated langs appear in the navigator.
         setActiveKeys((prev) => {
           const merged = [...prev];
-          for (const k of Object.keys(translations)) {
+          for (const k of Object.keys(usable)) {
             if (NON_FR_LANGS.some((l) => l.key === k) && !merged.includes(k)) merged.push(k);
           }
           return merged;
