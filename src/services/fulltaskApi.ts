@@ -267,6 +267,8 @@ export type PlanDispatchApiResponse = {
   error?: string;
   code?: string;
   data?: unknown;
+  alreadyDeferred?: boolean;
+  message?: string;
   dispatch?: { stubOnly?: boolean; channel?: string };
 };
 
@@ -324,6 +326,65 @@ export async function sendPlanRelance(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/relances/${relanceIndex}/send`,
     opts?.forceResend ? { forceResend: true } : {},
   );
+}
+
+/** Relance admin hors planning — WhatsApp ou OTA (nouvelle ligne d'historique sur le plan). */
+export async function sendExtraPlanRelance(
+  reservationId: string,
+  taskId: string,
+  channel: 'whatsapp' | 'OTA',
+) {
+  return postPlanDispatch(
+    `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/relances/extra`,
+    { channel },
+  );
+}
+
+/** Aperçu corps message (WA / email / OTA) — mêmes interpolations que l’envoi. */
+export async function previewPlanDispatch(
+  reservationId: string,
+  opts:
+    | { kind: 'message'; messageIndex: number }
+    | { kind: 'relance'; taskId: string; relanceIndex: number },
+): Promise<{
+  success: boolean;
+  error?: string;
+  data?: {
+    label: string;
+    messageId?: string;
+    bodies: Array<{
+      canal: 'whatsapp' | 'email' | 'OTA';
+      content: string;
+      metaTemplateName?: string;
+      templateVariables?: string[];
+    }>;
+  };
+}> {
+  const params = new URLSearchParams({ kind: opts.kind });
+  if (opts.kind === 'message') {
+    params.set('messageIndex', String(opts.messageIndex));
+  } else {
+    params.set('taskId', opts.taskId);
+    params.set('relanceIndex', String(opts.relanceIndex));
+  }
+  const { data } = await apiClient.get(
+    `${BASE}/plans/${encodeURIComponent(reservationId)}/dispatch-preview?${params.toString()}`,
+    { validateStatus: () => true },
+  );
+  return data as {
+    success: boolean;
+    error?: string;
+    data?: {
+      label: string;
+      messageId?: string;
+      bodies: Array<{
+        canal: 'whatsapp' | 'email' | 'OTA';
+        content: string;
+        metaTemplateName?: string;
+        templateVariables?: string[];
+      }>;
+    };
+  };
 }
 
 export type AssignationContext = {
@@ -407,6 +468,17 @@ export async function forcePlanGuestSlot(
   return postPlanDispatch(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/escalade/force-slot`,
     { time, ...(opts?.date ? { date: opts.date } : {}) },
+  );
+}
+
+/** Stop relances enregistrement + mode à l'arrivée (accès WhatsApp OK, guest peut encore s'enregistrer). */
+export async function deferRegistrationToArrival(
+  reservationId: string,
+  opts?: { note?: string },
+) {
+  return postPlanDispatch(
+    `${BASE}/plans/${encodeURIComponent(reservationId)}/registration/defer-to-arrival`,
+    opts?.note ? { note: opts.note } : {},
   );
 }
 
@@ -523,6 +595,8 @@ export type DayPlanStep = {
   taskType?: string;
   staffName?: string | null;
   registrationPending?: boolean;
+  /** Mode à l'arrivée — affiché, non bloquant, accès WhatsApp OK. */
+  registrationAtArrival?: boolean;
   state: 'done' | 'pending' | 'attention';
   /** Heure par défaut estimée ('HH:mm' — départ 11:00 / arrivée 15:00) quand hourUnknown. */
   estimatedTime?: string;
@@ -538,6 +612,8 @@ export type DayPlanStep = {
   guestPhone?: string;
   auto: boolean;
   meta?: string;
+  /** Accueil staff — points à vérifier. */
+  checklist?: Array<{ id: string; label: string; required: boolean; done?: boolean }>;
   chainId?: string;
   slackMinutes?: number;
   attention?: {
@@ -560,6 +636,8 @@ export type DayPlanChain = {
   status: 'ok' | 'tight' | 'broken';
   cleaningDurationMinutes: number;
   expectedCleaningEnd: string;
+  /** HH:mm mur — afficher tel quel (évite décalage TZ sur ISO). */
+  expectedCleaningEndHm?: string;
   /** Heures départ/arrivée non choisies : la marge est estimée sur des défauts. */
   hoursUnknown?: boolean;
 };

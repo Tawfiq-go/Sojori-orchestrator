@@ -6,10 +6,12 @@ function normalizeApiRole(role: string | undefined, prev?: MockUserRole | string
   const r = String(role ?? prev ?? '').trim();
   const lower = r.toLowerCase();
   if (r === Roles.Worker || lower === 'worker' || lower === 'staff') return Roles.Worker;
-  if (r === Roles.Owner || lower === 'owner') return 'owner';
-  if (r === Roles.Admin || lower === 'admin') return 'admin';
-  if (r === Roles.SuperAdmin || lower === 'superadmin') return 'admin';
-  return r || prev || 'owner';
+  // Keep canonical Owner (not legacy mock lowercase) — role checks use Roles.Owner.
+  if (r === Roles.Owner || lower === 'owner') return Roles.Owner;
+  if (r === Roles.Admin || lower === 'admin') return Roles.Admin;
+  if (r === Roles.SuperAdmin || lower === 'superadmin') return Roles.SuperAdmin;
+  if (r === Roles.Landlord || lower === 'landlord') return Roles.Landlord;
+  return r || prev || Roles.Owner;
 }
 
 export function apiUserToMockUser(api: ApiUser, prev: MockUser | null): MockUser {
@@ -23,6 +25,7 @@ export function apiUserToMockUser(api: ApiUser, prev: MockUser | null): MockUser
     role,
     ownerId: api.ownerId ?? prev?.ownerId,
     ownerAccess: api.ownerAccess ?? prev?.ownerAccess ?? false,
+    listingIds: api.listingIds ?? (prev as { listingIds?: string[] } | null)?.listingIds,
     featureGrants: api.featureGrants ?? prev?.featureGrants ?? [],
     phone: api.phone ?? prev?.phone ?? '',
     company: api.company ?? prev?.company ?? '',

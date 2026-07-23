@@ -119,6 +119,10 @@ export interface WizardCapabilities {
   departureChoose: boolean;
   arrivalDeclare: boolean;
   departureDeclare: boolean;
+  /** Accueil staff à l'arrivée (tâche receive_arrival). */
+  receiveArrival?: boolean;
+  /** Accueil staff au départ (tâche receive_departure). */
+  receiveDeparture?: boolean;
   transport: boolean;
   groceries: boolean;
   concierge: boolean;

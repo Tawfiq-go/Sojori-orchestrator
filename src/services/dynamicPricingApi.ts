@@ -666,6 +666,8 @@ export type ApplyPreviewDiffRowDto = {
   airroiMad: number | null;
   g7ProposedMad: number | null;
   calendarCurrentMad: number | null;
+  /** Prix Sojori figé à la réservation (priceBreakdown) — jours réservés. */
+  bookedPriceMad?: number | null;
   baseImportMad: number | null;
   deltaMad: number | null;
   alert: ApplyPreviewDiffAlertDto;

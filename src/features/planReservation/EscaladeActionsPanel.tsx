@@ -53,6 +53,7 @@ interface Props {
   guestName?: string;
   reservationRef?: string;
   staffAssignment?: StaffAssignmentPlan;
+  clientChosenTime?: string;
   onDispatched?: (planDoc?: FulltaskPlanDoc) => void;
 }
 
@@ -65,12 +66,19 @@ export default function EscaladeActionsPanel({
   guestName,
   reservationRef,
   staffAssignment,
+  clientChosenTime,
   onDispatched,
 }: Props) {
   const escaladeActive = escalade.status === 'active';
   const [forceSlotOpen, setForceSlotOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [callStaffOpen, setCallStaffOpen] = useState(false);
+  const isGuestSlot = /^(arrival|departure)_(choose|declare)$/.test(taskType);
+  const slotLabel = isGuestSlot
+    ? clientChosenTime
+      ? `Modifier l’heure · ${clientChosenTime}`
+      : 'Choisir l’heure'
+    : 'Forcer créneau';
 
   const defaultWaText = taskType.includes('departure')
     ? `Bonjour${guestName ? ` ${guestName.split(/\s+/)[0]}` : ''}, c'est l'équipe Sojori pour votre départ (${reservationRef || ''}). Pouvez-vous confirmer votre créneau ?`
@@ -147,7 +155,7 @@ export default function EscaladeActionsPanel({
         />
         <ActionBtn icon="👤" label="Assigner staff" onClick={() => setAssignOpen(true)} />
         <ActionBtn icon="📋" label="Appeler un staff" onClick={() => setCallStaffOpen(true)} />
-        <ActionBtn icon="⏰" label="Forcer créneau" onClick={() => setForceSlotOpen(true)} />
+        <ActionBtn icon="⏰" label={slotLabel} onClick={() => setForceSlotOpen(true)} />
         <ActionBtn icon="❌" label="Annuler la tâche" danger onClick={() => void cancelTask()} />
       </div>
 
@@ -156,6 +164,8 @@ export default function EscaladeActionsPanel({
         reservationId={reservationId}
         taskId={taskId}
         taskType={taskType}
+        mode={clientChosenTime ? 'modify' : 'choose'}
+        initialTime={clientChosenTime}
         onClose={() => setForceSlotOpen(false)}
         onSubmitted={onDispatched}
       />

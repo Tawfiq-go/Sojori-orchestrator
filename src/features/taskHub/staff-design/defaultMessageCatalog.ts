@@ -1,5 +1,4 @@
 import {
-  WELCOME_MESSAGE_TEMPLATE_FR,
   WHATSAPP_RESERVATION_LINK_VAR,
   ensureCatalogWhatsAppLink,
 } from './orchestrationMessageVars';
@@ -16,13 +15,31 @@ export const CLAUDE_DEFAULT_MESSAGE_CATALOG: CatalogMessage[] = [
 Votre réservation {reservationNumber} pour {listingName} est confirmée.
 Arrivée : {arrivalDate} · Départ : {departureDate} · {nights} nuit(s)
 
-Pour préparer votre séjour (enregistrement, heure d'arrivée, services), contactez-nous sur WhatsApp :
+Pour préparer votre arrivée, écrivez-nous sur WhatsApp :
+• consignes d'accès et parcours jusqu'au logement
+{babyCotBlock}• navette aéroport
+• ménage, courses, conciergerie et autres services
 
+👉 WhatsApp (réf. {reservationNumber}) :
 ${WHATSAPP_RESERVATION_LINK_VAR}
 
-Cordialement,
 Équipe Sojori`,
-    messageFrEmail: WELCOME_MESSAGE_TEMPLATE_FR,
+    messageFrEmail: `Objet : Bienvenue — {listingName} · {reservationNumber}
+
+Bonjour {firstName},
+
+Votre réservation {reservationNumber} pour {listingName} est confirmée.
+Arrivée : {arrivalDate} · Départ : {departureDate} · {nights} nuit(s)
+
+Pour préparer votre arrivée, écrivez-nous sur WhatsApp :
+• consignes d'accès et parcours jusqu'au logement
+{babyCotBlock}• navette aéroport
+• ménage, courses, conciergerie et autres services
+
+👉 WhatsApp (réf. {reservationNumber}) :
+${WHATSAPP_RESERVATION_LINK_VAR}
+
+Équipe Sojori`,
   },
   {
     id: 'checkin_feedback',

@@ -208,6 +208,8 @@ export interface PlanGuestRelanceItem {
   scheduleOffsetLabel?: string;
   executionStatus: RelanceExecutionStatus;
   rawStatus: 'en_attente' | 'envoyee' | 'saute' | 'echec';
+  /** Raison métier si saute (ex. client_a_repondu). */
+  skipReason?: string;
   relanceIndex: number;
   /** Dernier envoi (manuel ou scheduler) pour audit UI. */
   lastDispatch?: import('./planDispatchDisplay').PlanLastDispatchView;
@@ -256,6 +258,8 @@ export interface PlanSequenceView {
   hasEscalade: boolean;
   /** Client a choisi heure arrivée/départ — bloc relances terminé. */
   clientActionCompleted?: boolean;
+  /** Enregistrement passé en mode à l'arrivée (stop relances, non bloquant). */
+  deferredToArrival?: boolean;
   /** Heure choisie par le client (depuis payload tâche). */
   clientChosenTime?: string;
   /** Statut tâche fulltask (waiting_guest, done, cancelled…). */

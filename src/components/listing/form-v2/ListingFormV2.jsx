@@ -128,10 +128,22 @@ export default function ListingFormV2({
         );
       } else {
         console.error('[ListingFormV2] Sync FAILED - error:', syncResult.error);
-        toast.error(
-          `Échec de la synchronisation vers les OTAs: ${syncResult.error || 'Erreur inconnue'}`,
-          { autoClose: 8000 }
-        );
+        const blockers = Array.isArray(syncResult.data?.otaBlockers)
+          ? syncResult.data.otaBlockers
+          : [];
+        if (blockers.length > 0) {
+          toast.error(
+            `Annonce non publiable OTA / wizard RU — corrigez :\n${blockers
+              .map((b, i) => `${i + 1}. ${b.message || b}`)
+              .join('\n')}`,
+            { autoClose: 15000 }
+          );
+        } else {
+          toast.error(
+            `Échec de la synchronisation vers les OTAs: ${syncResult.error || 'Erreur inconnue'}`,
+            { autoClose: 8000 }
+          );
+        }
       }
     } catch (error) {
       console.error('[ListingFormV2] handlePublish exception:', error);

@@ -16,6 +16,8 @@ const STAFF_PILL_LABEL_OVERRIDES: Partial<Record<FulltaskTaskTypeId, string>> = 
   departure_choose: 'Choisir départ',
   arrival_declare: 'Déclarer arrivée',
   departure_declare: 'Déclarer départ',
+  receive_arrival: 'Accueil arrivée',
+  receive_departure: 'Accueil départ',
   registration: 'Enregistrement',
   checkout_cleaning: 'Ménage Sojori',
 };

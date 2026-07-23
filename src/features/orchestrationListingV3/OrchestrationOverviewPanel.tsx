@@ -63,7 +63,9 @@ import {
 } from './ownerScheduledMessagesApi';
 import type { CatalogMessage, ScheduledOrchestrationMessage } from '../taskHub/staff-design/types';
 import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
+import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
 import OrchestrationGlobalSwitch from './OrchestrationGlobalSwitch';
+import CapabilityAuditStrip from './CapabilityAuditStrip';
 import { V3Section } from './V3Primitives';
 import { GROUP_EMOJI } from './V3Rail';
 import { V3 } from './theme';
@@ -151,6 +153,20 @@ const TIMING_PRESETS: Record<
     fin: 'J0',
     anchor: 'checkout',
     hint: 'Choisir départ J-3 → jour du départ',
+  },
+  receive_arrival: {
+    label: 'Jour J arrivée',
+    start: 0,
+    fin: 'J0',
+    anchor: 'checkin',
+    hint: 'Accueil staff le jour d’arrivée (lié à D1)',
+  },
+  receive_departure: {
+    label: 'Jour J départ',
+    start: 0,
+    fin: 'J0',
+    anchor: 'checkout',
+    hint: 'Accueil staff le jour de départ (lié à D2)',
   },
   arrival_declare: {
     label: 'Jour J arrivée',
@@ -476,8 +492,9 @@ const CLIENT_MSG_ID: Record<string, string> = {
 };
 
 const STAFF_MSG_ID: Record<string, string> = {
-  arrival_choose: 'staff_reminder_arrival',
-  departure_choose: 'staff_reminder_departure',
+  // arrival_choose / departure_choose / registration : pas de rappel staff (task N/A)
+  receive_arrival: 'staff_reminder_receive_arrival',
+  receive_departure: 'staff_reminder_receive_departure',
   cleaning_free: 'staff_reminder_cleaning',
   cleaning_paid: 'staff_reminder_cleaning',
   checkout_cleaning: 'staff_reminder_cleaning',
@@ -489,8 +506,22 @@ const STAFF_MSG_ID: Record<string, string> = {
 };
 
 function defaultRefForTask(taskType: string): string {
-  if (taskType === 'arrival_choose' || taskType === 'registration' || taskType === 'arrival_declare') return 'checkin';
-  if (taskType === 'departure_choose' || taskType === 'departure_declare' || taskType === 'checkout_cleaning') return 'checkout';
+  if (
+    taskType === 'arrival_choose' ||
+    taskType === 'registration' ||
+    taskType === 'arrival_declare' ||
+    taskType === 'receive_arrival'
+  ) {
+    return 'checkin';
+  }
+  if (
+    taskType === 'departure_choose' ||
+    taskType === 'departure_declare' ||
+    taskType === 'checkout_cleaning' ||
+    taskType === 'receive_departure'
+  ) {
+    return 'checkout';
+  }
   if (taskType === 'support' || taskType === 'service_client') return 'task_created';
   return 'scheduledDate';
 }
@@ -1112,17 +1143,21 @@ export default function OrchestrationOverviewPanel({
       }
     }
     const taskType = def.taskType ?? capKey;
+    const noOpsTask = def.columns.task === 'na';
     const decisions = {
       managed: true,
       clientEnabled: flags.clientEnabled,
       // Colonne ON = master ; plus de bouton Orchestrer en UI.
       orchestrated: true,
-      taskEnabled: def.columns.task === 'na' ? false : flags.taskEnabled,
+      taskEnabled: noOpsTask ? false : flags.taskEnabled,
     };
     const onDemand = isOnDemandCapability(def);
+    const flagInput = onDemand ? { ...flags, clientReminders: false } : flags;
     const execution = buildExecutionFromFlags(
       cap,
-      onDemand ? { ...flags, clientReminders: false } : flags,
+      noOpsTask
+        ? { ...flagInput, taskEnabled: false, staffReminders: false }
+        : flagInput,
       taskType,
       { onDemand },
     );
@@ -1255,7 +1290,6 @@ export default function OrchestrationOverviewPanel({
     if (!cap || !def) return null;
     const taskType = def.taskType ?? '';
     const exec = cap.execution ?? {};
-    const isDeparture = taskType === 'departure_choose' || taskType === 'departure_declare';
     const close = () => setEditor(null);
 
     let body: JSX.Element | null = null;
@@ -1263,7 +1297,11 @@ export default function OrchestrationOverviewPanel({
     if (editor.kind === 'availability') {
       const av = (cap.whatsapp?.menuOptions?.[0]?.availability ?? { type: 'always' }) as Availability;
       const fallbackAnchor: TimingAnchor =
-        taskType === 'departure_choose' || taskType === 'departure_declare' ? 'checkout' : 'checkin';
+        taskType === 'departure_choose' ||
+        taskType === 'departure_declare' ||
+        taskType === 'receive_departure'
+          ? 'checkout'
+          : 'checkin';
       const { start: curStart, fin: curFin, anchor: curAnchor } = parseTimingState(av, fallbackAnchor);
       const curReqs = requiresList(av);
       const preset = TIMING_PRESETS[editor.capKey];
@@ -1906,11 +1944,14 @@ export default function OrchestrationOverviewPanel({
           reminders: reminders.length
             ? `${daysHuman(reminders.map((r) => Number(r.day ?? 0)))} à ${hourOf(String(reminders[0]?.time ?? ''))}`
             : '—',
-          assign: sa ? assignHuman(sa) : '—',
-          autoAssign: sa ? (sa as { autoAssign?: boolean }).autoAssign === true : null,
-          staffReminder: staffRem.length
-            ? `${daysHuman(staffRem.map((r) => Number(r.day ?? 0)))} à ${hourOf(String(staffRem[0]?.time ?? ''))}`
-            : '—',
+          // Choisir heure / enregistrement : pas de tâche ops → assignation & rappels staff N/A
+          assign: hasTaskCol ? (sa ? assignHuman(sa) : '—') : 'N/A',
+          autoAssign: hasTaskCol && sa ? (sa as { autoAssign?: boolean }).autoAssign === true : null,
+          staffReminder: hasTaskCol
+            ? staffRem.length
+              ? `${daysHuman(staffRem.map((r) => Number(r.day ?? 0)))} à ${hourOf(String(staffRem[0]?.time ?? ''))}`
+              : '—'
+            : 'N/A',
           escalation: escalationHuman(escOn, dl),
         };
       }),
@@ -2058,6 +2099,10 @@ export default function OrchestrationOverviewPanel({
           ) : null}
         </Typography>
       </Box>
+
+      {!isListingScope && doc ? (
+        <CapabilityAuditStrip capabilities={doc.capabilities as Record<string, CapDoc> | undefined} />
+      ) : null}
 
       <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: 2, p: 1.5, bgcolor: V3.card }}>
         <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t, mb: 1 }}>
@@ -2265,12 +2310,16 @@ export default function OrchestrationOverviewPanel({
                   </Typography>
                   <Typography
                     component="div"
-                    sx={r.on && r.hasTask ? editCell : cell}
-                    onClick={r.on && r.hasTask ? open('assign', r.key) : undefined}
-                    title="Assignation staff — début / fin / auto-accept"
+                    sx={r.on && r.hasTaskCol ? editCell : cell}
+                    onClick={r.on && r.hasTaskCol ? open('assign', r.key) : undefined}
+                    title={
+                      r.hasTaskCol
+                        ? 'Assignation staff — début / fin / auto-accept'
+                        : 'N/A — pas de tâche ops staff (choix heure / enregistrement)'
+                    }
                   >
                     {r.assign}
-                    {r.autoAssign != null && r.assign !== '—' && (
+                    {r.autoAssign != null && r.assign !== '—' && r.assign !== 'N/A' && (
                       <Box component="span" sx={{ ml: 0.5, fontSize: 11, color: r.autoAssign ? V3.task : V3.t4 }}>
                         · Auto {r.autoAssign ? '✓' : '✗'}
                       </Box>
@@ -2278,9 +2327,13 @@ export default function OrchestrationOverviewPanel({
                   </Typography>
                   <Typography
                     component="div"
-                    sx={r.on && r.hasTask ? editCell : cell}
-                    onClick={r.on && r.hasTask ? open('staffRem', r.key) : undefined}
-                    title="Rappels staff — notification équipe (jour + heure)"
+                    sx={r.on && r.hasTaskCol ? editCell : cell}
+                    onClick={r.on && r.hasTaskCol ? open('staffRem', r.key) : undefined}
+                    title={
+                      r.hasTaskCol
+                        ? 'Rappels staff — notification équipe (jour + heure)'
+                        : 'N/A — pas de rappel staff (pas de tâche ops)'
+                    }
                   >
                     {r.staffReminder}
                   </Typography>
@@ -2641,6 +2694,15 @@ export default function OrchestrationOverviewPanel({
                     <V3CleaningIncludedPanel
                       gestion={configGestionValues}
                       listingValues={listingValues}
+                      onSave={async (nextGestion) => {
+                        await onGestionPatch(configDef.key, nextGestion);
+                      }}
+                    />
+                  ) : configDef.key === 'receive_arrival' ||
+                    configDef.key === 'receive_departure' ? (
+                    <V3ReceiveChecklistPanel
+                      kind={configDef.key === 'receive_arrival' ? 'arrival' : 'departure'}
+                      gestion={configGestionValues}
                       onSave={async (nextGestion) => {
                         await onGestionPatch(configDef.key, nextGestion);
                       }}

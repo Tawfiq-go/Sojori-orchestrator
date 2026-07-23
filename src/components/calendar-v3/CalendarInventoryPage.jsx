@@ -17,12 +17,14 @@ import { normalizeCalendarReservation, reservationRouteId } from './reservationC
 import reservationsService from '../../services/reservationsService';
 import {
   MULTI_VISIBLE_DAYS,
+  INVENTORY_PAST_RETENTION_DAYS,
   CALENDAR_HORIZON_MESSAGE,
   clampPivotDate,
   isAtHorizonEnd,
+  formatHorizonEndLabel,
   getCalendarWindowBounds,
 } from './inventoryCalendarConstants';
-
+import { useWriteAccess } from '../../hooks/useWriteAccess';
 function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
@@ -44,6 +46,7 @@ export default function CalendarInventoryPage({
   listingNameById = {},
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsProp || [];
+  const { canWrite } = useWriteAccess('calendar/multi');
   const [searchParams, setSearchParams] = useSearchParams();
   const viewFromUrl = searchParams.get('view') === 'simple' ? 'simple' : 'multi';
 
@@ -87,15 +90,14 @@ export default function CalendarInventoryPage({
   const [selectedColumns, setSelectedColumns] = useState([
     'availableRoom',
     'rate',
-    'dynamicPrice',
     'minStay',
+    'dynamicPrice',
   ]);
   const [pivotDate, setPivotDate] = useState(() => startOfDay(startDate));
   const [modalCells, setModalCells] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerAnchor, setPickerAnchor] = useState(null);
   const [limitHint, setLimitHint] = useState(null);
-  const [listingSearch, setListingSearch] = useState('');
   const [drawerReservation, setDrawerReservation] = useState(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
 
@@ -104,16 +106,6 @@ export default function CalendarInventoryPage({
   const atHorizonEnd = isAtHorizonEnd(pivotDate);
 
   const windowStart = useMemo(() => startOfDay(pivotDate), [pivotDate]);
-
-  const filteredListings = useMemo(() => {
-    const q = listingSearch.trim().toLowerCase();
-    if (!q) return listings;
-    return listings.filter((l) => {
-      const name = String(l.name || '').toLowerCase();
-      const city = String(l.city || '').toLowerCase();
-      return name.includes(q) || city.includes(q);
-    });
-  }, [listings, listingSearch]);
 
   useEffect(() => {
     setPivotDate(clampPivotDate(startDate));
@@ -126,16 +118,17 @@ export default function CalendarInventoryPage({
   }, [limitHint]);
 
   useEffect(() => {
-    // Vue simple : auto-sélection si aucun listing URL ou filtre search a exclu la sélection.
-    if (view !== 'simple' || filteredListings.length === 0) return;
+    // Vue simple façon Airbnb : le 1er listing est auto-sélectionné,
+    // et on re-sélectionne si le listing de l'URL n'existe plus dans le catalogue.
+    if (view !== 'simple' || listings.length === 0) return;
     const exists =
       selectedListingId &&
-      filteredListings.some((l) => String(l._id) === String(selectedListingId));
-    if (!exists) setSelectedListingId(String(filteredListings[0]._id));
-  }, [view, filteredListings, selectedListingId, setSelectedListingId]);
+      listings.some((l) => String(l._id) === String(selectedListingId));
+    if (!exists) setSelectedListingId(String(listings[0]._id));
+  }, [view, listings, selectedListingId, setSelectedListingId]);
 
   const selectedListing = useMemo(() => {
-    const cat = filteredListings.find((l) => String(l._id) === String(selectedListingId));
+    const cat = listings.find((l) => String(l._id) === String(selectedListingId));
     if (!cat) return null;
     return {
       ...cat,
@@ -147,7 +140,7 @@ export default function CalendarInventoryPage({
         },
       ],
     };
-  }, [filteredListings, selectedListingId, inventoriesByListing]);
+  }, [listings, selectedListingId, inventoriesByListing]);
 
   const commitDate = (d) => {
     const requested = startOfDay(d);
@@ -242,7 +235,7 @@ export default function CalendarInventoryPage({
         >
           {[
             { id: 'multi', label: '📊 Vue multi', count: listings.length },
-            { id: 'simple', label: '📅 Vue simple', count: listings.length },
+            { id: 'simple', label: '📅 Vue simple', count: 1 },
           ].map((opt) => {
             const active = view === opt.id;
             return (
@@ -364,29 +357,20 @@ export default function CalendarInventoryPage({
           }}
         />
 
-        {listings.length > 1 ? (
-          <input
-            type="search"
-            value={listingSearch}
-            onChange={(e) => setListingSearch(e.target.value)}
-            placeholder="Rechercher un listing…"
-            aria-label="Rechercher un listing"
+        {view !== 'simple' && (
+          <span
             style={{
-              flex: '1 1 160px',
-              minWidth: 140,
-              maxWidth: 240,
-              height: 32,
-              padding: '0 12px',
-              fontSize: 12.5,
+              fontSize: 10.5,
+              color: T.text3,
               fontWeight: 600,
-              color: T.text,
-              background: T.bg2,
-              border: `1px solid ${T.border}`,
-              borderRadius: 9,
-              outline: 'none',
+              maxWidth: 280,
+              lineHeight: 1.35,
             }}
-          />
-        ) : null}
+            title={`Dernière date inventaire : ${formatHorizonEndLabel()}`}
+          >
+            Calendrier géré sur 3 ans · jusqu&apos;au {formatHorizonEndLabel()}
+          </span>
+        )}
 
         {limitHint && (
           <span
@@ -405,6 +389,20 @@ export default function CalendarInventoryPage({
           </span>
         )}
 
+        {view !== 'simple' && (
+          <span
+            style={{
+              fontSize: 10.5,
+              color: T.text3,
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+            }}
+            title={`Jours avant J-${INVENTORY_PAST_RETENTION_DAYS} : InventoryArchive (srv-calendar)`}
+          >
+            Historique gris · hors fenêtre : — (pas de 0)
+          </span>
+        )}
+
         <DpSyncAuditStrip
           summary={dpSyncSummary}
           listingNameById={listingNameById}
@@ -414,34 +412,44 @@ export default function CalendarInventoryPage({
 
       </div>
 
-      {listingSearch.trim() && filteredListings.length === 0 ? (
-        <div
-          style={{
-            fontSize: 13,
-            color: T.text3,
-            fontWeight: 600,
-            padding: '24px 16px',
-            textAlign: 'center',
-            background: T.bg1,
-            border: `1px solid ${T.border}`,
-            borderRadius: 14,
-            marginBottom: 8,
-          }}
-        >
-          Aucun listing pour « {listingSearch.trim()} »
-        </div>
-      ) : null}
-
-      {view === 'multi' && filteredListings.length > 0 && (
+      {view === 'multi' && (
         <MultiView
           startDate={windowStart}
           daysCount={MULTI_VISIBLE_DAYS}
-          listingCatalog={filteredListings}
+          listingCatalog={listings}
           inventoriesByListing={inventoriesByListing}
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
-          onCellsSelected={setModalCells}
+          onCellsSelected={canWrite ? setModalCells : undefined}
           onOpenReservation={openReservationDrawer}
+          onToggleDynamicPrice={
+            canWrite
+              ? async ({ listingId, roomTypeId, dateStr, enable }) => {
+                  const listing = listings.find((l) => String(l._id) === String(listingId));
+                  const rtId = roomTypeId || listing?.roomTypeId || listing?.roomTypes?.[0]?._id;
+                  if (!rtId || !dateStr) return;
+                  const base = {
+                    roomTypeId: String(rtId),
+                    date_from: dateStr,
+                    date_to: dateStr,
+                    listingName: listing?.name || listing?.title || '',
+                    roomTypeName: listing?.roomTypeName || '',
+                  };
+                  await onUpdateInventory?.([
+                    {
+                      ...base,
+                      type: 'setUseDynamicPriceManual',
+                      setUseDynamicPriceManual: enable,
+                    },
+                    {
+                      ...base,
+                      type: 'setPriceMode',
+                      priceMode: enable ? 'dynamic' : 'base',
+                    },
+                  ]);
+                }
+              : undefined
+          }
         />
       )}
       {view === 'simple' && inventoryLoading && (
@@ -459,7 +467,7 @@ export default function CalendarInventoryPage({
       {view === 'simple' && selectedListing && (
         <SimpleView
           listing={selectedListing}
-          listings={filteredListings}
+          listings={listings}
           selectedListingId={selectedListingId}
           onSelectListing={setSelectedListingId}
           year={pivotDate.getFullYear()}
@@ -468,7 +476,7 @@ export default function CalendarInventoryPage({
           onLoadMoreMonths={onLoadMoreMonths}
           inventoryLoading={inventoryLoading}
           inventories={inventoriesByListing[selectedListingId] || {}}
-          onCellsSelected={setModalCells}
+          onCellsSelected={canWrite ? setModalCells : undefined}
           onOpenReservation={openReservationDrawer}
         />
       )}

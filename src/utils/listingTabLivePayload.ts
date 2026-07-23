@@ -135,6 +135,8 @@ export function buildListingTabLivePayload(
         'orchestration_choose_departure',
         'orchestration_declare_arrival',
         'orchestration_declare_departure',
+        'orchestration_receive_arrival',
+        'orchestration_receive_departure',
         'orchestration_transport',
         'orchestration_grocery',
         'orchestration_custom',

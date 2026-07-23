@@ -13,6 +13,8 @@ const WIZARD_CAP_LABELS: Partial<Record<keyof WizardCapabilities, string>> = {
   departureChoose: 'Départ',
   arrivalDeclare: 'Déclarer arrivée',
   departureDeclare: 'Déclarer départ',
+  receiveArrival: 'Accueil arrivée',
+  receiveDeparture: 'Accueil départ',
   transport: 'Transport',
   groceries: 'Courses',
   concierge: 'Conciergerie',

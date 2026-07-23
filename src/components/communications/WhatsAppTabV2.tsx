@@ -254,8 +254,9 @@ export default function WhatsAppTabV2() {
 
   useEffect(() => {
     if (loading) return;
-    const linkKey = deepLinkPhone
-      ? `phone:${deepLinkPhone}`
+    const phoneDigits = (deepLinkPhone || '').replace(/\D/g, '');
+    const linkKey = phoneDigits
+      ? `phone:${phoneDigits}`
       : deepLinkReservation
         ? `res:${deepLinkReservation}`
         : null;
@@ -263,13 +264,16 @@ export default function WhatsAppTabV2() {
     if (waDeepLinkedRef.current === linkKey) return;
 
     let conv: Conversation | undefined;
-    if (deepLinkPhone) {
-      const needle = deepLinkPhone.replace(/\s/g, '');
+    if (phoneDigits) {
+      const needleTail = phoneDigits.slice(-9);
       conv = displayConversations.find((c) => {
-        const p = (c.phone || '').replace(/\s/g, '');
-        return p === needle || c.phone === deepLinkPhone;
+        const pDigits = (c.phone || '').replace(/\D/g, '');
+        if (pDigits === phoneDigits) return true;
+        if (needleTail.length >= 9 && pDigits.slice(-9) === needleTail) return true;
+        return false;
       });
-    } else if (deepLinkReservation) {
+    }
+    if (!conv && deepLinkReservation) {
       const resNeedle = deepLinkReservation.trim().toUpperCase();
       conv = displayConversations.find((c) => {
         const num = String(c.reservation_number || c.reservation_id || '').trim().toUpperCase();

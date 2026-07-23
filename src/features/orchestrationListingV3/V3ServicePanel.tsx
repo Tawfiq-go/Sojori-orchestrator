@@ -13,6 +13,7 @@ import type { OwnerOrchestrationDoc } from './ownerOrchestrationApi';
 import { saveListingGestion } from './listingOrchestrationApi';
 import { saveOwnerGestion } from './ownerOrchestrationApi';
 import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
+import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
 import V3TaskBehaviorPanel from './V3TaskBehaviorPanel';
 import { V3 } from './theme';
 import { V3Badge, V3DecisionPill } from './V3Primitives';
@@ -190,30 +191,60 @@ export default function V3ServicePanel({
 
     switch (activePanel) {
       case 'gestion':
-        return def.key === 'cleaning_free' ? (
-          <V3CleaningIncludedPanel
-            gestion={(orchestrationDoc.capabilities?.cleaning_free?.gestion ?? {}) as Record<string, unknown>}
-            listingValues={listingValues}
-            onSave={async nextGestion => {
-              if (ownerTemplateMode) {
-                await saveOwnerGestion({
-                  ownerKey,
-                  capabilityKey: 'cleaning_free',
-                  gestion: nextGestion,
-                  doc: orchestrationDoc as OwnerOrchestrationDoc,
-                });
-              } else {
-                await saveListingGestion({
-                  listingId,
-                  capabilityKey: 'cleaning_free',
-                  gestion: nextGestion,
-                  doc: orchestrationDoc as ListingOrchestrationDoc,
-                });
-              }
-              onReload();
-            }}
-          />
-        ) : (
+        if (def.key === 'cleaning_free') {
+          return (
+            <V3CleaningIncludedPanel
+              gestion={(orchestrationDoc.capabilities?.cleaning_free?.gestion ?? {}) as Record<string, unknown>}
+              listingValues={listingValues}
+              onSave={async nextGestion => {
+                if (ownerTemplateMode) {
+                  await saveOwnerGestion({
+                    ownerKey,
+                    capabilityKey: 'cleaning_free',
+                    gestion: nextGestion,
+                    doc: orchestrationDoc as OwnerOrchestrationDoc,
+                  });
+                } else {
+                  await saveListingGestion({
+                    listingId,
+                    capabilityKey: 'cleaning_free',
+                    gestion: nextGestion,
+                    doc: orchestrationDoc as ListingOrchestrationDoc,
+                  });
+                }
+                onReload();
+              }}
+            />
+          );
+        }
+        if (def.key === 'receive_arrival' || def.key === 'receive_departure') {
+          const kind = def.key === 'receive_arrival' ? 'arrival' : 'departure';
+          return (
+            <V3ReceiveChecklistPanel
+              kind={kind}
+              gestion={(orchestrationDoc.capabilities?.[def.key]?.gestion ?? {}) as Record<string, unknown>}
+              onSave={async nextGestion => {
+                if (ownerTemplateMode) {
+                  await saveOwnerGestion({
+                    ownerKey,
+                    capabilityKey: def.key,
+                    gestion: nextGestion,
+                    doc: orchestrationDoc as OwnerOrchestrationDoc,
+                  });
+                } else {
+                  await saveListingGestion({
+                    listingId,
+                    capabilityKey: def.key,
+                    gestion: nextGestion,
+                    doc: orchestrationDoc as ListingOrchestrationDoc,
+                  });
+                }
+                onReload();
+              }}
+            />
+          );
+        }
+        return (
           <CapabilityGestionPanel
             def={def}
             scope={matrixScope}

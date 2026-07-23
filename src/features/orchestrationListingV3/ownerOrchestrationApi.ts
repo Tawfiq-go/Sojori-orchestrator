@@ -19,6 +19,7 @@ import {
 } from './listingOrchestrationApi';
 import { loadCapabilityMatrix, saveCapabilityRow } from '../serviceMatrix/capabilityMatrixApi';
 import { cleaningIncludedToGestion, parseCleaningIncludedGestion } from './cleaningGestionHelpers';
+import { defaultReceiveGestion } from './receiveChecklistDefaults';
 import { isAxiosError } from 'axios';
 import { enrichOwnerDocGestionFromTemplate } from './enrichOwnerOrchestration';
 
@@ -157,6 +158,11 @@ function buildOwnerGestionFromTemplate(
         checkoutTimeslotsEnabled: listing.checkoutTimeslotsEnabled,
         TS_CHECKOUT: listing.TS_CHECKOUT ?? [],
       };
+    case 'receive_arrival':
+    case 'receive_departure':
+      return defaultReceiveGestion(
+        capabilityKey === 'receive_arrival' ? 'arrival' : 'departure',
+      );
     case 'arrival_declare':
     case 'departure_declare':
       return undefined;

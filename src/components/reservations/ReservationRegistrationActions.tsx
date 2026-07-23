@@ -52,7 +52,16 @@ type Props = {
   total?: number;
   members?: GuestMemberRecord[];
   disabled?: boolean;
+  /** Mode à l'arrivée déjà actif (plan / day-plan). */
+  deferredToArrival?: boolean;
+  /**
+   * `link` (défaut) = compteur 0/1 souligné — tables denses.
+   * `button` = CTA explicite « Ouvrir l'enregistrement · 0/1 » — cockpit / panneaux.
+   */
+  variant?: 'link' | 'button';
   onRegistrationUpdated?: (patch: RegistrationFieldPatch) => void;
+  /** Après passage en mode à l'arrivée (reload parent). */
+  onDeferredToArrival?: () => void;
 };
 
 const EMPTY_MEMBER: GuestMemberInput = {
@@ -110,7 +119,10 @@ export function ReservationRegistrationActions({
   total = 0,
   members,
   disabled,
+  deferredToArrival: deferredProp,
+  variant = 'link',
   onRegistrationUpdated,
+  onDeferredToArrival,
 }: Props) {
   const safeTotal = Math.max(total, 1);
   const safeRegistered = Math.min(Math.max(registered, 0), safeTotal);
@@ -118,15 +130,44 @@ export function ReservationRegistrationActions({
 
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState<'one' | 'force' | null>(null);
+  const [busy, setBusy] = useState<'one' | 'force' | 'defer' | null>(null);
   const [flow, setFlow] = useState<RegistrationFlowState | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [memberForm, setMemberForm] = useState<GuestMemberInput>(EMPTY_MEMBER);
+  const [deferredLocal, setDeferredLocal] = useState(Boolean(deferredProp));
+  const deferred = deferredLocal || Boolean(deferredProp);
 
-  const label = useMemo(
-    () => `${safeRegistered}/${safeTotal}`,
-    [safeRegistered, safeTotal],
-  );
+  const label = useMemo(() => {
+    const base = `${safeRegistered}/${safeTotal}`;
+    if (complete) return base;
+    if (deferred) return `${base} · à l’arrivée`;
+    return base;
+  }, [safeRegistered, safeTotal, complete, deferred]);
+
+  useEffect(() => {
+    setDeferredLocal(Boolean(deferredProp));
+  }, [deferredProp, reservationId]);
+
+  const runDeferToArrival = async () => {
+    if (!reservationId || complete) return;
+    setBusy('defer');
+    try {
+      const res = await fulltaskApi.deferRegistrationToArrival(reservationId);
+      if (res?.success === false) throw new Error(res?.error || 'Échec');
+      setDeferredLocal(true);
+      toast.success(
+        res?.alreadyDeferred
+          ? 'Déjà en mode à l’arrivée'
+          : 'Enregistrement passé à l’arrivée — plus de relances, accès WhatsApp OK',
+      );
+      onDeferredToArrival?.();
+      onRegistrationUpdated?.({});
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Impossible de passer à l’arrivée');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const loadFlow = async () => {
     if (!reservationId) return;
@@ -271,22 +312,56 @@ export function ReservationRegistrationActions({
 
   return (
     <>
-      <Box
-        component="span"
-        title="Enregistrement voyageurs"
-        onClick={(e) => {
-          if (disabled) return;
-          setAnchor(e.currentTarget);
-        }}
-        sx={{
-          ...linkSx,
-          color: complete ? T.success : T.primaryDeep,
-          textDecoration: complete ? 'none' : 'underline',
-          textDecorationStyle: 'dotted',
-        }}
-      >
-        {label}
-      </Box>
+      {variant === 'button' ? (
+        <Button
+          size="small"
+          variant="contained"
+          disabled={disabled}
+          title="Cliquer pour ouvrir le formulaire d’enregistrement"
+          onClick={(e) => {
+            if (disabled) return;
+            setAnchor(e.currentTarget);
+          }}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 800,
+            fontSize: 12,
+            px: 1.25,
+            py: 0.6,
+            boxShadow: 'none',
+            bgcolor: complete ? T.success : T.primaryDeep,
+            '&:hover': { bgcolor: complete ? '#087a50' : '#6e4f14', boxShadow: 'none' },
+          }}
+        >
+          {complete
+            ? `✓ Enregistrement · ${label}`
+            : deferred
+              ? `📝 Ouvrir · ${label}`
+              : `📝 Ouvrir l’enregistrement · ${label}`}
+        </Button>
+      ) : (
+        <Box
+          component="button"
+          type="button"
+          title="Cliquer pour ouvrir l’enregistrement voyageurs"
+          onClick={(e) => {
+            if (disabled) return;
+            setAnchor(e.currentTarget);
+          }}
+          sx={{
+            ...linkSx,
+            appearance: 'none',
+            background: 'transparent',
+            border: 0,
+            color: complete ? T.success : T.primaryDeep,
+            textDecoration: complete ? 'none' : 'underline',
+            textDecorationStyle: 'dotted',
+            textUnderlineOffset: '3px',
+          }}
+        >
+          {label}
+        </Box>
+      )}
 
       <Popover
         open={Boolean(anchor)}
@@ -298,7 +373,7 @@ export function ReservationRegistrationActions({
         slotProps={{ paper: { sx: { p: 1.5, width: 280, border: `1px solid ${T.border}` } } }}
       >
         <Typography sx={{ fontSize: 10, fontWeight: 700, color: T.text3, mb: 1, textTransform: 'uppercase' }}>
-          Enregistrement
+          Enregistrement voyageurs · cliquable
         </Typography>
 
         {loading ? (
@@ -374,6 +449,40 @@ export function ReservationRegistrationActions({
                 {busy === 'force' ? '…' : 'Tout enregistrer'}
               </Button>
             </Stack>
+
+            {!complete && (
+              <Button
+                size="small"
+                fullWidth
+                variant={deferred ? 'contained' : 'outlined'}
+                disabled={Boolean(busy) || deferred}
+                onClick={() => void runDeferToArrival()}
+                sx={{
+                  mb: 1,
+                  fontSize: 10,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  py: 0.45,
+                  borderColor: deferred ? undefined : T.primaryDeep,
+                  bgcolor: deferred ? T.text3 : undefined,
+                  color: deferred ? '#fff' : T.primaryDeep,
+                  boxShadow: 'none',
+                }}
+              >
+                {busy === 'defer'
+                  ? '…'
+                  : deferred
+                    ? '✓ Mode à l’arrivée'
+                    : 'Passer à l’arrivée (stop relances)'}
+              </Button>
+            )}
+
+            {deferred && !complete && (
+              <Typography sx={{ fontSize: 10, color: T.text3, mb: 1, lineHeight: 1.35 }}>
+                Plus de relances. Le guest peut encore s’enregistrer ; les accès WhatsApp ne sont
+                plus bloqués par l’enregistrement.
+              </Typography>
+            )}
 
             <Stack spacing={0.75} sx={{ mb: 1 }}>
               <TextField

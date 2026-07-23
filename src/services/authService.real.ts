@@ -24,9 +24,11 @@ export interface User {
   phone?: string;
   company?: string;
   avatar?: string;
-  /** Compte propriétaire (Worker) */
+  /** Compte propriétaire (Worker / Landlord) */
   ownerId?: string;
   ownerAccess?: boolean;
+  /** Annonces assignées (Worker restreint / Landlord). */
+  listingIds?: string[];
   featureGrants?: Array<{ feature?: string; actions?: string[] }>;
 }
 
@@ -83,6 +85,9 @@ function userFromValidTokenPayload(data: Record<string, unknown>): User | undefi
         ? String(r.ownerId)
         : undefined,
     ownerAccess: !!r.ownerAccess,
+    listingIds: Array.isArray(r.listingIds)
+      ? r.listingIds.map((id) => String(id))
+      : undefined,
     featureGrants: Array.isArray(r.featureGrants)
       ? (r.featureGrants as User['featureGrants'])
       : [],

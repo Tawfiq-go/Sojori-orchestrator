@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react';
+import { toast } from 'react-toastify';
+import * as fulltaskApi from '../../services/fulltaskApi';
 import type {
   AssignAttempt,
   Channel,
@@ -11,9 +13,11 @@ import type {
 } from './types';
 import DispatchLastSendLine from './DispatchLastSendLine';
 import DispatchPreviewChips from './DispatchPreviewChips';
+import MessageBodyPreview from './MessageBodyPreview';
 import PlanAssignButtons from './PlanAssignButtons';
 import PlanDispatchButton from './PlanDispatchButton';
 import EscaladeActionsPanel from './EscaladeActionsPanel';
+import SequenceGuestOpsBar from './SequenceGuestOpsBar';
 import {
   groupStatusLabel,
   relancesGroupStatusLabel,
@@ -23,6 +27,46 @@ import {
   sequenceStatusLabel,
   showRelanceConfigHint,
 } from './planGroupStatus';
+import { formatSkipReason } from '../../utils/planStatusMappers';
+
+function DeferRegistrationButton({
+  reservationId,
+  onDone,
+}: {
+  reservationId: string;
+  onDone?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className="btn-ghost"
+      disabled={busy}
+      onClick={() => {
+        if (busy) return;
+        setBusy(true);
+        void (async () => {
+          try {
+            const res = await fulltaskApi.deferRegistrationToArrival(reservationId);
+            if (res?.success === false) throw new Error(res?.error || 'Échec');
+            toast.success(
+              res?.alreadyDeferred
+                ? 'Déjà en mode à l’arrivée'
+                : 'Enregistrement → à l’arrivée (stop relances, accès OK)',
+            );
+            onDone?.(res?.data as import('./buildPlanViewModel').FulltaskPlanDoc | undefined);
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Échec mode à l’arrivée');
+          } finally {
+            setBusy(false);
+          }
+        })();
+      }}
+    >
+      {busy ? '…' : 'Passer à l’arrivée (stop relances)'}
+    </button>
+  );
+}
 
 function defaultOpenForStatus(_status: EventStatus): boolean {
   return false;
@@ -171,6 +215,15 @@ function RelanceDispatchRow({
               </div>
             ) : null}
             <DispatchLastSendLine last={r.lastDispatch} attempt={r.lastDispatchAttempt} />
+            {r.executionStatus === 'sautee' && r.skipReason ? (
+              <div className="rel-row-config">Motif · {formatSkipReason(r.skipReason)}</div>
+            ) : null}
+            <MessageBodyPreview
+              reservationId={reservationId}
+              kind="relance"
+              taskId={taskId}
+              relanceIndex={r.relanceIndex}
+            />
           </div>
         </div>
   );
@@ -332,9 +385,33 @@ function AssignBlockBody({
         </div>
       ) : null}
       {attempts && attempts.length > 0 ? (
-        <div className="assign-track">
-          <div className="l3-sub-h">Historique tentatives</div>
-          {attempts.map((a) => (
+        <AttemptsHistoryCollapse attempts={attempts} />
+      ) : (
+        <div className="l3-empty">Aucune tentative enregistrée pour l&apos;instant.</div>
+      )}
+    </>
+  );
+}
+
+function AttemptsHistoryCollapse({ attempts }: { attempts: AssignAttempt[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`assign-track assign-attempts${open ? ' open' : ''}`}>
+      <button
+        type="button"
+        className="l3-sub-h l3-sub-h--toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        <span>
+          Historique tentatives · {attempts.length}
+        </span>
+        <span className="l2-arr" aria-hidden>
+          ▶
+        </span>
+      </button>
+      {open
+        ? attempts.map((a) => (
             <div key={a.id} className="attempt">
               <span className="step">#{a.step}</span>
               <span className="when">{a.triedAt}</span>
@@ -346,12 +423,9 @@ function AssignBlockBody({
                 {resultLabel(a.result)}
               </span>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="l3-empty">Aucune tentative enregistrée pour l&apos;instant.</div>
-      )}
-    </>
+          ))
+        : null}
+    </div>
   );
 }
 
@@ -490,6 +564,7 @@ export default function SequencePlanCard({
   guestPhone,
   guestName,
   reservationRef,
+  checkInIso,
   onDispatched,
 }: {
   seq: PlanSequenceView;
@@ -497,6 +572,7 @@ export default function SequencePlanCard({
   guestPhone?: string;
   guestName?: string;
   reservationRef?: string;
+  checkInIso?: string;
   onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
 }) {
   const taskId = seq.taskId || seq.id;
@@ -557,6 +633,9 @@ export default function SequencePlanCard({
                   {seq.registrationProgress.registered}/{seq.registrationProgress.total}
                 </span>
                 <span className="registration-progress-label"> enregistrés</span>
+                {seq.deferredToArrival ? (
+                  <span className="registration-at-arrival"> · à l’arrivée</span>
+                ) : null}
               </>
             ) : (
               seq.range || seq.atDisplay
@@ -568,6 +647,30 @@ export default function SequencePlanCard({
 
       {open ? (
         <div className="ev-body seq-l1-body">
+          <SequenceGuestOpsBar
+            reservationId={reservationId}
+            taskId={taskId}
+            taskType={seq.taskType}
+            hasRelances={Boolean(seq.hasRelances)}
+            actionCompleted={relancesResolved}
+            clientChosenTime={seq.clientChosenTime}
+            checkInIso={checkInIso}
+            onDone={onDispatched}
+          />
+          {seq.taskType === 'registration' && !relancesResolved ? (
+            <div className="seq-reg-actions" style={{ marginBottom: 8 }}>
+              {seq.deferredToArrival ? (
+                <span className="registration-at-arrival-banner">
+                  Mode à l’arrivée — plus de relances · accès WhatsApp OK · enregistrement encore possible
+                </span>
+              ) : (
+                <DeferRegistrationButton
+                  reservationId={reservationId}
+                  onDone={onDispatched}
+                />
+              )}
+            </div>
+          ) : null}
           {seq.hasRelances ? (
             <CollapseBlock
               icon="📨"
@@ -696,6 +799,7 @@ export default function SequencePlanCard({
                 guestName={guestName}
                 reservationRef={reservationRef}
                 staffAssignment={seq.staffAssignment}
+                clientChosenTime={seq.clientChosenTime}
                 onDispatched={onDispatched}
               />
             </CollapseBlock>

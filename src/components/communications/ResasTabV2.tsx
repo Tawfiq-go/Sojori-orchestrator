@@ -6,13 +6,14 @@
 // Fils sans résa : visibles admin/superadmin uniquement (owner inconnu).
 // ════════════════════════════════════════════════════════════════════
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, Button, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import messagesService from '../../services/messagesService';
 import { fetchInboxResas, initiateWhatsAppForResa, type InboxResaRow } from '../../services/inboxResasService';
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { useAuth } from '../../hooks/useAuth';
 import { Roles } from '../../constants/roles';
+import { last9Phone, otaInboxUrl, waInboxUrl } from '../../utils/commsDeepLinks';
 
 const MONO = 'ui-monospace, "SF Mono", Menlo, monospace';
 const C = {
@@ -39,10 +40,6 @@ type FilterKey = 'contact' | 'arrivals7' | 'instay' | 'all';
 const TEMPLATES = [
   { id: 'welcome_sojori_v2', label: '👋 Bienvenue (welcome_sojori_v2)' },
 ];
-
-function last9(phone: string): string {
-  return phone.replace(/\D/g, '').slice(-9);
-}
 
 function phoneSourceLabel(source?: InboxResaRow['phoneSource']): string | null {
   if (source === 'whatsapp') return 'WhatsApp';
@@ -72,6 +69,7 @@ function StatePill({ bg, color, children }: { bg: string; color: string; childre
 
 export default function ResasTabV2() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const isPlatformAdmin =
@@ -87,7 +85,12 @@ export default function ResasTabV2() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
-  const [search, setSearch] = useState('');
+  const deepLinkQ =
+    searchParams.get('q') ||
+    searchParams.get('reservation') ||
+    searchParams.get('res') ||
+    '';
+  const [search, setSearch] = useState(deepLinkQ);
   const [openResaId, setOpenResaId] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState(TEMPLATES[0].id);
   const [sending, setSending] = useState(false);
@@ -115,7 +118,7 @@ export default function ResasTabV2() {
       const phoneByResa = new Map<string, string>();
       if (convRes?.status === 'success') {
         for (const c of convRes.data.conversations as Array<{ phone?: string; name?: string; reservation_number?: string }>) {
-          if (c.phone) phones.add(last9(String(c.phone)));
+          if (c.phone) phones.add(last9Phone(String(c.phone)));
           if (c.reservation_number) {
             resaNums.add(String(c.reservation_number));
             if (c.phone && !phoneByResa.has(String(c.reservation_number))) {
@@ -146,6 +149,10 @@ export default function ResasTabV2() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (deepLinkQ) setSearch(deepLinkQ);
+  }, [deepLinkQ]);
+
   const waStateFor = useCallback(
     (r: InboxResaRow): WaState => {
       const local = sendState[r.id];
@@ -155,7 +162,7 @@ export default function ResasTabV2() {
         (r.reservationNumber ? waPhoneByResa.get(r.reservationNumber) : undefined) ||
         '';
       if (!phone) return { kind: 'nonum' };
-      if (waPhones.has(last9(phone)) || (r.reservationNumber && waResaNumbers.has(r.reservationNumber))) {
+      if (waPhones.has(last9Phone(phone)) || (r.reservationNumber && waResaNumbers.has(r.reservationNumber))) {
         return { kind: 'actif' };
       }
       return { kind: 'jamais' };
@@ -364,14 +371,25 @@ export default function ResasTabV2() {
                   ) : null}
                   {r.wa.kind === 'actif' || r.wa.kind === 'envoye' ? (
                     <Button
-                      onClick={() => navigate('/communications?section=guest&tab=whatsapp')}
+                      onClick={() =>
+                        navigate(
+                          waInboxUrl({ phone: r.phone, reservationNumber: r.reservationNumber }),
+                        )
+                      }
                       sx={{ textTransform: 'none', border: `1.5px solid ${C.borderStrong}`, color: C.text2, fontWeight: 700, fontSize: 11.5, borderRadius: '9px', px: 1.5 }}
                     >
                       Ouvrir le fil
                     </Button>
                   ) : null}
                   <Button
-                    onClick={() => navigate('/communications?section=guest&tab=ota')}
+                    onClick={() =>
+                      navigate(
+                        otaInboxUrl({
+                          threadId: r.ota.threadId,
+                          reservationNumber: r.reservationNumber,
+                        }),
+                      )
+                    }
                     sx={{
                       textTransform: 'none', fontWeight: 700, fontSize: 11.5, borderRadius: '9px', px: 1.5,
                       ...(r.ota.exists || r.wa.kind === 'nonum'
@@ -448,7 +466,7 @@ export default function ResasTabV2() {
                   <Typography sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 800 }}>{t.name || t.phone}</Typography>
                   <Typography sx={{ fontSize: 11, color: C.text4, flex: 1 }}>aucune résa rattachée — owner inconnu</Typography>
                   <Button
-                    onClick={() => navigate('/communications?section=guest&tab=whatsapp')}
+                    onClick={() => navigate(waInboxUrl({ phone: t.phone }))}
                     sx={{ textTransform: 'none', border: `1.5px solid ${C.borderStrong}`, color: C.text2, fontWeight: 700, fontSize: 11, borderRadius: '9px', px: 1.5 }}
                   >
                     Ouvrir le fil

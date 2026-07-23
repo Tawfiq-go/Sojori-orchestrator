@@ -51,8 +51,8 @@ const EXPRESS_SERVICES: ExpressService[] = [
 
 /** Services avec tâche staff assignable (clé = taskType fulltask). */
 const STAFF_SERVICES: Array<{ taskType: string; emoji: string; label: string; capAny: Array<keyof WizardCapabilities> }> = [
-  { taskType: 'arrival_choose', emoji: '🕓', label: 'Accueil arrivée', capAny: ['arrivalChoose'] },
-  { taskType: 'departure_choose', emoji: '🕐', label: 'Départ', capAny: ['departureChoose'] },
+  { taskType: 'receive_arrival', emoji: '🙋', label: 'Accueil arrivée', capAny: ['receiveArrival'] },
+  { taskType: 'receive_departure', emoji: '👋', label: 'Accueil départ', capAny: ['receiveDeparture'] },
   { taskType: 'cleaning_free', emoji: '🧹', label: 'Ménage inclus', capAny: ['cleaningFree'] },
   { taskType: 'cleaning_paid', emoji: '🧹', label: 'Ménage payant', capAny: ['cleaningPaid'] },
   { taskType: 'transport', emoji: '🚐', label: 'Navette', capAny: ['transport'] },

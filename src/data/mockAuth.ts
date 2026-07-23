@@ -10,6 +10,7 @@ export interface MockUser {
   /** Compte propriétaire lié (Worker) */
   ownerId?: string;
   ownerAccess?: boolean;
+  listingIds?: string[];
   featureGrants?: Array<{ feature?: string; actions?: string[] }>;
   phone: string;
   company: string;

@@ -184,8 +184,10 @@ function ChartDayTooltipContent({
   const marche = row.airroiMad;
   const sojori = row.g7ProposedMad;
   const cal = row.calendarCurrentMad;
+  const booked = row.bookedPriceMad ?? null;
   const deltaMarcheCal = priceDelta(marche, cal);
   const deltaSojoriCal = priceDelta(sojori, cal);
+  const deltaBookedMarche = priceDelta(booked, marche);
   const lineSx = { fontSize: 10.5, fontFamily: MONO, lineHeight: 1.5, fontVariantNumeric: 'tabular-nums' };
 
   return (
@@ -197,14 +199,33 @@ function ChartDayTooltipContent({
       <Box sx={{ height: 4 }} />
       <Typography sx={lineSx}>Prix estimé (marché) : {fmtMad(marche)}</Typography>
       <Typography sx={{ ...lineSx, fontWeight: 800, color: T.goldDeep }}>Prix Sojori : {fmtMad(sojori)}</Typography>
-      <Typography sx={lineSx}>Prix calendrier : {fmtMad(cal)}</Typography>
+      {status === 'reserved' ? (
+        <>
+          <Typography sx={{ ...lineSx, fontWeight: 800, color: T.info }}>
+            Prix à la réservation : {fmtMad(booked)}
+          </Typography>
+          {cal != null && booked != null && cal !== booked ? (
+            <Typography sx={{ ...lineSx, color: T.text3 }}>Prix calendrier actuel : {fmtMad(cal)}</Typography>
+          ) : null}
+        </>
+      ) : (
+        <Typography sx={lineSx}>Prix calendrier : {fmtMad(cal)}</Typography>
+      )}
       <Box sx={{ height: 4 }} />
-      <Typography sx={{ ...lineSx, color: deltaTone(deltaMarcheCal) }}>
-        Δ1 marché − cal. : {fmtSignedDelta(deltaMarcheCal)}
-      </Typography>
-      <Typography sx={{ ...lineSx, color: deltaTone(deltaSojoriCal), fontWeight: 700 }}>
-        Δ2 Sojori − cal. : {fmtSignedDelta(deltaSojoriCal)}
-      </Typography>
+      {status === 'reserved' ? (
+        <Typography sx={{ ...lineSx, color: deltaTone(deltaBookedMarche), fontWeight: 700 }}>
+          Δ résa − estimation : {fmtSignedDelta(deltaBookedMarche)}
+        </Typography>
+      ) : (
+        <>
+          <Typography sx={{ ...lineSx, color: deltaTone(deltaMarcheCal) }}>
+            Δ1 marché − cal. : {fmtSignedDelta(deltaMarcheCal)}
+          </Typography>
+          <Typography sx={{ ...lineSx, color: deltaTone(deltaSojoriCal), fontWeight: 700 }}>
+            Δ2 Sojori − cal. : {fmtSignedDelta(deltaSojoriCal)}
+          </Typography>
+        </>
+      )}
       {rule ? (
         <Typography sx={{ fontSize: 10, color: T.warning, mt: 0.25 }}>
           {rule.emoji ?? '🗓'} {rule.name}
@@ -326,7 +347,14 @@ export default function PricePreviewCard({
   const maxPrice = React.useMemo(
     () =>
       rows.reduce(
-        (m, r) => Math.max(m, r.g7ProposedMad ?? 0, r.calendarCurrentMad ?? 0, r.airroiMad ?? 0),
+        (m, r) =>
+          Math.max(
+            m,
+            r.g7ProposedMad ?? 0,
+            r.calendarCurrentMad ?? 0,
+            r.airroiMad ?? 0,
+            r.bookedPriceMad ?? 0,
+          ),
         0,
       ) || 1,
     [rows],
@@ -758,7 +786,7 @@ export default function PricePreviewCard({
                       />
                     </Box>
                   ) : null}
-                  {['Date', 'Statut (M/D)', 'Prix estimé (marché)', 'Prix Sojori (après réglages)', 'Prix calendrier actuel', 'Δ Sojori vs cal.'].map((h, i) => (
+                  {['Date', 'Statut (M/D)', 'Prix estimé (marché)', 'Prix Sojori (après réglages)', 'Prix cal. / réservé', 'Δ (résa−estim. / Sojori−cal.)'].map((h, i) => (
                     <Box
                       key={h}
                       component="th"
@@ -870,7 +898,33 @@ export default function PricePreviewCard({
                         </Box>
                         <Box component="td" sx={cellSx}>{r.airroiMad != null ? fmt(r.airroiMad) : '—'}</Box>
                         <Box component="td" sx={{ ...cellSx, fontWeight: 800 }}>{r.g7ProposedMad != null ? fmt(r.g7ProposedMad) : '—'}</Box>
-                        <Box component="td" sx={cellSx}>{r.calendarCurrentMad != null ? fmt(r.calendarCurrentMad) : '—'}</Box>
+                        <Box
+                          component="td"
+                          sx={{
+                            ...cellSx,
+                            fontWeight: st === 'reserved' ? 800 : 400,
+                            color: st === 'reserved' ? T.info : cellSx.color,
+                            bgcolor:
+                              st === 'reserved'
+                                ? T.infoTint
+                                : cellSx.bgcolor,
+                          }}
+                          title={
+                            st === 'reserved'
+                              ? r.bookedPriceMad != null
+                                ? 'Prix Sojori figé à la réservation (priceBreakdown)'
+                                : 'Réservé — prix à la réservation indisponible'
+                              : undefined
+                          }
+                        >
+                          {st === 'reserved'
+                            ? r.bookedPriceMad != null
+                              ? fmt(r.bookedPriceMad)
+                              : '—'
+                            : r.calendarCurrentMad != null
+                              ? fmt(r.calendarCurrentMad)
+                              : '—'}
+                        </Box>
                         <Box
                           component="td"
                           sx={{
@@ -888,7 +942,9 @@ export default function PricePreviewCard({
                         >
                           {delta == null ? '—' : `${delta > 0 ? '+' : ''}${fmt(delta)}`}
                           {st === 'reserved' ? (
-                            <Box component="span" sx={{ fontSize: 9.5, color: T.text4, fontWeight: 400, ml: 0.625 }}>figé</Box>
+                            <Box component="span" sx={{ fontSize: 9.5, color: T.info, fontWeight: 400, ml: 0.625 }}>
+                              {r.bookedPriceMad != null ? 'vs estim.' : 'figé'}
+                            </Box>
                           ) : st === 'blocked' ? (
                             <Box component="span" sx={{ fontSize: 9.5, color: T.text4, fontWeight: 400, ml: 0.625 }}>non poussé</Box>
                           ) : calendarPriceMode(r) === 'manual' ? (
@@ -906,7 +962,7 @@ export default function PricePreviewCard({
           {/* Pied : aide */}
           <Typography sx={{ fontSize: 11, color: T.text3, mt: 1.75 }}>
             Cochez des jours libres → « Modifier » dans le bandeau en haut.
-            Les jours réservés sont figés · les bloqués ne sont jamais poussés.
+            Les jours réservés affichent le prix figé à la réservation (bleu) · les bloqués ne sont jamais poussés.
           </Typography>
         </>
       ) : null}
