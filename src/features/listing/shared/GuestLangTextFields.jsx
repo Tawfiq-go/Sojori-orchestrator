@@ -244,7 +244,9 @@ export function GuestLangTextFields({
         const res = await translateGuestLangs({ text: fr, targetLangs: targets, sourceLang: 'fr' });
         const translations = res?.data?.translations || {};
         if (!translations || Object.keys(translations).length === 0) {
-          if (!silent) setError('Traduction indisponible. Réessayez.');
+          if (!silent) {
+            setError(res?.data?.error || 'Traduction indisponible. Réessayez.');
+          }
           return;
         }
         writeCache(fr, targets, translations);
@@ -257,16 +259,23 @@ export function GuestLangTextFields({
           }
           return merged;
         });
+        setError('');
         return next;
       } catch (e) {
+        const emptyBody = e?.response?.data?.translations;
+        if (emptyBody && typeof emptyBody === 'object' && Object.keys(emptyBody).length > 0) {
+          applyTranslations(emptyBody);
+          setError('');
+          return;
+        }
         const apiMsg =
-          e?.response?.data?.errors?.[0]?.message ||
           e?.response?.data?.error ||
+          e?.response?.data?.errors?.[0]?.message ||
           e?.message;
         if (!silent) {
           setError(
             apiMsg && /not found|403|401|forbidden/i.test(String(apiMsg))
-              ? 'Traduction AI indisponible (endpoint non déployé ou droits). Réessayez après deploy srv-reservations.'
+              ? 'Traduction AI indisponible (endpoint non déployé ou droits).'
               : apiMsg || 'Échec de la traduction AI.',
           );
         }
