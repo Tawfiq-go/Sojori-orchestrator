@@ -9,6 +9,7 @@ import 'moment/locale/fr';
 import { differenceInCalendarDays, format, isValid, parseISO, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { formatPriceOrPlaceholder } from '../../utils/formatPrice';
+import { formatReservationPaid } from '../../utils/reservationPaidDisplay';
 import { formatDateInputValue } from '../../utils/reservationEditPayload';
 import * as fulltaskApi from '../../services/fulltaskApi';
 import { toast } from 'react-toastify';
@@ -405,8 +406,8 @@ function StayHero({ r }: { r: any }) {
           </Box>
         </Stack>
         <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-          <Typography sx={{ fontSize: 18, fontWeight: 800, fontFamily: '"Geist Mono", monospace', color: T.primaryDeep, lineHeight: 1.1 }}>
-            {formatPriceOrPlaceholder(r.totalPrice, r.currency || 'MAD')}
+          <Typography sx={{ fontSize: 18, fontWeight: 800, fontFamily: '"Geist Mono", monospace', color: T.primaryDeep, lineHeight: 1.1 }} title="Total déjà payé — hors taxes non payées">
+            {formatReservationPaid(r) || formatPriceOrPlaceholder(r.totalPrice, r.currency || 'MAD')}
           </Typography>
           <Typography sx={{ fontSize: 11, color: T.text3, fontWeight: 600, mt: 0.2 }}>
             {nights > 0 ? `${nights} nuit${nights > 1 ? 's' : ''}` : ''}

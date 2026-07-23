@@ -4,6 +4,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { T } from './_shared';
+import { reservationPaidDisplay } from '../../utils/reservationPaidDisplay';
 
 function channelMeta(channelName) {
   const c = String(channelName || '').toLowerCase();
@@ -42,17 +43,20 @@ export default function ReservationCalendarDrawer({ reservation, loading = false
     `${reservation.guestFirstName || ''} ${reservation.guestLastName || ''}`.trim() ||
     '—';
   const nights = reservation.nights ?? nightsBetween(reservation.arrivalDate, reservation.departureDate);
-  const total = Number(
-    reservation.totalPrice ||
-    reservation.sojoriTotal ||
-    reservation.costs?.ClientPrice ||
-    reservation.costs?.RUPrice ||
-    0,
-  );
-  const currency = reservation.currency || 'MAD';
+  const paidDisplay = reservationPaidDisplay({
+    alreadyPaid: reservation.alreadyPaid,
+    totalPrice:
+      reservation.totalPrice ||
+      reservation.sojoriTotal ||
+      reservation.costs?.RUPrice ||
+      null,
+    currency: reservation.currency || 'MAD',
+  });
+  const total = paidDisplay.amount ?? 0;
+  const currency = paidDisplay.currency;
   const paid =
     reservation.paymentStatus === 'Paid' ||
-    (reservation.costs?.AlreadyPaid && total > 0 && reservation.costs.AlreadyPaid >= total);
+    (Number(reservation.alreadyPaid) > 0 && total > 0 && Number(reservation.alreadyPaid) >= total * 0.95);
   const status = reservation.status || '—';
   const listingName = reservation.listingName || reservation.sojoriName || reservation.propertyName;
 
