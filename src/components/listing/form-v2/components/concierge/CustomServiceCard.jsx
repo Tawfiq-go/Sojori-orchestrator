@@ -2,34 +2,20 @@ import React from 'react';
 import { Card, CardContent, Box, Typography, Switch, FormControlLabel, TextField, Stack, Chip, IconButton } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { conciergeServiceCardSx } from './conciergeCardSx';
+import {
+  GuestLangTextFields,
+  mergeGuestLangMap,
+} from '../../../../features/listing/shared/GuestLangTextFields';
+
 const CustomServiceCard = ({
   service,
   onChange,
   onDelete
 }) => {
   const handleChange = (field, value) => {
-    const updatedService = {
+    onChange({
       ...service,
       [field]: value
-    };
-    onChange(updatedService);
-  };
-  const handleNameChange = (lang, value) => {
-    onChange({
-      ...service,
-      name: {
-        ...service.name,
-        [lang]: value
-      }
-    });
-  };
-  const handleDescriptionChange = (lang, value) => {
-    onChange({
-      ...service,
-      description: {
-        ...service.description,
-        [lang]: value
-      }
     });
   };
   return <Card sx={conciergeServiceCardSx}>
@@ -53,32 +39,25 @@ const CustomServiceCard = ({
           </Stack>
         </Box>
 
-        {/* Name fields (editable) */}
-        <Box sx={{
-        display: 'grid',
-        gridTemplateColumns: {
-          xs: '1fr',
-          md: '1fr 1fr 1fr'
-        },
-        gap: 2,
-        mb: 2
-      }}>
-          <TextField label="Nom (Français)" value={service.name?.fr || ''} onChange={e => handleNameChange('fr', e.target.value)} size="small" fullWidth placeholder="Ex: 💬 Service personnalisé" />
-          <TextField label="Nom (English)" value={service.name?.en || ''} onChange={e => handleNameChange('en', e.target.value)} size="small" fullWidth placeholder="Ex: 💬 Custom service" />
-          <TextField label="Nom (العربية)" value={service.name?.ar || ''} onChange={e => handleNameChange('ar', e.target.value)} size="small" fullWidth placeholder="Ex: 💬 خدمة مخصصة" />
+        <Box sx={{ mb: 2 }}>
+          <GuestLangTextFields
+            fieldLabel="Nom"
+            requiredFr
+            value={mergeGuestLangMap(service.name)}
+            onChange={(name) => onChange({ ...service, name })}
+            helperText="FR requis · ✨ pour générer les traductions WhatsApp."
+          />
         </Box>
 
-        <TextField
-          label="Description"
-          value={service.description?.fr || ''}
-          onChange={(e) => handleDescriptionChange('fr', e.target.value)}
-          size="small"
-          fullWidth
-          multiline
-          rows={3}
-          placeholder="Décrivez le service (français)"
-          sx={{ mb: 2 }}
-        />
+        <Box sx={{ mb: 2 }}>
+          <GuestLangTextFields
+            fieldLabel="Description"
+            value={mergeGuestLangMap(service.description)}
+            onChange={(description) => onChange({ ...service, description })}
+            multiline
+            rows={2}
+          />
+        </Box>
 
         <TextField label="Explication prix (FR)" value={service.pricing?.explanation?.fr || ''} onChange={e => {
         const currentPricing = service.pricing || {};
@@ -86,10 +65,9 @@ const CustomServiceCard = ({
           ...service,
           pricing: {
             type: currentPricing.type || 'quote',
-            // Always include type
             ...currentPricing,
             explanation: {
-              ...currentPricing.explanation,
+              ...mergeGuestLangMap(currentPricing.explanation),
               fr: e.target.value
             }
           }

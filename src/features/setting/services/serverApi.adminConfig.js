@@ -400,6 +400,11 @@ export function updateConfigReservation(data) {
 export function translateText(data) {
   return axios.post(`${MICROSERVICE_BASE_URL.SRV_RESERVATION}/ai/translate-txt`, data);
 }
+
+/** Batch translate FR → guest WhatsApp langs (Claude Haiku). */
+export function translateGuestLangs(data) {
+  return axios.post(`${MICROSERVICE_BASE_URL.SRV_RESERVATION}/ai/translate-guest-langs`, data);
+}
 export function sendMailTemplate(data) {
   return axios.post(`${MICROSERVICE_BASE_URL.SRV_RESERVATION}/mailTemplate/send-mail-template`, data);
 }

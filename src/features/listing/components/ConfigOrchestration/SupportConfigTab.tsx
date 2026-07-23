@@ -15,6 +15,11 @@ import type { SupportConfig, SupportCategory, SupportPriority } from './types';
 import { SOJORI_TOKENS, DEFAULT_CATEGORIES } from './types';
 import { SUPPORT_PRIORITIES, priorityMeta } from './supportPriority';
 import { FormRow, TYPO } from './SHARED';
+import {
+  GuestLangTextFields,
+  mergeGuestLangMap,
+  emptyGuestLangMap,
+} from '../../shared/GuestLangTextFields';
 
 const T = SOJORI_TOKENS;
 const MAX_CATEGORIES = 50;
@@ -57,8 +62,8 @@ export default function SupportConfigTab({ initial, onSave }: SupportConfigTabPr
     const newCat: SupportCategory = {
       id: `cat_${Date.now()}`,
       enabled: true,
-      label: { fr: 'Nouvelle catégorie', en: 'New category' },
-      description: { fr: '', en: '' },
+      label: mergeGuestLangMap({ fr: 'Nouvelle catégorie', en: 'New category' }),
+      description: emptyGuestLangMap(''),
       icon: '💬',
       defaultUrgency: 'normal',
       guestCanChoosePriority: true,
@@ -91,10 +96,10 @@ export default function SupportConfigTab({ initial, onSave }: SupportConfigTabPr
   const categoryCount = config.categories.length;
 
   return (
-    <Box sx={{ p: 2, maxWidth: 720 }}>
+    <Box sx={{ p: 2, maxWidth: 880 }}>
       <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
         <Typography sx={{ ...TYPO.intro, flex: 1 }}>
-          Catégories du formulaire « Signaler un problème » : libellés, icônes et niveau d’urgence.
+          Catégories « Signaler un problème » : libellés multilingues (FR, EN, ES, DE, IT, AR, Darija), icônes et urgence.
         </Typography>
         {savingState !== 'idle' && (
           <Typography sx={{ fontSize: 10.5, color: savingState === 'saved' ? T.success : T.text3, fontWeight: 700 }}>
@@ -182,20 +187,26 @@ function SortableCategory({ category, onUpdate, onDelete }: {
           <FormRow label="ID (slug)" help="Lettres minuscules et underscores · unique">
             <input style={inputSx} value={category.id} onChange={e => onUpdate({ id: e.target.value.replace(/[^a-z_]/g, '') })} />
           </FormRow>
-          <FormRow label="Libellé" required help="Français (EN et AR reprennent le même texte)">
-            <input style={inputSx} value={category.label.fr} maxLength={40}
-              onChange={e => {
-                const fr = e.target.value;
-                onUpdate({ label: { fr, en: fr, ar: fr } });
-              }} />
-          </FormRow>
-          <FormRow label="Description" help="Sous le libellé dans le message · max 60 caractères">
-            <input style={inputSx} value={category.description?.fr || ''} maxLength={60}
-              onChange={e => {
-                const fr = e.target.value;
-                onUpdate({ description: { fr, en: fr, ar: fr } });
-              }} />
-          </FormRow>
+          <GuestLangTextFields
+            fieldLabel="Libellé"
+            requiredFr
+            dense
+            autoFillMissing
+            value={mergeGuestLangMap(category.label)}
+            onChange={(label) => onUpdate({ label })}
+            helperText="FR requis · ✨ génère les autres langues (WhatsApp)."
+            maxLength={40}
+          />
+          <GuestLangTextFields
+            fieldLabel="Description"
+            dense
+            autoFillMissing
+            value={mergeGuestLangMap(category.description)}
+            onChange={(description) => onUpdate({ description })}
+            multiline
+            rows={2}
+            maxLength={60}
+          />
           <FormRow label="Icône" help="Emoji">
             <input style={{ ...inputSx, width: 60, textAlign: 'center', fontSize: 18 }} value={category.icon}
               onChange={e => onUpdate({ icon: e.target.value })} />

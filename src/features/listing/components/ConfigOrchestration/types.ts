@@ -10,8 +10,13 @@ export type UrgencyLevel = SupportPriority;
 
 export interface LocalizedString {
   fr: string;
-  en: string;
+  en?: string;
   ar?: string;
+  es?: string;
+  de?: string;
+  it?: string;
+  ary?: string;
+  [key: string]: string | undefined;
 }
 
 export interface SupportCategory {

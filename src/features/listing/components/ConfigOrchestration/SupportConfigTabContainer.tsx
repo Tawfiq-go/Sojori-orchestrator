@@ -10,6 +10,10 @@ import {
   readSojoriMeta,
   type SupportPriority as SP,
 } from './supportPriority';
+import {
+  mergeGuestLangMap,
+  cleanGuestLangMap,
+} from '../../shared/GuestLangTextFields';
 
 function normalizePriority(raw: string): SupportPriority {
   if (raw === 'urgent' || raw === 'CRITICAL') return 'urgent';
@@ -26,20 +30,16 @@ function mapApiToDesign(apiDoc: { categories?: unknown[] } | null): SupportConfi
   return {
     enabled: true,
     categories: cats.map((c: Record<string, unknown>, i: number) => {
-      const name = (c.name as { fr?: string; en?: string; ar?: string }) || { fr: 'Catégorie' };
-      const desc = c.description as { fr?: string; en?: string } | undefined;
+      const name = mergeGuestLangMap(c.name as Record<string, string> | undefined, 'Catégorie');
+      const desc = mergeGuestLangMap(c.description as Record<string, string> | undefined);
       const fields = (c.fields as Record<string, unknown>) || {};
       const meta = readSojoriMeta(fields);
       const priority = normalizePriority(String(c.priority || 'normal'));
       return {
         id: String(c.id || `cat_${i}`),
         enabled: c.enabled !== false,
-        label: {
-          fr: name.fr || '',
-          en: name.en || name.fr || '',
-          ar: name.ar,
-        },
-        description: desc ? { fr: desc.fr || '', en: desc.en || '' } : { fr: '', en: '' },
+        label: name,
+        description: desc,
         icon: String(c.icon || '💬'),
         defaultUrgency: priority,
         guestCanChoosePriority: meta.guestCanChoosePriority !== false,
@@ -54,25 +54,15 @@ function mapDesignToApi(config: SupportConfig) {
   return config.categories.map((cat, i) => {
     const ext = cat as SupportCategory & { _fields?: Record<string, unknown> };
     const baseFields = ext._fields || {};
+    const name = cleanGuestLangMap(cat.label);
+    if (!name.fr) name.fr = cat.label?.fr || 'Catégorie';
+    const description = cleanGuestLangMap(cat.description);
     return {
       id: cat.id,
       enabled: true,
       category: String((ext as Record<string, unknown>).category || 'other'),
-      name: {
-        fr: cat.label.fr,
-        en: cat.label.en || cat.label.fr,
-        ar: cat.label.ar || '',
-      },
-      description: (() => {
-        const descFr = (cat.description?.fr ?? '').trim();
-        const descEn = (cat.description?.en ?? cat.label.en ?? cat.label.fr ?? '').trim();
-        if (!descFr && !descEn) return undefined;
-        return {
-          fr: descFr || cat.label.fr,
-          en: descEn || cat.label.fr,
-          ar: cat.label.ar || '',
-        };
-      })(),
+      name,
+      description: Object.keys(description).length ? description : undefined,
       icon: cat.icon,
       displayOrder: cat.order ?? i,
       priority: cat.defaultUrgency as SP,

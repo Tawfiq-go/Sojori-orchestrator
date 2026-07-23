@@ -11,6 +11,12 @@ import AddIcon from '@mui/icons-material/Add';
 import { toast } from 'react-toastify';
 import { useSelector } from 'react-redux';
 import { getOwnerSupportCategories, updateOwnerSupportCategories, resetOwnerSupportCategories } from '../services/serverApi.adminConfig';
+import {
+  GuestLangTextFields,
+  emptyGuestLangMap,
+  mergeGuestLangMap,
+  cleanGuestLangMap,
+} from '../../listing/shared/GuestLangTextFields';
 const SOJORI_COLORS = {
   primary: '#E6B022',
   primaryDark: '#B8881A',
@@ -82,16 +88,8 @@ const SupportCategoriesTemplate = ({
     id: '',
     enabled: true,
     category: 'technical',
-    name: {
-      fr: '',
-      en: '',
-      ar: ''
-    },
-    description: {
-      fr: '',
-      en: '',
-      ar: ''
-    },
+    name: emptyGuestLangMap(''),
+    description: emptyGuestLangMap(''),
     icon: '🔧',
     displayOrder: 1,
     priority: 'normal',
@@ -101,7 +99,11 @@ const SupportCategoriesTemplate = ({
     estimatedResponseTime: {
       fr: '2 heures',
       en: '2 hours',
-      ar: 'ساعتان'
+      ar: 'ساعتان',
+      es: '2 horas',
+      de: '2 Stunden',
+      it: '2 ore',
+      ary: '2 heures',
     }
   });
   const fetchSupportCategories = useCallback(async () => {
@@ -163,10 +165,10 @@ const SupportCategoriesTemplate = ({
       // Nettoyer seulement les strings vides, garder la structure
       const cleanedCategories = categories.map(cat => ({
         ...cat,
-        name: cleanEmptyStrings(cat.name),
-        description: cleanEmptyStrings(cat.description),
-        estimatedResponseTime: cleanEmptyStrings(cat.estimatedResponseTime),
-        autoResponse: cat.autoResponse ? cleanEmptyStrings(cat.autoResponse) : undefined
+        name: cleanGuestLangMap(cat.name),
+        description: cleanGuestLangMap(cat.description),
+        estimatedResponseTime: cleanGuestLangMap(cat.estimatedResponseTime),
+        autoResponse: cat.autoResponse ? cleanGuestLangMap(cat.autoResponse) : undefined
       }));
       if (isListing && onSaveListingConfig) {
         // Mode listing: call the provided callback
@@ -215,16 +217,8 @@ const SupportCategoriesTemplate = ({
       id: `custom_${Date.now()}`,
       enabled: true,
       category: 'other',
-      name: {
-        fr: '',
-        en: '',
-        ar: ''
-      },
-      description: {
-        fr: '',
-        en: '',
-        ar: ''
-      },
+      name: emptyGuestLangMap(''),
+      description: emptyGuestLangMap(''),
       icon: '💬',
       displayOrder: categories.length + 1,
       priority: 'normal',
@@ -234,13 +228,13 @@ const SupportCategoriesTemplate = ({
       estimatedResponseTime: {
         fr: '2 heures',
         en: '2 hours',
-        ar: 'ساعتان'
+        ar: 'ساعتان',
+        es: '2 horas',
+        de: '2 Stunden',
+        it: '2 ore',
+        ary: '2 heures',
       },
-      autoResponse: {
-        fr: '',
-        en: '',
-        ar: ''
-      },
+      autoResponse: emptyGuestLangMap(''),
       troubleshootingSteps: {},
       fields: {
         description: {
@@ -249,12 +243,20 @@ const SupportCategoriesTemplate = ({
           label: {
             fr: 'Description',
             en: 'Description',
-            ar: 'الوصف'
+            ar: 'الوصف',
+            es: 'Descripción',
+            de: 'Beschreibung',
+            it: 'Descrizione',
+            ary: 'Description',
           },
           placeholder: {
             fr: 'Décrivez votre demande',
             en: 'Describe your request',
-            ar: 'صف طلبك'
+            ar: 'صف طلبك',
+            es: 'Describe tu solicitud',
+            de: 'Beschreiben Sie Ihre Anfrage',
+            it: 'Descrivi la tua richiesta',
+            ary: 'Décrivez votre demande',
           }
         }
       },
@@ -266,7 +268,11 @@ const SupportCategoriesTemplate = ({
     setDialogMode('edit');
     setEditingCategory(category);
     setFormData({
-      ...category
+      ...category,
+      name: mergeGuestLangMap(category.name),
+      description: mergeGuestLangMap(category.description),
+      estimatedResponseTime: mergeGuestLangMap(category.estimatedResponseTime, '2 heures'),
+      autoResponse: mergeGuestLangMap(category.autoResponse),
     });
     setDialogOpen(true);
   };
@@ -463,12 +469,15 @@ const SupportCategoriesTemplate = ({
           <Grid container spacing={2} sx={{
           mt: 1
         }}>
-            {/* Nom (FR) */}
-            <Grid item xs={12} sm={6}>
-              <TextField label="Nom (Français) *" fullWidth value={formData.name.fr} onChange={e => handleFormChange('name', {
-              ...formData.name,
-              fr: e.target.value
-            })} />
+            <Grid item xs={12}>
+              <GuestLangTextFields
+                fieldLabel="Nom"
+                requiredFr
+                autoFillMissing
+                value={mergeGuestLangMap(formData.name)}
+                onChange={(name) => handleFormChange('name', name)}
+                helperText="Libellé WhatsApp · ✨ génère les traductions manquantes."
+              />
             </Grid>
 
             {/* Icône */}
@@ -505,20 +514,22 @@ const SupportCategoriesTemplate = ({
               </FormControl>
             </Grid>
 
-            {/* Délai de réponse (FR) */}
-            <Grid item xs={12}>
-              <TextField label="Délai de réponse estimé (Français)" fullWidth value={formData.estimatedResponseTime.fr} onChange={e => handleFormChange('estimatedResponseTime', {
-              ...formData.estimatedResponseTime,
+            <Grid item xs={12} sm={6}>
+              <TextField label="Délai de réponse estimé (Français)" fullWidth value={formData.estimatedResponseTime?.fr || ''} onChange={e => handleFormChange('estimatedResponseTime', {
+              ...mergeGuestLangMap(formData.estimatedResponseTime),
               fr: e.target.value
             })} placeholder="2 heures" />
             </Grid>
 
-            {/* Description (FR) */}
             <Grid item xs={12}>
-              <TextField label="Description (Français)" fullWidth multiline rows={2} value={formData.description?.fr || ''} onChange={e => handleFormChange('description', {
-              ...formData.description,
-              fr: e.target.value
-            })} />
+              <GuestLangTextFields
+                fieldLabel="Description"
+                autoFillMissing
+                value={mergeGuestLangMap(formData.description)}
+                onChange={(description) => handleFormChange('description', description)}
+                multiline
+                rows={2}
+              />
             </Grid>
 
             {/* Options */}
