@@ -248,12 +248,29 @@ export default function AiCockpit() {
     });
   }, [plan]);
 
-  /** Hors chaîne : arrivées/départs du jour + toute étape qui requiert une décision. */
-  const soloTraffic = useMemo(() => {
+  /** Hors chaîne : mêmes checklists complètes que les turnovers, groupées par réservation. */
+  const soloGroups = useMemo(() => {
     if (!plan) return [];
-    return plan.steps.filter(
-      (s) => !s.chainId && (s.kind === 'arrival' || s.kind === 'departure' || s.state === 'attention'),
-    );
+    const map = new Map<
+      string,
+      { reservationId: string; listingName: string; guestName?: string; steps: DayPlanStep[] }
+    >();
+    for (const s of plan.steps) {
+      if (s.chainId) continue;
+      if (s.kind === 'message' && s.state !== 'attention') continue;
+      const g =
+        map.get(s.reservationId) ??
+        { reservationId: s.reservationId, listingName: s.listingName, guestName: s.guestName, steps: [] };
+      if (!g.guestName && s.guestName) g.guestName = s.guestName;
+      g.steps.push(s);
+      map.set(s.reservationId, g);
+    }
+    const rank = (s: DayPlanStep) =>
+      s.kind === 'departure' ? 0 : s.kind === 'arrival' ? 1 : s.kind === 'cleaning' ? 2 : s.kind === 'task' ? 3 : 4;
+    for (const g of map.values()) {
+      g.steps.sort((a, b) => rank(a) - rank(b) || String(a.time || '').localeCompare(String(b.time || '')));
+    }
+    return [...map.values()];
   }, [plan]);
 
   const targets = useMemo(() => new Set(reply?.targets ?? []), [reply]);
@@ -486,34 +503,40 @@ export default function AiCockpit() {
           />
         ))}
 
-        {soloTraffic.length > 0 && (
+        {soloGroups.length > 0 && (
           <>
             <div className="ck-board-title solo">
-              <span>Trafic hors turnover</span>
+              <span>Hors turnover · par réservation</span>
+              <span className="ck-board-hint">mêmes checklists et actions que les turnovers</span>
             </div>
-            <div className="ck-solo">
-              {soloTraffic.map((s) => (
+            {soloGroups.map((g, i) => {
+              const attn = g.steps.find((s) => s.state === 'attention');
+              return (
                 <div
-                  key={s.id}
-                  className={`ck-solo-item ${s.state}`}
-                  title={s.attention?.reason || s.title}
+                  key={g.reservationId}
+                  className={`ck-flight ${attn ? 'tight' : 'ok'}`}
+                  style={{ animationDelay: `${Math.min(i, 8) * 70}ms` }}
                 >
-                  <span className="ck-solo-kind">{CHECK_ICON[s.kind]}</span>
-                  <span className="ck-solo-time">
-                    {s.time ? fmtTime(s.time) : s.kind === 'cleaning' ? 'au départ' : '—:—'}
-                  </span>
-                  <span className="ck-solo-name" title={s.title}>
-                    {s.kind === 'arrival' || s.kind === 'departure' ? s.listingName : s.title}
-                  </span>
-                  {s.guestName && <span className="ck-solo-guest">{s.guestName}</span>}
-                  {s.state === 'attention' && s.attention?.actions?.[0] && (
-                    <button type="button" onClick={() => runAction(s, s.attention!.actions[0])}>
-                      {s.attention.actions[0].label}
-                    </button>
-                  )}
+                  <div className="ck-flight-head">
+                    <span className="ck-flight-name" title={g.listingName}>
+                      {g.listingName}
+                      {g.guestName ? ` · ${g.guestName}` : ''}
+                    </span>
+                    {attn ? (
+                      <span className="ck-flight-chip tight">✋ décision requise</span>
+                    ) : (
+                      <span className="ck-flight-chip ok">✓ en ordre</span>
+                    )}
+                  </div>
+                  <ChecksList
+                    steps={g.steps}
+                    planDate={date}
+                    onAction={runAction}
+                    onOpenRelances={setRelanceStep}
+                  />
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </>
         )}
       </div>
@@ -766,6 +789,62 @@ function fmtWhen(iso: string, planDate?: string): string {
   return planDate && dayKey === planDate ? hm : `${z(d.getDate())}/${z(d.getMonth() + 1)} ${hm}`;
 }
 
+/** Checklist réutilisable (turnovers + réservations hors chaîne) : statuts, badges 🔔, actions. */
+function ChecksList({
+  steps,
+  planDate,
+  onAction,
+  onOpenRelances,
+}: {
+  steps: DayPlanStep[];
+  planDate: string;
+  onAction: (step: DayPlanStep, action: DayPlanAction) => void;
+  onOpenRelances: (step: DayPlanStep) => void;
+}) {
+  if (!steps.length) return null;
+  return (
+    <div className="ck-checks">
+      {steps.map((s) => {
+        const action = s.attention?.actions?.[0];
+        const state = s.state === 'done' ? 'done' : s.state === 'attention' ? 'attn' : 'todo';
+        const isRegistration = s.taskType === 'registration';
+        const isCleaningTask = s.kind === 'cleaning' && Boolean(s.taskId);
+        const clickable = Boolean(s.relances?.length) || isRegistration || isCleaningTask;
+        return (
+          <div
+            key={s.id}
+            className={`ck-check ${state} ${clickable ? 'has-rel' : ''}`}
+            title={s.attention?.reason || (clickable ? 'Voir relances & actions' : s.title)}
+            onClick={clickable ? () => onOpenRelances(s) : undefined}
+          >
+            <span className="ck-check-state" aria-hidden>
+              {state === 'done' ? '✓' : state === 'attn' ? '!' : '·'}
+            </span>
+            <span className="ck-check-ico" aria-hidden>{CHECK_ICON[s.kind]}</span>
+            <span className="ck-check-label">{checkLabel(s)}</span>
+            <span className="ck-check-detail">{checkDetail(s, planDate)}</span>
+            {Boolean(s.relances?.length) && (
+              <span className="ck-check-rel" aria-hidden>🔔{s.relances!.length}</span>
+            )}
+            {action && (
+              <button
+                type="button"
+                className="ck-check-cta"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAction(s, action);
+                }}
+              >
+                {action.label}
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function checkDetail(s: DayPlanStep, planDate?: string): string {
   if (s.state === 'done') return s.time ? `fait · ${s.time}` : 'fait';
   /* Règle métier : le ménage démarre à l'heure de départ client. */
@@ -895,47 +974,7 @@ function FlightRow({
       </div>
 
       {/* Checklist statuts + actions : enregistrement, choix d'heure, assignation… */}
-      {orderedChecks.length > 0 && (
-        <div className="ck-checks">
-          {orderedChecks.map((s) => {
-            const action = s.attention?.actions?.[0];
-            const state = s.state === 'done' ? 'done' : s.state === 'attention' ? 'attn' : 'todo';
-            const isRegistration = s.taskType === 'registration';
-            const isCleaningTask = s.kind === 'cleaning' && Boolean(s.taskId);
-            const clickable = Boolean(s.relances?.length) || isRegistration || isCleaningTask;
-            return (
-              <div
-                key={s.id}
-                className={`ck-check ${state} ${clickable ? 'has-rel' : ''}`}
-                title={s.attention?.reason || (clickable ? 'Voir relances & actions' : s.title)}
-                onClick={clickable ? () => onOpenRelances(s) : undefined}
-              >
-                <span className="ck-check-state" aria-hidden>
-                  {state === 'done' ? '✓' : state === 'attn' ? '!' : '·'}
-                </span>
-                <span className="ck-check-ico" aria-hidden>{CHECK_ICON[s.kind]}</span>
-                <span className="ck-check-label">{checkLabel(s)}</span>
-                <span className="ck-check-detail">{checkDetail(s, planDate)}</span>
-                {Boolean(s.relances?.length) && (
-                  <span className="ck-check-rel" aria-hidden>🔔{s.relances!.length}</span>
-                )}
-                {action && (
-                  <button
-                    type="button"
-                    className="ck-check-cta"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAction(s, action);
-                    }}
-                  >
-                    {action.label}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <ChecksList steps={orderedChecks} planDate={planDate} onAction={onAction} onOpenRelances={onOpenRelances} />
 
       <div className="ck-flight-foot">
         {cta && attentionStep ? (
