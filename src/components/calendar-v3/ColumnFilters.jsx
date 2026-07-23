@@ -204,7 +204,7 @@ export default function ColumnFilters({
                 border: 0,
               }}
             >
-              Par défaut (prix · dyn. · min stay)
+              Par défaut (prix · dispo · min stay · dyn)
             </button>
             <span style={{ fontFamily: '"Geist Mono", monospace' }}>
               {selectedColumns.length} / {ALL_COLUMNS.length}

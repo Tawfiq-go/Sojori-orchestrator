@@ -128,6 +128,9 @@ export function CapabilityGestionPanel({
       </Box>
     );
   }
+  if (key === 'receive_arrival' || key === 'receive_departure') {
+    return null; // V3ServicePanel → V3ReceiveChecklistPanel
+  }
   if (key === 'registration') {
     return (
       <Box sx={embeddedSx}>

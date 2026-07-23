@@ -76,6 +76,15 @@ function buildChainGroups(steps: DayPlanStep[]): { groups: ChainGroup[]; solo: D
         step: arrivalStep,
         actions: [{ type: 'plan', label: 'Relancer via le plan' }],
       });
+    } else if (arrivalStep?.registrationAtArrival) {
+      links.push({
+        order: 4,
+        severity: 'p2',
+        label: `Enregistrement à l’arrivée — ${arrivalStep.guestName || 'guest entrant'}`,
+        meta: 'Non bloquant · plus de relances · accès WhatsApp OK · guest peut encore s’enregistrer.',
+        step: arrivalStep,
+        actions: [{ type: 'plan', label: 'Voir le plan' }],
+      });
     }
 
     links.forEach((l, i) => { l.order = i + 1; });

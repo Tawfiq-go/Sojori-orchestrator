@@ -4,7 +4,7 @@ import {
   labelForTaskTypeId,
 } from '../taskHub/staff-design/fulltaskTaskTypes';
 import { mapDispatchDisplay } from './planDispatchDisplay';
-import { dispatchPreviewToChannel, sourceLabelFromSummary } from './planDispatchPreview';
+import { dispatchPreviewToChannel, normalizeReservationSourceLabel, sourceLabelFromSummary } from './planDispatchPreview';
 import type { PlanDispatchContext } from './planDispatchPreview';
 import type {
   Channel,
@@ -74,6 +74,8 @@ export interface FulltaskPlanDoc {
     };
     clientActionCompleted?: boolean;
     clientActionCompletedAt?: string | Date;
+    deferredToArrival?: boolean;
+    deferredToArrivalAt?: string | Date;
     task?: {
       status?: string;
       scheduledDate?: string | Date;
@@ -99,6 +101,7 @@ export interface FulltaskPlanDoc {
       scheduledAt: string | Date;
       sentAt?: string | Date | null;
       status: 'en_attente' | 'envoyee' | 'saute' | 'echec';
+      reason?: string;
       dispatchPreview?: import('./planDispatchPreview').MessageDispatchPreview;
       dispatchLog?: Array<{
         at: string | Date;
@@ -688,7 +691,9 @@ export function buildReservationView(
       id: String(resa.sojoriId || resa.listingMapId || plan?.listingId || ''),
       name: listingName || String(resa.sojoriId || 'Logement'),
     },
-    source: resa.channelName || resa.otaCode || plan?.channelName || 'Direct',
+    source: normalizeReservationSourceLabel(
+      resa.channelName || resa.otaCode || plan?.channelName || (plan?.atSojori ? 'Sojori' : ''),
+    ) || (plan?.atSojori ? 'Sojori' : 'OTA'),
     guestsCount: resa.numberOfGuests || resa.adults || 1,
     checkIn,
     checkOut,
@@ -756,6 +761,7 @@ function mapRelanceExecution(
     label: string;
     scheduledAt: string | Date;
     status: string;
+    reason?: string;
     dispatchLog?: Array<{
       at: string | Date;
       ok: boolean;
@@ -778,6 +784,7 @@ function mapRelanceExecution(
   | 'channel'
   | 'executionStatus'
   | 'rawStatus'
+  | 'skipReason'
   | 'lastDispatch'
   | 'lastDispatchAttempt'
   | 'dispatchLog'
@@ -815,6 +822,7 @@ function mapRelanceExecution(
     channel,
     executionStatus,
     rawStatus,
+    skipReason: r.reason?.trim() || undefined,
     lastDispatch,
     lastDispatchAttempt,
     dispatchLog,
@@ -1401,13 +1409,17 @@ function buildSequenceView(
 
   const hasLinkedTask = Boolean(seq.taskId || seq.task);
   const blockStatusesFromApi = mapBackendBlockStatuses(seq.blocks);
-  const status = seq.status
+  let status = seq.status
     ? mapBackendOrchestrationStatus(seq.status)
     : deriveSequenceDisplayStatus({
         taskStatus,
         seqStatus: seq.status,
         hasLinkedTask,
       });
+  // Heure / action client déjà faite → L1 toujours Terminé (même après Modifier)
+  if (clientActionCompleted && status !== 'blocked') {
+    status = 'done';
+  }
 
   const blockStatuses = blockStatusesFromApi ?? {
     relances: aggregateRelancesGroupStatus(relances, clientActionCompleted),
@@ -1446,6 +1458,7 @@ function buildSequenceView(
     hasStaffReminders: staffReminders.length > 0,
     hasEscalade: Boolean(escalade),
     clientActionCompleted,
+    deferredToArrival: Boolean(seq.deferredToArrival) && !clientActionCompleted,
     clientChosenTime,
     taskStatus,
     registrationProgress,

@@ -10,7 +10,10 @@ const ROLE_MAP: Record<string, string> = {
   owner: 'Owner',
   staff: 'Worker',
   superadmin: 'SuperAdmin',
+  landlord: 'Landlord',
 };
+
+const CANONICAL_ROLES = ['SuperAdmin', 'Admin', 'Owner', 'Worker', 'Landlord'] as const;
 
 /** Map AuthContext user → shape attendu par features/staff legacy (redux). */
 export function toLegacyAuthUser(user: MockUser | ApiUser | null): Record<string, unknown> | null {
@@ -19,7 +22,7 @@ export function toLegacyAuthUser(user: MockUser | ApiUser | null): Record<string
   const rawRole = String(user.role || '');
   const role =
     ROLE_MAP[rawRole.toLowerCase()] ||
-    (['SuperAdmin', 'Admin', 'Owner', 'Worker'].includes(rawRole) ? rawRole : 'Admin');
+    (CANONICAL_ROLES.includes(rawRole as (typeof CANONICAL_ROLES)[number]) ? rawRole : rawRole || 'Owner');
   return {
     _id: id,
     id,
@@ -31,6 +34,7 @@ export function toLegacyAuthUser(user: MockUser | ApiUser | null): Record<string
     company: 'company' in user ? user.company : undefined,
     ownerId: (user as { ownerId?: string }).ownerId,
     ownerAccess: !!(user as { ownerAccess?: boolean }).ownerAccess,
+    listingIds: (user as { listingIds?: string[] }).listingIds,
     featureGrants: (user as { featureGrants?: unknown[] }).featureGrants,
   };
 }

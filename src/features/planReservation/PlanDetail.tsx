@@ -9,6 +9,7 @@ import {
 } from './buildPlanViewModel';
 import DispatchLastSendLine from './DispatchLastSendLine';
 import DispatchPreviewChips from './DispatchPreviewChips';
+import MessageBodyPreview from './MessageBodyPreview';
 import { dispatchPreviewShort, formatReservationSourceLabel } from './planDispatchPreview';
 import { formatDispatchHistoryError, formatDispatchWhen } from './planDispatchDisplay';
 import PlanDispatchButton from './PlanDispatchButton';
@@ -130,6 +131,7 @@ export default function PlanDetail({
               guestPhone={plan.guestPhone}
               guestName={plan.guestName ?? r.guest.name}
               reservationRef={r.reference}
+              checkInIso={r.checkIn}
               onDispatched={onPlanUpdated}
             />,
           );
@@ -137,7 +139,7 @@ export default function PlanDetail({
       }
     }
     return nodes;
-  }, [orderedTimelineEvents, sequenceByEventId, r.id, r.guest.name, r.reference, plan.guestPhone, plan.guestName, onPlanUpdated]);
+  }, [orderedTimelineEvents, sequenceByEventId, r.id, r.guest.name, r.reference, r.checkIn, plan.guestPhone, plan.guestName, onPlanUpdated]);
 
   const runCronNow = async () => {
     setCronLoading(true);
@@ -641,6 +643,14 @@ function MessagePlanCard({
               )}
             </div>
           ) : null}
+
+          {typeof ev.messageIndex === 'number' ? (
+            <MessageBodyPreview
+              reservationId={reservationId}
+              kind="message"
+              messageIndex={ev.messageIndex}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -649,11 +659,11 @@ function MessagePlanCard({
 
 function StatusBadge({ status, kind }: { status: EventStatus; kind: PlanEvent['kind'] }) {
   const labels: Record<EventStatus, string> = {
-    done: kind === 'sequence' ? '✓ COMPLÉTÉE' : '✓ ENVOYÉ',
+    done: kind === 'sequence' ? '✓ TERMINÉ' : '✓ ENVOYÉ',
     now: '⚡ EN COURS',
     pending: '⏸ EN ATTENTE',
-    blocked: '🚨 BLOQUÉE',
-    future: '📅 PRÉVU',
+    blocked: '🚨 BLOQUÉ',
+    future: '📅 À VENIR',
   };
   return <span className={`st-badge ${status}`}>{labels[status]}</span>;
 }

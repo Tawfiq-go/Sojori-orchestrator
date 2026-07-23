@@ -9,6 +9,7 @@ export function normalizeUserRole(role) {
   if (r === Roles.Admin || lower === 'admin') return Roles.Admin;
   if (r === Roles.Owner || lower === 'owner') return Roles.Owner;
   if (r === Roles.Worker || lower === 'worker' || lower === 'staff') return Roles.Worker;
+  if (r === Roles.Landlord || lower === 'landlord') return Roles.Landlord;
   return r;
 }
 
@@ -41,6 +42,8 @@ export function hasWildcardFeatureGrants(user) {
 export function canSelectOwnerInAdminFilter(user) {
   if (!user) return false;
   const role = normalizeUserRole(user.role);
+  // Propriétaire immobilier : jamais le sélecteur PM / « Tous plateforme ».
+  if (role === Roles.Landlord) return false;
   if (isPlatformAdminRole(role)) return true;
   if (role === Roles.Owner) return false;
   if (role === Roles.Worker) {
@@ -67,7 +70,8 @@ export function getPropertyOwnerScopeId(user) {
     const id = user._id || user.id || null;
     return id != null && String(id).trim() !== '' ? String(id).trim() : null;
   }
-  if (role === Roles.Worker) {
+  // Landlord / Worker : données du PM (ownerId), pas l’id du compte lui-même.
+  if (role === Roles.Worker || role === Roles.Landlord) {
     const o = user.ownerId;
     return o != null && String(o).trim() !== '' ? String(o).trim() : null;
   }

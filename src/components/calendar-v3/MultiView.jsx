@@ -32,6 +32,7 @@ export default function MultiView({
   selectedColumns = [],
   onCellsSelected,
   onOpenReservation,
+  onToggleDynamicPrice,
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsLegacy || [];
   const { isMobile } = useCalendarBreakpoint();
@@ -45,7 +46,6 @@ export default function MultiView({
   /* ─── Expand/collapse par listing — fermé par défaut ─── */
   const [expanded, setExpanded] = useState({});
   const toggleListing = (id) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
-
   /* ─── Sélection Excel vs clic détail tarif ─── */
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
@@ -70,7 +70,8 @@ export default function MultiView({
   const onMouseDown = (cell, e) => {
     const inv = inventoriesByListing[cell.listingId]?.[cell.dateStr];
     const st = resolveInventoryCellState(cell.dateStr, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
-    if (st !== 'data') return;
+    // Prix dyn. : sélection Excel aussi sur jours passés (archive)
+    if (st !== 'data' && !(st === 'archive' && cell.column === 'dynamicPrice')) return;
     setActiveTip(null);
     dragMovedRef.current = false;
     dragStartPosRef.current = e ? { x: e.clientX, y: e.clientY } : null;
@@ -312,6 +313,7 @@ export default function MultiView({
               onPriceClick={onPriceClick}
               onReservationClick={handleReservationDayClick}
               activeTip={activeTip}
+              onToggleDynamicPrice={onToggleDynamicPrice}
             />
           ))}
         </div>
@@ -469,6 +471,7 @@ const ListingLabel = memo(function ListingLabel({
 /* ─── Ligne d'un listing (prix + dispo sur une ligne, détail en collapse) ─── */
 function ListingRow({
   listing, inventories, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onPriceClick, onReservationClick, activeTip,
+  onToggleDynamicPrice,
 }) {
   const primaryCols = calendarPrimaryColumns(selectedColumns);
   const collapseColumns = calendarCollapseColumns(selectedColumns);
@@ -618,9 +621,14 @@ function ListingRow({
                 <CollapseCell
                   key={d.iso} col={col} day={d} inv={inv} listing={listing}
                   selected={sel} draggable={draggable}
-                  onMouseDown={draggable && cellState === 'data' ? (e) => onMouseDown(cellMeta, e) : undefined}
+                  onMouseDown={
+                    draggable && (cellState === 'data' || (colId === 'dynamicPrice' && cellState === 'archive'))
+                      ? (e) => onMouseDown(cellMeta, e)
+                      : undefined
+                  }
                   onMouseEnter={draggable ? () => onMouseEnter(cellMeta) : undefined}
                   onPriceClick={onPriceClick}
+                  onToggleDynamicPrice={onToggleDynamicPrice}
                   tipOpen={
                     colId === 'rate' &&
                     activeTip?.listingId === listing._id &&
@@ -776,7 +784,6 @@ function PrimaryInventoryCell({
         />
       )}
 
-      {/* Bandeau Excel (sans icône) */}
       {hasExcelZone && hasPriceZone && (
         <div
           {...bindExcel(excelMeta)}
@@ -792,7 +799,6 @@ function PrimaryInventoryCell({
         />
       )}
 
-      {/* Dispo seule — cellule Excel pleine largeur */}
       {hasExcelZone && !hasPriceZone && (
         <div
           {...bindExcel(excelMeta)}
@@ -816,7 +822,6 @@ function PrimaryInventoryCell({
         </div>
       )}
 
-      {/* Prix + dispo — clic détail sur le tarif */}
       {hasPriceZone && (
         <div
           onClick={canPriceClick ? (e) => onPriceClick?.(rateMeta, e) : undefined}
@@ -867,7 +872,7 @@ function PrimaryInventoryCell({
 }
 
 /* ─── Collapse cell — tarif : + Excel · prix clic ; autres : cellule Excel ─── */
-function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown, onMouseEnter, onReservationClick, tipOpen, onPriceClick }) {
+function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown, onMouseEnter, onReservationClick, tipOpen, onPriceClick, onToggleDynamicPrice }) {
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
 
@@ -920,10 +925,42 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
   else if (col.id === 'manualPrice') content = inv.manualPrice ?? dash;
   else if (col.id === 'dynamicPrice') {
     const isDyn = resolvePriceMode(inv) === 'dynamic';
+    const canToggle =
+      Boolean(onToggleDynamicPrice) &&
+      hasInventoryData(inv) &&
+      (state === 'data' || state === 'archive');
     content = (
-      <span style={{ color: isDyn ? T.ai : T.text3, fontSize: 11, fontWeight: 700 }}>
-        {isDyn ? 'Oui' : 'Non'}
-      </span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!canToggle) return;
+          onToggleDynamicPrice?.({
+            listingId: listing._id,
+            roomTypeId: listing.roomTypeId || 'default',
+            dateStr: day.iso,
+            enable: !isDyn,
+            isArchived: archived,
+          });
+        }}
+        disabled={!canToggle}
+        title={isDyn ? 'Prix dynamique ON — cliquer pour OFF' : 'Prix dynamique OFF — cliquer pour ON'}
+        style={{
+          border: 0,
+          cursor: canToggle ? 'pointer' : 'default',
+          color: isDyn ? T.ai : T.text3,
+          fontSize: 10,
+          fontWeight: 800,
+          background: isDyn ? 'rgba(124,58,237,0.14)' : 'rgba(20,17,10,0.05)',
+          padding: '1px 6px',
+          borderRadius: 99,
+          letterSpacing: '0.04em',
+          fontFamily: '"Geist Mono", monospace',
+          opacity: canToggle ? 1 : 0.55,
+        }}
+      >
+        {isDyn ? 'ON' : 'OFF'}
+      </button>
     );
   }
   else if (col.id === 'priceMode') {

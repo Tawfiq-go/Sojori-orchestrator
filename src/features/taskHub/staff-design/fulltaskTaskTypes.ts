@@ -10,6 +10,8 @@ export const FULLTASK_TASK_TYPES = [
   'cleaning_free',
   'arrival_declare',
   'departure_declare',
+  'receive_arrival',
+  'receive_departure',
   'registration',
   'cleaning_paid',
   'checkout_cleaning',
@@ -28,6 +30,8 @@ export const FULLTASK_TASK_TYPE_LABELS: Record<FulltaskTaskTypeId, string> = {
   cleaning_free: 'Ménage gratuit',
   arrival_declare: 'Déclarer arrivée',
   departure_declare: 'Déclarer départ',
+  receive_arrival: 'Accueil arrivée',
+  receive_departure: 'Accueil départ',
   registration: 'Enregistrement',
   cleaning_paid: 'Ménage payant',
   checkout_cleaning: 'Ménage Sojori',
@@ -44,6 +48,8 @@ export const FULLTASK_TASK_TYPE_EMOJI: Partial<Record<FulltaskTaskTypeId, string
   cleaning_free: '🧹',
   arrival_declare: '🛬',
   departure_declare: '🛫',
+  receive_arrival: '🙋',
+  receive_departure: '👋',
   registration: '📝',
   cleaning_paid: '✨',
   checkout_cleaning: '🧼',
@@ -84,7 +90,9 @@ export function defaultOrchestrationReferenceForTaskType(taskType?: string): Ref
   ) {
     return 'previous_step_done';
   }
-  if (t === 'departure_choose' || t === 'departure_declare') return 'check_out';
+  if (t === 'departure_choose' || t === 'departure_declare' || t === 'receive_departure') {
+    return 'check_out';
+  }
   if (t === 'support' || t === 'service_client') return 'task_created';
   return 'check_in';
 }

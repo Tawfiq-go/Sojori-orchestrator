@@ -2151,6 +2151,11 @@ export const listingsService = {
       }
 
       console.warn('[syncListingToRentalUnited] Response success=false:', result);
+      const otaBlockers = Array.isArray(result?.data?.otaBlockers) ? result.data.otaBlockers : [];
+      const otaDetail = otaBlockers
+        .map((e: { message?: string }) => e?.message)
+        .filter(Boolean)
+        .join('\n');
       const ruErrors = Array.isArray(result?.data?.errors) ? result.data.errors : [];
       const ruDetail = ruErrors
         .map((e: { message?: string; step?: string }) => e?.message)
@@ -2159,11 +2164,21 @@ export const listingsService = {
       return {
         success: false,
         data: result?.data || {},
-        error: ruDetail || result?.message || 'Failed to sync listing to RentalsUnited',
+        error: otaDetail || ruDetail || result?.message || 'Failed to sync listing to RentalsUnited',
       };
     } catch (error) {
       if (isAxiosError(error)) {
-        const msg = error.response?.data?.message || error.response?.data?.error || error.message;
+        const data = error.response?.data;
+        const otaBlockers = Array.isArray(data?.data?.otaBlockers) ? data.data.otaBlockers : [];
+        const otaDetail = otaBlockers
+          .map((e: { message?: string }) => e?.message)
+          .filter(Boolean)
+          .join('\n');
+        const msg =
+          otaDetail ||
+          data?.message ||
+          data?.error ||
+          error.message;
         console.error('[syncListingToRentalUnited] Axios error:');
         console.error('  - Status:', error.response?.status);
         console.error('  - Status text:', error.response?.statusText);
@@ -2172,6 +2187,7 @@ export const listingsService = {
         console.error('  - Full error:', error);
         return {
           success: false,
+          data: data?.data || {},
           error: msg || 'Failed to sync listing to RentalsUnited',
         };
       }

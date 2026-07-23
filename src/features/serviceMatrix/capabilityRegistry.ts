@@ -12,6 +12,9 @@ export type CapabilityGroupId =
   | 'concierge'
   | 'info';
 
+/** Durée affichée dans l’audit listing : hours | minutes | na. */
+export type CapabilityDurationKind = 'hours' | 'minutes' | 'na';
+
 export interface CapabilityDefinition {
   key: string;
   label: string;
@@ -31,6 +34,8 @@ export interface CapabilityDefinition {
     task: CapabilityColumnMode;
     execution: CapabilityColumnMode;
   };
+  /** Unité de durée pour l’audit config (défaut na). */
+  durationKind?: CapabilityDurationKind;
   gestionHint: string;
   whatsappHint: string;
   orchestrationExpertPath: string;
@@ -58,6 +63,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['A', 'B', 'C', 'D', 'J'],
     orchestrationFlag: null,
     columns: { managed: 'yes', client: 'yes', orchestrated: 'na', task: 'na', execution: 'na' },
+    durationKind: 'na',
     gestionHint: 'Navigation · menu principal · langue · parcours · sous-menus',
     whatsappHint: 'Options A · B · C · D · J — structure du parcours voyageur',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
@@ -73,6 +79,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['I'],
     orchestrationFlag: 'orchestration_cleaning_free',
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'hours',
     gestionHint: 'Paliers durée · créneaux horaires · message voyageur',
     whatsappHint: 'Option I · fenêtre disponibilité',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
@@ -88,6 +95,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['I'],
     orchestrationFlag: 'orchestration_cleaning_paid',
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'hours',
     gestionHint: 'paidCleaningConfig · types · jours · tarifs',
     whatsappHint: 'Option I (demande ménage) · même entrée menu que inclus',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
@@ -103,13 +111,14 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: [],
     orchestrationFlag: 'orchestration_cleaning_sojori',
     columns: { managed: 'yes', client: 'na', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'hours',
     gestionHint: 'cleaningOrchestration · J+ checkout · checklist',
     whatsappHint: 'N/A — automatisation staff post-checkout',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
     key: 'arrival_choose',
-    label: 'Choisir arrivée',
+    label: 'Choisir heure arrivée',
     emoji: '🛬',
     group: 'journey',
     groupLabel: 'Arrivée & départ',
@@ -117,24 +126,42 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     workflowKey: 'wf:arrival_choose',
     menuCodes: ['D1'],
     orchestrationFlag: 'orchestration_choose_arrival',
-    columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
-    gestionHint: 'TS_CHECKIN · créneaux choix arrivée',
+    columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
+    durationKind: 'na',
+    gestionHint: 'Créneaux TS_CHECKIN — pas une tâche staff',
     whatsappHint: 'Option D1 · fenêtre',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
-    key: 'departure_choose',
-    label: 'Choisir départ',
-    emoji: '🛫',
+    key: 'receive_arrival',
+    label: 'Accueil arrivée',
+    emoji: '🙋',
     group: 'journey',
     groupLabel: 'Arrivée & départ',
-    taskType: 'departure_choose',
-    workflowKey: 'wf:departure_choose',
-    menuCodes: ['D2'],
-    orchestrationFlag: 'orchestration_choose_departure',
-    columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
-    gestionHint: 'TS_CHECKOUT · créneaux choix départ',
-    whatsappHint: 'Option D2 · fenêtre',
+    taskType: 'receive_arrival',
+    workflowKey: 'wf:receive_arrival',
+    menuCodes: [],
+    orchestrationFlag: 'orchestration_receive_arrival',
+    columns: { managed: 'yes', client: 'na', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'minutes',
+    gestionHint: 'durée min · checklist staff (enregistrement, taxe séjour, clés…)',
+    whatsappHint: 'N/A — tâche staff seulement',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
+  },
+  {
+    key: 'registration',
+    label: 'Enregistrement voyageurs',
+    emoji: '👥',
+    group: 'journey',
+    groupLabel: 'Arrivée & départ',
+    taskType: 'registration',
+    workflowKey: 'wf:registration',
+    menuCodes: ['E'],
+    orchestrationFlag: 'orchestration_registration',
+    columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
+    durationKind: 'na',
+    gestionHint: 'Flow enregistrement · menu E — pas une tâche staff visible',
+    whatsappHint: 'Option E · guest_registration',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
@@ -148,8 +175,41 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['D3'],
     orchestrationFlag: 'orchestration_declare_arrival',
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'na',
     gestionHint: 'Heure libre 24h · WhatsApp D3',
     whatsappHint: 'Option D3',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
+  },
+  {
+    key: 'departure_choose',
+    label: 'Choisir heure départ',
+    emoji: '🛫',
+    group: 'journey',
+    groupLabel: 'Arrivée & départ',
+    taskType: 'departure_choose',
+    workflowKey: 'wf:departure_choose',
+    menuCodes: ['D2'],
+    orchestrationFlag: 'orchestration_choose_departure',
+    columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
+    durationKind: 'na',
+    gestionHint: 'Créneaux TS_CHECKOUT — pas une tâche staff',
+    whatsappHint: 'Option D2 · fenêtre',
+    orchestrationExpertPath: '/orchestration/config?tab=messages',
+  },
+  {
+    key: 'receive_departure',
+    label: 'Accueil départ',
+    emoji: '👋',
+    group: 'journey',
+    groupLabel: 'Arrivée & départ',
+    taskType: 'receive_departure',
+    workflowKey: 'wf:receive_departure',
+    menuCodes: [],
+    orchestrationFlag: 'orchestration_receive_departure',
+    columns: { managed: 'yes', client: 'na', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'minutes',
+    gestionHint: 'durée min · checklist staff (clés, état des lieux, taxe…)',
+    whatsappHint: 'N/A — tâche staff seulement',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
@@ -163,23 +223,9 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['D4'],
     orchestrationFlag: 'orchestration_declare_departure',
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'na',
     gestionHint: 'Heure libre 24h · WhatsApp D4',
     whatsappHint: 'Option D4',
-    orchestrationExpertPath: '/orchestration/config?tab=messages',
-  },
-  {
-    key: 'registration',
-    label: 'Enregistrement voyageurs',
-    emoji: '👥',
-    group: 'journey',
-    groupLabel: 'Arrivée & départ',
-    taskType: 'registration',
-    workflowKey: 'wf:registration',
-    menuCodes: ['E'],
-    orchestrationFlag: 'orchestration_registration',
-    columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
-    gestionHint: 'Flow enregistrement · champs obligatoires',
-    whatsappHint: 'Option E · guest_registration',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
@@ -193,6 +239,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['K'],
     orchestrationFlag: 'orchestration_support',
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'na',
     gestionHint: 'Catégories · urgence · champs',
     whatsappHint: 'Option K · contact_support',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
@@ -208,6 +255,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['L'],
     orchestrationFlag: 'orchestration_service_client',
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'na',
     gestionHint: 'SLA · objets · formulaire',
     whatsappHint: 'Option L · contact_service_client',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
@@ -223,6 +271,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['J1'],
     orchestrationFlag: 'orchestration_transport',
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'na',
     gestionHint: 'Routes · prix · villes',
     whatsappHint: 'Option J1 · request_transport',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
@@ -238,6 +287,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['J2'],
     orchestrationFlag: 'orchestration_grocery',
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'na',
     gestionHint: 'Frais · note · devise',
     whatsappHint: 'Option J2 · request_shopping',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
@@ -253,6 +303,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['J3'],
     orchestrationFlag: 'orchestration_custom',
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
+    durationKind: 'na',
     gestionHint: 'customServices · formules · villes',
     whatsappHint: 'Option J3 · request_custom_service',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
@@ -268,6 +319,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['F'],
     orchestrationFlag: null,
     columns: { managed: 'yes', client: 'yes', orchestrated: 'na', task: 'na', execution: 'na' },
+    durationKind: 'na',
     gestionHint: 'Mode réception · instructions par zone',
     whatsappHint: 'Option F · show_access_info',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
@@ -283,6 +335,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['G'],
     orchestrationFlag: null,
     columns: { managed: 'yes', client: 'yes', orchestrated: 'na', task: 'na', execution: 'na' },
+    durationKind: 'na',
     gestionHint: 'Infos logement · WiFi listing',
     whatsappHint: 'Option G · show_property_info',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
@@ -298,6 +351,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     menuCodes: ['H'],
     orchestrationFlag: null,
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
+    durationKind: 'na',
     gestionHint: 'Rules · InfoUtils · listing_rules_and_info',
     whatsappHint: 'Option H · show_house_rules',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
@@ -306,6 +360,12 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
 
 export function getCapabilityDefinition(key: string): CapabilityDefinition | undefined {
   return CAPABILITY_REGISTRY.find(c => c.key === key);
+}
+
+export function capabilityDurationKind(
+  def: Pick<CapabilityDefinition, 'durationKind'> | null | undefined,
+): CapabilityDurationKind {
+  return def?.durationKind ?? 'na';
 }
 
 /** Sous-titre rail V3 — menu WA ou extrait gestion (pas le badge « Local »). */
@@ -337,7 +397,7 @@ export function defaultListingRailCapabilityKey(): string {
   return row?.key ?? 'cleaning_free';
 }
 
-/** Tâches sans relances voyageur (à la demande + ménage Sojori checkout). */
+/** Tâches sans relances voyageur (à la demande + ménage Sojori checkout + accueil staff). */
 export const NO_CLIENT_REMINDER_TASK_TYPES = [
   'cleaning_paid',
   'transport',
@@ -346,6 +406,8 @@ export const NO_CLIENT_REMINDER_TASK_TYPES = [
   'support',
   'service_client',
   'checkout_cleaning',
+  'receive_arrival',
+  'receive_departure',
 ] as const
 
 /** @deprecated alias — préférer NO_CLIENT_REMINDER_TASK_TYPES */

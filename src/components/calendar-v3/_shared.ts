@@ -262,9 +262,9 @@ export const ALL_COLUMNS: ColumnDef[] = [
   },
   {
     id: 'dynamicPrice',
-    label: 'Prix dynamique (Oui / Non)',
-    short: 'Dyn.',
-    excelSelectable: false,
+    label: 'Prix dynamique',
+    short: 'Prix dyn.',
+    excelSelectable: true,
   },
   {
     id: 'reservations',
@@ -298,28 +298,28 @@ export const ALL_COLUMNS: ColumnDef[] = [
   },
 ];
 
-/** Colonnes affichées sur la ligne principale (une seule ligne par défaut). */
+/** Colonnes affichées sur la ligne principale (prix + dispo). */
 export const CALENDAR_PRIMARY_ROW_COLUMNS = ['availableRoom', 'rate'] as const;
 
-/** Colonnes par défaut — filtre + collapse (hors ligne principale : dyn. + min stay). */
+/** Sélection colonnes par défaut (vue multi) — Min stay + prix dyn. dans le collapse. */
 export const CALENDAR_DEFAULT_COLUMNS = [
   'availableRoom',
   'rate',
-  'dynamicPrice',
   'minStay',
+  'dynamicPrice',
 ] as const;
 
-/** Colonnes prioritaires — ordre filtre + collapse */
+/** Colonnes prioritaires — ordre filtre + ligne principale */
 export const CALENDAR_COLUMN_PRIORITY = [
   'availableRoom',
   'rate',
-  'dynamicPrice',
   'minStay',
+  'dynamicPrice',
 ] as const;
 
 const PRIMARY_ROW_SET = new Set<string>(CALENDAR_PRIMARY_ROW_COLUMNS);
 
-/** Colonnes effectives (défaut prix + dispo si filtre vide). */
+/** Colonnes effectives (défaut prix + dispo + min stay + dyn si filtre vide). */
 export function effectiveCalendarColumns(selectedColumns: string[]): string[] {
   return selectedColumns.length > 0 ? selectedColumns : [...CALENDAR_DEFAULT_COLUMNS];
 }
@@ -341,7 +341,7 @@ export function calendarDetailColumns(selectedColumns: string[]): string[] {
   return sortCalendarColumns(effectiveCalendarColumns(selectedColumns));
 }
 
-/** Colonnes collapse sans doublon ligne principale (tarif + dispo déjà sur la 1re ligne). */
+/** Colonnes du collapse Multi (hors ligne principale prix/dispo) — Min stay, Prix dyn., etc. */
 export function calendarCollapseColumns(selectedColumns: string[]): string[] {
   return sortCalendarColumns(
     effectiveCalendarColumns(selectedColumns).filter((id) => !PRIMARY_ROW_SET.has(id)),

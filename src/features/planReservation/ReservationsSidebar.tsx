@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { planCodeDisplay, reservationRefDisplay } from './buildPlanViewModel';
+import { normalizeReservationSourceLabel, sourceChipClass } from './planDispatchPreview';
 import type { Reservation, ReservationGroup } from './types';
 
 interface Props {
@@ -146,6 +147,8 @@ function ResaItem({ r, active, onClick }: { r: Reservation; active: boolean; onC
   const color = r.guest.avatarColor || 1;
   const planLabel = planCodeDisplay(r.planCode);
   const resaLabel = reservationRefDisplay(r.reference);
+  const sourceLabel = normalizeReservationSourceLabel(r.source) || r.source || '';
+  const sourceCls = sourceChipClass(sourceLabel);
 
   return (
     <div
@@ -159,7 +162,7 @@ function ResaItem({ r, active, onClick }: { r: Reservation; active: boolean; onC
       }}
       role="button"
       tabIndex={0}
-      title={`${planLabel} · ${r.guest.name} · résa ${resaLabel}`}
+      title={`${planLabel} · ${r.guest.name} · ${sourceLabel || '—'} · résa ${resaLabel}`}
     >
       <div className={`av av-ref c${color}`} title={planLabel}>
         {refShort(planLabel)}
@@ -173,6 +176,11 @@ function ResaItem({ r, active, onClick }: { r: Reservation; active: boolean; onC
         </div>
         <div className="row1">
           <span className="nm">{r.guest.name}</span>
+          {sourceLabel ? (
+            <span className={`src-chip ${sourceCls}`} title={`Source · ${sourceLabel}`}>
+              {sourceLabel}
+            </span>
+          ) : null}
           <span className={`badge ${badge.cls}`}>{badge.label}</span>
         </div>
         <div className="row2">

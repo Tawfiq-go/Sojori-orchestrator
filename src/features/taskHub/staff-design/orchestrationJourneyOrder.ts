@@ -8,10 +8,12 @@ export const ORCHESTRATION_JOURNEY_SLOTS: Array<
 > = [
   { kind: 'message', catalogMessageId: 'welcome_sojori_v2' },
   { kind: 'workflow', taskTypeId: 'arrival_choose' },
+  { kind: 'workflow', taskTypeId: 'receive_arrival' },
   { kind: 'workflow', taskTypeId: 'registration' },
   { kind: 'workflow', taskTypeId: 'arrival_declare' },
   { kind: 'message', catalogMessageId: 'checkin_feedback' },
   { kind: 'workflow', taskTypeId: 'departure_choose' },
+  { kind: 'workflow', taskTypeId: 'receive_departure' },
   { kind: 'message', catalogMessageId: 'departure_instructions' },
   { kind: 'workflow', taskTypeId: 'departure_declare' },
   { kind: 'workflow', taskTypeId: 'cleaning_free' },

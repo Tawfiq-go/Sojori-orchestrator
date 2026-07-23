@@ -381,6 +381,11 @@
 }
 
 .ck-kpi.ai b { color: var(--ck-ai); }
+.ck-kpi.warn {
+  background: rgba(196, 101, 6, 0.12);
+  border-color: rgba(196, 101, 6, 0.35);
+  box-shadow: inset 0 -3px 0 var(--ck-warn);
+}
 .ck-kpi.warn b { color: var(--ck-warn); }
 .ck-kpi.ok b { color: var(--ck-ok); }
 
@@ -389,23 +394,34 @@
 .ck-audit {
   background: var(--ck-panel);
   border: 1px solid var(--ck-line);
-  border-left: 3px solid var(--ck-ok);
+  border-left: 4px solid var(--ck-ok);
   border-radius: 14px;
-  padding: 10px 14px;
+  padding: 12px 14px;
   box-shadow: 0 1px 2px rgba(20, 17, 10, 0.04);
   animation: ck-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
-.ck-audit.warn { border-left-color: var(--ck-warn); }
-.ck-audit.high { border-left-color: var(--ck-bad); }
+.ck-audit.warn {
+  border-left-color: var(--ck-warn);
+  background: linear-gradient(180deg, rgba(196, 101, 6, 0.10), var(--ck-panel) 42%);
+  border-color: rgba(196, 101, 6, 0.28);
+  box-shadow: 0 0 0 1px rgba(196, 101, 6, 0.12), 0 8px 24px rgba(196, 101, 6, 0.08);
+}
+
+.ck-audit.high {
+  border-left-color: var(--ck-bad);
+  background: linear-gradient(180deg, rgba(200, 30, 30, 0.12), var(--ck-panel) 42%);
+  border-color: rgba(200, 30, 30, 0.32);
+  box-shadow: 0 0 0 1px rgba(200, 30, 30, 0.14), 0 8px 24px rgba(200, 30, 30, 0.10);
+}
 
 .ck-audit-hdr {
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0.04em;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
   color: var(--ck-text);
 }
 
@@ -417,23 +433,50 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 11.5px;
-  font-weight: 650;
-  color: var(--ck-text2);
-  padding: 5px 8px;
-  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ck-text);
+  padding: 9px 11px;
+  border-radius: 10px;
   background: var(--ck-panel2);
   border: 1px solid var(--ck-line);
 }
 
-.ck-audit-item.high {
-  background: rgba(200, 30, 30, 0.06);
-  border-color: rgba(200, 30, 30, 0.22);
-  color: var(--ck-bad);
-  font-weight: 750;
+.ck-audit-item.warn {
+  background: rgba(196, 101, 6, 0.12);
+  border-color: rgba(196, 101, 6, 0.35);
+  color: #8a4500;
+  box-shadow: inset 3px 0 0 var(--ck-warn);
 }
 
-.ck-audit-ico { flex-shrink: 0; }
+.ck-audit-item.high {
+  background: rgba(200, 30, 30, 0.10);
+  border-color: rgba(200, 30, 30, 0.38);
+  color: var(--ck-bad);
+  font-weight: 800;
+  box-shadow: inset 3px 0 0 var(--ck-bad);
+  animation: ck-blink 2s ease-in-out infinite;
+}
+
+.ck-audit-ico {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+}
+
+.ck-audit-item.warn .ck-audit-ico {
+  background: rgba(196, 101, 6, 0.18);
+}
+
+.ck-audit-item.high .ck-audit-ico {
+  background: rgba(200, 30, 30, 0.16);
+}
 
 .ck-audit-lbl { flex: 1; min-width: 0; line-height: 1.35; }
 
@@ -443,9 +486,9 @@
   background: var(--ck-panel);
   color: var(--ck-text2);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 800;
-  padding: 4px 11px;
+  padding: 5px 12px;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s;
@@ -454,13 +497,15 @@
 .ck-audit-item button:hover { color: var(--ck-gold-deep); border-color: var(--ck-gold); }
 
 .ck-audit-item button.primary {
-  background: var(--ck-gold);
-  border-color: var(--ck-gold);
+  background: var(--ck-warn);
+  border-color: var(--ck-warn);
   color: #fff;
 }
 
-/* Heure par défaut non confirmée = signal visible dans les checklists */
-.ck-check.hour-warn .ck-check-detail { color: var(--ck-warn); }
+.ck-audit-item.high button.primary {
+  background: var(--ck-bad);
+  border-color: var(--ck-bad);
+}
 
 /* ── Tableau de vol ── */
 
@@ -513,8 +558,39 @@
 
 .ck-flight:hover { box-shadow: 0 8px 26px rgba(20, 17, 10, 0.10); }
 
-.ck-flight.tight { border-left-color: var(--ck-warn); }
-.ck-flight.broken { border-left-color: var(--ck-bad); }
+.ck-flight.tight {
+  border-left-width: 4px;
+  border-left-color: var(--ck-warn);
+  background: linear-gradient(90deg, rgba(196, 101, 6, 0.07), var(--ck-panel) 28%);
+  border-color: rgba(196, 101, 6, 0.22);
+}
+
+.ck-flight.broken {
+  border-left-width: 4px;
+  border-left-color: var(--ck-bad);
+  background: linear-gradient(90deg, rgba(200, 30, 30, 0.08), var(--ck-panel) 28%);
+  border-color: rgba(200, 30, 30, 0.28);
+}
+
+.ck-flight.needs-action {
+  box-shadow: 0 0 0 1px rgba(196, 101, 6, 0.18), 0 6px 18px rgba(196, 101, 6, 0.10);
+}
+
+.ck-flight-chip.tight {
+  color: #fff;
+  background: var(--ck-warn);
+  box-shadow: 0 2px 8px rgba(196, 101, 6, 0.35);
+}
+
+.ck-flight-chip.tight.pulse {
+  animation: ck-blink 1.4s ease-in-out infinite;
+}
+
+.ck-flight-chip.broken {
+  color: #fff;
+  background: var(--ck-bad);
+  animation: ck-blink 1.6s ease-in-out infinite;
+}
 
 .ck-flight.is-target {
   animation: ck-target 1.5s ease-in-out 2;
@@ -553,8 +629,8 @@
 }
 
 .ck-flight-chip.ok { color: var(--ck-ok); background: rgba(10, 143, 94, 0.10); }
-.ck-flight-chip.tight { color: var(--ck-warn); background: rgba(196, 101, 6, 0.10); }
-.ck-flight-chip.broken { color: var(--ck-bad); background: rgba(200, 30, 30, 0.10); animation: ck-blink 1.6s ease-in-out infinite; }
+.ck-flight-chip.tight { color: #fff; background: var(--ck-warn); box-shadow: 0 2px 8px rgba(196, 101, 6, 0.35); }
+.ck-flight-chip.broken { color: #fff; background: var(--ck-bad); animation: ck-blink 1.6s ease-in-out infinite; }
 
 /* piste : départ ──ménage──╌gap╌── arrivée */
 
@@ -575,10 +651,24 @@
 
 .ck-node-time {
   font-family: "Geist Mono", monospace;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 900;
   color: var(--ck-text);
   font-variant-numeric: tabular-nums;
+  padding: 2px 7px;
+  border-radius: 7px;
+  line-height: 1.2;
+}
+
+.ck-node-time.ok {
+  color: #067a50;
+  background: rgba(10, 143, 94, 0.14);
+}
+
+.ck-node-time.bad {
+  color: #b01515;
+  background: rgba(200, 30, 30, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(200, 30, 30, 0.28);
 }
 
 .ck-node-dot {
@@ -592,6 +682,8 @@
 .ck-node-dot.done { border-color: var(--ck-ok); background: var(--ck-ok); }
 .ck-node-dot.dep { border-color: var(--ck-gold); }
 .ck-node-dot.arr { border-color: var(--ck-gold-deep); }
+.ck-node-dot.ok { border-color: var(--ck-ok); background: var(--ck-ok); }
+.ck-node-dot.bad { border-color: var(--ck-bad); background: var(--ck-bad); animation: ck-blink 1.6s ease-in-out infinite; }
 
 .ck-node-label {
   font-size: 10.5px;
@@ -637,10 +729,22 @@
 
 .ck-joint-time {
   font-family: "Geist Mono", monospace;
-  font-size: 10.5px;
-  font-weight: 750;
+  font-size: 11px;
+  font-weight: 800;
   color: var(--ck-gold-deep);
   font-variant-numeric: tabular-nums;
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+
+.ck-joint-time.ok {
+  color: #067a50;
+  background: rgba(10, 143, 94, 0.12);
+}
+
+.ck-joint-time.bad {
+  color: #b01515;
+  background: rgba(200, 30, 30, 0.10);
 }
 
 .ck-joint-dot {
@@ -649,6 +753,11 @@
   border-radius: 50%;
   border: 2px solid var(--ck-gold);
   background: var(--ck-panel);
+}
+
+.ck-joint-dot.ok {
+  border-color: var(--ck-ok);
+  background: var(--ck-ok);
 }
 
 .ck-joint-label {
@@ -671,6 +780,7 @@
 
 .ck-node-sub.ok { color: var(--ck-ok); background: rgba(10, 143, 94, 0.10); }
 .ck-node-sub.warn { color: var(--ck-warn); background: rgba(196, 101, 6, 0.12); }
+.ck-node-sub.info { color: var(--ck-text2); background: rgba(20, 17, 10, 0.06); }
 
 .ck-seg-fill {
   position: absolute;
@@ -696,7 +806,19 @@
   padding: 0 10px;
 }
 
-.ck-seg-label em { font-style: normal; color: var(--ck-warn); }
+.ck-seg-label.ok { color: #067a50; font-weight: 850; }
+.ck-seg-label.bad { color: #b01515; font-weight: 900; }
+.ck-seg-label em { font-style: normal; color: inherit; }
+
+.ck-seg.clean.staff-ok {
+  background: rgba(10, 143, 94, 0.12);
+  border-color: rgba(10, 143, 94, 0.32);
+}
+
+.ck-seg.clean.staff-miss {
+  background: rgba(200, 30, 30, 0.10);
+  border-color: rgba(200, 30, 30, 0.38);
+}
 
 /* ── Checklist statuts + actions par réservation ── */
 
@@ -736,6 +858,85 @@
 .ck-check.attn .ck-check-state { background: rgba(196, 101, 6, 0.14); color: var(--ck-warn); animation: ck-blink 1.6s ease-in-out infinite; }
 .ck-check.todo .ck-check-state { background: var(--ck-panel3); color: var(--ck-text3); }
 
+/* Lignes problème : fond ambre, bordure, poids — doivent sauter aux yeux */
+.ck-check.problem {
+  background: rgba(196, 101, 6, 0.14);
+  border: 1px solid rgba(196, 101, 6, 0.40);
+  border-radius: 9px;
+  padding: 5px 8px;
+  margin: 0 -2px;
+  box-shadow: inset 3px 0 0 var(--ck-warn);
+}
+
+.ck-check.problem .ck-check-state {
+  background: var(--ck-warn);
+  color: #fff;
+  animation: ck-blink 1.5s ease-in-out infinite;
+}
+
+.ck-check.problem .ck-check-label,
+.ck-check.problem .ck-check-detail {
+  color: #8a4500;
+  font-weight: 800;
+}
+
+.ck-check.problem .ck-check-time.approx {
+  color: #8a4500;
+  background: rgba(255, 255, 255, 0.55);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+
+.ck-check.problem .ck-check-cta {
+  background: var(--ck-warn);
+  border-color: var(--ck-warn);
+  color: #fff;
+}
+
+.ck-check.staff-miss.problem {
+  background: rgba(196, 101, 6, 0.16);
+}
+
+.ck-check.reg-block.problem {
+  /* même famille visuelle — enregistrement bloquant */
+}
+
+.ck-check.reg-arrival.problem {
+  /* vigilance jour J — non bloquant mais orange */
+  background: rgba(196, 101, 6, 0.12);
+  border-color: rgba(196, 101, 6, 0.36);
+}
+
+.ck-check-time {
+  flex-shrink: 0;
+  min-width: 3.4em;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+  color: var(--ck-text);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+
+.ck-check-time.ok {
+  color: #067a50;
+  background: rgba(10, 143, 94, 0.12);
+}
+
+.ck-check-time.approx,
+.ck-check-time.bad {
+  color: #b01515;
+  font-weight: 800;
+  font-size: 11px;
+  min-width: 4.6em;
+  background: rgba(200, 30, 30, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(200, 30, 30, 0.22);
+}
+
+.ck-check.done .ck-check-time { color: var(--ck-ok); }
+
 .ck-check-ico { font-size: 11px; flex-shrink: 0; }
 
 .ck-check-label {
@@ -744,16 +945,21 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .ck-check.done .ck-check-label { color: var(--ck-text2); }
 
 .ck-check-detail {
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
   font-family: "Geist Mono", monospace;
   font-size: 10px;
   font-weight: 700;
   color: var(--ck-text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ck-check.done .ck-check-detail { color: var(--ck-ok); }
@@ -937,6 +1143,26 @@
   font-size: 12px;
   font-weight: 700;
   color: var(--ck-text2);
+}
+
+.ck-relpop-reg-stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  background: var(--ck-gold-tint, rgba(184, 133, 26, 0.08));
+}
+
+.ck-relpop-reg-title {
+  font-size: 12px;
+  font-weight: 850;
+  color: var(--ck-text);
+}
+
+.ck-relpop-reg-hint {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ck-text3);
+  line-height: 1.35;
 }
 
 .ck-relpop-time {

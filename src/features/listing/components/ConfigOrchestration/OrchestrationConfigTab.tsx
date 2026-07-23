@@ -7,10 +7,12 @@ import { SectionHeader, Card, FormRow, WhenOffNote, Toggle, ConfigIntroBar } fro
 import FullChatbotSyncButton from '../../../../components/listing/FullChatbotSyncButton';
 
 const ORCH_FLAGS = [
-  { key: 'orchestration_choose_arrival', label: 'Choisir arrivée' },
-  { key: 'orchestration_choose_departure', label: 'Choisir départ' },
+  { key: 'orchestration_choose_arrival', label: 'Choisir heure arrivée' },
+  { key: 'orchestration_choose_departure', label: 'Choisir heure départ' },
   { key: 'orchestration_declare_arrival', label: 'Déclarer arrivée' },
   { key: 'orchestration_declare_departure', label: 'Déclarer départ' },
+  { key: 'orchestration_receive_arrival', label: 'Accueil arrivée' },
+  { key: 'orchestration_receive_departure', label: 'Accueil départ' },
   { key: 'orchestration_registration', label: 'Enregistrement voyageurs' },
   { key: 'orchestration_cleaning_free', label: 'Ménage gratuit' },
   { key: 'orchestration_cleaning_paid', label: 'Ménage payant' },

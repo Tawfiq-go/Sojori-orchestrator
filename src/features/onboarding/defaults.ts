@@ -106,6 +106,8 @@ export const defaultCapabilities = (): WizardCapabilities => ({
   departureChoose: true,
   arrivalDeclare: false,
   departureDeclare: false,
+  receiveArrival: false,
+  receiveDeparture: false,
   transport: true,
   groceries: false,
   concierge: false,

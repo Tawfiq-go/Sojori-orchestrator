@@ -184,6 +184,18 @@ export function formatSkipReason(reason?: string): string {
     case 'remplace_par_lm':
       return 'Remplacé par Last-Minute'
 
+    case 'regroupe_veille_depart':
+      return 'Regroupée veille départ'
+
+    case 'reporte_avant_arrivee':
+      return 'Reportée avant arrivée'
+
+    case 'decale_collision_arrivee':
+      return 'Décalée (collision arrivée)'
+
+    case 'assignation_exhausted':
+      return 'Assignation épuisée'
+
     case 'expire':
       return 'Expiré'
 

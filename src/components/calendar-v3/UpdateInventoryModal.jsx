@@ -220,7 +220,7 @@ export default function UpdateInventoryModal({
     if (form.closedArrival) out.push('Arrivée fermée ⛔');
     if (form.closedDeparture) out.push('Départ fermé ⛔');
     if (form.priceMode !== null) {
-      out.push(`Mode prix: ${form.priceMode === 'dynamic' ? 'Dynamique ⚡' : 'Base'}`);
+      out.push(`Prix dynamique: ${form.priceMode === 'dynamic' ? 'ON ⚡' : 'OFF'}`);
     }
     return out;
   }, [form, displayCurrency, cellsAnalysis.isSingleListing]);
@@ -549,6 +549,30 @@ export default function UpdateInventoryModal({
                 </Section>
               )}
 
+              <Section label="Prix dynamique">
+                <ToggleGroup
+                  value={
+                    form.priceMode === 'dynamic'
+                      ? true
+                      : form.priceMode === 'base'
+                        ? false
+                        : null
+                  }
+                  onChange={(v) =>
+                    upd('priceMode', v === true ? 'dynamic' : v === false ? 'base' : null)
+                  }
+                  options={[
+                    { value: true, label: 'ON ⚡' },
+                    { value: false, label: 'OFF' },
+                    { value: null, label: 'Aucun changement' },
+                  ]}
+                />
+                <p style={{ fontSize: 11, color: T.text3, margin: '8px 0 0', lineHeight: 1.45 }}>
+                  ON = prix dynamique Sojori · OFF = prix de base. Applicable aussi sur les jours passés
+                  (historique) si la date est encore dans l’inventaire actif.
+                </p>
+              </Section>
+
               <details style={{ marginTop: 10, borderTop: `1px dashed ${T.border}`, paddingTop: 10 }}>
                 <summary style={{
                   cursor: 'pointer', fontSize: 11, fontWeight: 700, color: T.text2,
@@ -620,26 +644,6 @@ export default function UpdateInventoryModal({
                   </Section>
                   <CheckboxRow label="Arrivée fermée ⛔" checked={form.closedArrival} onChange={v => upd('closedArrival', v)} />
                   <CheckboxRow label="Départ fermé ⛔" checked={form.closedDeparture} onChange={v => upd('closedDeparture', v)} />
-                </div>
-              </details>
-
-              <details style={{ marginTop: 10, borderTop: `1px dashed ${T.border}`, paddingTop: 10 }}>
-                <summary style={{
-                  cursor: 'pointer', fontSize: 11, fontWeight: 700, color: T.text2,
-                  fontFamily: '"Geist Mono", monospace', letterSpacing: '0.06em', textTransform: 'uppercase',
-                  padding: '4px 0',
-                }}>▶ Mode prix</summary>
-                <div style={{ marginTop: 8 }}>
-                  <ToggleGroup value={form.priceMode} onChange={v => upd('priceMode', v)}
-                    options={[
-                      { value: 'dynamic', label: 'Dynamique ⚡' },
-                      { value: 'base', label: 'Base' },
-                      { value: null, label: 'Aucun changement' },
-                    ]} />
-                  <p style={{ fontSize: 11, color: T.text3, margin: '8px 0 0', lineHeight: 1.45 }}>
-                    Un seul mode par jour : dynamique (prix dynamique Sojori), base, ou manuel (via le champ
-                    prix manuel ci-dessus). Les flags legacy sont synchronisés automatiquement.
-                  </p>
                 </div>
               </details>
             </>

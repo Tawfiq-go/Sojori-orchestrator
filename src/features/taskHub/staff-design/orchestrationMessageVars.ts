@@ -28,6 +28,7 @@ export const MESSAGE_MERGE_VARIABLES: { key: string; label: string; group: strin
   { key: '{checkoutTime}', label: 'Heure de départ', group: 'Listing' },
   { key: '{cityTaxPerAdult}', label: 'Taxe ville / adulte / nuit', group: 'Listing' },
   { key: '{cityTaxTotal}', label: 'Taxe ville totale', group: 'Listing' },
+  { key: '{babyCotBlock}', label: 'Puce lit bébé (si amenity)', group: 'Bienvenue' },
 ];
 
 /** Numéro WhatsApp Sojori (E.164 sans +). */

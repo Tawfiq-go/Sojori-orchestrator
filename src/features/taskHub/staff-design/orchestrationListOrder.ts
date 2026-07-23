@@ -71,8 +71,59 @@ export function reconcileOrchestrationListOrder(
     if (key) push(key);
   }
 
+  // Manquants : parcours voyageur (Accueil après choisir / avant déclarer), pas en append brut.
   for (const key of defaultOrchestrationListOrder(scheduledRules, workflows)) {
+    if (seen.has(key)) continue;
+    if (key === 'wf:receive_arrival' || key === 'wf:receive_departure') {
+      const after =
+        key === 'wf:receive_arrival' ? 'wf:arrival_choose' : 'wf:departure_choose';
+      const before =
+        key === 'wf:receive_arrival'
+          ? ['wf:registration', 'wf:arrival_declare']
+          : ['sched:departure_instructions', 'wf:departure_declare'];
+      const afterIdx = result.indexOf(after as OrchListKey);
+      let insertAt = afterIdx >= 0 ? afterIdx + 1 : -1;
+      if (insertAt < 0) {
+        for (const b of before) {
+          const bi = result.indexOf(b as OrchListKey);
+          if (bi >= 0) {
+            insertAt = bi;
+            break;
+          }
+        }
+      }
+      if (insertAt < 0) insertAt = result.length;
+      result.splice(insertAt, 0, key);
+      seen.add(key);
+      continue;
+    }
     push(key);
+  }
+
+  // Si Accueil déjà présent mais mal placé, le repositionner.
+  for (const key of ['wf:receive_arrival', 'wf:receive_departure'] as const) {
+    if (!seen.has(key)) continue;
+    const after = key === 'wf:receive_arrival' ? 'wf:arrival_choose' : 'wf:departure_choose';
+    const before =
+      key === 'wf:receive_arrival'
+        ? ['wf:registration', 'wf:arrival_declare']
+        : ['sched:departure_instructions', 'wf:departure_declare'];
+    const without = result.filter((k) => k !== key);
+    const afterIdx = without.indexOf(after as OrchListKey);
+    let insertAt = afterIdx >= 0 ? afterIdx + 1 : -1;
+    if (insertAt < 0) {
+      for (const b of before) {
+        const bi = without.indexOf(b as OrchListKey);
+        if (bi >= 0) {
+          insertAt = bi;
+          break;
+        }
+      }
+    }
+    if (insertAt < 0) insertAt = without.length;
+    without.splice(insertAt, 0, key);
+    result.length = 0;
+    result.push(...without);
   }
 
   return result;

@@ -655,7 +655,8 @@ export function apiOrchestrationToDesign(doc: Record<string, unknown> | null) {
   const scheduledRules = rawScheduled.map((m, i) => {
     const trigger = m.trigger as { ref?: string; day?: number; time?: string; hours?: number };
     const ch = m.channel as { primary?: string; fallback?: string };
-    const useHours = trigger?.hours != null && trigger.hours !== 0;
+    // hours:0 = Immédiat — ne pas le traiter comme jours (J0)
+    const useHours = trigger?.hours != null;
     const legacyName = String(m.name || m.label || '');
     const messageId = String(m.messageId || m.template || slugCatalogId(legacyName, String(m.template || '')));
     const schedId = messageId || `sched-${i}`;

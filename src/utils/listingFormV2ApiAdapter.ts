@@ -923,6 +923,8 @@ export function mergeFormV2ToUpdatePropertyPayload(
     'orchestration_choose_departure',
     'orchestration_declare_arrival',
     'orchestration_declare_departure',
+    'orchestration_receive_arrival',
+    'orchestration_receive_departure',
     'orchestration_registration',
     'orchestration_cleaning_free',
     'orchestration_cleaning_paid',
