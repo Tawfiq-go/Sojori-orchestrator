@@ -1,4 +1,4 @@
-// Conciergerie — FR uniquement · catalogue services + picker icônes
+// Conciergerie — catalogue services + picker icônes · noms/descriptions multilingues
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Box,
@@ -55,6 +55,11 @@ import { V3BlockSaveBar } from '../../../orchestrationListingV3/V3BlockSaveBar';
 import { logV3Orch } from '../../../orchestrationListingV3/v3OrchestrationDebugLog';
 import { persistListingConciergeSlice } from './conciergeListingPersist';
 import { cloneCityAssociation } from './transportRouteCatalog';
+import {
+  GuestLangTextFields,
+  mergeGuestLangMap,
+  cleanGuestLangMap,
+} from '../../shared/GuestLangTextFields';
 
 const T = SOJORI_TOKENS;
 const MAX_SERVICES = 15;
@@ -67,10 +72,12 @@ function gestionConciergeShell(listingValues: Record<string, unknown>) {
   };
 }
 
+type GuestLangMap = Record<string, string>;
+
 interface ConciergeService {
   id: string;
-  labelFr: string;
-  descriptionFr: string;
+  name: GuestLangMap;
+  description: GuestLangMap;
   icon: string;
   price: number;
   pricePerPerson: number;
@@ -88,9 +95,13 @@ interface ConciergeConfig {
 
 const EMPTY_CONCIERGE: ConciergeConfig = { enabled: true, services: [] };
 
+function displayName(s: ConciergeService): string {
+  return s.name?.fr || s.name?.en || 'Service';
+}
+
 function mapApiService(s: Record<string, unknown>, i: number): ConciergeService {
-  const name = (s.name as { fr?: string; en?: string }) || {};
-  const desc = (s.description as { fr?: string; en?: string }) || {};
+  const name = mergeGuestLangMap(s.name as GuestLangMap | undefined);
+  const desc = mergeGuestLangMap(s.description as GuestLangMap | undefined);
   const pricing = (s.pricing as {
     type?: string;
     amount?: number;
@@ -109,8 +120,8 @@ function mapApiService(s: Record<string, unknown>, i: number): ConciergeService 
   const priceType = typeMap[String(pricing.type || 'quote')] || 'ON_QUOTE';
   return {
     id: String(s.id || `svc_${i}`),
-    labelFr: name.fr || name.en || 'Service',
-    descriptionFr: desc.fr || desc.en || '',
+    name: name.fr ? name : mergeGuestLangMap(undefined, 'Service'),
+    description: desc,
     icon: String(s.icon || '✨'),
     price: Number(pricing.amount) || 0,
     pricePerPerson: Number(pricing.pricePerPerson) || 0,
@@ -138,8 +149,8 @@ function buildCustomServicesPayload(services: ConciergeService[]) {
     id: s.id,
     enabled: s.enabled,
     icon: s.icon,
-    name: { fr: s.labelFr, en: s.labelFr, ar: s.labelFr },
-    description: { fr: s.descriptionFr, en: s.descriptionFr, ar: s.descriptionFr },
+    name: cleanGuestLangMap(s.name),
+    description: cleanGuestLangMap(s.description),
     pricing: buildPricingPayload(s),
     ...(s.maxPersons > 0
       ? {
@@ -149,6 +160,10 @@ function buildCustomServicesPayload(services: ConciergeService[]) {
               fr: `Maximum ${s.maxPersons} personnes pour ce service`,
               en: `Maximum ${s.maxPersons} people for this service`,
               ar: `الحد الأقصى ${s.maxPersons} أشخاص`,
+              es: `Máximo ${s.maxPersons} personas para este servicio`,
+              de: `Maximal ${s.maxPersons} Personen für diesen Service`,
+              it: `Massimo ${s.maxPersons} persone per questo servizio`,
+              ary: `Maximum ${s.maxPersons} personnes pour ce service`,
             },
           },
         }
@@ -482,8 +497,8 @@ export default function ConciergeConfigTab({
         ...prev.services,
         {
           id,
-          labelFr: 'Nouveau service',
-          descriptionFr: 'Service personnalisé sur demande',
+          name: mergeGuestLangMap({ fr: 'Nouveau service' }),
+          description: mergeGuestLangMap({ fr: 'Service personnalisé sur demande' }),
           icon: '✨',
           price: 0,
           pricePerPerson: 0,
@@ -803,7 +818,7 @@ function SortableService({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  if (!service.labelFr) return null;
+  if (!displayName(service)) return null;
 
   const priceLabel = formatConciergePriceLabel(service);
   const cityLabel = formatCityAssociationSummary(service.cityIds, cityOptions);
@@ -835,12 +850,12 @@ function SortableService({
         />
         <Box sx={{ fontSize: 20, flexShrink: 0 }}>{service.icon}</Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ ...TYPO.bodyBold }}>{service.labelFr}</Typography>
-          {(service.descriptionFr || service.maxPersons > 0) && (
+          <Typography sx={{ ...TYPO.bodyBold }}>{displayName(service)}</Typography>
+          {(service.description?.fr || service.maxPersons > 0) && (
             <Typography sx={{ ...TYPO.caption }}>
-              {service.descriptionFr}
+              {service.description?.fr || ''}
               {service.maxPersons > 0
-                ? `${service.descriptionFr ? ' · ' : ''}max ${service.maxPersons} pers.`
+                ? `${service.description?.fr ? ' · ' : ''}max ${service.maxPersons} pers.`
                 : ''}
             </Typography>
           )}
@@ -861,15 +876,15 @@ function SortableService({
 
       <Collapse in={expanded}>
         <Box sx={{ mt: 1.25, pt: 1.25, borderTop: `1px solid ${T.border}` }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.25 }}>
-            <TextField
-              size="small"
-              label="Nom"
-              value={service.labelFr}
-              onChange={e => onUpdate({ labelFr: e.target.value })}
-              onKeyDown={e => e.stopPropagation()}
-              fullWidth
-              slotProps={{ htmlInput: { maxLength: 60 } }}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+            <GuestLangTextFields
+              fieldLabel="Nom"
+              requiredFr
+              dense
+              autoFillMissing
+              value={mergeGuestLangMap(service.name)}
+              onChange={(name) => onUpdate({ name })}
+              helperText="FR requis · ✨ génère les autres langues (WhatsApp)."
             />
             <FormControl size="small" fullWidth>
               <InputLabel>Tarification</InputLabel>
@@ -896,21 +911,17 @@ function SortableService({
                 ))}
               </Select>
             </FormControl>
-            <TextField
-              size="small"
-              label="Description"
-              value={service.descriptionFr}
-              onChange={e => onUpdate({ descriptionFr: e.target.value })}
-              onKeyDown={e => e.stopPropagation()}
-              fullWidth
+            <GuestLangTextFields
+              fieldLabel="Description"
+              dense
+              autoFillMissing
+              value={mergeGuestLangMap(service.description)}
+              onChange={(description) => onUpdate({ description })}
               multiline
-              minRows={1}
-              slotProps={{ htmlInput: { maxLength: 120 } }}
-              sx={{ gridColumn: { md: '1 / -1' } }}
+              rows={2}
             />
             <Box
               sx={{
-                gridColumn: { md: '1 / -1' },
                 p: 1.25,
                 borderRadius: 1,
                 border: `1px solid ${T.primary}44`,

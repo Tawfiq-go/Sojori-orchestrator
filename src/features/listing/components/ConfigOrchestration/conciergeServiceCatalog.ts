@@ -136,8 +136,24 @@ export const CONCIERGE_SERVICE_CATALOG: ConciergeCatalogCategory[] = [
 export function catalogItemToService(item: ConciergeCatalogItem, order: number) {
   return {
     id: item.id,
-    labelFr: item.labelFr,
-    descriptionFr: item.descriptionFr,
+    name: {
+      fr: item.labelFr,
+      en: item.labelFr,
+      ar: '',
+      es: '',
+      de: '',
+      it: '',
+      ary: '',
+    },
+    description: {
+      fr: item.descriptionFr,
+      en: item.descriptionFr,
+      ar: '',
+      es: '',
+      de: '',
+      it: '',
+      ary: '',
+    },
     icon: item.icon,
     priceType: item.priceType,
     price: item.price ?? 0,

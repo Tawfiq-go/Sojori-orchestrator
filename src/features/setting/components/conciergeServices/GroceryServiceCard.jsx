@@ -1,6 +1,11 @@
 import React from 'react';
 import { Card, CardContent, Box, Typography, Switch, FormControlLabel, TextField, Stack, Chip, IconButton } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import {
+  GuestLangTextFields,
+  mergeGuestLangMap,
+} from '../../../listing/shared/GuestLangTextFields';
+
 const GroceryServiceCard = ({
   service,
   onChange,
@@ -28,24 +33,6 @@ const GroceryServiceCard = ({
       }
     });
   };
-  const handleNameChange = (lang, value) => {
-    onChange({
-      ...service,
-      name: {
-        ...service.name,
-        [lang]: value
-      }
-    });
-  };
-  const handleDescriptionChange = (lang, value) => {
-    onChange({
-      ...service,
-      description: {
-        ...service.description,
-        [lang]: value
-      }
-    });
-  };
   return <Card sx={{
     border: '1px solid #e0e0e0',
     boxShadow: 'none'
@@ -69,34 +56,25 @@ const GroceryServiceCard = ({
           </Stack>
         </Box>
 
-        {/* Name fields (editable) */}
-        <Box sx={{
-        display: 'grid',
-        gridTemplateColumns: {
-          xs: '1fr',
-          md: '1fr 1fr 1fr'
-        },
-        gap: 2,
-        mb: 2
-      }}>
-          <TextField label="Nom (Français)" value={service.name?.fr || ''} onChange={e => handleNameChange('fr', e.target.value)} size="small" fullWidth placeholder="Ex: 🛒 Courses" />
-          <TextField label="Nom (English)" value={service.name?.en || ''} onChange={e => handleNameChange('en', e.target.value)} size="small" fullWidth placeholder="Ex: 🛒 Grocery shopping" />
-          <TextField label="Nom (العربية)" value={service.name?.ar || ''} onChange={e => handleNameChange('ar', e.target.value)} size="small" fullWidth placeholder="Ex: 🛒 تسوق البقالة" />
+        <Box sx={{ mb: 2 }}>
+          <GuestLangTextFields
+            fieldLabel="Nom"
+            requiredFr
+            autoFillMissing
+            value={mergeGuestLangMap(service.name)}
+            onChange={(name) => onChange({ ...service, name })}
+          />
         </Box>
 
-        {/* Description fields (editable) */}
-        <Box sx={{
-        display: 'grid',
-        gridTemplateColumns: {
-          xs: '1fr',
-          md: '1fr 1fr 1fr'
-        },
-        gap: 2,
-        mb: 3
-      }}>
-          <TextField label="Description (Français)" value={service.description?.fr || ''} onChange={e => handleDescriptionChange('fr', e.target.value)} size="small" fullWidth multiline rows={2} placeholder="Décrivez le service" />
-          <TextField label="Description (English)" value={service.description?.en || ''} onChange={e => handleDescriptionChange('en', e.target.value)} size="small" fullWidth multiline rows={2} placeholder="Describe the service" />
-          <TextField label="Description (العربية)" value={service.description?.ar || ''} onChange={e => handleDescriptionChange('ar', e.target.value)} size="small" fullWidth multiline rows={2} placeholder="وصف الخدمة" />
+        <Box sx={{ mb: 3 }}>
+          <GuestLangTextFields
+            fieldLabel="Description"
+            autoFillMissing
+            value={mergeGuestLangMap(service.description)}
+            onChange={(description) => onChange({ ...service, description })}
+            multiline
+            rows={2}
+          />
         </Box>
 
         <Box sx={{
