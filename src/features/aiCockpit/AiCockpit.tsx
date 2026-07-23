@@ -16,7 +16,6 @@ import type {
 } from '../../services/fulltaskApi';
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import PlanManualAssignModal from '../planReservation/PlanManualAssignModal';
-import EscaladeForceSlotModal from '../planReservation/EscaladeForceSlotModal';
 import { ReservationRegistrationActions } from '../../components/reservations/ReservationRegistrationActions';
 import './aiCockpit.css';
 
@@ -211,7 +210,12 @@ export default function AiCockpit() {
   const [reply, setReply] = useState<CopilotReply | null>(null);
   const [typed, setTyped] = useState('');
   const [assignCtx, setAssignCtx] = useState<{ reservationId: string; taskId: string } | null>(null);
-  const [slotCtx, setSlotCtx] = useState<{ reservationId: string; taskId: string; taskType: string } | null>(null);
+  const [slotCtx, setSlotCtx] = useState<{
+    reservationId: string;
+    taskId: string;
+    taskType: string;
+    step?: DayPlanStep;
+  } | null>(null);
   /** Étape dont on inspecte les relances (panneau détail + actions). */
   const [relanceStep, setRelanceStep] = useState<DayPlanStep | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -436,6 +440,7 @@ export default function AiCockpit() {
         reservationId: step.reservationId,
         taskId: action.taskId,
         taskType: step.kind === 'departure' ? 'departure_choose' : 'arrival_choose',
+        step,
       });
     }
   };
@@ -682,15 +687,114 @@ export default function AiCockpit() {
         />
       )}
       {slotCtx && (
-        <EscaladeForceSlotModal
-          open
-          reservationId={slotCtx.reservationId}
-          taskId={slotCtx.taskId}
-          taskType={slotCtx.taskType}
+        <ForceSlotPanel
+          ctx={slotCtx}
           onClose={() => setSlotCtx(null)}
-          onSubmitted={() => { setSlotCtx(null); void load(); }}
+          onDone={() => { setSlotCtx(null); void load(); }}
         />
       )}
+    </div>
+  );
+}
+
+/* ─── Fixer une heure (choix admin) — même API que l'escalade, UI Cockpit ─── */
+
+function ForceSlotPanel({
+  ctx,
+  onClose,
+  onDone,
+}: {
+  ctx: { reservationId: string; taskId: string; taskType: string; step?: DayPlanStep };
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const isDeparture = ctx.taskType === 'departure_choose';
+  const suggestions = isDeparture
+    ? ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00']
+    : ['13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+  const [time, setTime] = useState(
+    ctx.step?.time ?? ctx.step?.estimatedTime ?? (isDeparture ? '11:00' : '15:00'),
+  );
+  const [saving, setSaving] = useState(false);
+
+  const sent = (ctx.step?.relances ?? []).filter((r) => r.status === 'fait').length;
+  const totalRel = ctx.step?.relances?.length ?? 0;
+
+  const submit = async () => {
+    if (saving || !/^\d{2}:\d{2}$/.test(time)) return;
+    setSaving(true);
+    try {
+      const res = await fulltaskApi.forcePlanGuestSlot(ctx.reservationId, ctx.taskId, time);
+      if (res?.success === false) {
+        toast.error(res?.error || 'Impossible de fixer le créneau');
+        setSaving(false);
+        return;
+      }
+      toast.success(`Heure ${isDeparture ? 'de départ' : "d'arrivée"} fixée à ${time}`);
+      onDone();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur en fixant le créneau');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="ck-relpop-backdrop" onClick={onClose} role="presentation">
+      <div className="ck-relpop" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Fixer une heure">
+        <div className="ck-relpop-hdr">
+          <span>
+            🕐 Fixer l'heure {isDeparture ? 'de départ' : "d'arrivée"}
+            {ctx.step?.guestName ? ` · ${ctx.step.guestName}` : ''}
+          </span>
+          <button type="button" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+
+        <div className="ck-slot-body">
+          {ctx.step?.listingName && <div className="ck-slot-listing">{ctx.step.listingName}</div>}
+          <div className="ck-slot-context">
+            {ctx.step?.estimatedTime && (
+              <span className="ck-slot-tag warn">défaut actuel ≈ {ctx.step.estimatedTime}</span>
+            )}
+            {totalRel > 0 && (
+              <span className="ck-slot-tag">
+                🔔 {sent}/{totalRel} relance{totalRel > 1 ? 's' : ''} envoyée{sent > 1 ? 's' : ''} — sans réponse
+              </span>
+            )}
+          </div>
+
+          <div className="ck-slots">
+            {suggestions.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`ck-slot-chip ${time === s ? 'on' : ''}`}
+                onClick={() => setTime(s)}
+              >
+                {s}
+              </button>
+            ))}
+            <input
+              type="time"
+              className="ck-relpop-time"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              aria-label="Heure précise"
+            />
+          </div>
+
+          <div className="ck-slot-note">
+            Choix admin — enregistré sur la tâche et le plan d'orchestration ; les relances client
+            sont clôturées et la synchronisation réservation suit automatiquement.
+          </div>
+        </div>
+
+        <div className="ck-relpop-actions">
+          <button type="button" className="primary" disabled={saving} onClick={() => void submit()}>
+            {saving ? 'Application…' : `✓ Valider ${time}`}
+          </button>
+          <button type="button" onClick={onClose}>Annuler</button>
+        </div>
+      </div>
     </div>
   );
 }
