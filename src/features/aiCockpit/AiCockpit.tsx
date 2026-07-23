@@ -1019,7 +1019,6 @@ function FlightRow({
     return Math.max(0, Math.min(1, (nowM - a) / (b - a)));
   };
   const cleanPct = seg(depM, endM) * 100;
-  const gapPct = seg(endM, arrM) * 100;
 
   const status = chain.status;
   /* Heures non choisies : marge estimée sur les défauts (départ 11:00 / arrivée 15:00). */
@@ -1058,6 +1057,7 @@ function FlightRow({
         </span>
       </div>
 
+      {/* Piste temporelle : segments PROPORTIONNELS aux durées réelles (ménage / marge) */}
       <div className="ck-strip">
         <div className="ck-node">
           <span className="ck-node-time">
@@ -1071,18 +1071,38 @@ function FlightRow({
           <span className="ck-node-label">🛫 {chain.departingGuestName || 'Départ'}</span>
         </div>
 
-        <div className="ck-seg">
+        {/* Ménage — largeur ∝ durée */}
+        <div
+          className="ck-seg clean"
+          style={{ flexGrow: Math.max(chain.cleaningDurationMinutes, 45) }}
+          title={`Ménage ${fmtDuration(chain.cleaningDurationMinutes)}`}
+        >
           <div className="ck-seg-fill clean" style={{ width: `${chain.hoursUnknown ? 0 : cleanPct}%` }} />
           <span className="ck-seg-label">
-            🧹 {cleaning?.staffName || <em>à assigner</em>}
-            {chain.hoursUnknown
-              ? ` · au départ client · ≈ fin ${fmtTime(chain.expectedCleaningEnd)}`
-              : ` · fin ${fmtTime(chain.expectedCleaningEnd)}`}
+            🧹 {cleaning?.staffName || <em>à assigner</em>} · {fmtDuration(chain.cleaningDurationMinutes)}
           </span>
         </div>
 
-        <div className="ck-seg gap">
-          <div className="ck-seg-fill" style={{ width: `${gapPct}%` }} />
+        {/* Jonction : heure de fin de ménage */}
+        <div className="ck-joint">
+          <span className="ck-joint-time">
+            {chain.hoursUnknown ? `≈ ${fmtTime(chain.expectedCleaningEnd)}` : fmtTime(chain.expectedCleaningEnd)}
+          </span>
+          <span className="ck-joint-dot" />
+          <span className="ck-joint-label">fin ménage</span>
+        </div>
+
+        {/* Marge — largeur ∝ durée, couleur par état */}
+        <div
+          className={`ck-seg margin ${chain.slackMinutes < 0 ? 'broken' : status === 'tight' || chain.hoursUnknown ? 'tight' : 'ok'}`}
+          style={{ flexGrow: Math.max(Math.abs(chain.slackMinutes), 35) }}
+          title={chain.slackMinutes >= 0 ? `Marge ${fmtDuration(chain.slackMinutes)}` : `Dépassement ${fmtDuration(chain.slackMinutes)}`}
+        >
+          <span className="ck-seg-label">
+            {chain.slackMinutes >= 0
+              ? `${chain.hoursUnknown ? '≈ ' : ''}+${fmtDuration(chain.slackMinutes)} de marge`
+              : `⚠ −${fmtDuration(chain.slackMinutes)}`}
+          </span>
         </div>
 
         <div className="ck-node">
@@ -1095,6 +1115,15 @@ function FlightRow({
           </span>
           <span className={`ck-node-dot arr ${arrival?.state === 'done' ? 'done' : ''}`} />
           <span className="ck-node-label">🛬 {chain.arrivingGuestName || 'Arrivée'}</span>
+          {(() => {
+            const reg = checkSteps.find((s) => s.taskType === 'registration');
+            if (!reg) return null;
+            return (
+              <span className={`ck-node-sub ${reg.state === 'done' ? 'ok' : 'warn'}`}>
+                📋 {reg.state === 'done' ? 'enregistré' : 'enregistrement en attente'}
+              </span>
+            );
+          })()}
         </div>
       </div>
 

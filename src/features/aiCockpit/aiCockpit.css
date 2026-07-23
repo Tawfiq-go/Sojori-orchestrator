@@ -605,17 +605,72 @@
 
 .ck-seg {
   position: relative;
-  flex: 2;
+  flex-grow: 2;
+  flex-basis: 0;
+  min-width: 70px;
   height: 22px;
   border-radius: 99px;
   background: var(--ck-panel3);
   border: 1px solid var(--ck-line);
   overflow: hidden;
-  margin: 0 8px;
+  margin: 0 6px;
   align-self: center;
 }
 
-.ck-seg.gap { flex: 1; height: 8px; }
+/* Marge — couleur selon l'état, largeur proportionnelle à la durée */
+.ck-seg.margin { background: var(--ck-panel2); }
+.ck-seg.margin.ok { background: rgba(10, 143, 94, 0.10); border-color: rgba(10, 143, 94, 0.25); }
+.ck-seg.margin.ok .ck-seg-label { color: var(--ck-ok); }
+.ck-seg.margin.tight { background: rgba(196, 101, 6, 0.10); border-color: rgba(196, 101, 6, 0.28); }
+.ck-seg.margin.tight .ck-seg-label { color: var(--ck-warn); }
+.ck-seg.margin.broken { background: rgba(200, 30, 30, 0.10); border-color: rgba(200, 30, 30, 0.30); }
+.ck-seg.margin.broken .ck-seg-label { color: var(--ck-bad); font-weight: 850; }
+
+/* Jonction fin de ménage */
+.ck-joint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.ck-joint-time {
+  font-family: "Geist Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 750;
+  color: var(--ck-gold-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-joint-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--ck-gold);
+  background: var(--ck-panel);
+}
+
+.ck-joint-label {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ck-text3);
+  white-space: nowrap;
+}
+
+/* Badge sous un nœud (ex. enregistrement sous l'arrivée) */
+.ck-node-sub {
+  font-size: 9px;
+  font-weight: 750;
+  padding: 1px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.ck-node-sub.ok { color: var(--ck-ok); background: rgba(10, 143, 94, 0.10); }
+.ck-node-sub.warn { color: var(--ck-warn); background: rgba(196, 101, 6, 0.12); }
 
 .ck-seg-fill {
   position: absolute;
