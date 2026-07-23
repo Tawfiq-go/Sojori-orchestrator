@@ -255,8 +255,15 @@ export default function AiCockpit() {
       string,
       { reservationId: string; listingName: string; guestName?: string; steps: DayPlanStep[] }
     >();
+    /* Une réservation membre d'une chaîne est déjà couverte par la checklist du turnover
+       (même quand certaines de ses étapes ne portent pas de chainId, ex. enregistrement). */
+    const chained = new Set<string>();
+    for (const c of plan.chains ?? []) {
+      chained.add(c.departingReservationId);
+      chained.add(c.arrivingReservationId);
+    }
     for (const s of plan.steps) {
-      if (s.chainId) continue;
+      if (s.chainId || chained.has(s.reservationId)) continue;
       if (s.kind === 'message' && s.state !== 'attention') continue;
       const g =
         map.get(s.reservationId) ??
