@@ -370,18 +370,11 @@ export default function AiCockpit() {
 
   return (
     <div className="ck-root">
-      {/* ══ Barre haute : identité + horloge + date ══ */}
+      {/* ══ Toolbar : LIVE + horloge + navigation date (le titre de page est déjà au-dessus) ══ */}
       <div className="ck-topbar">
-        <div className="ck-brand">
-          <span className="ck-brand-orb" aria-hidden />
-          <div>
-            <div className="ck-brand-name">Cockpit IA</div>
-            <div className="ck-brand-sub">Orchestration Sojori</div>
-          </div>
-          {isToday && (
-            <span className="ck-live"><i aria-hidden />LIVE</span>
-          )}
-        </div>
+        {isToday && (
+          <span className="ck-live"><i aria-hidden />LIVE</span>
+        )}
         <div className="ck-clock" aria-label="Heure actuelle">
           {clock.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </div>
