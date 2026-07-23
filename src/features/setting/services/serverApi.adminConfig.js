@@ -401,9 +401,62 @@ export function translateText(data) {
   return axios.post(`${MICROSERVICE_BASE_URL.SRV_RESERVATION}/ai/translate-txt`, data);
 }
 
-/** Batch translate FR → guest WhatsApp langs (Claude Haiku). */
-export function translateGuestLangs(data) {
-  return axios.post(`${MICROSERVICE_BASE_URL.SRV_RESERVATION}/ai/translate-guest-langs`, data);
+const GUEST_LANG_TRANSLATE_LABEL = {
+  en: 'English',
+  es: 'Spanish',
+  de: 'German',
+  it: 'Italian',
+  ar: 'Modern Standard Arabic',
+  ary: 'Moroccan Darija in Latin script (informal WhatsApp style)',
+};
+
+async function translateGuestLangsViaLegacy(text, targetLangs) {
+  const translations = {};
+  await Promise.all(
+    (targetLangs || []).map(async (lang) => {
+      const language = GUEST_LANG_TRANSLATE_LABEL[lang] || lang;
+      try {
+        const res = await translateText({ txt: text, language, preserveValues: [] });
+        const t = res?.data?.translatedText;
+        if (typeof t === 'string' && t.trim()) translations[lang] = t.trim();
+      } catch {
+        /* per-lang failure — keep going */
+      }
+    }),
+  );
+  return translations;
+}
+
+/**
+ * Batch FR → guest WhatsApp langs.
+ * Prefers new Haiku endpoint; falls back to existing /ai/translate-txt when not deployed yet (404).
+ */
+export async function translateGuestLangs(data) {
+  const text = data?.text;
+  const targetLangs = data?.targetLangs || [];
+  try {
+    const res = await axios.post(
+      `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/ai/translate-guest-langs`,
+      data,
+    );
+    return res;
+  } catch (err) {
+    const status = err?.response?.status;
+    const msg = String(err?.response?.data?.errors?.[0]?.message || err?.response?.data?.error || '');
+    const notDeployed = status === 404 || /not found/i.test(msg);
+    if (!notDeployed || !text || !targetLangs.length) throw err;
+
+    const translations = await translateGuestLangsViaLegacy(text, targetLangs);
+    if (!Object.keys(translations).length) throw err;
+    return {
+      data: {
+        success: true,
+        translations,
+        fallback: 'translate-txt',
+      },
+      status: 200,
+    };
+  }
 }
 export function sendMailTemplate(data) {
   return axios.post(`${MICROSERVICE_BASE_URL.SRV_RESERVATION}/mailTemplate/send-mail-template`, data);
