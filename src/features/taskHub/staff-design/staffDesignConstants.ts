@@ -30,8 +30,12 @@ export const STAFF_TASK_PILLS = FULLTASK_TASK_TYPES.map((key) => ({
 
 export const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'] as const;
 
-export const LANG_OPTIONS = ['fr', 'en', 'ar'] as const;
-export type WorkLang = (typeof LANG_OPTIONS)[number];
+export const LANG_OPTIONS = [
+  { value: 'fr', label: 'Français' },
+  { value: 'en', label: 'English' },
+  { value: 'ar', label: 'Darija' },
+] as const;
+export type WorkLang = (typeof LANG_OPTIONS)[number]['value'];
 
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
