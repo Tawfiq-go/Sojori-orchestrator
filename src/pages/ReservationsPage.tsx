@@ -111,6 +111,7 @@ interface Reservation {
 }
 
 import { dashboardTokens as T } from '../design/sojoriBrandTokens';
+import { formatReservationPaid } from '../utils/reservationPaidDisplay';
 
 const TOOLBAR_SELECT_SX = {
   minWidth: 0,
@@ -910,7 +911,7 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
               bgcolor: T.bg2,
               background: `linear-gradient(180deg, ${T.bg1} 0%, ${T.bg2} 100%)`,
             }}>
-              {['Réservation', 'Source', 'Propriété', 'Voyageur', 'Pays', 'Créé', 'Check-in', 'Check-out', 'Nuits', 'Présence', 'Statut', 'Prix', 'Voyageurs', 'Paiement', 'Actions'].map((h) => (
+              {['Réservation', 'Source', 'Propriété', 'Voyageur', 'Pays', 'Créé', 'Check-in', 'Check-out', 'Nuits', 'Présence', 'Statut', 'Payé', 'Voyageurs', 'Paiement', 'Actions'].map((h) => (
                 <Box component="th" key={h} sx={{
                   textAlign: h === 'Nuits' || h === 'Présence' || h === 'Voyageurs' || h === 'Actions' ? 'center' : 'left',
                   px: 1.5, py: 1.25,
@@ -1042,11 +1043,19 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                     </Stack>
                   </Box>
                   <Box component="td">
-                    {r.totalPrice != null ? (
-                      <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text, fontFamily: '"Geist Mono", monospace' }}>
-                        {r.totalPrice.toFixed(0)} {r.currency || 'EUR'}
-                      </Typography>
-                    ) : <Typography sx={{ fontSize: 12, color: T.text4 }}>—</Typography>}
+                    {(() => {
+                      const paidLabel = formatReservationPaid(r);
+                      return paidLabel ? (
+                        <Typography
+                          sx={{ fontSize: 12.5, fontWeight: 600, color: T.text, fontFamily: '"Geist Mono", monospace' }}
+                          title="Total déjà payé (MAD, taux admin) — hors taxes non payées (ex. taxe de séjour)"
+                        >
+                          {paidLabel}
+                        </Typography>
+                      ) : (
+                        <Typography sx={{ fontSize: 12, color: T.text4 }}>—</Typography>
+                      );
+                    })()}
                   </Box>
                   <Box component="td" sx={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                     <Typography sx={{ fontSize: 11, color: T.text2 }}>
@@ -1231,9 +1240,12 @@ function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpd
               onRegistrationUpdated={(patch) => onRegistrationUpdate?.(r._id, patch)}
             />
           </Stack>
-          {r.totalPrice != null && (
-            <Typography sx={{ fontSize: 13, fontWeight: 700, fontFamily: '"Geist Mono", monospace' }}>
-              {r.totalPrice.toFixed(0)} {r.currency || 'EUR'}
+          {formatReservationPaid(r) && (
+            <Typography
+              sx={{ fontSize: 13, fontWeight: 700, fontFamily: '"Geist Mono", monospace' }}
+              title="Total déjà payé (MAD, taux admin) — hors taxes non payées"
+            >
+              {formatReservationPaid(r)}
             </Typography>
           )}
         </Stack>

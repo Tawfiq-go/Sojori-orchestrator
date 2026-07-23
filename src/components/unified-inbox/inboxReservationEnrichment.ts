@@ -62,7 +62,11 @@ export function mapReservationToInboxData(
   const checkIn = r.arrivalDate ? String(r.arrivalDate) : conv?.checkin_date;
   const checkOut = r.departureDate ? String(r.departureDate) : conv?.checkout_date;
   const nights = r.nights ?? nightsBetween(checkIn, checkOut);
-  const total = r.totalPrice ?? undefined;
+  const paidAmt = Number(r.alreadyPaid);
+  const total =
+    Number.isFinite(paidAmt) && paidAmt > 0
+      ? paidAmt
+      : r.totalPrice ?? undefined;
   const commission =
     total != null ? Math.round(total * 0.1) : undefined;
   const netHost = total != null && commission != null ? total - commission : undefined;
@@ -86,7 +90,7 @@ export function mapReservationToInboxData(
     guestsLabel: formatGuestsLabel(r),
     guestPhone: String(r.phone || '').trim() || undefined,
     totalPrice: total,
-    currency: r.currency || 'EUR',
+    currency: r.currency || 'MAD',
     paymentStatus: mapPaymentStatus(r.paymentStatus, r.alreadyPaid, total),
     netHost,
     commission,
