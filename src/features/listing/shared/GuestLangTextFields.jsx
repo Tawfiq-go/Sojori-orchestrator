@@ -92,13 +92,16 @@ function writeCache(fr, targets, translations) {
   }
 }
 
-/** Empty or stamped FR copy → needs AI translation. */
+/** Empty or long FR-stamped copy → needs AI translation. Short cognates (e.g. Massage) are OK. */
 export function langNeedsTranslation(key, map, frText) {
   if (key === 'fr') return false;
   const fr = String(frText || '').trim();
   const v = String(map?.[key] || '').trim();
   if (!v) return true;
-  if (fr && v === fr) return true;
+  if (fr && v === fr) {
+    const words = fr.split(/\s+/).filter(Boolean).length;
+    if (words >= 3 || fr.length >= 24) return true;
+  }
   return false;
 }
 
@@ -215,7 +218,14 @@ export function GuestLangTextFields({
         if (!silent) setError('Remplissez d’abord le français.');
         return;
       }
-      const targets = missingTargetKeys(map);
+      const targets =
+        silent
+          ? missingTargetKeys(map)
+          : NON_FR_LANGS.map((l) => l.key).filter((k) => {
+              const v = String(map[k] || '').trim();
+              // Manual ✨: fill empty + long FR stamps; keep short cognates (Massage).
+              return langNeedsTranslation(k, map, fr) || !v;
+            });
       if (targets.length === 0) {
         if (!silent) setError('');
         return;
@@ -249,7 +259,17 @@ export function GuestLangTextFields({
         });
         return next;
       } catch (e) {
-        if (!silent) setError(e?.response?.data?.error || 'Échec de la traduction AI.');
+        const apiMsg =
+          e?.response?.data?.errors?.[0]?.message ||
+          e?.response?.data?.error ||
+          e?.message;
+        if (!silent) {
+          setError(
+            apiMsg && /not found|403|401|forbidden/i.test(String(apiMsg))
+              ? 'Traduction AI indisponible (endpoint non déployé ou droits). Réessayez après deploy srv-reservations.'
+              : apiMsg || 'Échec de la traduction AI.',
+          );
+        }
       } finally {
         setLoading(false);
       }
