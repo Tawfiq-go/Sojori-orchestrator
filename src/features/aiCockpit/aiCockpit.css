@@ -967,6 +967,75 @@
 .ck-relpop-apply:hover { transform: translateY(-1px); }
 .ck-relpop-apply:disabled { opacity: 0.55; cursor: default; }
 
+/* ── Fixer une heure ── */
+
+.ck-slot-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.ck-slot-listing {
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--ck-text2);
+}
+
+.ck-slot-context { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.ck-slot-tag {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  font-weight: 750;
+  color: var(--ck-text2);
+  background: var(--ck-panel2);
+  border: 1px solid var(--ck-line);
+  padding: 3px 10px;
+  border-radius: 99px;
+}
+
+.ck-slot-tag.warn {
+  color: var(--ck-warn);
+  background: rgba(196, 101, 6, 0.08);
+  border-color: rgba(196, 101, 6, 0.25);
+}
+
+.ck-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.ck-slot-chip {
+  border: 1px solid var(--ck-line-strong);
+  background: var(--ck-panel);
+  color: var(--ck-text);
+  font: inherit;
+  font-family: "Geist Mono", monospace;
+  font-size: 12.5px;
+  font-weight: 750;
+  padding: 8px 13px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ck-slot-chip:hover { border-color: var(--ck-gold); color: var(--ck-gold-deep); transform: translateY(-1px); }
+
+.ck-slot-chip.on {
+  background: linear-gradient(135deg, #e6b64c, var(--ck-gold));
+  border-color: var(--ck-gold);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(184, 133, 26, 0.30);
+}
+
+.ck-slot-note {
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ck-text3);
+  background: var(--ck-panel2);
+  border-radius: 9px;
+  padding: 8px 11px;
+}
+
 .ck-relpop-actions {
   display: flex;
   gap: 8px;
