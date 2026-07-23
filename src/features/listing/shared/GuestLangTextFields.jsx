@@ -264,7 +264,12 @@ export function GuestLangTextFields({
         );
         if (!usable || Object.keys(usable).length === 0) {
           if (!silent) {
-            setError(res?.data?.error || 'Traduction indisponible (réponse non traduite). Réessayez.');
+            const detail = res?.data?.detail || res?.data?.error;
+            setError(
+              detail
+                ? `Traduction indisponible — ${String(detail).slice(0, 180)}`
+                : 'Traduction indisponible (réponse non traduite). Réessayez.',
+            );
           }
           return;
         }
@@ -288,6 +293,7 @@ export function GuestLangTextFields({
           return;
         }
         const apiMsg =
+          e?.response?.data?.detail ||
           e?.response?.data?.error ||
           e?.response?.data?.errors?.[0]?.message ||
           e?.message;
@@ -295,7 +301,9 @@ export function GuestLangTextFields({
           setError(
             apiMsg && /not found|403|401|forbidden/i.test(String(apiMsg))
               ? 'Traduction AI indisponible (endpoint non déployé ou droits).'
-              : apiMsg || 'Échec de la traduction AI.',
+              : apiMsg
+                ? String(apiMsg).slice(0, 220)
+                : 'Échec de la traduction AI.',
           );
         }
       } finally {
