@@ -77,14 +77,15 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   }
   if (path.startsWith('/catalogue/channels')) return 'channels';
 
-  if (path.startsWith('/dynamic-pricing/bien/')) return 'dynamic-pricing/portefeuille';
-  if (path.startsWith('/dynamic-pricing/audit')) return 'dynamic-pricing/audit';
+  // Aligné navConfig / grants : pricing/portfolio & pricing/audit (pas dynamic-pricing/*)
+  if (path.startsWith('/dynamic-pricing/bien/')) return 'pricing/portfolio';
+  if (path.startsWith('/dynamic-pricing/audit')) return 'pricing/audit';
   if (path.startsWith('/dynamic-pricing/portefeuille') || path === '/dynamic-pricing') {
-    return 'dynamic-pricing/portefeuille';
+    return 'pricing/portfolio';
   }
   if (path.startsWith('/catalogue/dynamic-pricing')) {
-    if (path.includes('/audit')) return 'dynamic-pricing/audit';
-    return 'dynamic-pricing/portefeuille';
+    if (path.includes('/audit')) return 'pricing/audit';
+    return 'pricing/portfolio';
   }
 
   if (path.startsWith('/monitor') || path.startsWith('/admin/monitor')) {

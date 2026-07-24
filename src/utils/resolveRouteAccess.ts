@@ -83,14 +83,18 @@ export function resolveRouteAccess(input: RouteAccessInput): RouteAccessResult {
   const platformPath = isPlatformAdminPath(pathname);
   const navId = resolveNavIdFromPath(pathname, search);
 
-  if (platformPath && navRole === Roles.Owner && (navId === 'staff' || navId === 'equipe/onboarding')) {
+  // Owner PM items that live under /admin/* (Channel Manager, mon-profil, notifs, onboarding…)
+  // must still pass if they appear in OWNER_NAV_GROUPS — not treated as platform-admin-only.
+  if (platformPath && navRole === Roles.Owner) {
     const allowed = roleAllowedOnNavItem(navId, Roles.Owner);
-    return {
-      allowed,
-      zone: 'pm',
-      reason: allowed ? 'owner_allowed' : 'owner_denied',
-      navId,
-    };
+    if (allowed) {
+      return {
+        allowed: true,
+        zone: 'pm',
+        reason: 'owner_allowed',
+        navId,
+      };
+    }
   }
 
   if (platformPath) {
