@@ -526,18 +526,18 @@ export default function PricePreviewCard({
                 <Typography sx={{ fontFamily: MONO, fontSize: 15, fontWeight: 800, color: T.goldDeep }}>
                   {stats.avgDeltaPct > 0 ? '+' : ''}{stats.avgDeltaPct} %
                 </Typography>
-                <Typography sx={{ fontSize: 10.5, color: T.text3 }}>Sojori vs calendrier</Typography>
+                <Typography sx={{ fontSize: 10.5, color: T.text3 }}>dynamique vs calendrier</Typography>
               </Box>
             ) : null}
             {stats.avgSojori != null ? (
               <Box sx={chipSx}>
                 <Typography sx={{ fontFamily: MONO, fontSize: 15, fontWeight: 800 }}>{fmt(stats.avgSojori)}</Typography>
-                <Typography sx={{ fontSize: 10.5, color: T.text3 }}>MAD/nuit moyen Sojori</Typography>
+                <Typography sx={{ fontSize: 10.5, color: T.text3 }}>MAD/nuit moyen dynamique</Typography>
               </Box>
             ) : null}
           </Stack>
 
-          {/* Graphe : barres marché + lignes Sojori & calendrier */}
+          {/* Graphe : barres marché + lignes dynamique & calendrier */}
           <Box sx={{ mt: 2, pt: 1.75, pb: 0.75, borderRadius: 1.25, bgcolor: T.bg2, border: `1px solid ${T.border}`, px: 1, overflowX: 'auto' }}>
             <Box
               sx={{
