@@ -14,6 +14,7 @@ import { saveListingGestion } from './listingOrchestrationApi';
 import { saveOwnerGestion } from './ownerOrchestrationApi';
 import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
 import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
+import V3InformSyndicPanel from './V3InformSyndicPanel';
 import V3TaskBehaviorPanel from './V3TaskBehaviorPanel';
 import { V3 } from './theme';
 import { V3Badge, V3DecisionPill } from './V3Primitives';
@@ -222,6 +223,31 @@ export default function V3ServicePanel({
           return (
             <V3ReceiveChecklistPanel
               kind={kind}
+              gestion={(orchestrationDoc.capabilities?.[def.key]?.gestion ?? {}) as Record<string, unknown>}
+              onSave={async nextGestion => {
+                if (ownerTemplateMode) {
+                  await saveOwnerGestion({
+                    ownerKey,
+                    capabilityKey: def.key,
+                    gestion: nextGestion,
+                    doc: orchestrationDoc as OwnerOrchestrationDoc,
+                  });
+                } else {
+                  await saveListingGestion({
+                    listingId,
+                    capabilityKey: def.key,
+                    gestion: nextGestion,
+                    doc: orchestrationDoc as ListingOrchestrationDoc,
+                  });
+                }
+                onReload();
+              }}
+            />
+          );
+        }
+        if (def.key === 'inform_syndic') {
+          return (
+            <V3InformSyndicPanel
               gestion={(orchestrationDoc.capabilities?.[def.key]?.gestion ?? {}) as Record<string, unknown>}
               onSave={async nextGestion => {
                 if (ownerTemplateMode) {

@@ -13,6 +13,7 @@ const ORCH_FLAGS = [
   { key: 'orchestration_declare_departure', label: 'Déclarer départ' },
   { key: 'orchestration_receive_arrival', label: 'Accueil arrivée' },
   { key: 'orchestration_receive_departure', label: 'Accueil départ' },
+  { key: 'orchestration_inform_syndic', label: 'Informer syndic' },
   { key: 'orchestration_registration', label: 'Enregistrement voyageurs' },
   { key: 'orchestration_cleaning_free', label: 'Ménage gratuit' },
   { key: 'orchestration_cleaning_paid', label: 'Ménage payant' },

@@ -59,6 +59,7 @@ const LISTING_ORCH_LABELS = {
   orchestration_declare_departure: 'Déclarer départ',
   orchestration_receive_arrival: 'Accueil arrivée',
   orchestration_receive_departure: 'Accueil départ',
+  orchestration_inform_syndic: 'Informer syndic',
   orchestration_cleaning_free: 'Ménage gratuit',
   orchestration_cleaning_paid: 'Ménage payant',
   orchestration_cleaning_sojori: 'Ménage Sojori',
