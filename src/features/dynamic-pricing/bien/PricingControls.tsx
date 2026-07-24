@@ -131,6 +131,12 @@ const PRESET_META: Record<string, { sub: string; quote: string; recommended?: bo
   equilibre: { sub: 'au prix du marché', quote: "L'optimum revenu", recommended: true },
   agressif: { sub: 'légèrement au-dessus', quote: 'Je vise premium' },
 };
+/** Vue client : mêmes cartes, sans référence au marché. */
+const PRESET_META_OWNER: Record<string, { sub: string; quote: string; recommended?: boolean }> = {
+  prudent: { sub: 'prix légèrement plus bas', quote: 'Je veux remplir' },
+  equilibre: { sub: 'prix optimal', quote: "L'équilibre revenu", recommended: true },
+  agressif: { sub: 'prix légèrement plus haut', quote: 'Je vise premium' },
+};
 const PRESET_EMOJI: Record<string, string> = { prudent: '🛡', equilibre: '⚖', agressif: '🚀' };
 
 const lblSx = {
@@ -622,12 +628,11 @@ export default function PricingControls(props: PricingControlsProps) {
 
         </Box>
 
-        {/* Positionnement (vs marché) — admin only */}
-        {!ownerMode ? (
+        {/* Positionnement — les 3 cartes rassurent, wording sans marché côté client */}
         <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ gap: 1, py: 1, pb: 0.25, alignItems: { sm: 'flex-start' } }}>
           <Box sx={{ width: { sm: 120 }, flexShrink: 0 }}>
             <Typography sx={{ fontSize: 12.5, fontWeight: 800 }}>Positionnement</Typography>
-            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>vs marché</Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>{ownerMode ? 'votre stratégie' : 'vs marché'}</Typography>
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Box
@@ -638,14 +643,14 @@ export default function PricingControls(props: PricingControlsProps) {
               }}
             >
               {presets.map((m) => {
-                const meta = PRESET_META[m.id];
+                const meta = (ownerMode ? PRESET_META_OWNER : PRESET_META)[m.id];
                 return (
                   <ModeCardMini
                     key={m.id}
                     on={activeModeId === m.id}
                     name={m.label}
                     emoji={PRESET_EMOJI[m.id] ?? '⭐'}
-                    sub={`${meta?.sub ?? ''} · ×${m.multiplier}`}
+                    sub={ownerMode ? (meta?.sub ?? '') : `${meta?.sub ?? ''} · ×${m.multiplier}`}
                     quote={meta?.quote ?? ''}
                     recommended={meta?.recommended}
                     onClick={() => onActiveModeChange(m.id)}
@@ -655,7 +660,6 @@ export default function PricingControls(props: PricingControlsProps) {
             </Box>
           </Box>
         </Stack>
-        ) : null}
       </Box>
 
       {/* ═══ Avancés (repliés) : occupation · last min · trous · events ═══ */}
