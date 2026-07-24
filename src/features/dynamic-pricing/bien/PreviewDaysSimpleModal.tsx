@@ -18,6 +18,8 @@ import { processInventoryResponse } from '../../../components/calendar-v3/proces
 
 const MONO = '"Geist Mono", monospace';
 
+type PriceModeChoice = 'manual' | 'dynamic';
+
 function splitContiguousIsoRanges(sortedIsos: string[]) {
   if (!sortedIsos.length) return [];
   const ranges: { from: string; to: string }[] = [];
@@ -43,6 +45,53 @@ function fmtDayFr(iso: string) {
   return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
+function ModeToggle({
+  value,
+  onChange,
+}: {
+  value: PriceModeChoice;
+  onChange: (v: PriceModeChoice) => void;
+}) {
+  return (
+    <Stack direction="row" sx={{ display: 'inline-flex', bgcolor: T.bg3, borderRadius: 1.25, p: 0.375, gap: 0.375, mb: 1.75 }}>
+      {(
+        [
+          { id: 'dynamic' as const, label: 'Dynamique', hint: 'Pilote Sojori' },
+          { id: 'manual' as const, label: 'Manuel', hint: 'Prix forcé' },
+        ] as const
+      ).map((opt) => {
+        const on = value === opt.id;
+        return (
+          <Box
+            key={opt.id}
+            component="button"
+            type="button"
+            onClick={() => onChange(opt.id)}
+            sx={{
+              all: 'unset',
+              cursor: 'pointer',
+              px: 1.5,
+              py: 0.75,
+              borderRadius: 1,
+              fontSize: 12.5,
+              fontWeight: 800,
+              color: on ? T.text : T.text3,
+              bgcolor: on ? T.bg1 : 'transparent',
+              boxShadow: on ? '0 1px 3px rgba(0,0,0,0.10)' : 'none',
+              '&:focus-visible': { outline: `2px solid ${T.goldDeep}`, outlineOffset: 1 },
+            }}
+          >
+            {opt.label}
+            <Box component="span" sx={{ display: 'block', fontSize: 10, fontWeight: 600, color: T.text3, mt: 0.15 }}>
+              {opt.hint}
+            </Box>
+          </Box>
+        );
+      })}
+    </Stack>
+  );
+}
+
 export interface PreviewDaysSimpleModalProps {
   open: boolean;
   onClose: () => void;
@@ -62,12 +111,14 @@ export default function PreviewDaysSimpleModal({
   onSaved,
 }: PreviewDaysSimpleModalProps) {
   const sortedDates = useMemo(() => [...selectedDates].sort(), [selectedDates]);
+  const [priceMode, setPriceMode] = useState<PriceModeChoice>('manual');
   const [manualPrice, setManualPrice] = useState('');
   const [minStay, setMinStay] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPriceHint, setCurrentPriceHint] = useState<string | null>(null);
   const [currentMinStayHint, setCurrentMinStayHint] = useState<string | null>(null);
+  const [currentModeHint, setCurrentModeHint] = useState<string | null>(null);
 
   const sojoriMinStayReco = useMemo(() => {
     const vals = sortedDates
@@ -85,6 +136,8 @@ export default function PreviewDaysSimpleModal({
       setError(null);
       setCurrentPriceHint(null);
       setCurrentMinStayHint(null);
+      setCurrentModeHint(null);
+      setPriceMode('manual');
       return;
     }
     let cancelled = false;
@@ -105,12 +158,30 @@ export default function PreviewDaysSimpleModal({
         if (!rtId) return;
         const prices: number[] = [];
         const stays: number[] = [];
+        let manualN = 0;
+        let dynamicN = 0;
         for (const iso of sortedDates) {
           const inv = processed[listingId]?.[rtId]?.availability?.[iso] as
-            | { manualPrice?: number; minStay?: number }
+            | {
+                manualPrice?: number;
+                minStay?: number;
+                applyManual?: boolean;
+                useDynamicPrice?: boolean;
+                priceMode?: string;
+              }
             | undefined;
-          if (inv?.manualPrice != null) prices.push(Number(inv.manualPrice));
+          if (inv?.manualPrice != null && Number(inv.manualPrice) > 0) {
+            prices.push(Number(inv.manualPrice));
+          }
           if (inv?.minStay != null) stays.push(Number(inv.minStay));
+          const mode =
+            inv?.priceMode === 'dynamic' || inv?.useDynamicPrice === true
+              ? 'dynamic'
+              : inv?.priceMode === 'manual' || inv?.applyManual === true
+                ? 'manual'
+                : null;
+          if (mode === 'manual') manualN += 1;
+          if (mode === 'dynamic') dynamicN += 1;
         }
         const samePrice = prices.length && prices.every((p) => p === prices[0]) ? prices[0] : null;
         const sameStay = stays.length && stays.every((s) => s === stays[0]) ? stays[0] : null;
@@ -128,6 +199,20 @@ export default function PreviewDaysSimpleModal({
               ? `Mix ${Math.min(...stays)}–${Math.max(...stays)} n`
               : null,
         );
+        if (manualN === sortedDates.length) {
+          setPriceMode('manual');
+          setCurrentModeHint('Actuellement : Manuel');
+        } else if (dynamicN === sortedDates.length) {
+          setPriceMode('dynamic');
+          setCurrentModeHint('Actuellement : Dynamique');
+        } else if (manualN || dynamicN) {
+          setCurrentModeHint(`Mix : ${manualN} Manu · ${dynamicN} Dyn`);
+        } else {
+          setCurrentModeHint(null);
+        }
+        if (samePrice != null && manualPrice === '') {
+          setManualPrice(String(Math.round(samePrice)));
+        }
       } catch {
         /* hints optionnels */
       }
@@ -135,23 +220,28 @@ export default function PreviewDaysSimpleModal({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once à l’ouverture
   }, [open, listingId, sortedDates]);
 
   const handleSave = async () => {
     const priceVal = manualPrice.trim() === '' ? null : Number(manualPrice);
     const minVal = minStay.trim() === '' ? null : Number(minStay);
-    if (priceVal == null && minVal == null) {
-      setError('Saisissez un prix manuel et/ou un min stay');
-      return;
-    }
-    if (priceVal != null && (!Number.isFinite(priceVal) || priceVal <= 0)) {
-      setError('Prix invalide');
-      return;
+
+    if (priceMode === 'manual') {
+      if (priceVal == null) {
+        setError('Saisissez un prix manuel (MAD)');
+        return;
+      }
+      if (!Number.isFinite(priceVal) || priceVal <= 0) {
+        setError('Prix invalide');
+        return;
+      }
     }
     if (minVal != null && (!Number.isFinite(minVal) || minVal < 1)) {
       setError('Min stay invalide (≥ 1)');
       return;
     }
+
     setLoading(true);
     setError(null);
     try {
@@ -170,8 +260,20 @@ export default function PreviewDaysSimpleModal({
       const payloads: Record<string, unknown>[] = [];
       for (const { from, to } of ranges) {
         const base = { roomTypeId: rtId, date_from: from, date_to: to };
-        if (priceVal != null) {
+        if (priceMode === 'manual' && priceVal != null) {
           payloads.push({ type: 'manualPrice', ...base, price: Math.round(priceVal) });
+        } else if (priceMode === 'dynamic') {
+          // Même dual-write que calendrier multi-view (flags + priceMode)
+          payloads.push({
+            type: 'setUseDynamicPriceManual',
+            ...base,
+            setUseDynamicPriceManual: true,
+          });
+          payloads.push({
+            type: 'setPriceMode',
+            ...base,
+            priceMode: 'dynamic',
+          });
         }
         if (minVal != null) {
           payloads.push({ type: 'min_stay_arrival', ...base, min_stay_arrival: Math.round(minVal) });
@@ -194,10 +296,11 @@ export default function PreviewDaysSimpleModal({
         Modifier les jours sélectionnés
       </DialogTitle>
       <DialogContent>
-        <Typography sx={{ fontSize: 12, color: T.text2, mb: 1.5 }}>
-          {sortedDates.length} jour{sortedDates.length > 1 ? 's' : ''} · prix manuel (mode M) · min stay optionnel
+        <Typography sx={{ fontSize: 12, color: T.text2, mb: 1 }}>
+          {sortedDates.length} jour{sortedDates.length > 1 ? 's' : ''}
+          {currentModeHint ? ` · ${currentModeHint}` : ''}
         </Typography>
-        <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap', mb: 2 }}>
+        <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap', mb: 1.75 }}>
           {sortedDates.map((iso) => (
             <Chip
               key={iso}
@@ -208,18 +311,42 @@ export default function PreviewDaysSimpleModal({
           ))}
         </Stack>
 
-        <TextField
-          fullWidth
-          size="small"
-          type="number"
-          label="Prix manuel (MAD)"
-          placeholder={currentPriceHint ?? 'Ex. 1850'}
-          helperText={currentPriceHint ?? 'Appliqué uniquement aux jours cochés'}
-          value={manualPrice}
-          onChange={(e) => setManualPrice(e.target.value)}
-          sx={{ mb: 2 }}
-          InputProps={{ sx: { fontFamily: MONO, fontWeight: 700 } }}
-        />
+        <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.text3, mb: 0.75, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Mode prix
+        </Typography>
+        <ModeToggle value={priceMode} onChange={setPriceMode} />
+
+        {priceMode === 'manual' ? (
+          <TextField
+            fullWidth
+            size="small"
+            type="number"
+            label="Prix manuel (MAD)"
+            placeholder={currentPriceHint ?? 'Ex. 1850'}
+            helperText={currentPriceHint ?? 'Force un prix fixe (mode Manu) sur ces jours'}
+            value={manualPrice}
+            onChange={(e) => setManualPrice(e.target.value)}
+            sx={{ mb: 2 }}
+            InputProps={{ sx: { fontFamily: MONO, fontWeight: 700 } }}
+          />
+        ) : (
+          <Box
+            sx={{
+              mb: 2,
+              p: 1.25,
+              borderRadius: 1.25,
+              bgcolor: T.goldTint,
+              border: `1px solid ${T.gold}`,
+            }}
+          >
+            <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: T.goldDeep }}>
+              Remettre en prix dynamique
+            </Typography>
+            <Typography sx={{ fontSize: 11.5, color: T.text2, mt: 0.35, lineHeight: 1.4 }}>
+              Ces jours suivront à nouveau le pilote (estimation + réglages). Le prix manuel forcé est désactivé.
+            </Typography>
+          </Box>
+        )}
 
         <Stack direction="row" sx={{ gap: 1, alignItems: 'flex-start' }}>
           <TextField
@@ -263,7 +390,13 @@ export default function PreviewDaysSimpleModal({
             '&:hover': { bgcolor: T.gold, color: T.text },
           }}
         >
-          {loading ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'Enregistrer'}
+          {loading ? (
+            <CircularProgress size={18} sx={{ color: '#fff' }} />
+          ) : priceMode === 'dynamic' ? (
+            'Remettre dynamique'
+          ) : (
+            'Forcer prix manuel'
+          )}
         </Button>
       </DialogActions>
     </Dialog>
