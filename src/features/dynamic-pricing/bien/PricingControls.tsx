@@ -8,6 +8,7 @@
 import React from 'react';
 import { Box, Stack, Typography, Slider, Button, TextField } from '@mui/material';
 import { T, DP_LAYOUT_SX } from '../_tokens';
+import PeriodRulesCard from './PeriodRulesCard';
 
 export type PricingMode = 'prudent' | 'equilibre' | 'agressif';
 
@@ -108,6 +109,9 @@ export interface PricingControlsProps {
   onAddEvent: () => void;
   onEditEvent: (id: string) => void;
   onDeleteEvent: (id: string) => void;
+  onCreateEvent?: (ev: PricingEvent) => void | Promise<void>;
+  onToggleEventEnabled?: (id: string, on: boolean) => void | Promise<void>;
+  onDuplicateEvent?: (id: string) => void | Promise<void>;
   onAcceptSuggestion: (id: string) => void;
   estimatedRevenue?: number;
   estimatedRevenueLiftPct?: number;
@@ -116,6 +120,8 @@ export interface PricingControlsProps {
   boundsContextHint?: string;
   /** Owner/PM : masquer la bannière cascade pédagogique */
   compactGuide?: boolean;
+  /** Vue client : cache Point de départ, Positionnement et repère marché (admin only). */
+  ownerMode?: boolean;
 }
 
 const MONO = '"Geist Mono", monospace';
@@ -246,11 +252,13 @@ function AdvancedSettingsCollapse({
   occupancyOn,
   lastMinuteOn,
   gapsOn,
+  eventsCount,
   children,
 }: {
   occupancyOn: boolean;
   lastMinuteOn: boolean;
   gapsOn: boolean;
+  eventsCount: number;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -263,21 +271,22 @@ function AdvancedSettingsCollapse({
         sx={{
           alignItems: 'center',
           gap: 1,
-          mt: 0.5,
-          mb: open ? 1.25 : 0,
+          mt: 0.25,
+          mb: open ? 1 : 0,
           cursor: 'pointer',
           userSelect: 'none',
-          py: 0.75,
-          px: 1,
-          mx: -1,
-          borderRadius: 1.25,
+          py: 0.5,
+          px: 0.75,
+          mx: -0.75,
+          borderRadius: 1,
           '&:hover': { bgcolor: T.bg2 },
         }}
       >
-        <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Réglages avancés</Typography>
-        <Typography sx={{ fontSize: 11.5, color: T.text3, flex: 1 }}>
-          — occupation · dernière minute · trous
-          {onCount > 0 ? ` · ${onCount} actif${onCount > 1 ? 's' : ''}` : ''}
+        <Typography sx={{ fontSize: 12.5, fontWeight: 800 }}>Réglages avancés</Typography>
+        <Typography sx={{ fontSize: 11, color: T.text3, flex: 1 }}>
+          — occupation · last min · trous · events
+          {onCount > 0 ? ` · ${onCount} auto` : ''}
+          {eventsCount > 0 ? ` · ${eventsCount} event${eventsCount > 1 ? 's' : ''}` : ''}
         </Typography>
         <Box
           component="span"
@@ -459,19 +468,23 @@ function MadInput({
 export default function PricingControls(props: PricingControlsProps) {
   const {
     floor, ceiling, recoFloor, recoCeiling,
-    pricingModes, activeModeId, gapBlockEnabled, gapBlockMinNights,
+    pricingModes, activeModeId, events, gapBlockEnabled, gapBlockMinNights,
     lastMinuteEnabled, lastMinuteFromDays, lastMinuteToDays, lastMinuteDiscountPct,
     occupancyBandsEnabled, occupancyLowMax, occupancyLowAdj, occupancyHighMin, occupancyHighAdj,
     pricingBaseSource, manualBasePriceMad,
+    eventsEnabled = true,
     onGapBlockEnabledChange, onGapBlockMinNightsChange,
     onFloorChange, onCeilingChange,
     onLastMinuteEnabledChange, onLastMinuteFromDaysChange, onLastMinuteToDaysChange, onLastMinuteDiscountPctChange,
     onOccupancyBandsEnabledChange, onOccupancyLowMaxChange, onOccupancyLowAdjChange,
     onOccupancyHighMinChange, onOccupancyHighAdjChange,
     onPricingBaseSourceChange, onManualBasePriceMadChange,
+    onEventsEnabledChange,
     onApplyRecoBounds,
     onActiveModeChange,
+    onEditEvent, onDeleteEvent, onCreateEvent, onToggleEventEnabled, onDuplicateEvent,
     boundsContextHint,
+    ownerMode = false,
   } = props;
 
   const presets = pricingModes.filter((m) => m.kind === 'preset' && m.enabled);
@@ -479,35 +492,32 @@ export default function PricingControls(props: PricingControlsProps) {
   const cardSx = {
     bgcolor: T.bg1,
     border: `1px solid ${T.border}`,
-    borderRadius: 2,
-    p: { xs: 2, md: 2.5 },
+    borderRadius: 1.5,
+    p: { xs: 1.25, md: 1.5 },
     boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
   } as const;
 
   return (
-    <Stack spacing={1.75} sx={DP_LAYOUT_SX}>
-      {/* ═══ L'essentiel ═══ */}
-      <Stack direction="row" sx={{ alignItems: 'baseline', gap: 1, mt: 0.5 }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 800 }}>L'essentiel</Typography>
-        <Typography sx={{ fontSize: 11.5, color: T.text3 }}>— les 3 seuls réglages à décider</Typography>
-      </Stack>
+    <Stack spacing={1} sx={DP_LAYOUT_SX}>
+      {/* ═══ L'essentiel (compact) ═══ */}
       <Box sx={cardSx}>
         {/* Point de départ + Fourchette côte à côte en large */}
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', lg: 'auto 1fr' },
-            columnGap: 6,
-            borderBottom: `1px solid ${T.border}`,
+            gridTemplateColumns: { xs: '1fr', lg: ownerMode ? '1fr' : 'auto 1fr' },
+            columnGap: 4,
+            borderBottom: ownerMode ? 'none' : `1px solid ${T.border}`,
           }}
         >
+        {!ownerMode ? (
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          sx={{ gap: 1.5, py: 1.5, pt: 0.5, borderBottom: { xs: `1px solid ${T.border}`, lg: 'none' }, alignItems: { sm: 'center' } }}
+          sx={{ gap: 1, py: 1, pt: 0.25, borderBottom: { xs: `1px solid ${T.border}`, lg: 'none' }, alignItems: { sm: 'center' } }}
         >
-          <Box sx={{ width: { sm: 150 }, flexShrink: 0 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Point de départ</Typography>
-            <Typography sx={{ fontSize: 11, color: T.text3 }}>d'où part le prix</Typography>
+          <Box sx={{ width: { sm: 120 }, flexShrink: 0 }}>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 800 }}>Point de départ</Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>d'où part le prix</Typography>
           </Box>
           <Box>
             <Stack direction="row" sx={{ display: 'inline-flex', bgcolor: T.bg3, borderRadius: 1.25, p: 0.375, gap: 0.375 }}>
@@ -563,24 +573,27 @@ export default function PricingControls(props: PricingControlsProps) {
             ) : null}
           </Box>
         </Stack>
+        ) : null}
 
         {/* Fourchette */}
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          sx={{ gap: 1.5, py: 1.5, pt: { lg: 0.5 }, alignItems: { sm: 'center' } }}
+          sx={{ gap: 1, py: 1, pt: { lg: 0.25 }, alignItems: { sm: 'center' } }}
         >
-          <Box sx={{ width: { sm: 150 }, flexShrink: 0 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Fourchette</Typography>
-            <Typography sx={{ fontSize: 11, color: T.text3 }}>le prix ne sort jamais de là</Typography>
+          <Box sx={{ width: { sm: 120 }, flexShrink: 0 }}>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 800 }} title={boundsContextHint || undefined}>
+              Fourchette
+            </Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>min · max MAD</Typography>
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
               <MadInput value={floor} label="Prix minimum (plancher)" onCommit={onFloorChange} />
-              <Typography sx={{ fontSize: 11, color: T.text3, fontFamily: MONO }}>min</Typography>
+              <Typography sx={{ fontSize: 10.5, color: T.text3, fontFamily: MONO }}>min</Typography>
               <Typography sx={{ color: T.text4 }}>—</Typography>
               <MadInput value={ceiling} label="Prix maximum (plafond)" onCommit={onCeilingChange} />
-              <Typography sx={{ fontSize: 11, color: T.text3, fontFamily: MONO }}>max MAD</Typography>
-              {recoFloor > 0 && recoCeiling > 0 ? (
+              <Typography sx={{ fontSize: 10.5, color: T.text3, fontFamily: MONO }}>max</Typography>
+              {recoFloor > 0 && recoCeiling > 0 && !ownerMode ? (
                 <Box
                   component="button"
                   type="button"
@@ -592,40 +605,36 @@ export default function PricingControls(props: PricingControlsProps) {
                     bgcolor: T.goldTint,
                     color: T.goldDeep,
                     borderRadius: 999,
-                    px: 1.5,
-                    py: 0.625,
-                    fontSize: 11.5,
+                    px: 1.25,
+                    py: 0.5,
+                    fontSize: 11,
                     fontWeight: 700,
                     '&:hover': { bgcolor: T.goldTint2 },
                     '&:focus-visible': { outline: `2px solid ${T.goldDeep}`, outlineOffset: 1 },
                   }}
                 >
-                  ✨ Suggérer : {fmt(recoFloor)} – {fmt(recoCeiling)} (marché)
+                  ✨ {fmt(recoFloor)} – {fmt(recoCeiling)}
                 </Box>
               ) : null}
             </Stack>
-            {boundsContextHint ? (
-              <Typography sx={{ fontSize: 10.5, color: T.text3, mt: 0.875, lineHeight: 1.45 }}>
-                {boundsContextHint}
-              </Typography>
-            ) : null}
           </Box>
         </Stack>
 
         </Box>
 
-        {/* Positionnement — 3 presets, défaut Équilibré (pas de perso / pas de switch on-off) */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ gap: 1.5, py: 1.5, pb: 0.5, alignItems: { sm: 'flex-start' } }}>
-          <Box sx={{ width: { sm: 150 }, flexShrink: 0 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Positionnement</Typography>
-            <Typography sx={{ fontSize: 11, color: T.text3 }}>vs le marché</Typography>
+        {/* Positionnement (vs marché) — admin only */}
+        {!ownerMode ? (
+        <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ gap: 1, py: 1, pb: 0.25, alignItems: { sm: 'flex-start' } }}>
+          <Box sx={{ width: { sm: 120 }, flexShrink: 0 }}>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 800 }}>Positionnement</Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>vs marché</Typography>
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Box
               sx={{
                 display: 'grid',
                 gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
-                gap: 1,
+                gap: 0.75,
               }}
             >
               {presets.map((m) => {
@@ -646,23 +655,25 @@ export default function PricingControls(props: PricingControlsProps) {
             </Box>
           </Box>
         </Stack>
+        ) : null}
       </Box>
 
-      {/* ═══ Ajustements automatiques (repliés par défaut) ═══ */}
+      {/* ═══ Avancés (repliés) : occupation · last min · trous · events ═══ */}
       <AdvancedSettingsCollapse
         occupancyOn={occupancyBandsEnabled}
         lastMinuteOn={lastMinuteEnabled}
         gapsOn={gapBlockEnabled}
+        eventsCount={events.filter((e) => e.enabled !== false).length}
       >
         <Box
           sx={{
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
-            gap: 1.5,
+            gap: 1,
             alignItems: 'start',
           }}
         >
-        <Box sx={{ ...cardSx, py: { xs: 0.5, md: 0.75 } }}>
+        <Box sx={{ ...cardSx, py: { xs: 0.25, md: 0.5 } }}>
         <AutoItem
           emoji="📉"
           title="Remplissage du mois"
@@ -684,7 +695,7 @@ export default function PricingControls(props: PricingControlsProps) {
         </AutoItem>
         </Box>
 
-        <Box sx={{ ...cardSx, py: { xs: 0.5, md: 0.75 } }}>
+        <Box sx={{ ...cardSx, py: { xs: 0.25, md: 0.5 } }}>
         <AutoItem
           emoji="⏰"
           title="Dernière minute"
@@ -705,7 +716,7 @@ export default function PricingControls(props: PricingControlsProps) {
         </AutoItem>
         </Box>
 
-        <Box sx={{ ...cardSx, py: { xs: 0.5, md: 0.75 } }}>
+        <Box sx={{ ...cardSx, py: { xs: 0.25, md: 0.5 } }}>
         <AutoItem
           emoji="🧩"
           title="Trous entre réservations"
@@ -724,12 +735,30 @@ export default function PricingControls(props: PricingControlsProps) {
         </AutoItem>
         </Box>
 
-        {/* Règles par période & événements → bloc dédié « 04 Règles par période » */}
+        <Box sx={{ ...cardSx, gridColumn: { lg: '1 / -1' }, py: { xs: 1, md: 1.25 } }}>
+          <Typography sx={{ fontSize: 12.5, fontWeight: 800, mb: 0.75 }}>
+            Règles par période (events)
+          </Typography>
+          <Typography sx={{ fontSize: 11, color: T.text3, mb: 1, lineHeight: 1.4 }}>
+            Prioritaires sur le dynamique — ex. GITEX +25 % vs marché
+          </Typography>
+          <PeriodRulesCard
+            embedded
+            events={events}
+            eventsEnabled={eventsEnabled}
+            onEventsEnabledChange={onEventsEnabledChange}
+            onCreateEvent={onCreateEvent}
+            onEditEvent={onEditEvent}
+            onDeleteEvent={onDeleteEvent}
+            onToggleEventEnabled={onToggleEventEnabled}
+            onDuplicateEvent={onDuplicateEvent}
+          />
+        </Box>
         </Box>
       </AdvancedSettingsCollapse>
 
-      <Typography sx={{ fontSize: 10.5, color: T.text4, textAlign: 'center' }}>
-        Modifications enregistrées automatiquement · la propagation vers le calendrier suit le réglage « Sync calendrier »
+      <Typography sx={{ fontSize: 10, color: T.text4, textAlign: 'center' }}>
+        {ownerMode ? 'Modifications enregistrées automatiquement' : 'Enregistrement auto · sync calendrier selon le réglage Sync'}
       </Typography>
     </Stack>
   );

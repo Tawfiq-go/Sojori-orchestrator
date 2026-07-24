@@ -11,9 +11,20 @@ import { T } from '../_tokens';
 import type { ApplyPreviewDiffDto, ApplyPreviewDiffRowDto } from '../../../services/dynamicPricingApi';
 import type { PricingEvent } from './PricingControls';
 import { usePricePreviewSelectionOptional } from './pricePreviewSelectionContext';
+import { BIEN_STICKY_FILTER_TOP_OFFSET, BIEN_STICKY_TOP_CSS_VAR } from './BienPageStickyFilters';
 
 const MONO = '"Geist Mono", monospace';
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR');
+
+/** En-tête : sticky sous le bandeau listing (scroll page — le bloc monte, puis la tête reste). */
+const TH_STICKY_SX = {
+  position: 'sticky' as const,
+  top: `var(${BIEN_STICKY_TOP_CSS_VAR}, ${BIEN_STICKY_FILTER_TOP_OFFSET}px)`,
+  zIndex: 40,
+  bgcolor: T.bg2,
+  borderBottom: `1.5px solid ${T.borderStrong}`,
+  boxShadow: '0 2px 6px rgba(20,17,10,0.08)',
+};
 
 /** Tooltip clair (fond blanc) — lisible sur le tableau et la courbe. */
 const LIGHT_TOOLTIP_SLOTS = {
@@ -55,6 +66,9 @@ function rowStatus(row: ApplyPreviewDiffRowDto): RowStatus {
 }
 
 function calendarPriceMode(row: ApplyPreviewDiffRowDto): CalendarPriceMode {
+  // Aligné calendrier multi-view : priceMode → useDynamic (via API) → applyManual
+  if (row.priceMode === 'manual') return 'manual';
+  if (row.priceMode === 'dynamic' || row.priceMode === 'base') return 'dynamic';
   if (typeof row.applyManual === 'boolean') return row.applyManual ? 'manual' : 'dynamic';
   if (row.skipReason === 'apply_manual' || row.alert === 'manual') return 'manual';
   return 'dynamic';
@@ -68,6 +82,59 @@ function statusWord(st: RowStatus): string {
   if (st === 'reserved') return 'RÉSERVÉ';
   if (st === 'blocked') return 'BLOQUÉ';
   return 'LIBRE';
+}
+
+/** Affiche min stay cal. ; si le pilote propose un trou (ajustement), 2→1. */
+function MinStayCell({ row }: { row: ApplyPreviewDiffRowDto }) {
+  const cal = row.calendarMinStay ?? null;
+  const prop = row.proposedMinStay ?? null;
+  const gap = row.applied?.gapMinStay;
+  const gapSignaled = row.applied?.gapSignaled === true;
+
+  if (gap && gap.from !== gap.to) {
+    return (
+      <Box
+        component="span"
+        title={`Comble trou : min stay ${gap.from} → ${gap.to} nuit(s)`}
+        sx={{ color: T.goldDeep, fontWeight: 800 }}
+      >
+        {gap.from}→{gap.to}
+      </Box>
+    );
+  }
+  if (cal != null && prop != null && cal !== prop) {
+    return (
+      <Box
+        component="span"
+        title={`Calendrier ${cal}n · proposé ${prop}n`}
+        sx={{ fontWeight: 700 }}
+      >
+        {cal}
+        <Box component="span" sx={{ color: T.text3, fontWeight: 600 }}>
+          →{prop}
+        </Box>
+      </Box>
+    );
+  }
+  const n = cal ?? prop;
+  if (n == null) return <Box component="span" sx={{ color: T.text4 }}>—</Box>;
+  return (
+    <Box
+      component="span"
+      title={gapSignaled ? `Min stay ${n}n · trou 1 nuit signalé` : `Min stay ${n} nuit(s)`}
+      sx={{
+        fontWeight: gapSignaled ? 800 : 600,
+        color: gapSignaled ? T.warning : undefined,
+      }}
+    >
+      {n}
+      {gapSignaled ? (
+        <Box component="span" sx={{ fontSize: 9, ml: 0.35, fontWeight: 800 }}>
+          !
+        </Box>
+      ) : null}
+    </Box>
+  );
 }
 
 /** Badge statut : Manu si manuel · nom d’event si règle · rien si dynamique pur. */
@@ -144,15 +211,17 @@ function DayStatusBadge({
 function DynamicPriceHover({
   row,
   rule,
+  ownerMode = false,
 }: {
   row: ApplyPreviewDiffRowDto;
   rule?: DayRule;
+  ownerMode?: boolean;
 }) {
   const lineSx = { fontSize: 10.5, fontFamily: MONO, lineHeight: 1.45, fontVariantNumeric: 'tabular-nums' };
   const base =
     row.applied?.baseFixeMad != null
       ? { label: 'Prix de base (fixe)', value: row.applied.baseFixeMad }
-      : row.airroiMad != null
+      : row.airroiMad != null && !ownerMode
         ? { label: 'Prix estimé (marché)', value: row.airroiMad }
         : null;
   const steps: string[] = [];
@@ -187,7 +256,7 @@ function DynamicPriceHover({
 
   return (
     <Stack spacing={0.35} sx={{ py: 0.25, maxWidth: 260 }}>
-      <Typography sx={{ fontSize: 11, fontWeight: 800 }}>Prix dynamique</Typography>
+      <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.text }}>Prix dynamique</Typography>
       {steps.length ? (
         steps.map((s) => (
           <Typography key={s} sx={{ ...lineSx, color: T.text2 }}>
@@ -195,7 +264,7 @@ function DynamicPriceHover({
           </Typography>
         ))
       ) : (
-        <Typography sx={{ ...lineSx, color: T.text3 }}>Calcul standard (estimé → bornes)</Typography>
+        <Typography sx={{ ...lineSx, color: T.text3 }}>{ownerMode ? 'Prix optimisé automatiquement' : 'Calcul standard (estimé → bornes)'}</Typography>
       )}
       <Typography sx={{ ...lineSx, fontWeight: 800, color: T.goldDeep, pt: 0.25 }}>
         = {row.g7ProposedMad != null ? `${fmt(row.g7ProposedMad)} MAD` : '—'}
@@ -247,92 +316,22 @@ function buildLinePoints(
     .join(' ');
 }
 
-function fmtMad(v: number | null | undefined): string {
-  return v != null ? `${fmt(v)} MAD` : '—';
-}
-
-function priceDelta(a: number | null | undefined, b: number | null | undefined): number | null {
-  if (a == null || b == null) return null;
-  return a - b;
-}
-
-function fmtSignedDelta(d: number | null): string {
-  if (d == null) return '—';
-  return `${d > 0 ? '+' : ''}${fmt(d)} MAD`;
-}
-
-function deltaTone(d: number | null): string {
-  if (d == null) return T.text4;
-  if (d > 0) return T.success;
-  if (d < 0) return T.error;
-  return T.text3;
-}
-
-const STATUS_LABEL: Record<RowStatus, string> = {
-  reserved: 'Réservé',
-  blocked: 'Bloqué sans résa',
-  free: 'Libre',
-};
-
+/** Hover courbe = même détail calcul que le tableau. */
 function ChartDayTooltipContent({
   row,
-  status,
   rule,
+  ownerMode = false,
 }: {
   row: ApplyPreviewDiffRowDto;
-  status: RowStatus;
   rule?: DayRule;
+  ownerMode?: boolean;
 }) {
-  const marche = row.airroiMad;
-  const dynamique = row.g7ProposedMad;
-  const cal = row.calendarCurrentMad;
-  const booked = row.bookedPriceMad ?? null;
-  const mode = calendarPriceMode(row);
-  const deltaDynCal = priceDelta(dynamique, cal);
-  const deltaBookedMarche = priceDelta(booked, marche);
-  const lineSx = { fontSize: 10.5, fontFamily: MONO, lineHeight: 1.5, fontVariantNumeric: 'tabular-nums' };
-  const modeBit = rule
-    ? `event « ${rule.name} »`
-    : mode === 'manual'
-      ? 'Manu'
-      : 'dynamique';
-
   return (
-    <Stack spacing={0.375} sx={{ py: 0.125 }}>
-      <Typography sx={{ fontSize: 11.5, fontWeight: 800, lineHeight: 1.3 }}>{dayLabelFr(row.date)}</Typography>
-      <Typography sx={{ fontSize: 10, color: T.text3 }}>
-        {STATUS_LABEL[status]} · {modeBit}
+    <Stack spacing={0.5} sx={{ py: 0.125 }}>
+      <Typography sx={{ fontSize: 11.5, fontWeight: 800, lineHeight: 1.3, color: T.text }}>
+        {dayLabelFr(row.date)}
       </Typography>
-      <Box sx={{ height: 4 }} />
-      <Typography sx={lineSx}>Prix estimé (marché) : {fmtMad(marche)}</Typography>
-      <Typography sx={{ ...lineSx, fontWeight: 800, color: T.goldDeep }}>Prix dynamique : {fmtMad(dynamique)}</Typography>
-      {status === 'reserved' ? (
-        <>
-          <Typography sx={{ ...lineSx, fontWeight: 800, color: T.info }}>
-            Prix à la réservation : {fmtMad(booked)}
-          </Typography>
-          {cal != null && booked != null && cal !== booked ? (
-            <Typography sx={{ ...lineSx, color: T.text3 }}>Prix calendrier actuel : {fmtMad(cal)}</Typography>
-          ) : null}
-        </>
-      ) : (
-        <Typography sx={lineSx}>Prix calendrier : {fmtMad(cal)}</Typography>
-      )}
-      <Box sx={{ height: 4 }} />
-      {status === 'reserved' ? (
-        <Typography sx={{ ...lineSx, color: deltaTone(deltaBookedMarche), fontWeight: 700 }}>
-          Δ résa − estimation : {fmtSignedDelta(deltaBookedMarche)}
-        </Typography>
-      ) : (
-        <Typography sx={{ ...lineSx, color: deltaTone(deltaDynCal), fontWeight: 700 }}>
-          Δ dynamique − cal. : {fmtSignedDelta(deltaDynCal)}
-        </Typography>
-      )}
-      {rule ? (
-        <Typography sx={{ fontSize: 10, color: T.warning, mt: 0.25 }}>
-          {rule.emoji ?? '🗓'} {rule.name}
-        </Typography>
-      ) : null}
+      <DynamicPriceHover row={row} rule={rule} ownerMode={ownerMode} />
     </Stack>
   );
 }
@@ -344,6 +343,8 @@ export interface PricePreviewCardProps {
   onReload?: () => void;
   /** Règles actives → liseré orange sur le strip + chip 🗓 dans le tableau. */
   events?: PricingEvent[];
+  /** Vue client (owner) : masque marché/estimé, Δ vs calendrier et mécanique de mise à jour. */
+  ownerMode?: boolean;
 }
 
 export default function PricePreviewCard({
@@ -352,6 +353,7 @@ export default function PricePreviewCard({
   error = null,
   onReload,
   events = [],
+  ownerMode = false,
 }: PricePreviewCardProps) {
   const selection = usePricePreviewSelectionOptional();
   const [periodKey, setPeriodKey] = React.useState<(typeof PERIODS)[number]['key']>('30');
@@ -445,11 +447,6 @@ export default function PricePreviewCard({
 
   const canEditInventory = canSelect;
 
-  /** ≤ 90 j (3 mois) : tout le tableau visible · > 90 j : fenêtre ~3 mois + scroll */
-  const tableFitsWithoutInnerScroll = period.days <= 90;
-  /** ~3 mois de lignes (en-têtes mois + jours) */
-  const tableScrollMaxHeightPx = 3 * 26 + 90 * 34;
-
   const maxPrice = React.useMemo(
     () =>
       rows.reduce(
@@ -518,12 +515,12 @@ export default function PricePreviewCard({
           ))}
         </Stack>
         <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25 }}>
-          {data?.previewComputedAt ? (
+          {data?.previewComputedAt && !ownerMode ? (
             <Typography sx={{ fontSize: 10.5, color: T.text4, fontFamily: MONO }}>
               calculé {new Date(data.previewComputedAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
             </Typography>
           ) : null}
-          {onReload ? (
+          {onReload && !ownerMode ? (
             <Button size="small" onClick={onReload} disabled={loading} sx={{ fontSize: 11.5, textTransform: 'none', color: T.goldDeep, fontWeight: 700 }}>
               {loading ? 'Calcul…' : '↻ Recalculer'}
             </Button>
@@ -568,7 +565,7 @@ export default function PricePreviewCard({
               <Typography sx={{ fontFamily: MONO, fontSize: 15, fontWeight: 800 }}>{stats.free}</Typography>
               <Typography sx={{ fontSize: 10.5, color: T.text3 }}>libres à vendre</Typography>
             </Box>
-            {stats.avgDeltaPct != null ? (
+            {stats.avgDeltaPct != null && !ownerMode ? (
               <Box sx={chipSx}>
                 <Typography sx={{ fontFamily: MONO, fontSize: 15, fontWeight: 800, color: T.goldDeep }}>
                   {stats.avgDeltaPct > 0 ? '+' : ''}{stats.avgDeltaPct} %
@@ -617,6 +614,7 @@ export default function PricePreviewCard({
                   const isMonthStart = dayNum === 1 || i === 0;
                   const showDayLabel = !compactBars || isMonthStart || d.getDay() === 1;
                   const showEstimateLabel =
+                    !ownerMode &&
                     marche > 0 && shouldShowEstimateLabel(rows.length, compactBars, isMonthStart, d.getDay());
                   const dayLabel = isMonthStart
                     ? `${dayNum} ${d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}`
@@ -629,7 +627,7 @@ export default function PricePreviewCard({
                       placement="top"
                       enterDelay={120}
                       slotProps={LIGHT_TOOLTIP_SLOTS}
-                      title={<ChartDayTooltipContent row={r} status={st} rule={rule} />}
+                      title={<ChartDayTooltipContent row={r} rule={rule} ownerMode={ownerMode} />}
                     >
                       <Box
                         sx={{
@@ -696,7 +694,7 @@ export default function PricePreviewCard({
                               bgcolor: T.bg1,
                             }}
                           />
-                        ) : hMarche > 0 ? (
+                        ) : hMarche > 0 && !ownerMode ? (
                           <Box
                             sx={{
                               position: 'absolute',
@@ -826,10 +824,12 @@ export default function PricePreviewCard({
               <Box component="span" sx={{ display: 'inline-block', width: 14, height: 0, borderTop: `2px solid ${T.text}`, mr: 0.625, verticalAlign: 'middle' }} />
               trait = calendrier{showBookedCalPrices ? ' (résa = prix figé)' : ''}
             </Typography>
-            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 12, borderRadius: '2px', bgcolor: T.infoTint, border: '1px solid rgba(6,115,179,0.35)', mr: 0.625, verticalAlign: '-2px' }} />
-              barre = estimé (marché)
-            </Typography>
+            {!ownerMode ? (
+              <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+                <Box component="span" sx={{ display: 'inline-block', width: 9, height: 12, borderRadius: '2px', bgcolor: T.infoTint, border: '1px solid rgba(6,115,179,0.35)', mr: 0.625, verticalAlign: '-2px' }} />
+                barre = estimé (marché)
+              </Typography>
+            ) : null}
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
               <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', bgcolor: T.success, opacity: 0.65, mr: 0.625, verticalAlign: '-1px' }} />
               réservé
@@ -866,29 +866,34 @@ export default function PricePreviewCard({
             />
           </Stack>
 
-          {/* Tableau — détail jour par jour · scroll interne si > 3 mois */}
+          {/* Tableau — scroll page : le bloc monte, puis la tête reste sous le bandeau */}
           <Box
             sx={{
-              overflowX: 'auto',
               mt: 2,
               border: `1px solid ${T.border}`,
               borderRadius: 1.375,
-              ...(tableFitsWithoutInnerScroll
-                ? { overflowY: 'visible' }
-                : { maxHeight: tableScrollMaxHeightPx, overflowY: 'auto' }),
+              bgcolor: T.bg1,
+              /* pas d’overflow ici : sinon sticky page cassé */
             }}
           >
-            <Box component="table" sx={{ borderCollapse: 'collapse', width: '100%', minWidth: 640 }}>
-              <Box component="thead" sx={{ position: 'sticky', top: 0, zIndex: 1 }}>
+            <Box
+              component="table"
+              sx={{
+                borderCollapse: 'separate',
+                borderSpacing: 0,
+                width: '100%',
+                minWidth: 720,
+              }}
+            >
+              <Box component="thead">
                 <Box component="tr">
                   {canEditInventory ? (
                     <Box
                       component="th"
                       sx={{
+                        ...TH_STICKY_SX,
                         width: 40,
                         p: '9px 8px',
-                        borderBottom: `1.5px solid ${T.borderStrong}`,
-                        bgcolor: T.bg2,
                         textAlign: 'center',
                       }}
                     >
@@ -903,14 +908,23 @@ export default function PricePreviewCard({
                       />
                     </Box>
                   ) : null}
-                  {['Date', 'Statut', 'Prix dynamique', 'Prix cal. / réservé', 'Δ'].map((h, i) => (
+                  {(ownerMode
+                    ? ['Date', 'Statut', 'Min stay', 'Prix dynamique', 'Prix cal. / réservé']
+                    : ['Date', 'Statut', 'Min stay', 'Prix dynamique', 'Prix cal. / réservé', 'Δ']
+                  ).map((h, i) => (
                     <Box
                       key={h}
                       component="th"
                       sx={{
-                        fontFamily: MONO, fontSize: 10, letterSpacing: '0.07em', textTransform: 'uppercase',
-                        color: T.text3, textAlign: i === 0 ? 'left' : i === 1 ? 'center' : 'right',
-                        p: '9px 12px', borderBottom: `1.5px solid ${T.borderStrong}`, bgcolor: T.bg2, whiteSpace: 'nowrap',
+                        ...TH_STICKY_SX,
+                        fontFamily: MONO,
+                        fontSize: 10,
+                        letterSpacing: '0.07em',
+                        textTransform: 'uppercase',
+                        color: T.text3,
+                        textAlign: i === 0 ? 'left' : i === 1 || i === 2 ? 'center' : 'right',
+                        p: '9px 12px',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {h}
@@ -948,7 +962,7 @@ export default function PricePreviewCard({
                         <Box component="tr">
                           <Box
                             component="td"
-                            colSpan={canEditInventory ? 6 : 5}
+                            colSpan={canEditInventory ? 7 : 6}
                             sx={{ bgcolor: T.bg3, fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.text2, fontWeight: 800, p: '5px 12px' }}
                           >
                             {monthLabelFr(r.date)}
@@ -985,6 +999,9 @@ export default function PricePreviewCard({
                         </Box>
                         <Box component="td" sx={{ ...cellSx, textAlign: 'center' }}>
                           <DayStatusBadge row={r} st={st} rule={rule} />
+                        </Box>
+                        <Box component="td" sx={{ ...cellSx, textAlign: 'center', fontWeight: 700 }}>
+                          <MinStayCell row={r} />
                         </Box>
                         <Box component="td" sx={{ ...cellSx, fontWeight: 800 }}>
                           {r.g7ProposedMad != null ? (
@@ -1025,6 +1042,7 @@ export default function PricePreviewCard({
                         >
                           {calDisplay}
                         </Box>
+                        {!ownerMode ? (
                         <Box
                           component="td"
                           sx={{
@@ -1055,6 +1073,7 @@ export default function PricePreviewCard({
                             <Box component="span" sx={{ fontSize: 9.5, color: T.info, fontWeight: 400, ml: 0.625 }}>Manu</Box>
                           ) : null}
                         </Box>
+                        ) : null}
                       </Box>
                     </React.Fragment>
                   );
