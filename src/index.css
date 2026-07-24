@@ -67,6 +67,9 @@
   width: 100%;
   min-height: 100svh;
   box-sizing: border-box;
+  /* Réserve la place du bandeau réseau (hors ligne / 4G instable) */
+  padding-top: var(--sojori-net-banner-h, 0px);
+  transition: padding-top 0.2s ease;
 }
 
 body {
