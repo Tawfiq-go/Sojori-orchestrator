@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Autocomplete, Box, TextField, Typography } from '@mui/material';
 import type { PortfolioRow } from '../_tokens';
 import { T } from '../_tokens';
-import { listingMatchesCityScope, normalizeCityKey } from '../cityScope';
+import { normalizeCityKey } from '../cityScope';
 
 export type BienListingOption = {
   id: string;
@@ -12,13 +12,9 @@ export type BienListingOption = {
   bedrooms: number;
 };
 
-export function buildBienListingOptions(
-  rows: PortfolioRow[],
-  cityScope: string | null,
-): BienListingOption[] {
+export function buildBienListingOptions(rows: PortfolioRow[]): BienListingOption[] {
   return rows
     .filter((r) => r.listingActive !== false)
-    .filter((r) => listingMatchesCityScope(r.listing.city, cityScope))
     .map((r) => ({
       id: r.listing._id,
       name: r.listing.name,
@@ -38,22 +34,18 @@ function optionSearchText(o: BienListingOption): string {
 export interface BienListingSwitcherProps {
   rows: PortfolioRow[];
   currentListingId: string;
-  cityScope: string | null;
   loading?: boolean;
   onSelect: (listingId: string) => void;
 }
 
+/** Autocomplete : nom du listing + recherche d’un autre bien (toutes villes). */
 export default function BienListingSwitcher({
   rows,
   currentListingId,
-  cityScope,
   loading = false,
   onSelect,
 }: BienListingSwitcherProps) {
-  const options = useMemo(
-    () => buildBienListingOptions(rows, cityScope),
-    [rows, cityScope],
-  );
+  const options = useMemo(() => buildBienListingOptions(rows), [rows]);
 
   const selected = useMemo(() => {
     const found = options.find((o) => o.id === currentListingId);
@@ -74,80 +66,73 @@ export default function BienListingSwitcher({
     return [selected, ...options];
   }, [options, selected]);
 
-  const scopeHint =
-    cityScope != null
-      ? `${options.length} bien${options.length > 1 ? 's' : ''} · ${cityScope}`
-      : `${options.length} biens · toutes villes`;
-
   return (
-    <Box sx={{ minWidth: { xs: '100%', sm: 240 }, maxWidth: { xs: '100%', md: 420 }, flex: '1 1 240px' }}>
-      <Autocomplete
-        size="small"
-        loading={loading}
-        options={displayOptions}
-        value={selected}
-        disabled={loading || options.length === 0}
-        onChange={(_, v) => {
-          if (!v || v.id === currentListingId) return;
-          onSelect(v.id);
-        }}
-        getOptionLabel={(o) => o.name}
-        isOptionEqualToValue={(a, b) => a.id === b.id}
-        filterOptions={(opts, state) => {
-          const q = state.inputValue.trim().toLowerCase();
-          if (!q) return opts;
-          return opts.filter((o) => optionSearchText(o).includes(q));
-        }}
-        slotProps={{
-          popper: { sx: { zIndex: 1400 } },
-        }}
-        sx={{
-          '& .MuiOutlinedInput-root': {
-            bgcolor: T.bg1,
-            fontSize: 13,
-            fontWeight: 700,
-            '& fieldset': { borderColor: T.borderStrong },
-            '&:hover fieldset': { borderColor: T.gold },
-            '&.Mui-focused fieldset': { borderColor: T.goldDeep },
-          },
-        }}
-        renderOption={(props, option) => {
-          const { key, ...rest } = props as typeof props & { key: string };
-          const meta = [
-            option.city !== '—' ? option.city : null,
-            option.district,
-            option.bedrooms ? `${option.bedrooms} ch.` : null,
-          ]
-            .filter(Boolean)
-            .join(' · ');
-          return (
-            <Box component="li" key={key} {...rest}>
-              <Box sx={{ minWidth: 0, width: '100%' }}>
-                <Typography sx={{ fontSize: 13, fontWeight: 700, lineHeight: 1.25 }} noWrap>
-                  {option.name}
+    <Autocomplete
+      size="small"
+      loading={loading}
+      options={displayOptions}
+      value={selected}
+      disabled={loading || options.length === 0}
+      onChange={(_, v) => {
+        if (!v || v.id === currentListingId) return;
+        onSelect(v.id);
+      }}
+      getOptionLabel={(o) => o.name}
+      isOptionEqualToValue={(a, b) => a.id === b.id}
+      filterOptions={(opts, state) => {
+        const q = state.inputValue.trim().toLowerCase();
+        if (!q) return opts;
+        return opts.filter((o) => optionSearchText(o).includes(q));
+      }}
+      slotProps={{
+        popper: { sx: { zIndex: 1400 } },
+      }}
+      sx={{
+        width: '100%',
+        '& .MuiOutlinedInput-root': {
+          bgcolor: T.bg1,
+          fontSize: 13.5,
+          fontWeight: 800,
+          py: 0.15,
+          '& fieldset': { borderColor: T.borderStrong },
+          '&:hover fieldset': { borderColor: T.gold },
+          '&.Mui-focused fieldset': { borderColor: T.goldDeep },
+        },
+      }}
+      renderOption={(props, option) => {
+        const { key, ...rest } = props as typeof props & { key: string };
+        const meta = [
+          option.city !== '—' ? option.city : null,
+          option.district,
+          option.bedrooms ? `${option.bedrooms} ch.` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <Box component="li" key={key} {...rest}>
+            <Box sx={{ minWidth: 0, width: '100%' }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 700, lineHeight: 1.25 }} noWrap>
+                {option.name}
+              </Typography>
+              {meta ? (
+                <Typography sx={{ fontSize: 10.5, color: T.text3, lineHeight: 1.2 }} noWrap>
+                  {meta}
                 </Typography>
-                {meta ? (
-                  <Typography sx={{ fontSize: 10.5, color: T.text3, lineHeight: 1.2 }} noWrap>
-                    {meta}
-                  </Typography>
-                ) : null}
-              </Box>
+              ) : null}
             </Box>
-          );
-        }}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label="Changer de bien"
-            placeholder="Rechercher…"
-            helperText={scopeHint}
-            FormHelperTextProps={{
-              sx: { mx: 0, mt: 0.35, fontSize: 10, color: T.text3 },
-            }}
-            InputLabelProps={{ sx: { fontSize: 12 } }}
-          />
-        )}
-      />
-    </Box>
+          </Box>
+        );
+      }}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          placeholder="Rechercher un bien…"
+          inputProps={{
+            ...params.inputProps,
+            'aria-label': 'Listing — rechercher ou changer de bien',
+          }}
+        />
+      )}
+    />
   );
 }

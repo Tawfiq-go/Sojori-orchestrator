@@ -1,29 +1,21 @@
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Box, Button, Stack, Typography } from '@mui/material';
 import type { PortfolioRow } from '../_tokens';
 import { T, DP_LAYOUT_SX } from '../_tokens';
-import {
-  buildCityScopeOptions,
-  listingMatchesCityScope,
-} from '../cityScope';
 import BienListingSwitcher from './BienListingSwitcher';
-import DynamicPricingBreadcrumb from '../DynamicPricingBreadcrumb';
 import { usePricePreviewSelectionOptional } from './pricePreviewSelectionContext';
 import PreviewDaysSimpleModal from './PreviewDaysSimpleModal';
 
-/** Hauteur approx. bandeau sticky (BienView admin bandeau en dessous). */
-export const BIEN_STICKY_FILTER_TOP_OFFSET = 132;
+/** Hauteur approx. bandeau sticky (compact) — mis à jour en runtime via ResizeObserver. */
+export const BIEN_STICKY_FILTER_TOP_OFFSET = 56;
+export const BIEN_STICKY_TOP_CSS_VAR = '--dp-bien-sticky-top';
 
 export interface BienPageStickyFiltersProps {
   rows: PortfolioRow[];
-  cityScope: string | null;
-  onCityScopeChange: (scope: string | null) => void;
   currentListingId: string;
   loading?: boolean;
   onSelectListing: (listingId: string) => void;
   onNavigatePortfolio: () => void;
-  onNavigateCityPortfolio: (city: string) => void;
-  bienCityLabel: string | null;
 }
 
 function sojoriMinStayForRow(applied?: { gapMinStay?: { to?: number } }) {
@@ -33,29 +25,30 @@ function sojoriMinStayForRow(applied?: { gapMinStay?: { to?: number } }) {
 
 export default function BienPageStickyFilters({
   rows,
-  cityScope,
-  onCityScopeChange,
   currentListingId,
   loading = false,
   onSelectListing,
   onNavigatePortfolio,
-  onNavigateCityPortfolio,
-  bienCityLabel,
 }: BienPageStickyFiltersProps) {
   const selection = usePricePreviewSelectionOptional();
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const barRef = React.useRef<HTMLDivElement | null>(null);
 
-  const activeRows = useMemo(
-    () => rows.filter((r) => r.listingActive !== false),
-    [rows],
-  );
-
-  const cityOptions = useMemo(() => buildCityScopeOptions(activeRows), [activeRows]);
-
-  const scopedCount = useMemo(
-    () => activeRows.filter((r) => listingMatchesCityScope(r.listing.city, cityScope)).length,
-    [activeRows, cityScope],
-  );
+  React.useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const publish = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      document.documentElement.style.setProperty(BIEN_STICKY_TOP_CSS_VAR, `${h}px`);
+    };
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty(BIEN_STICKY_TOP_CSS_VAR);
+    };
+  }, []);
 
   const selectedCount = selection?.selectedDates.size ?? 0;
   const selectedDatesList = useMemo(
@@ -75,137 +68,63 @@ export default function BienPageStickyFilters({
 
   return (
     <Box
+      ref={barRef}
       sx={{
         position: 'sticky',
         top: 0,
         zIndex: 50,
-        bgcolor: 'rgba(255,255,255,0.94)',
-        backdropFilter: 'blur(14px) saturate(180%)',
+        bgcolor: 'rgba(255,255,255,0.96)',
+        backdropFilter: 'blur(12px) saturate(160%)',
         borderBottom: `1px solid ${T.borderStrong}`,
-        boxShadow: '0 4px 18px rgba(15,23,42,0.06)',
+        boxShadow: '0 2px 10px rgba(15,23,42,0.05)',
         ...DP_LAYOUT_SX,
-        pt: 1,
-        pb: 1.25,
+        py: 0.75,
       }}
     >
-      <DynamicPricingBreadcrumb
-        embedded
-        crumbs={[
-          { label: 'Pricing', onClick: onNavigatePortfolio },
-          ...(bienCityLabel
-            ? [{ label: bienCityLabel, onClick: () => onNavigateCityPortfolio(bienCityLabel) }]
-            : []),
-        ]}
-      />
-
       <Stack
-        direction={{ xs: 'column', lg: 'row' }}
-        sx={{ gap: 1.25, mt: 1, alignItems: { xs: 'stretch', lg: 'flex-end' } }}
+        direction="row"
+        sx={{
+          gap: 1,
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}
       >
-        <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
-          <Stack direction="row" sx={{ gap: 0.75, alignItems: 'center', mb: 0.625, flexWrap: 'wrap' }}>
-            <Typography
-              sx={{
-                fontSize: 10,
-                fontFamily: '"Geist Mono", monospace',
-                fontWeight: 800,
-                color: T.text3,
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
-              }}
-            >
-              Ville
-            </Typography>
-            <Typography sx={{ fontSize: 10, color: T.text4, fontFamily: '"Geist Mono", monospace' }}>
-              {scopedCount} bien{scopedCount > 1 ? 's' : ''} dans la liste
-            </Typography>
-          </Stack>
-          <Stack direction="row" sx={{ gap: 0.625, flexWrap: 'wrap' }}>
-            {cityOptions.map((opt) => {
-              const active = opt.id === '__all__' ? !cityScope : opt.id === cityScope;
-              return (
-                <Box
-                  key={opt.id}
-                  component="button"
-                  type="button"
-                  disabled={loading}
-                  onClick={() => onCityScopeChange(opt.id === '__all__' ? null : opt.id)}
-                  sx={{
-                    all: 'unset',
-                    cursor: loading ? 'wait' : 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 0.625,
-                    px: 1.125,
-                    py: 0.625,
-                    borderRadius: 999,
-                    border: `1px solid ${active ? T.goldDeep : T.border}`,
-                    bgcolor: active ? T.goldTint : T.bg1,
-                    opacity: loading ? 0.75 : 1,
-                    '&:hover': { borderColor: T.goldDeep, bgcolor: active ? T.goldTint : T.bg2 },
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      fontSize: 12,
-                      fontWeight: active ? 800 : 600,
-                      color: active ? T.text : T.text2,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {opt.id === '__all__' ? 'Toutes villes' : opt.label}
-                  </Typography>
-                  <Box
-                    sx={{
-                      fontFamily: '"Geist Mono", monospace',
-                      fontSize: 9.5,
-                      fontWeight: 800,
-                      px: 0.625,
-                      py: 0.125,
-                      borderRadius: 999,
-                      bgcolor: active ? 'rgba(199,155,34,0.22)' : T.bg3,
-                      color: active ? T.goldDeep : T.text3,
-                      minWidth: 18,
-                      textAlign: 'center',
-                    }}
-                  >
-                    {opt.count}
-                  </Box>
-                </Box>
-              );
-            })}
-          </Stack>
-        </Box>
-
-        <BienListingSwitcher
-          rows={rows}
-          currentListingId={currentListingId}
-          cityScope={cityScope}
-          loading={loading}
-          onSelect={(id) => onSelectListing(id)}
-        />
-      </Stack>
-
-      {selection && selectedCount > 0 ? (
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
+        <Box
+          component="button"
+          type="button"
+          onClick={onNavigatePortfolio}
           sx={{
-            mt: 1.25,
-            pt: 1.25,
-            borderTop: `1px dashed ${T.border}`,
-            gap: 1,
-            alignItems: { sm: 'center' },
-            justifyContent: 'space-between',
+            all: 'unset',
+            cursor: 'pointer',
+            fontSize: 11,
+            fontWeight: 800,
+            color: T.goldDeep,
+            fontFamily: '"Geist Mono", monospace',
+            '&:hover': { textDecoration: 'underline' },
+            flexShrink: 0,
           }}
         >
-          <Typography sx={{ fontSize: 12.5, fontWeight: 800, color: T.goldDeep }}>
-            {selectedCount} jour{selectedCount > 1 ? 's' : ''} coché{selectedCount > 1 ? 's' : ''} dans l’aperçu
-          </Typography>
-          <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
+          ← Pricing
+        </Box>
+
+        <Box sx={{ flex: '1 1 220px', minWidth: 0, maxWidth: 560 }}>
+          <BienListingSwitcher
+            rows={rows}
+            currentListingId={currentListingId}
+            loading={loading}
+            onSelect={(id) => onSelectListing(id)}
+          />
+        </Box>
+
+        {selection && selectedCount > 0 ? (
+          <Stack direction="row" sx={{ gap: 0.75, alignItems: 'center', flexShrink: 0, ml: 'auto' }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.goldDeep }}>
+              {selectedCount} j
+            </Typography>
             <Button
               size="small"
               onClick={() => selection.clearSelection()}
-              sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12, color: T.text3 }}
+              sx={{ textTransform: 'none', fontWeight: 700, fontSize: 11, color: T.text3, minWidth: 0, px: 1 }}
             >
               Annuler
             </Button>
@@ -216,16 +135,17 @@ export default function BienPageStickyFilters({
               sx={{
                 textTransform: 'none',
                 fontWeight: 800,
-                fontSize: 12,
+                fontSize: 11,
                 borderColor: T.goldDeep,
                 color: T.goldDeep,
+                py: 0.25,
               }}
             >
-              Modifier ({selectedCount} j)
+              Modifier
             </Button>
           </Stack>
-        </Stack>
-      ) : null}
+        ) : null}
+      </Stack>
 
       {selection && currentListingId ? (
         <PreviewDaysSimpleModal

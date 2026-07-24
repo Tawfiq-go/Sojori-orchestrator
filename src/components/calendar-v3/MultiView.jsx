@@ -3,6 +3,7 @@
 // Excel selection drag · scroll sync · tooltip breakdown · popover rotations
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   T, ALL_COLUMNS, priceOf, cellKey, genDays, isArchiveDay, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
   hasInventoryData, resolveInventoryCellState, formatInventoryRateLabel, OUT_OF_WINDOW_CELL_BG,
@@ -21,6 +22,21 @@ const CELL_W_DESKTOP = 90;
 const CELL_W_MOBILE = 76;
 const LEFT_W_DESKTOP = 200;
 const LEFT_W_MOBILE = 132;
+
+/** Icône éclair (prix dynamique) — SVG inline, pas d’emoji. */
+function BoltIcon({ size = 12, color = T.ai }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M9.2 1.2 3.5 9.1h4.1L6.8 14.8l5.7-7.9H8.4L9.2 1.2Z"
+        fill={color}
+        stroke={color}
+        strokeWidth="0.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 export default function MultiView({
   startDate = new Date(),
@@ -391,9 +407,11 @@ const DayHeader = memo(function DayHeader({ day, loading }) {
 
 /* ─── Colonne listing (sticky) — ne dépend pas des dates ─── */
 const ListingLabel = memo(function ListingLabel({
-  listing, expanded, showChevron, onToggle, avgPrice,
+  listing, expanded, showChevron, onToggle, avgPrice, dpEnabled = true,
 }) {
   const isSingle = listing.propertyUnit === 'Single';
+  const currency = listing.currencyCode || listing.currency || 'MAD';
+  const dpHref = `/dynamic-pricing/bien/${listing._id}`;
   return (
     <div
       onClick={showChevron ? onToggle : undefined}
@@ -457,10 +475,15 @@ const ListingLabel = memo(function ListingLabel({
               color: T.text3,
               fontFamily: '"Geist Mono", monospace',
               marginTop: 2,
-              display: 'block',
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 3,
             }}
           >
-            Moy: {avgPrice} {listing.currencyCode || listing.currency || 'MAD'}
+            <span>Moy: {avgPrice}</span>
+            <span style={{ fontSize: 8, fontWeight: 700, color: T.text4, letterSpacing: '0.04em' }}>
+              {currency}
+            </span>
           </span>
         ) : isSingle ? (
           <span style={{ fontSize: 9.5, color: T.text4, marginTop: 2, display: 'block' }}>
@@ -468,6 +491,45 @@ const ListingLabel = memo(function ListingLabel({
           </span>
         ) : null}
       </div>
+      <Link
+        to={dpHref}
+        title={
+          dpEnabled
+            ? 'Prix dynamique ON — ouvrir la fiche pricing'
+            : 'Prix dynamique OFF — ouvrir la fiche pricing'
+        }
+        aria-label={`Prix dynamique ${dpEnabled ? 'ON' : 'OFF'} — ${listing.name}`}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          flexShrink: 0,
+          width: 26,
+          height: 26,
+          borderRadius: 7,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: dpEnabled ? 'rgba(124,58,237,0.14)' : 'rgba(20,17,10,0.05)',
+          border: dpEnabled
+            ? '1px solid rgba(124,58,237,0.35)'
+            : `1px solid ${T.border}`,
+          color: dpEnabled ? T.ai : T.text3,
+          textDecoration: 'none',
+          transition: 'background 0.15s, transform 0.12s',
+          opacity: dpEnabled ? 1 : 0.75,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = dpEnabled
+            ? 'rgba(124,58,237,0.24)'
+            : 'rgba(20,17,10,0.09)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = dpEnabled
+            ? 'rgba(124,58,237,0.14)'
+            : 'rgba(20,17,10,0.05)';
+        }}
+      >
+        <BoltIcon size={13} color={dpEnabled ? T.ai : T.text3} />
+      </Link>
     </div>
   );
 });
@@ -478,7 +540,11 @@ function ListingRow({
   onToggleDynamicPrice, dpEnabled = true,
 }) {
   const primaryCols = calendarPrimaryColumns(selectedColumns);
-  const collapseColumns = calendarCollapseColumns(selectedColumns);
+  const collapseColumns = calendarCollapseColumns(selectedColumns).filter((colId) => {
+    // Pilote OFF sur ce bien → pas de lignes Prix dyn. / Mode (comme la modal sélection)
+    if (!dpEnabled && (colId === 'dynamicPrice' || colId === 'priceMode')) return false;
+    return true;
+  });
   const showChevron = collapseColumns.length > 0;
   const showDispo = primaryCols.includes('availableRoom');
   const showRate = primaryCols.includes('rate');
@@ -536,6 +602,7 @@ function ListingRow({
           showChevron={showChevron}
           onToggle={onToggle}
           avgPrice={avgPrice}
+          dpEnabled={dpEnabled}
         />
 
         {days.map(d => {
@@ -560,6 +627,7 @@ function ListingRow({
               listingId={listing._id}
               roomTypeId={roomTypeId}
               draggable={draggable}
+              dpEnabled={dpEnabled}
               tipOpen={
                 activeTip?.listingId === listing._id &&
                 activeTip?.dateStr === d.iso &&
@@ -715,7 +783,7 @@ function blockedNoResaInfo(inv) {
 /* ─── Ligne principale : bandeau Excel (gauche) · prix clic détail (droite) ─── */
 function PrimaryInventoryCell({
   day, inv, listing, showRate, showDispo, isSelected, onMouseDown, onMouseEnter, onPriceClick,
-  listingId, roomTypeId, draggable, tipOpen,
+  listingId, roomTypeId, draggable, tipOpen, dpEnabled = true,
 }) {
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
@@ -723,12 +791,19 @@ function PrimaryInventoryCell({
   const rate = formatInventoryRateLabel(state, inv);
   const archived = state === 'archive';
   const noData = state === 'out_of_window' || state === 'missing';
-  const isDynamic = hasInventoryData(inv) && resolvePriceMode(inv) === 'dynamic';
+  const isDynamic = dpEnabled && hasInventoryData(inv) && resolvePriceMode(inv) === 'dynamic';
   const isStop = hasInventoryData(inv) && !!inv.stopSell;
   const isBooked = (inv?.reservations?.length ?? 0) > 0;
   const isWeekend = day.isWeekend;
   const mode = resolvePriceMode(inv);
-  const modeColor = mode === 'manual' ? T.warning : mode === 'dynamic' ? T.ai : T.text;
+  const modeColor =
+    !dpEnabled
+      ? (mode === 'manual' ? T.warning : T.text)
+      : mode === 'manual'
+        ? T.warning
+        : mode === 'dynamic'
+          ? T.ai
+          : T.text;
   const canInteract = draggable && !archived;
   const canPriceClick = canInteract && showRate && hasInventoryData(inv) && !noData;
 

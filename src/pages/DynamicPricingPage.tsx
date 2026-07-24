@@ -19,7 +19,7 @@ import BienPageStickyFilters from '../features/dynamic-pricing/bien/BienPageStic
 import { PricePreviewSelectionProvider } from '../features/dynamic-pricing/bien/pricePreviewSelectionContext';
 import { usePortfolio } from '../features/dynamic-pricing/hooks/usePortfolio';
 import { bienHref, portfolioHref } from '../features/dynamic-pricing/DynamicPricingBreadcrumb';
-import { listingMatchesCityScope, normalizeCityKey } from '../features/dynamic-pricing/cityScope';
+import { listingMatchesCityScope } from '../features/dynamic-pricing/cityScope';
 import { applyPilotPricing } from '../services/dynamicPricingApi';
 
 /**
@@ -80,12 +80,7 @@ export function DynamicPricingPage() {
     return `cache marché ${city} · ${d}`;
   }, [portfolio.marketCache]);
 
-  const bienCityLabel = useMemo(() => {
-    if (bienDetail?.row?.listing.city) return normalizeCityKey(bienDetail.row.listing.city);
-    return cityScope;
-  }, [bienDetail?.row?.listing.city, cityScope]);
-
-  /** Fiche bien : pas de synchro auto ville URL — filtre manuel (Toutes villes / ville). */
+  /** Fiche bien : filtre ville uniquement via le portefeuille (lien ← Pricing). */
 
   const setCityScope = (scope: string | null) => {
     const next = new URLSearchParams(searchParams);
@@ -147,14 +142,10 @@ export function DynamicPricingPage() {
             <PricePreviewSelectionProvider>
               <BienPageStickyFilters
                 rows={portfolio.rows}
-                cityScope={cityScope}
-                onCityScopeChange={setCityScope}
                 currentListingId={listingId}
                 loading={portfolio.loading}
                 onSelectListing={(id) => navigate(bienHref(id, cityScope))}
                 onNavigatePortfolio={() => navigate(portfolioHref(cityScope))}
-                onNavigateCityPortfolio={(city) => navigate(portfolioHref(city))}
-                bienCityLabel={bienCityLabel}
               />
               <BienExpressBar
                 view={bienDetail.view}

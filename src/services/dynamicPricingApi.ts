@@ -673,8 +673,14 @@ export type ApplyPreviewDiffRowDto = {
   baseImportMad: number | null;
   deltaMad: number | null;
   alert: ApplyPreviewDiffAlertDto;
-  /** Prix calendrier manuel (applyManual), même si jour réservé ou bloqué. */
+  /** Prix calendrier manuel (mode résolu), même si jour réservé ou bloqué. */
   applyManual?: boolean;
+  /** Mode calendrier résolu (aligné multi-view D/M). */
+  priceMode?: 'manual' | 'dynamic' | 'base';
+  /** Min stay calendrier actuel (nuits). */
+  calendarMinStay?: number | null;
+  /** Min stay proposé par le pilote (nuits). */
+  proposedMinStay?: number | null;
   pushToCalendar: boolean;
   skipReason?: string;
   applied?: ApplyPreviewDiffAppliedDto;

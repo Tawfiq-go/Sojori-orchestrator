@@ -1413,57 +1413,34 @@ export function useBienDetail(
       estimateAdrMad: est?.adrP50Mad,
       onToggleAi: async (enabled: boolean) => {
         if (!listingId) return;
-        if (enabled) {
-          setScopeModalEdit(false);
-          setScopeModalOpen(true);
-          return;
-        }
-        setAiEnabled(false);
+        setAiEnabled(enabled);
         try {
-          await savePilotConfig(listingId, { enabled: false });
+          await savePilotConfig(listingId, {
+            enabled,
+            ...(enabled
+              ? {
+                  applyPrice: true,
+                  applyMinStay: applyMinStay,
+                }
+              : {}),
+          });
+          if (enabled) {
+            setApplyPrice(true);
+            setConfigSaveStatus('saved');
+            await pilot.runPreview();
+          }
         } catch {
-          /* garde état local */
+          setAiEnabled(!enabled);
         }
       },
       onScopeModalClose: () => {
-        if (scopeSaving) return;
-        setScopeModalOpen(false);
-        setScopeSaveError(null);
+        /* périmètre sync géré dans réglages avancés (trous / sync) */
       },
-      onScopeModalConfirm: async (choice: { applyPrice: boolean; applyMinStay: boolean }) => {
-        if (!listingId) return;
-        setScopeSaving(true);
-        setScopeSaveError(null);
-        setApplyPrice(choice.applyPrice);
-        setApplyMinStay(choice.applyMinStay);
-        try {
-          const payload = pilot.buildConfigPayload();
-          await savePilotConfig(listingId, {
-            ...(scopeModalEdit ? {} : { enabled: true }),
-            applyPrice: choice.applyPrice,
-            applyMinStay: choice.applyMinStay,
-            ...(payload ?? {}),
-          });
-          if (!scopeModalEdit) setAiEnabled(true);
-          setScopeModalOpen(false);
-          setConfigSaveStatus('saved');
-          await pilot.runPreview();
-        } catch (e) {
-          let msg = 'Enregistrement impossible';
-          if (isAxiosError(e)) {
-            const data = e.response?.data as { error?: string } | undefined;
-            msg = data?.error ?? `HTTP ${e.response?.status ?? '—'} — ${e.message}`;
-          } else if (e instanceof Error) {
-            msg = e.message;
-          }
-          setScopeSaveError(msg);
-        } finally {
-          setScopeSaving(false);
-        }
+      onScopeModalConfirm: async (_choice: { applyPrice: boolean; applyMinStay: boolean }) => {
+        /* modal périmètre retirée de la fiche bien */
       },
       onEditSyncScope: () => {
-        setScopeModalEdit(true);
-        setScopeModalOpen(true);
+        /* modal périmètre retirée de la fiche bien */
       },
       onFloorChange: (v) => {
         boundsDirtyRef.current = true;
