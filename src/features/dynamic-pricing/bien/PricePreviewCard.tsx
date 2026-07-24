@@ -780,42 +780,52 @@ export default function PricePreviewCard({
           </Box>
           <Stack direction="row" sx={{ gap: 2.25, mt: 1.25, flexWrap: 'wrap', alignItems: 'center' }}>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 12, borderRadius: '2px', bgcolor: T.infoTint, border: '1px solid rgba(6,115,179,0.35)', mr: 0.625, verticalAlign: '-2px' }} />
-              barre bleue = prix marché
-            </Typography>
-            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
               <Box component="span" sx={{ display: 'inline-block', width: 14, height: 0, borderTop: `2.5px solid ${T.goldDeep}`, mr: 0.625, verticalAlign: 'middle' }} />
               <Box component="span" sx={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', bgcolor: T.gold, border: `1px solid ${T.goldDeep}`, mr: 0.5, verticalAlign: '0px' }} />
-              ligne or = prix Sojori
+              ligne or = prix dynamique
             </Typography>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
               <Box component="span" sx={{ display: 'inline-block', width: 14, height: 0, borderTop: `2px solid ${T.text}`, mr: 0.625, verticalAlign: 'middle' }} />
-              trait = calendrier actuel
+              trait = calendrier
+            </Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 12, borderRadius: '2px', bgcolor: T.infoTint, border: '1px solid rgba(6,115,179,0.35)', mr: 0.625, verticalAlign: '-2px' }} />
+              barre = estimé (marché)
             </Typography>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
               <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', bgcolor: T.success, opacity: 0.65, mr: 0.625, verticalAlign: '-1px' }} />
               réservé
             </Typography>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-              <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', border: `1.5px dashed ${T.borderStrong}`, mr: 0.625, verticalAlign: '-1px' }} />
-              bloqué sans résa
-            </Typography>
-            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-              <Box component="span" sx={{ display: 'inline-block', width: 12, height: 3, borderRadius: 2, bgcolor: T.warning, mr: 0.625, verticalAlign: '1px' }} />
-              règle de période
-            </Typography>
-            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-              <Box component="span" sx={{ display: 'inline-block', fontFamily: MONO, fontWeight: 900, fontSize: 9, minWidth: 14, textAlign: 'center', borderRadius: '3px', bgcolor: T.infoTint, color: T.info, border: `1px solid ${T.info}`, mr: 0.5, px: 0.375 }}>M</Box>
-              manuel
+              <Box component="span" sx={{ display: 'inline-block', fontFamily: MONO, fontWeight: 900, fontSize: 9, borderRadius: '3px', bgcolor: T.infoTint, color: T.info, border: `1px solid ${T.info}`, mr: 0.5, px: 0.5 }}>Manu</Box>
+              prix manuel
               <Box component="span" sx={{ mx: 0.75, color: T.text4 }}>·</Box>
-              <Box component="span" sx={{ display: 'inline-block', fontFamily: MONO, fontWeight: 900, fontSize: 9, minWidth: 14, textAlign: 'center', borderRadius: '3px', bgcolor: T.bg3, color: T.text2, mr: 0.5, px: 0.375 }}>D</Box>
-              dynamique
+              dynamique = pas de pastille
             </Typography>
             {compactBars ? (
               <Typography sx={{ fontSize: 10.5, color: T.text4 }}>
-                montants estimés : 1er du mois{rows.length > 180 ? '' : ' + lundis'} · faites défiler →
+                labels : 1er du mois{rows.length > 180 ? '' : ' + lundis'} · faites défiler →
               </Typography>
             ) : null}
+          </Stack>
+
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'flex-end', mt: 1.5, mb: 0.5 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={showBookedCalPrices}
+                  onChange={(_, v) => setShowBookedCalPrices(v)}
+                  sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: T.info }, '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: T.info } }}
+                />
+              }
+              label={
+                <Typography sx={{ fontSize: 11.5, color: T.text2, fontWeight: 600 }}>
+                  Afficher prix à la réservation (jours réservés)
+                </Typography>
+              }
+              sx={{ mr: 0, ml: 0 }}
+            />
           </Stack>
 
           {/* Tableau — détail jour par jour · scroll interne si > 31 j */}
