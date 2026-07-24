@@ -450,55 +450,8 @@ export default function BienView(props: BienViewProps) {
         </Stack>
       </Box>
 
-      {/* ── Réglages pricing (potentiel + réglages + aperçu prix) ── */}
+      {/* ── Réglages pricing (réglages + aperçu prix) ── */}
       {advTab === 'reglages' ? (<>
-      <Section
-        num="02"
-        title="Le potentiel de votre bien"
-        sub={`District · ${listing.district} · ${listing.city}`}
-        sources={[
-          { kind: hasPotentialProd ? 'prod' : 'empty', label: hasPotentialProd ? 'Estimation Sojori' : 'Potentiel VIDE' },
-          {
-            kind: hasTtmAirbnb ? 'prod' : hasTtmCityMarket ? 'partial' : hasTtm ? 'partial' : 'empty',
-            label: hasTtmAirbnb
-              ? 'TTM Airbnb'
-              : hasTtmCityMarket
-                ? 'TTM ville'
-                : hasTtm
-                  ? 'TTM estim.'
-                  : 'TTM VIDE',
-          },
-          {
-            kind: hasPacingCityMarket ? 'partial' : hasL90dAirbnb ? 'prod' : hasL90d ? 'partial' : 'empty',
-            label: hasPacingCityMarket
-              ? 'Occ. ville'
-              : hasL90dAirbnb
-                ? 'L90D Airbnb'
-                : hasL90d
-                  ? 'Occ. projetée'
-                  : 'Pacing VIDE',
-          },
-        ]}
-        snapshotAt={provenance.snapshotAt}
-        snapshotLabel={
-          provenance.hasRevenueEstimate ? 'Estimation Sojori' : 'Données marché'
-        }
-        sourceNote={provenance.ttmPeriodLabel ?? undefined}
-      >
-        <StatsCards
-          hasPotentialProd={hasPotentialProd}
-          hasTtm={hasTtm}
-          hasL90d={hasL90d}
-          potentialAnnual={performance.potentialAnnual}
-          potentialUsd={performance.potentialUsd}
-          performance={performance.ttm}
-          pacing={performance.pacing}
-          potentialHint={potentialHint}
-          ttmHint={ttmHint}
-          pacingHint={pacingHint}
-          ownerMode={!isPlatformAdmin}
-        />
-      </Section>
       <Box sx={{ position: 'relative' }}>
         {configSaveStatus !== 'idle' ? (
           <Typography
@@ -514,7 +467,7 @@ export default function BienView(props: BienViewProps) {
         <PricingControls
           compactGuide={!isPlatformAdmin}
           floor={floor} ceiling={ceiling}
-          floorRange={[0, 20_000]} ceilingRange={[0, 20_000]}
+          floorRange={[0, 50_000]} ceilingRange={[0, 50_000]}
           recoFloor={market.recoBounds?.floor ?? 0} recoCeiling={market.recoBounds?.ceiling ?? 0}
           pricingModes={pricingModes}
           activeModeId={activeModeId}
@@ -568,7 +521,7 @@ export default function BienView(props: BienViewProps) {
 
       {/* ── Règles par période (style Hostaway) ── */}
       <Section
-        num="04"
+        num="02"
         title="Règles par période"
         sub="Une période, un effet — ex. GITEX +25 % vs marché · prioritaire sur tous les autres réglages"
       >
@@ -586,9 +539,9 @@ export default function BienView(props: BienViewProps) {
 
       {/* ── Aperçu des prix (super vue) ── */}
       <Section
-        num="05"
+        num="03"
         title="Aperçu des prix"
-        sub="Estimé (marché) → Sojori (après réglages) → calendrier actuel · résas et blocages en couleurs"
+        sub="Estimé (marché) → prix dynamique → calendrier · hover = détail du calcul · résas masquées sauf toggle"
       >
         <PricePreviewCard
           data={previewDiffData ?? null}
@@ -603,10 +556,57 @@ export default function BienView(props: BienViewProps) {
 
       {/* ── Concurrence (owner + admin) ── */}
       {advTab === 'bien' ? (<>
+      <Section
+        num="01"
+        title="Le potentiel de votre bien"
+        sub={`District · ${listing.district} · ${listing.city}`}
+        sources={[
+          { kind: hasPotentialProd ? 'prod' : 'empty', label: hasPotentialProd ? 'Estimation Sojori' : 'Potentiel VIDE' },
+          {
+            kind: hasTtmAirbnb ? 'prod' : hasTtmCityMarket ? 'partial' : hasTtm ? 'partial' : 'empty',
+            label: hasTtmAirbnb
+              ? 'TTM Airbnb'
+              : hasTtmCityMarket
+                ? 'TTM ville'
+                : hasTtm
+                  ? 'TTM estim.'
+                  : 'TTM VIDE',
+          },
+          {
+            kind: hasPacingCityMarket ? 'partial' : hasL90dAirbnb ? 'prod' : hasL90d ? 'partial' : 'empty',
+            label: hasPacingCityMarket
+              ? 'Occ. ville'
+              : hasL90dAirbnb
+                ? 'L90D Airbnb'
+                : hasL90d
+                  ? 'Occ. projetée'
+                  : 'Pacing VIDE',
+          },
+        ]}
+        snapshotAt={provenance.snapshotAt}
+        snapshotLabel={
+          provenance.hasRevenueEstimate ? 'Estimation Sojori' : 'Données marché'
+        }
+        sourceNote={provenance.ttmPeriodLabel ?? undefined}
+      >
+        <StatsCards
+          hasPotentialProd={hasPotentialProd}
+          hasTtm={hasTtm}
+          hasL90d={hasL90d}
+          potentialAnnual={performance.potentialAnnual}
+          potentialUsd={performance.potentialUsd}
+          performance={performance.ttm}
+          pacing={performance.pacing}
+          potentialHint={potentialHint}
+          ttmHint={ttmHint}
+          pacingHint={pacingHint}
+          ownerMode={!isPlatformAdmin}
+        />
+      </Section>
       <MarketDataFetchExplain isPlatformAdmin={isPlatformAdmin} />
       {(hasCompsMarket || (selfVsComps && (selfVsComps.adrDeltaPct != null || selfVsComps.occDeltaPts != null))) ? (
       <Section
-        num="01"
+        num="02"
         title="Votre bien vs concurrents"
         sub="Médianes TTM des comparables de cette annonce"
         sources={[
@@ -630,7 +630,7 @@ export default function BienView(props: BienViewProps) {
 
       {/* ── Carte ── */}
       <Section
-        num="02"
+        num="03"
         title={`Carte · positionnement`}
         sub={`GPS fiche listing · ${compMapPins.length} concurrents autour`}
         sources={[
@@ -657,7 +657,7 @@ export default function BienView(props: BienViewProps) {
 
       {/* ── Tableau concurrents ── */}
       <Section
-        num="03"
+        num="04"
         title={`Vos ${Math.max(0, compRows.length - 1)} concurrents directs`}
         sub="Comparables de l’annonce · tri colonnes"
         sources={[

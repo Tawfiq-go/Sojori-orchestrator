@@ -608,6 +608,37 @@ class ReservationsService {
   }
 
   /**
+   * PUT /api/v1/reservations/guest-registration
+   * Remplace guestRegistration (membres + compteurs) — onglet Enregistrement.
+   */
+  async updateGuestRegistration(
+    reservationId: string,
+    guestRegistration: Record<string, unknown>,
+  ): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const url = `${RESERVATIONS_API}/guest-registration`;
+      const response = await apiClient.put(url, { reservationId, guestRegistration });
+      if (response.data?.success) {
+        return { success: true, data: response.data.reservation || response.data };
+      }
+      return {
+        success: false,
+        message: response.data?.error || response.data?.message || 'Erreur enregistrement voyageurs',
+      };
+    } catch (error: any) {
+      console.error('[ReservationsService] updateGuestRegistration error:', error);
+      return {
+        success: false,
+        message:
+          error.response?.data?.error ||
+          error.response?.data?.message ||
+          error.message ||
+          'Erreur enregistrement voyageurs',
+      };
+    }
+  }
+
+  /**
    * PUT /api/v1/reservations/update-fields/:id
    * Met à jour des champs spécifiques (actualArrivalTime, actualDepartureTime, cancellationAcknowledged, etc.)
    */

@@ -1030,7 +1030,7 @@ function PilotNumberCell({
   onCommit,
   disabled,
   min = 100,
-  max = 20000,
+  max = 50000,
   compact,
   inactive,
   inactiveHint,

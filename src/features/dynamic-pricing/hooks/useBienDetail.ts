@@ -585,7 +585,7 @@ export function useBienDetail(
             c.pricingBaseSource === 'manual_base' ? 'manual_base' : 'estimate',
           );
           if (typeof c.manualBasePriceMad === 'number' && c.manualBasePriceMad > 0) {
-            setManualBasePriceMad(Math.max(200, Math.min(20000, Math.round(c.manualBasePriceMad))));
+            setManualBasePriceMad(Math.max(200, Math.min(50_000, Math.round(c.manualBasePriceMad))));
           }
           setEventsEnabled(c.eventsEnabled !== false);
           setApplyPrice(c.applyPrice !== false);
@@ -1232,7 +1232,7 @@ export function useBienDetail(
           est?.adrP50Mad
             ? `Estimation prix de marché : ADR P50 ≈ ${est.adrP50Mad.toLocaleString('fr-FR')} MAD — peut être plus bas que les comparables haut de gamme`
             : null,
-          'Deux curseurs libres 0–20 000 MAD, indépendants du repère marché.',
+          'Deux curseurs libres 0–50 000 MAD, indépendants du repère marché.',
         ]
           .filter(Boolean)
           .join(' · ')
@@ -1467,12 +1467,12 @@ export function useBienDetail(
       },
       onFloorChange: (v) => {
         boundsDirtyRef.current = true;
-        setFloor(Math.max(0, Math.min(20_000, Math.round(v))));
+        setFloor(Math.max(0, Math.min(50_000, Math.round(v))));
         scheduleConfigSave();
       },
       onCeilingChange: (v) => {
         boundsDirtyRef.current = true;
-        setCeiling(Math.max(0, Math.min(20_000, Math.round(v))));
+        setCeiling(Math.max(0, Math.min(50_000, Math.round(v))));
         scheduleConfigSave();
       },
       onApplyRecoBounds: () => {
@@ -1484,53 +1484,23 @@ export function useBienDetail(
       },
       onActiveModeChange: (id: string) => {
         setActiveModeId(id);
+        setModeEnabled(true);
         if (['prudent', 'equilibre', 'agressif'].includes(id)) {
           setMode(id as PricingMode);
         }
         scheduleConfigSave();
       },
-      onModeToggle: (modeId: string, enabled: boolean) => {
-        setPricingModes((prev) => {
-          const next = prev.map((m) => (m.id === modeId ? { ...m, enabled } : m));
-          if (!enabled && activeModeId === modeId) {
-            const fallback = next.find((m) => m.enabled);
-            if (fallback) {
-              setActiveModeId(fallback.id);
-              if (fallback.kind === 'preset') setMode(fallback.id as PricingMode);
-            }
-          }
-          return next;
-        });
-        scheduleConfigSave();
+      onModeToggle: () => {
+        /* UI perso retirée */
       },
       onAddCustomMode: () => {
-        const id = `custom_${Date.now()}`;
-        setPricingModes((prev) => [
-          ...prev,
-          { id, label: 'Personnalisé', multiplier: 1.05, kind: 'custom', enabled: true },
-        ]);
-        setActiveModeId(id);
-        scheduleConfigSave();
+        /* UI perso retirée */
       },
-      onUpdateCustomMode: (modeId: string, patch: Partial<Pick<PricingModeDef, 'label' | 'multiplier'>>) => {
-        setPricingModes((prev) =>
-          prev.map((m) => (m.id === modeId ? { ...m, ...patch } : m)),
-        );
-        scheduleConfigSave();
+      onUpdateCustomMode: () => {
+        /* UI perso retirée */
       },
-      onDeleteCustomMode: (modeId: string) => {
-        setPricingModes((prev) => {
-          const next = prev.filter((m) => m.id !== modeId);
-          if (activeModeId === modeId) {
-            const fallback = next.find((m) => m.enabled) ?? next[0];
-            if (fallback) {
-              setActiveModeId(fallback.id);
-              if (fallback.kind === 'preset') setMode(fallback.id as PricingMode);
-            }
-          }
-          return next.length ? next : DEFAULT_PRICING_MODES;
-        });
-        scheduleConfigSave();
+      onDeleteCustomMode: () => {
+        /* UI perso retirée */
       },
       onGapBlockEnabledChange: (on) => {
         setGapBlockEnabled(on);
@@ -1540,8 +1510,8 @@ export function useBienDetail(
         setGapBlockMinNights(Math.max(1, Math.min(14, Math.round(v))));
         scheduleConfigSave();
       },
-      onModeEnabledChange: (v) => {
-        setModeEnabled(v);
+      onModeEnabledChange: () => {
+        setModeEnabled(true);
         scheduleConfigSave();
       },
       onLastMinuteEnabledChange: (on) => {
@@ -1589,7 +1559,7 @@ export function useBienDetail(
         scheduleConfigSave();
       },
       onManualBasePriceMadChange: (v: number) => {
-        setManualBasePriceMad(Math.max(200, Math.min(20000, Math.round(v))));
+        setManualBasePriceMad(Math.max(200, Math.min(50_000, Math.round(v))));
         scheduleConfigSave();
       },
       onEventsEnabledChange: (on: boolean) => {

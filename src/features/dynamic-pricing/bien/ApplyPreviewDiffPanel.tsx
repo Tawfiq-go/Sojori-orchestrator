@@ -217,8 +217,8 @@ export default function ApplyPreviewDiffPanel({
                     )}
                   </Box>
                 </th>
-                <th title="Prix Sojori après bornes min/max, mode agressif/normal et events §03">
-                  Sojori
+                <th title="Prix dynamique après bornes min/max, mode et events">
+                  Dynamique
                 </th>
                 <th title="Prix affiché dans le calendrier Sojori (manuel ou dynamique)">
                   {DP.calendrierActuel}

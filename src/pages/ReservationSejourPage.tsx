@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════
 // Sojori — Reservation Sejour Page · édition « Atelier 2026 »
-// Wrapper de page avec header sticky, infobar, 3 onglets.
+// Wrapper de page avec header sticky, infobar, 4 onglets.
 // Tous les onglets injectés via slots — pas de logique métier ici.
 // ════════════════════════════════════════════════════════════════════
 
@@ -17,6 +17,7 @@ import { DashboardWrapper } from '../components/DashboardWrapper';
 import { GuestInfoTab } from '../components/reservation/GuestInfoTab';
 import { FinancierTab } from '../components/reservation/FinancierTab';
 import { MessagesTab } from '../components/reservation/MessagesTab';
+import { RegistrationTab } from '../components/reservation/RegistrationTab';
 import { useWriteAccess } from '../hooks/useWriteAccess';
 
 const T = {
@@ -28,7 +29,7 @@ const T = {
   success: '#0a8f5e', warning: '#c46506', error: '#c81e1e', info: '#0673b3',
 };
 
-const TAB_NAMES = ['sejour', 'financier', 'messages'];
+const TAB_NAMES = ['sejour', 'financier', 'messages', 'enregistrement'];
 
 function formatStayRange(arrival?: string, departure?: string): string {
   if (!arrival) return '—';
@@ -103,6 +104,14 @@ export function ReservationSejourPage() {
   const [editedData, setEditedData] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
   const [contentFullscreen, setContentFullscreen] = useState(false);
+
+  // Sync tab when URL ?tab= changes (ex. lien depuis Séjour → Enregistrement)
+  useEffect(() => {
+    const raw = searchParams.get('tab') || 'sejour';
+    const key = raw === 'guest-info' ? 'sejour' : raw;
+    const idx = TAB_NAMES.indexOf(key);
+    if (idx >= 0 && idx !== tab) setTab(idx);
+  }, [searchParams, tab]);
 
   useEffect(() => {
     if (!contentFullscreen) return undefined;
@@ -272,8 +281,17 @@ export function ReservationSejourPage() {
         />
       );
     }
-    return <MessagesTab reservationDetails={reservationDetails} />;
-  }, [tab, reservationDetails, isEditMode, editedData, refreshReservation]);
+    if (tab === 2) {
+      return <MessagesTab reservationDetails={reservationDetails} />;
+    }
+    return (
+      <RegistrationTab
+        reservationDetails={reservationDetails}
+        onRefresh={refreshReservation}
+        readOnly={!canWrite}
+      />
+    );
+  }, [tab, reservationDetails, isEditMode, editedData, refreshReservation, canWrite]);
 
   const tabsBar = (
     <Tabs
@@ -298,6 +316,7 @@ export function ReservationSejourPage() {
       <Tab label="Séjour" />
       <Tab label="Financier" />
       <Tab label="Messages" />
+      <Tab label="Enregistrement" />
     </Tabs>
   );
 

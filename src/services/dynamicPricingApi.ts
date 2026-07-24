@@ -652,6 +652,8 @@ export type ApplyPreviewDiffAlertDto =
 
 /** Ajustements réellement appliqués sur le jour (chips aperçu). */
 export type ApplyPreviewDiffAppliedDto = {
+  modeLabel?: string;
+  modeMultiplier?: number;
   occupancyPct?: number;
   lastMinutePct?: number;
   clamp?: 'floor' | 'ceiling';
