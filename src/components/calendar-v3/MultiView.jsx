@@ -26,6 +26,7 @@ export default function MultiView({
   startDate = new Date(),
   daysCount = 31,
   listingCatalog = [],
+  dpEnabledByListing = {},
   listings: listingsLegacy,
   inventoriesByListing = {},
   inventoryLoading = false,
@@ -242,7 +243,9 @@ export default function MultiView({
           <Legend dot="rgba(6,115,179,0.7)" label="Réservé" />
           <Legend dot="rgba(200,30,30,0.7)" label="Stop sell" />
           <Legend dot={T.warning} label="Bloqué canal (sans résa Sojori)" />
-          <Legend dot={T.ai} label="Prix dynamique" />
+          {listings.some((l) => dpEnabledByListing[String(l._id)] !== false) ? (
+            <Legend dot={T.ai} label="Prix dynamique" />
+          ) : null}
           <Legend dot={T.bg2} label="Weekend" />
           <Legend dot={ARCHIVE_CELL_BG} label="Historique (lecture seule)" />
           <Legend dot={T.text4} label="Hors inventaire (—)" />
@@ -300,6 +303,7 @@ export default function MultiView({
             <ListingRow
               key={listing._id}
               listing={listing}
+              dpEnabled={dpEnabledByListing[String(listing._id)] !== false}
               inventories={inventoriesByListing[listing._id] || {}}
               days={days}
               leftW={LEFT_W}
@@ -471,7 +475,7 @@ const ListingLabel = memo(function ListingLabel({
 /* ─── Ligne d'un listing (prix + dispo sur une ligne, détail en collapse) ─── */
 function ListingRow({
   listing, inventories, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onPriceClick, onReservationClick, activeTip,
-  onToggleDynamicPrice,
+  onToggleDynamicPrice, dpEnabled = true,
 }) {
   const primaryCols = calendarPrimaryColumns(selectedColumns);
   const collapseColumns = calendarCollapseColumns(selectedColumns);
@@ -620,6 +624,7 @@ function ListingRow({
               return (
                 <CollapseCell
                   key={d.iso} col={col} day={d} inv={inv} listing={listing}
+                  dpEnabled={dpEnabled}
                   selected={sel} draggable={draggable}
                   onMouseDown={
                     draggable && (cellState === 'data' || (colId === 'dynamicPrice' && cellState === 'archive'))
@@ -872,7 +877,7 @@ function PrimaryInventoryCell({
 }
 
 /* ─── Collapse cell — tarif : + Excel · prix clic ; autres : cellule Excel ─── */
-function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown, onMouseEnter, onReservationClick, tipOpen, onPriceClick, onToggleDynamicPrice }) {
+function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown, onMouseEnter, onReservationClick, tipOpen, onPriceClick, onToggleDynamicPrice, dpEnabled = true }) {
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
 
@@ -923,6 +928,10 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
       : <span style={{ color: T.text4 }}>{rate.main}</span>;
   } else if (col.id === 'basePrice') content = inv.basePrice ?? dash;
   else if (col.id === 'manualPrice') content = inv.manualPrice ?? dash;
+  else if (col.id === 'dynamicPrice' && !dpEnabled) {
+    // Pilote prix dynamique OFF sur ce bien → pas d'élément DP dans le calendrier
+    content = dash;
+  }
   else if (col.id === 'dynamicPrice') {
     const isDyn = resolvePriceMode(inv) === 'dynamic';
     const canToggle =

@@ -25,6 +25,8 @@ import {
   getCalendarWindowBounds,
 } from './inventoryCalendarConstants';
 import { useWriteAccess } from '../../hooks/useWriteAccess';
+import { useAuth } from '../../hooks/useAuth';
+import { fetchPilotConfig } from '../../services/dynamicPricingApi';
 function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
@@ -46,6 +48,32 @@ export default function CalendarInventoryPage({
   listingNameById = {},
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsProp || [];
+
+  // ── Prix dynamique par listing : pilote OFF → éléments DP masqués partout ──
+  const { user: authUser } = useAuth();
+  const isPlatformAdmin = ['admin', 'superadmin'].includes(String(authUser?.role || '').toLowerCase());
+  const [dpEnabledByListing, setDpEnabledByListing] = useState({});
+  const listingIdsKey = listings.map((l) => String(l._id)).join(',');
+  useEffect(() => {
+    let cancelled = false;
+    const ids = listingIdsKey ? listingIdsKey.split(',').filter(Boolean).slice(0, 30) : [];
+    if (!ids.length) return undefined;
+    Promise.all(
+      ids.map(async (id) => {
+        try {
+          const cfg = await fetchPilotConfig(id);
+          return [id, Boolean(cfg?.data?.config?.enabled)];
+        } catch {
+          return [id, false];
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setDpEnabledByListing(Object.fromEntries(entries));
+    });
+    return () => { cancelled = true; };
+  }, [listingIdsKey]);
+  /** undefined (chargement) → true pour éviter le flash sur les biens pilote ON */
+  const dpOn = (id) => dpEnabledByListing[String(id)] !== false;
   const { canWrite } = useWriteAccess('calendar/multi');
   const [searchParams, setSearchParams] = useSearchParams();
   const viewFromUrl = searchParams.get('view') === 'simple' ? 'simple' : 'multi';
@@ -403,12 +431,14 @@ export default function CalendarInventoryPage({
           </span>
         )}
 
-        <DpSyncAuditStrip
-          summary={dpSyncSummary}
-          listingNameById={listingNameById}
-          selectedListingId={view === 'simple' ? selectedListingId : null}
-          loading={dpSyncLoading}
-        />
+        {isPlatformAdmin ? (
+          <DpSyncAuditStrip
+            summary={dpSyncSummary}
+            listingNameById={listingNameById}
+            selectedListingId={view === 'simple' ? selectedListingId : null}
+            loading={dpSyncLoading}
+          />
+        ) : null}
 
       </div>
 
@@ -417,6 +447,7 @@ export default function CalendarInventoryPage({
           startDate={windowStart}
           daysCount={MULTI_VISIBLE_DAYS}
           listingCatalog={listings}
+          dpEnabledByListing={dpEnabledByListing}
           inventoriesByListing={inventoriesByListing}
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
@@ -468,6 +499,7 @@ export default function CalendarInventoryPage({
         <SimpleView
           listing={selectedListing}
           listings={listings}
+          dpEnabled={dpOn(selectedListingId)}
           selectedListingId={selectedListingId}
           onSelectListing={setSelectedListingId}
           year={pivotDate.getFullYear()}
@@ -505,6 +537,7 @@ export default function CalendarInventoryPage({
 
       <UpdateInventoryModal
         open={!!modalCells}
+        dpEnabled={!modalCells || modalCells.some((c) => dpOn(c.listingId))}
         selectedCells={modalCells || []}
         currency={resolveSelectionCurrency(modalCells, listings, 'MAD')}
         inventoryData={inventoryData}

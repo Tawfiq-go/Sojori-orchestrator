@@ -33,6 +33,7 @@ function isoDate(v) {
 
 export default function SimpleView({
   listing,
+  dpEnabled = true,
   listings = [],
   selectedListingId = null,
   onSelectListing,
@@ -198,7 +199,7 @@ export default function SimpleView({
             <div style={{ display: 'flex', gap: 14, fontSize: 10.5, color: T.text3, flexShrink: 0 }}>
               <Legend dot="#3d3a33" label="Réservé" />
               <Legend dot={T.error} label="Stop sell" />
-              <Legend dot={T.ai} label="Prix dynamique" />
+              {dpEnabled ? <Legend dot={T.ai} label="Prix dynamique" /> : null}
               {inventoryLoading && <span style={{ fontWeight: 700 }}>Chargement…</span>}
             </div>
           </div>
@@ -242,6 +243,7 @@ export default function SimpleView({
       {/* Panneau latéral façon Airbnb : détails du/des jour(s) au clic (plus de hover) */}
       {selected.length > 0 && (
         <DaySidePanel
+          dpEnabled={dpEnabled}
           selected={selected}
           focusIso={focusIso || selected[selected.length - 1]}
           inventories={inventories}
@@ -650,7 +652,7 @@ function PanelRow({ label, value, color, strong }) {
   );
 }
 
-function DaySidePanel({ selected, focusIso, inventories, currency, onModify, onClose }) {
+function DaySidePanel({ selected, focusIso, inventories, currency, onModify, onClose, dpEnabled = true }) {
   const [tab, setTab] = useState('infos');
   const sorted = useMemo(() => [...selected].sort(), [selected]);
   const inv = inventories[focusIso];
@@ -695,7 +697,7 @@ function DaySidePanel({ selected, focusIso, inventories, currency, onModify, onC
 
       {/* Onglets */}
       <div style={{ display: 'flex', gap: 4, padding: '8px 12px 0' }}>
-        {PANEL_TABS.map((t) => {
+        {PANEL_TABS.filter((t) => dpEnabled || t.id !== 'ai').map((t) => {
           const active = tab === t.id;
           return (
             <button
@@ -731,7 +733,7 @@ function DaySidePanel({ selected, focusIso, inventories, currency, onModify, onC
               value={`${Math.round(priceOf(inv))} ${currency}`}
               color={mode === 'manual' ? T.warning : mode === 'dynamic' ? T.ai : T.primary}
             />
-            {inv.calculatedPrice != null && (
+            {inv.calculatedPrice != null && dpEnabled && (
               <PanelRow label="Prix dynamique" value={`${Math.round(inv.calculatedPrice)} ${currency}`} color={mode === 'dynamic' ? T.ai : T.text3} />
             )}
             {inv.manualPrice != null && (
