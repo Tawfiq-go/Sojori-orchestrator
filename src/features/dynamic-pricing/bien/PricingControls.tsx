@@ -740,7 +740,7 @@ export default function PricingControls(props: PricingControlsProps) {
             Règles par période (events)
           </Typography>
           <Typography sx={{ fontSize: 11, color: T.text3, mb: 1, lineHeight: 1.4 }}>
-            Prioritaires sur le dynamique — ex. GITEX +25 % vs marché
+            Prioritaires sur le prix dynamique — ex. GITEX +25 %
           </Typography>
           <PeriodRulesCard
             embedded

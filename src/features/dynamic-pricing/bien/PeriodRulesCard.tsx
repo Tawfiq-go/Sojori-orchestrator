@@ -24,6 +24,8 @@ export interface PeriodRulesCardProps {
   onDeleteEvent: (id: string) => void;
   onToggleEventEnabled?: (id: string, on: boolean) => void | Promise<void>;
   onDuplicateEvent?: (id: string) => void | Promise<void>;
+  /** Dans « réglages avancés » : pas de 2ᵉ collapse. */
+  embedded?: boolean;
 }
 
 function ruleNights(dateRange: string): number | null {
@@ -50,7 +52,7 @@ function EffectChip({ ev }: { ev: PricingEvent }) {
   const delta = isPct ? ev.marketPercent - 100 : 0;
   const up = delta >= 0;
   const label = isPct
-    ? `${up ? '+' : '−'}${Math.abs(delta)} % vs marché`
+    ? `${up ? '+' : '−'}${Math.abs(delta)} %`
     : `${fmt(ev.fixedPrice)} MAD fixe`;
   const color = isPct ? (up ? T.success : T.info) : T.goldDeep;
   const bg = isPct ? (up ? T.successTint : T.infoTint) : T.goldTint;
@@ -76,8 +78,10 @@ export default function PeriodRulesCard({
   onDeleteEvent,
   onToggleEventEnabled,
   onDuplicateEvent,
+  embedded = false,
 }: PeriodRulesCardProps) {
   const [listOpen, setListOpen] = React.useState(false);
+  const showBody = embedded || listOpen;
   const [formOpen, setFormOpen] = React.useState(false);
   const [name, setName] = React.useState('');
   const [from, setFrom] = React.useState('');
@@ -179,7 +183,7 @@ export default function PeriodRulesCard({
 
       {events.length === 0 ? (
         <Typography sx={{ fontSize: 12.5, color: T.text3, fontStyle: 'italic', mb: 1.25 }}>
-          Aucune règle — ex. « GITEX 12 → 25 oct : +25 % vs marché ». Sur ses dates, la règle est prioritaire
+          Aucune règle — ex. « GITEX 12 → 25 oct : +25 % ». Sur ses dates, la règle est prioritaire
           sur le positionnement, l'occupation et la dernière minute.
         </Typography>
       ) : null}
@@ -274,8 +278,8 @@ export default function PeriodRulesCard({
               [
                 'Effet',
                 <TextField key="e" size="small" select value={effect} onChange={(e) => setEffect(e.target.value as EffectKind)} sx={{ ...inputSx, width: 160 }}>
-                  <MenuItem value="up" sx={{ fontSize: 12.5 }}>+ % vs marché</MenuItem>
-                  <MenuItem value="down" sx={{ fontSize: 12.5 }}>− % vs marché</MenuItem>
+                  <MenuItem value="up" sx={{ fontSize: 12.5 }}>+ % (hausse)</MenuItem>
+                  <MenuItem value="down" sx={{ fontSize: 12.5 }}>− % (baisse)</MenuItem>
                   <MenuItem value="fixed" sx={{ fontSize: 12.5 }}>Prix fixe MAD</MenuItem>
                 </TextField>,
               ],
