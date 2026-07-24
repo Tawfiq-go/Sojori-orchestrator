@@ -119,20 +119,20 @@ export function useDashboardChrome() {
       return 'channels';
     }
 
+    // Aligné navConfig / pathToNavId : pricing/portfolio & pricing/audit
     if (path.startsWith('/dynamic-pricing/bien/')) {
-      return 'dynamic-pricing/portefeuille';
+      return 'pricing/portfolio';
     }
     if (path.startsWith('/dynamic-pricing/audit')) {
-      return 'dynamic-pricing/audit';
+      return 'pricing/audit';
     }
     if (path.startsWith('/dynamic-pricing/portefeuille') || path === '/dynamic-pricing') {
-      return 'dynamic-pricing/portefeuille';
+      return 'pricing/portfolio';
     }
     if (path.startsWith('/catalogue/dynamic-pricing')) {
-      if (path.includes('/audit')) return 'dynamic-pricing/audit';
-      if (path.includes('/bien/')) return 'dynamic-pricing/bien';
-      if (path.includes('/bien')) return 'dynamic-pricing/bien';
-      return 'dynamic-pricing/portefeuille';
+      if (path.includes('/audit')) return 'pricing/audit';
+      if (path.includes('/bien/') || path.includes('/bien')) return 'pricing/portfolio';
+      return 'pricing/portfolio';
     }
 
     // Monitor hub (onglets via ?tab=)
