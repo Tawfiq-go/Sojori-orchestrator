@@ -20,8 +20,8 @@ import calendarService from '../../services/calendarService';
 
 const CELL_W_DESKTOP = 90;
 const CELL_W_MOBILE = 76;
-const LEFT_W_DESKTOP = 200;
-const LEFT_W_MOBILE = 132;
+const LEFT_W_DESKTOP = 268;
+const LEFT_W_MOBILE = 168;
 
 /** Icône éclair (prix dynamique) — SVG inline, pas d’emoji. */
 function BoltIcon({ size = 12, color = T.ai }) {
