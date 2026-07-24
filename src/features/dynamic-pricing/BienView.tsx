@@ -5,7 +5,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Stack, Typography, Button } from '@mui/material';
 import { T, KEYFRAMES, DP_LAYOUT_SX } from './_tokens';
-import { BIEN_STICKY_FILTER_TOP_OFFSET } from './bien/BienPageStickyFilters';
 import type { Listing, BienDetailPerformance, MarketData, CompListing, PriceFactor } from './_tokens';
 
 import StatsCards from './bien/StatsCards';
@@ -28,10 +27,8 @@ import CompCompareModal from './bien/CompCompareModal';
 import MarketDataFetchExplain from './bien/MarketDataFetchExplain';
 import JustificationModalG7 from './JustificationModalG7';
 import EventEditorModal from './bien/EventEditorModal';
-import DynamicPriceScopeModal from './bien/DynamicPriceScopeModal';
 import CalendarUpdateModal from './bien/CalendarUpdateModal';
 import type { PilotApplyReportDto } from '../../services/dynamicPricingApi';
-import PeriodRulesCard from './bien/PeriodRulesCard';
 import PricePreviewCard from './bien/PricePreviewCard';
 import { usePricePreviewSelectionOptional } from './bien/pricePreviewSelectionContext';
 import { SectionSourceBar, type DataSourceItem } from './DataSourceBadges';
@@ -302,13 +299,12 @@ export default function BienView(props: BienViewProps) {
       <style>{KEYFRAMES}</style>
       {isPlatformAdmin ? (
         <>
-          {/* ── Bandeau sticky (admin) ── */}
+          {/* ── Bandeau listing (admin) — non sticky : le bandeau search reste le seul sticky haut ── */}
           <Box sx={{
-            position: 'sticky', top: BIEN_STICKY_FILTER_TOP_OFFSET, zIndex: 30,
-            bgcolor: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(16px) saturate(180%)',
+            bgcolor: T.bg1,
             borderBottom: `1px solid ${T.border}`,
             px: 0,
-            py: 1.75,
+            py: 1.25,
             display: 'flex',
             flexWrap: 'wrap',
             alignItems: 'flex-start',
@@ -384,17 +380,6 @@ export default function BienView(props: BienViewProps) {
               <Typography sx={{ fontSize: 11.5, fontWeight: 800, color: aiEnabled ? T.goldDeep : T.text3 }}>
                 {aiEnabled ? 'Pilote actif' : 'Pilote inactif'}
               </Typography>
-              <SyncScopeChip label="Prix" active={applyPrice} />
-              <SyncScopeChip label="Min stay" active={applyMinStay} />
-              {onEditSyncScope ? (
-                <Typography
-                  component="span"
-                  onClick={() => onEditSyncScope()}
-                  sx={{ cursor: 'pointer', fontSize: 10.5, color: T.goldDeep, fontWeight: 700, textDecoration: 'underline' }}
-                >
-                  Modifier
-                </Typography>
-              ) : null}
             </Box>
             <Box sx={{
               flex: '0 0 auto',
@@ -466,6 +451,7 @@ export default function BienView(props: BienViewProps) {
         ) : null}
         <PricingControls
           compactGuide={!isPlatformAdmin}
+          ownerMode={!isPlatformAdmin}
           floor={floor} ceiling={ceiling}
           floorRange={[0, 50_000]} ceilingRange={[0, 50_000]}
           recoFloor={market.recoBounds?.floor ?? 0} recoCeiling={market.recoBounds?.ceiling ?? 0}
@@ -513,35 +499,24 @@ export default function BienView(props: BienViewProps) {
           onAddCustomMode={onAddCustomMode}
           onUpdateCustomMode={onUpdateCustomMode}
           onDeleteCustomMode={onDeleteCustomMode}
-          onAddEvent={onAddEvent} onEditEvent={onEditEvent}
-          onDeleteEvent={onDeleteEvent}           onAcceptSuggestion={onAcceptSuggestion}
+          onAddEvent={onAddEvent}
+          onEditEvent={onEditEvent}
+          onDeleteEvent={onDeleteEvent}
+          onCreateEvent={onCreateEvent}
+          onToggleEventEnabled={onToggleEventEnabled}
+          onDuplicateEvent={onDuplicateEvent}
+          onAcceptSuggestion={onAcceptSuggestion}
           boundsContextHint={boundsContextHint}
         />
       </Box>
 
-      {/* ── Règles par période (style Hostaway) ── */}
-      <Section
-        num="02"
-        title="Règles par période"
-        sub="Une période, un effet — ex. GITEX +25 % vs marché · prioritaire sur tous les autres réglages"
-      >
-        <PeriodRulesCard
-          events={events}
-          eventsEnabled={eventsEnabled}
-          onEventsEnabledChange={onEventsEnabledChange}
-          onCreateEvent={onCreateEvent}
-          onEditEvent={onEditEvent}
-          onDeleteEvent={onDeleteEvent}
-          onToggleEventEnabled={onToggleEventEnabled}
-          onDuplicateEvent={onDuplicateEvent}
-        />
-      </Section>
-
       {/* ── Aperçu des prix (super vue) ── */}
       <Section
-        num="03"
+        num="02"
         title="Aperçu des prix"
-        sub="Estimé (marché) → prix dynamique → calendrier · hover = détail du calcul · résas masquées sauf toggle"
+        sub={isPlatformAdmin
+          ? 'Prix dynamique · hover = détail du calcul · résas masquées sauf toggle'
+          : 'Vos prix jour par jour · survolez un prix pour le détail'}
       >
         <PricePreviewCard
           data={previewDiffData ?? null}
@@ -549,6 +524,7 @@ export default function BienView(props: BienViewProps) {
           error={previewDiffError}
           onReload={onPreviewDiffReload}
           events={events}
+          ownerMode={!isPlatformAdmin}
         />
       </Section>
 
@@ -717,18 +693,6 @@ export default function BienView(props: BienViewProps) {
         onSave={(ev) => void onEventSave?.(ev)}
       />
 
-      <DynamicPriceScopeModal
-        open={Boolean(scopeModalOpen)}
-        editMode={scopeModalEdit}
-        saving={scopeSaving}
-        errorMessage={scopeSaveError}
-        listingName={listing.name}
-        initialApplyPrice={applyPrice}
-        initialApplyMinStay={applyMinStay}
-        onClose={() => onScopeModalClose?.()}
-        onConfirm={(c) => void onScopeModalConfirm?.(c)}
-      />
-
       <CalendarUpdateModal
         open={calendarUpdateOpen && Boolean(onRunCalendarUpdate)}
         listingName={listing.name}
@@ -777,34 +741,6 @@ export default function BienView(props: BienViewProps) {
   );
 }
 
-function SyncScopeChip({
-  label,
-  active,
-  inactiveColor = T.text3,
-}: {
-  label: string;
-  active: boolean;
-  inactiveColor?: string;
-}) {
-  return (
-    <Box
-      sx={{
-        fontSize: 9.5,
-        fontWeight: 800,
-        fontFamily: '"Geist Mono", monospace',
-        px: 0.625,
-        py: 0.125,
-        borderRadius: '99px',
-        bgcolor: active ? 'rgba(46,125,50,0.12)' : 'rgba(211,47,47,0.10)',
-        color: active ? T.success : inactiveColor,
-        border: `1px solid ${active ? T.success : inactiveColor}`,
-      }}
-    >
-      {label} {active ? '✓' : '✗'}
-    </Box>
-  );
-}
-
 function Section({
   num,
   title,
@@ -828,7 +764,7 @@ function Section({
     <Box
       sx={{
         px: 0,
-        py: { xs: 3, md: 5 },
+        py: { xs: 1.5, md: 2.5 },
         animation: 'sj-fadeIn 0.5s both',
       }}
     >

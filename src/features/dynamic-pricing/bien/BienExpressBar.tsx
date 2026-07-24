@@ -171,26 +171,6 @@ function OwnerAutoSwitch({
   );
 }
 
-function ScopeChip({ label, active }: { label: string; active: boolean }) {
-  return (
-    <Box
-      component="span"
-      sx={{
-        fontSize: 10,
-        fontWeight: 700,
-        px: 0.75,
-        py: 0.125,
-        borderRadius: '99px',
-        bgcolor: active ? T.successTint : T.bg2,
-        color: active ? T.success : T.text3,
-        border: `1px solid ${active ? T.success : T.border}`,
-      }}
-    >
-      {label} {active ? '✓' : '✗'}
-    </Box>
-  );
-}
-
 function CompactToggle({
   title,
   schedule,
@@ -272,16 +252,9 @@ function OwnerExpressBar({
   onToggleAdvanced,
 }: BienExpressBarProps) {
   const listingId = view.listing._id;
-  const { listing } = view;
   const modeLabel = view.activeModeLabel ?? view.mode;
-  const loc =
-    [listing.district, listing.city].filter((x) => x && x !== '—').join(', ') || listing.city || '—';
-  const metaParts = [
-    listing.bedrooms ? `${listing.bedrooms} ch.` : null,
-    listing.bathrooms ? `${listing.bathrooms} sdb.` : null,
-    listing.maxGuests ? `${listing.maxGuests} pers.` : null,
-    `${modeLabel} · ${view.floor}–${view.ceiling} MAD`,
-  ].filter(Boolean);
+  // Client : ni mode « vs marché » ni date d'estimation — juste sa fourchette
+  const metaParts = [`${view.floor}–${view.ceiling} MAD`];
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [autoSnapshot, setAutoSnapshot] = useState(true);
@@ -320,48 +293,30 @@ function OwnerExpressBar({
     }
   };
 
-  const majLine = snapshotAt ? `est. ${fmtDateShort(snapshotAt)}` : null;
-
   return (
     <Box
       sx={{
         mx: { xs: 2, md: 3 },
-        mb: 1.5,
-        px: { xs: 1.5, md: 2 },
-        py: 1.25,
-        borderRadius: 2,
+        mb: 1,
+        px: { xs: 1.25, md: 1.5 },
+        py: 0.875,
+        borderRadius: 1.5,
         border: `1px solid ${T.border}`,
         bgcolor: T.bg1,
       }}
     >
-      <Typography
-        sx={{
-          fontSize: { xs: 17, md: 19 },
-          fontWeight: 800,
-          letterSpacing: '-0.02em',
-          lineHeight: 1.25,
-          wordBreak: 'break-word',
-        }}
-      >
-        {listing.name}
-      </Typography>
-      <Typography sx={{ fontSize: 12, color: T.text2, mt: 0.35 }}>
-        {loc}
-        {metaParts.length ? ` · ${metaParts.join(' · ')}` : ''}
-      </Typography>
-      {majLine ? (
-        <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.25 }}>
-          MAJ {majLine}
+      {metaParts.length ? (
+        <Typography sx={{ fontSize: 11, color: T.text3, mb: 0.75 }} noWrap>
+          {metaParts.join(' · ')}
         </Typography>
       ) : null}
 
       <Box
         sx={{
-          mt: 1.25,
           display: 'flex',
           flexDirection: { xs: 'column', md: 'row' },
           border: `1px solid ${T.border}`,
-          borderRadius: 1.5,
+          borderRadius: 1.25,
           overflow: 'hidden',
           bgcolor: T.bg0,
           '& > * + *': {
@@ -371,15 +326,8 @@ function OwnerExpressBar({
         }}
       >
         <OwnerAutoSwitch
-          label="Estimation auto"
-          sub="lun. & jeu."
-          checked={autoSnapshot}
-          saving={savingToggle === 'snap'}
-          onChange={(v) => void saveToggle('snap', v)}
-        />
-        <OwnerAutoSwitch
-          label="Sync calendrier"
-          sub="chaque nuit"
+          label="🤖 Prix dynamique"
+          sub={autoPropagation ? 'Sojori ajuste vos prix automatiquement' : 'désactivé — vos prix restent tels quels'}
           checked={autoPropagation}
           saving={savingToggle === 'prop'}
           onChange={(v) => void saveToggle('prop', v)}
@@ -389,58 +337,22 @@ function OwnerExpressBar({
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         sx={{
-          mt: 1,
+          mt: 0.75,
           alignItems: { sm: 'center' },
           justifyContent: 'space-between',
-          gap: 1,
+          gap: 0.75,
         }}
       >
-        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-          <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: view.aiEnabled ? T.goldDeep : T.text3 }}>
-            {view.aiEnabled ? 'Pilote ON' : 'Pilote OFF'}
-          </Typography>
-          <ScopeChip label="Prix" active={view.applyPrice} />
-          <ScopeChip label="Min stay" active={view.applyMinStay} />
-          {view.onEditSyncScope ? (
-            <Button
-              size="small"
-              onClick={() => view.onEditSyncScope?.()}
-              sx={{
-                minWidth: 0,
-                px: 0.5,
-                py: 0,
-                textTransform: 'none',
-                fontSize: 11,
-                fontWeight: 700,
-                color: T.goldDeep,
-              }}
-            >
-              Modifier
-            </Button>
-          ) : null}
-        </Stack>
+        <Typography sx={{ fontSize: 11, color: T.text3 }}>
+          Plancher, plafond, périodes spéciales et options : dans les réglages ci-dessous.
+        </Typography>
         <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
-          <Button
-            size="small"
-            variant="outlined"
-            disabled={!hasMarketData || !view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
-            onClick={() => setCalendarOpen(true)}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 700,
-              fontSize: 12,
-              borderColor: T.borderStrong,
-              color: T.text2,
-            }}
-          >
-            {view.pilotApplyLoading ? '…' : DP.updateCalendar}
-          </Button>
           <Button
             size="small"
             onClick={onToggleAdvanced}
             sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12, color: T.text3, minWidth: 0 }}
           >
-            {advancedOpen ? 'Masquer ▲' : 'Réglages & analyse ▼'}
+            {advancedOpen ? 'Masquer ▲' : 'Réglages ▼'}
           </Button>
         </Stack>
       </Stack>
