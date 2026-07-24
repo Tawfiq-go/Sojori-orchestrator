@@ -249,6 +249,9 @@ export default function V3ServicePanel({
           return (
             <V3InformSyndicPanel
               gestion={(orchestrationDoc.capabilities?.[def.key]?.gestion ?? {}) as Record<string, unknown>}
+              listingId={ownerTemplateMode ? undefined : listingId}
+              listingValues={listingValues}
+              ownerTemplateMode={ownerTemplateMode}
               onSave={async nextGestion => {
                 if (ownerTemplateMode) {
                   await saveOwnerGestion({

@@ -167,7 +167,7 @@ const TIMING_PRESETS: Record<
     start: 2,
     fin: 'J0',
     anchor: 'checkin',
-    hint: 'Informer le syndic J-2 → J0 (texte WA + option images)',
+    hint: 'Informer le syndic J-2 → J0 (contacts listing.syndics + template Meta)',
   },
   receive_departure: {
     label: 'Jour J départ',
@@ -2718,8 +2718,14 @@ export default function OrchestrationOverviewPanel({
                   ) : configDef.key === 'inform_syndic' ? (
                     <V3InformSyndicPanel
                       gestion={configGestionValues}
+                      listingId={listingId}
+                      listingValues={listingValues}
+                      ownerTemplateMode={!isListingScope}
                       onSave={async (nextGestion) => {
                         await onGestionPatch(configDef.key, nextGestion);
+                      }}
+                      onSyndicsSaved={(next) => {
+                        setListingValues((prev) => ({ ...prev, syndics: next }));
                       }}
                     />
                   ) : (

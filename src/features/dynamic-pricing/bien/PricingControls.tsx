@@ -6,7 +6,7 @@
 // (artifact reglages-pricing-simple). Auto-save inchangé (débounce hook).
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
-import { Box, Stack, Typography, Slider, Button, IconButton, TextField } from '@mui/material';
+import { Box, Stack, Typography, Slider, Button, TextField } from '@mui/material';
 import { T, DP_LAYOUT_SX } from '../_tokens';
 
 export type PricingMode = 'prudent' | 'equilibre' | 'agressif';
@@ -241,6 +241,61 @@ function GoldSwitch({ on, onChange, label }: { on: boolean; onChange: (v: boolea
   );
 }
 
+/** Conteneur « réglages avancés » replié par défaut. */
+function AdvancedSettingsCollapse({
+  occupancyOn,
+  lastMinuteOn,
+  gapsOn,
+  children,
+}: {
+  occupancyOn: boolean;
+  lastMinuteOn: boolean;
+  gapsOn: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const onCount = [occupancyOn, lastMinuteOn, gapsOn].filter(Boolean).length;
+  return (
+    <Box>
+      <Stack
+        direction="row"
+        onClick={() => setOpen((o) => !o)}
+        sx={{
+          alignItems: 'center',
+          gap: 1,
+          mt: 0.5,
+          mb: open ? 1.25 : 0,
+          cursor: 'pointer',
+          userSelect: 'none',
+          py: 0.75,
+          px: 1,
+          mx: -1,
+          borderRadius: 1.25,
+          '&:hover': { bgcolor: T.bg2 },
+        }}
+      >
+        <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Réglages avancés</Typography>
+        <Typography sx={{ fontSize: 11.5, color: T.text3, flex: 1 }}>
+          — occupation · dernière minute · trous
+          {onCount > 0 ? ` · ${onCount} actif${onCount > 1 ? 's' : ''}` : ''}
+        </Typography>
+        <Box
+          component="span"
+          sx={{
+            color: T.text4,
+            fontSize: 11,
+            transition: 'transform 0.15s',
+            transform: open ? 'rotate(90deg)' : 'none',
+          }}
+        >
+          ▶
+        </Box>
+      </Stack>
+      {open ? children : null}
+    </Box>
+  );
+}
+
 /** Ligne « ajustement automatique » : phrase-résultat + switch, détails repliés. */
 function AutoItem({
   emoji, title, résumé, on, onToggle, defaultOpen = false, headerExtra, children,
@@ -376,7 +431,7 @@ function MadInput({
   React.useEffect(() => setDraft(String(value)), [value]);
   const commit = () => {
     const n = Number(draft.replace(/[^\d]/g, ''));
-    if (Number.isFinite(n) && n >= 0 && n <= 20_000 && n !== value) onCommit(n);
+    if (Number.isFinite(n) && n >= 0 && n <= 50_000 && n !== value) onCommit(n);
     else setDraft(String(value));
   };
   return (
@@ -404,27 +459,22 @@ function MadInput({
 export default function PricingControls(props: PricingControlsProps) {
   const {
     floor, ceiling, recoFloor, recoCeiling,
-    pricingModes, activeModeId, events, suggestions, gapBlockEnabled, gapBlockMinNights, modeEnabled,
+    pricingModes, activeModeId, gapBlockEnabled, gapBlockMinNights,
     lastMinuteEnabled, lastMinuteFromDays, lastMinuteToDays, lastMinuteDiscountPct,
     occupancyBandsEnabled, occupancyLowMax, occupancyLowAdj, occupancyHighMin, occupancyHighAdj,
     pricingBaseSource, manualBasePriceMad,
-    eventsEnabled = true,
     onGapBlockEnabledChange, onGapBlockMinNightsChange,
-    onFloorChange, onCeilingChange, onModeEnabledChange,
+    onFloorChange, onCeilingChange,
     onLastMinuteEnabledChange, onLastMinuteFromDaysChange, onLastMinuteToDaysChange, onLastMinuteDiscountPctChange,
     onOccupancyBandsEnabledChange, onOccupancyLowMaxChange, onOccupancyLowAdjChange,
     onOccupancyHighMinChange, onOccupancyHighAdjChange,
     onPricingBaseSourceChange, onManualBasePriceMadChange,
-    onEventsEnabledChange,
     onApplyRecoBounds,
-    onActiveModeChange, onAddCustomMode, onUpdateCustomMode, onDeleteCustomMode,
-    onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
-    estimatedRevenue, estimatedRevenueLiftPct, boundsContextHint,
+    onActiveModeChange,
+    boundsContextHint,
   } = props;
 
   const presets = pricingModes.filter((m) => m.kind === 'preset' && m.enabled);
-  const customs = pricingModes.filter((m) => m.kind === 'custom');
-  const activeCustom = customs.find((m) => m.id === activeModeId);
 
   const cardSx = {
     bgcolor: T.bg1,
@@ -505,7 +555,7 @@ export default function PricingControls(props: PricingControlsProps) {
                   display={`${fmt(manualBasePriceMad)} MAD`}
                   value={manualBasePriceMad}
                   min={200}
-                  max={5000}
+                  max={50_000}
                   step={50}
                   onChange={onManualBasePriceMadChange}
                 />
@@ -564,20 +614,17 @@ export default function PricingControls(props: PricingControlsProps) {
 
         </Box>
 
-        {/* Positionnement */}
+        {/* Positionnement — 3 presets, défaut Équilibré (pas de perso / pas de switch on-off) */}
         <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ gap: 1.5, py: 1.5, pb: 0.5, alignItems: { sm: 'flex-start' } }}>
           <Box sx={{ width: { sm: 150 }, flexShrink: 0 }}>
-            <Stack direction="row" sx={{ alignItems: 'center', gap: 0.875 }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Positionnement</Typography>
-              <GoldSwitch on={modeEnabled} onChange={onModeEnabledChange} label="Positionnement actif" />
-            </Stack>
+            <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Positionnement</Typography>
             <Typography sx={{ fontSize: 11, color: T.text3 }}>vs le marché</Typography>
           </Box>
-          <Box sx={{ flex: 1, minWidth: 0, opacity: modeEnabled ? 1 : 0.45, pointerEvents: modeEnabled ? 'auto' : 'none' }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, minmax(0, 1fr))', xl: 'repeat(5, minmax(0, 1fr))' },
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
                 gap: 1,
               }}
             >
@@ -596,101 +643,25 @@ export default function PricingControls(props: PricingControlsProps) {
                   />
                 );
               })}
-              {customs.map((m) => (
-                <ModeCardMini
-                  key={m.id}
-                  on={activeModeId === m.id}
-                  name={m.label}
-                  emoji="✏️"
-                  sub={`×${m.multiplier}`}
-                  quote="Mon positionnement"
-                  custom
-                  onClick={() => onActiveModeChange(m.id)}
-                />
-              ))}
-              <Box
-                component="button"
-                type="button"
-                onClick={onAddCustomMode}
-                aria-label="Ajouter un positionnement personnalisé"
-                sx={{
-                  all: 'unset',
-                  boxSizing: 'border-box',
-                  cursor: 'pointer',
-                  borderRadius: 1.5,
-                  border: `1.5px dashed ${T.borderStrong}`,
-                  bgcolor: T.bg2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 0.25,
-                  minHeight: 76,
-                  color: T.text3,
-                  '&:hover': { borderColor: T.goldDeep, bgcolor: T.goldTint, color: T.goldDeep },
-                  '&:focus-visible': { outline: `2px solid ${T.goldDeep}`, outlineOffset: 1 },
-                }}
-              >
-                <Box sx={{ fontSize: 19, fontWeight: 800, lineHeight: 1 }}>＋</Box>
-                <Typography sx={{ fontSize: 10.5, fontWeight: 700 }}>Personnalisé</Typography>
-              </Box>
             </Box>
-
-            {/* Éditeur du mode perso actif : nom + coefficient */}
-            {activeCustom ? (
-              <Stack
-                direction="row"
-                sx={{
-                  alignItems: 'center', gap: 1.5, mt: 1.25, p: '10px 12px',
-                  bgcolor: T.bg2, border: `1px solid ${T.border}`, borderRadius: 1.25, flexWrap: 'wrap',
-                }}
-              >
-                <TextField
-                  size="small"
-                  value={activeCustom.label}
-                  aria-label="Nom du positionnement personnalisé"
-                  placeholder="Nom (ex. Ramadan)"
-                  onChange={(e) => onUpdateCustomMode(activeCustom.id, { label: e.target.value })}
-                  sx={{ width: 160, '& input': { fontSize: 12.5, fontWeight: 700, py: 0.75 } }}
-                />
-                <Box sx={{ flex: 1, minWidth: 180 }}>
-                  <FieldSlider
-                    label="Coefficient"
-                    display={`×${activeCustom.multiplier}`}
-                    value={activeCustom.multiplier}
-                    min={0.75}
-                    max={1.35}
-                    step={0.01}
-                    onChange={(v) => onUpdateCustomMode(activeCustom.id, { multiplier: v })}
-                  />
-                </Box>
-                <IconButton
-                  size="small"
-                  aria-label="Supprimer ce positionnement"
-                  onClick={() => onDeleteCustomMode(activeCustom.id)}
-                  sx={{ fontSize: 13 }}
-                >
-                  🗑
-                </IconButton>
-              </Stack>
-            ) : null}
           </Box>
         </Stack>
       </Box>
 
-      {/* ═══ Ajustements automatiques ═══ */}
-      <Stack direction="row" sx={{ alignItems: 'baseline', gap: 1, mt: 0.5 }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 800 }}>Ajustements automatiques</Typography>
-        <Typography sx={{ fontSize: 11.5, color: T.text3 }}>— déjà réglés · déplier pour affiner</Typography>
-      </Stack>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
-          gap: 1.5,
-          alignItems: 'start',
-        }}
+      {/* ═══ Ajustements automatiques (repliés par défaut) ═══ */}
+      <AdvancedSettingsCollapse
+        occupancyOn={occupancyBandsEnabled}
+        lastMinuteOn={lastMinuteEnabled}
+        gapsOn={gapBlockEnabled}
       >
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
+            gap: 1.5,
+            alignItems: 'start',
+          }}
+        >
         <Box sx={{ ...cardSx, py: { xs: 0.5, md: 0.75 } }}>
         <AutoItem
           emoji="📉"
@@ -754,7 +725,8 @@ export default function PricingControls(props: PricingControlsProps) {
         </Box>
 
         {/* Règles par période & événements → bloc dédié « 04 Règles par période » */}
-      </Box>
+        </Box>
+      </AdvancedSettingsCollapse>
 
       <Typography sx={{ fontSize: 10.5, color: T.text4, textAlign: 'center' }}>
         Modifications enregistrées automatiquement · la propagation vers le calendrier suit le réglage « Sync calendrier »

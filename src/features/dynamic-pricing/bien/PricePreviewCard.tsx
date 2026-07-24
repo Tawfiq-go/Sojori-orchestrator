@@ -15,6 +15,26 @@ import { usePricePreviewSelectionOptional } from './pricePreviewSelectionContext
 const MONO = '"Geist Mono", monospace';
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR');
 
+/** Tooltip clair (fond blanc) — lisible sur le tableau et la courbe. */
+const LIGHT_TOOLTIP_SLOTS = {
+  tooltip: {
+    sx: {
+      bgcolor: '#ffffff',
+      color: T.text,
+      border: `1px solid ${T.borderStrong}`,
+      boxShadow: '0 8px 24px rgba(15,23,42,0.14)',
+      maxWidth: 300,
+      p: 1.25,
+    },
+  },
+  arrow: {
+    sx: {
+      color: '#ffffff',
+      '&::before': { border: `1px solid ${T.borderStrong}` },
+    },
+  },
+} as const;
+
 const PERIODS = [
   { key: '7', label: '7 j', days: 7 },
   { key: '15', label: '15 j', days: 15 },
@@ -137,7 +157,21 @@ function DynamicPriceHover({
         : null;
   const steps: string[] = [];
   if (base) steps.push(`${base.label} : ${fmt(base.value)} MAD`);
-  if (rule) steps.push(`Event « ${rule.name} » (remplace le dynamique)`);
+  if (rule) {
+    steps.push(`Event « ${rule.name} » (remplace le dynamique)`);
+  } else {
+    const modeLabel = row.applied?.modeLabel;
+    const modeMul = row.applied?.modeMultiplier;
+    const isEquilibre =
+      !modeLabel ||
+      /^équil/i.test(modeLabel) ||
+      modeMul === 1;
+    if (modeLabel && !isEquilibre) {
+      steps.push(
+        `Mode ${modeLabel}${modeMul != null ? ` (×${modeMul})` : ''}`,
+      );
+    }
+  }
   if (row.applied?.occupancyPct != null) {
     steps.push(`Occupation : ${row.applied.occupancyPct > 0 ? '+' : ''}${row.applied.occupancyPct} %`);
   }
@@ -149,6 +183,7 @@ function DynamicPriceHover({
   if (row.applied?.gapMinStay) {
     steps.push(`Trou : min stay ${row.applied.gapMinStay.from}→${row.applied.gapMinStay.to} n`);
   }
+  if (row.applied?.gapSignaled) steps.push('Trou 1 nuit signalé');
 
   return (
     <Stack spacing={0.35} sx={{ py: 0.25, maxWidth: 260 }}>
@@ -410,8 +445,10 @@ export default function PricePreviewCard({
 
   const canEditInventory = canSelect;
 
-  /** ≤ 31 j : tout le tableau visible · > 31 j : scroll vertical dans le cadre du tableau */
-  const tableFitsWithoutInnerScroll = period.days <= 31;
+  /** ≤ 90 j (3 mois) : tout le tableau visible · > 90 j : fenêtre ~3 mois + scroll */
+  const tableFitsWithoutInnerScroll = period.days <= 90;
+  /** ~3 mois de lignes (en-têtes mois + jours) */
+  const tableScrollMaxHeightPx = 3 * 26 + 90 * 34;
 
   const maxPrice = React.useMemo(
     () =>
@@ -437,8 +474,18 @@ export default function PricePreviewCard({
     [rows, maxPrice],
   );
   const calendarLinePoints = React.useMemo(
-    () => buildLinePoints(rows, (r) => r.calendarCurrentMad ?? 0, maxPrice),
-    [rows, maxPrice],
+    () =>
+      buildLinePoints(
+        rows,
+        (r) => {
+          if (rowStatus(r) === 'reserved' && showBookedCalPrices) {
+            return r.bookedPriceMad ?? 0;
+          }
+          return r.calendarCurrentMad ?? 0;
+        },
+        maxPrice,
+      ),
+    [rows, maxPrice, showBookedCalPrices],
   );
 
   const chipSx = {
@@ -581,19 +628,7 @@ export default function PricePreviewCard({
                       arrow
                       placement="top"
                       enterDelay={120}
-                      slotProps={{
-                        tooltip: {
-                          sx: {
-                            bgcolor: T.bg1,
-                            color: T.text,
-                            border: `1px solid ${T.borderStrong}`,
-                            boxShadow: '0 8px 24px rgba(15,23,42,0.14)',
-                            maxWidth: 300,
-                            p: 1.25,
-                          },
-                        },
-                        arrow: { sx: { color: T.bg1, '&::before': { border: `1px solid ${T.borderStrong}` } } },
-                      }}
+                      slotProps={LIGHT_TOOLTIP_SLOTS}
                       title={<ChartDayTooltipContent row={r} status={st} rule={rule} />}
                     >
                       <Box
@@ -749,7 +784,10 @@ export default function PricePreviewCard({
                   />
                   {rows.map((r, i) => {
                     const st = rowStatus(r);
-                    const cal = r.calendarCurrentMad ?? 0;
+                    const cal =
+                      st === 'reserved' && showBookedCalPrices
+                        ? (r.bookedPriceMad ?? 0)
+                        : (r.calendarCurrentMad ?? 0);
                     const soj = r.g7ProposedMad ?? 0;
                     return (
                       <React.Fragment key={`pt-${r.date}`}>
@@ -786,7 +824,7 @@ export default function PricePreviewCard({
             </Typography>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
               <Box component="span" sx={{ display: 'inline-block', width: 14, height: 0, borderTop: `2px solid ${T.text}`, mr: 0.625, verticalAlign: 'middle' }} />
-              trait = calendrier
+              trait = calendrier{showBookedCalPrices ? ' (résa = prix figé)' : ''}
             </Typography>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
               <Box component="span" sx={{ display: 'inline-block', width: 9, height: 12, borderRadius: '2px', bgcolor: T.infoTint, border: '1px solid rgba(6,115,179,0.35)', mr: 0.625, verticalAlign: '-2px' }} />
@@ -828,7 +866,7 @@ export default function PricePreviewCard({
             />
           </Stack>
 
-          {/* Tableau — détail jour par jour · scroll interne si > 31 j */}
+          {/* Tableau — détail jour par jour · scroll interne si > 3 mois */}
           <Box
             sx={{
               overflowX: 'auto',
@@ -837,10 +875,10 @@ export default function PricePreviewCard({
               borderRadius: 1.375,
               ...(tableFitsWithoutInnerScroll
                 ? { overflowY: 'visible' }
-                : { maxHeight: 460, overflowY: 'auto' }),
+                : { maxHeight: tableScrollMaxHeightPx, overflowY: 'auto' }),
             }}
           >
-            <Box component="table" sx={{ borderCollapse: 'collapse', width: '100%', minWidth: 780 }}>
+            <Box component="table" sx={{ borderCollapse: 'collapse', width: '100%', minWidth: 640 }}>
               <Box component="thead" sx={{ position: 'sticky', top: 0, zIndex: 1 }}>
                 <Box component="tr">
                   {canEditInventory ? (
@@ -865,7 +903,7 @@ export default function PricePreviewCard({
                       />
                     </Box>
                   ) : null}
-                  {['Date', 'Statut (M/D)', 'Prix estimé (marché)', 'Prix Sojori (après réglages)', 'Prix cal. / réservé', 'Δ (résa−estim. / Sojori−cal.)'].map((h, i) => (
+                  {['Date', 'Statut', 'Prix dynamique', 'Prix cal. / réservé', 'Δ'].map((h, i) => (
                     <Box
                       key={h}
                       component="th"
@@ -886,6 +924,14 @@ export default function PricePreviewCard({
                   const rule = ruleForDate(r.date);
                   const showMonth = i === 0 || r.date.slice(0, 7) !== rows[i - 1].date.slice(0, 7);
                   const delta = r.deltaMad;
+                  const calDisplay =
+                    st === 'reserved'
+                      ? showBookedCalPrices && r.bookedPriceMad != null
+                        ? fmt(r.bookedPriceMad)
+                        : '—'
+                      : r.calendarCurrentMad != null
+                        ? fmt(r.calendarCurrentMad)
+                        : '—';
                   const cellSx = {
                     p: '7px 12px',
                     borderBottom: `1px solid ${T.border}`,
@@ -902,7 +948,7 @@ export default function PricePreviewCard({
                         <Box component="tr">
                           <Box
                             component="td"
-                            colSpan={canEditInventory ? 7 : 6}
+                            colSpan={canEditInventory ? 6 : 5}
                             sx={{ bgcolor: T.bg3, fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.text2, fontWeight: 800, p: '5px 12px' }}
                           >
                             {monthLabelFr(r.date)}
@@ -936,80 +982,55 @@ export default function PricePreviewCard({
                         ) : null}
                         <Box component="td" sx={{ ...cellSx, textAlign: 'left', fontFamily: 'inherit', fontWeight: 700, whiteSpace: 'nowrap' }}>
                           {dayLabelFr(r.date)}
-                          {rule ? (
-                            <Box component="span" sx={{ fontSize: 9.5, borderRadius: 999, px: 0.875, py: 0.125, bgcolor: T.warningTint, color: T.warning, ml: 0.75, fontFamily: MONO, whiteSpace: 'nowrap' }}>
-                              {rule.emoji ?? '🗓'} {rule.name}
-                            </Box>
-                          ) : null}
-                          {r.applied?.baseFixeMad != null ? (
-                            <Box component="span" title={`Base du calcul : votre prix fixe ${fmt(r.applied.baseFixeMad)} MAD (pas l'estimation marché)`} sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: T.bg3, color: T.text2 }}>
-                              🎯 base {fmt(r.applied.baseFixeMad)}
-                            </Box>
-                          ) : null}
-                          {r.applied?.occupancyPct != null ? (
-                            <Box component="span" title={`Ajustement occupation appliqué : ${r.applied.occupancyPct > 0 ? '+' : ''}${r.applied.occupancyPct} %`} sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: r.applied.occupancyPct < 0 ? T.errorTint : T.successTint, color: r.applied.occupancyPct < 0 ? T.error : T.success }}>
-                              📉 {r.applied.occupancyPct > 0 ? '+' : ''}{r.applied.occupancyPct} %
-                            </Box>
-                          ) : null}
-                          {r.applied?.lastMinutePct != null ? (
-                            <Box component="span" title={`Dernière minute appliquée : ${r.applied.lastMinutePct} %`} sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: T.infoTint, color: T.info }}>
-                              ⏰ {r.applied.lastMinutePct > 0 ? '+' : ''}{r.applied.lastMinutePct} %
-                            </Box>
-                          ) : null}
-                          {r.applied?.gapMinStay ? (
-                            <Box component="span" title={`Comble trous : min stay ${r.applied.gapMinStay.from} → ${r.applied.gapMinStay.to} nuits`} sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: T.goldTint, color: T.goldDeep }}>
-                              🧩 {r.applied.gapMinStay.from}→{r.applied.gapMinStay.to} n
-                            </Box>
-                          ) : null}
-                          {r.applied?.gapSignaled ? (
-                            <Box component="span" title="Trou d'une nuit signalé (pas de modification automatique)" sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: T.bg3, color: T.text3 }}>
-                              🧩 trou 1 n
-                            </Box>
-                          ) : null}
-                          {r.applied?.clamp ? (
-                            <Box component="span" title={r.applied.clamp === 'ceiling' ? 'Prix ramené au plafond' : 'Prix remonté au plancher'} sx={{ fontSize: 9.5, borderRadius: 999, px: 0.75, py: 0.125, ml: 0.625, fontFamily: MONO, whiteSpace: 'nowrap', bgcolor: T.bg3, color: T.text2 }}>
-                              {r.applied.clamp === 'ceiling' ? '⤒ plafond' : '⤓ plancher'}
-                            </Box>
-                          ) : null}
                         </Box>
                         <Box component="td" sx={{ ...cellSx, textAlign: 'center' }}>
-                          <DayStatusBadge row={r} st={st} />
+                          <DayStatusBadge row={r} st={st} rule={rule} />
                         </Box>
-                        <Box component="td" sx={cellSx}>{r.airroiMad != null ? fmt(r.airroiMad) : '—'}</Box>
-                        <Box component="td" sx={{ ...cellSx, fontWeight: 800 }}>{r.g7ProposedMad != null ? fmt(r.g7ProposedMad) : '—'}</Box>
+                        <Box component="td" sx={{ ...cellSx, fontWeight: 800 }}>
+                          {r.g7ProposedMad != null ? (
+                            <Tooltip
+                              title={<DynamicPriceHover row={r} rule={rule} />}
+                              arrow
+                              placement="left"
+                              slotProps={LIGHT_TOOLTIP_SLOTS}
+                            >
+                              <Box component="span" sx={{ cursor: 'help', borderBottom: `1px dotted ${T.goldDeep}` }}>
+                                {fmt(r.g7ProposedMad)}
+                              </Box>
+                            </Tooltip>
+                          ) : (
+                            '—'
+                          )}
+                        </Box>
                         <Box
                           component="td"
                           sx={{
                             ...cellSx,
-                            fontWeight: st === 'reserved' ? 800 : 400,
-                            color: st === 'reserved' ? T.info : cellSx.color,
+                            fontWeight: st === 'reserved' && showBookedCalPrices ? 800 : 400,
+                            color: st === 'reserved' && showBookedCalPrices ? T.info : cellSx.color,
                             bgcolor:
-                              st === 'reserved'
+                              st === 'reserved' && showBookedCalPrices
                                 ? T.infoTint
                                 : cellSx.bgcolor,
                           }}
                           title={
                             st === 'reserved'
-                              ? r.bookedPriceMad != null
-                                ? 'Prix Sojori figé à la réservation (priceBreakdown)'
-                                : 'Réservé — prix à la réservation indisponible'
+                              ? showBookedCalPrices
+                                ? r.bookedPriceMad != null
+                                  ? 'Prix figé à la réservation (priceBreakdown)'
+                                  : 'Prix à la réservation indisponible'
+                                : 'Activez le toggle pour voir le prix à la réservation'
                               : undefined
                           }
                         >
-                          {st === 'reserved'
-                            ? r.bookedPriceMad != null
-                              ? fmt(r.bookedPriceMad)
-                              : '—'
-                            : r.calendarCurrentMad != null
-                              ? fmt(r.calendarCurrentMad)
-                              : '—'}
+                          {calDisplay}
                         </Box>
                         <Box
                           component="td"
                           sx={{
                             ...cellSx, fontWeight: 800,
                             color:
-                              delta == null
+                              delta == null || (st === 'reserved' && !showBookedCalPrices)
                                 ? T.text4
                                 : delta > 0
                                   ? T.success
@@ -1019,15 +1040,19 @@ export default function PricePreviewCard({
                             opacity: st === 'free' ? 1 : 0.75,
                           }}
                         >
-                          {delta == null ? '—' : `${delta > 0 ? '+' : ''}${fmt(delta)}`}
-                          {st === 'reserved' ? (
+                          {st === 'reserved' && !showBookedCalPrices
+                            ? '—'
+                            : delta == null
+                              ? '—'
+                              : `${delta > 0 ? '+' : ''}${fmt(delta)}`}
+                          {st === 'reserved' && showBookedCalPrices ? (
                             <Box component="span" sx={{ fontSize: 9.5, color: T.info, fontWeight: 400, ml: 0.625 }}>
                               {r.bookedPriceMad != null ? 'vs estim.' : 'figé'}
                             </Box>
                           ) : st === 'blocked' ? (
                             <Box component="span" sx={{ fontSize: 9.5, color: T.text4, fontWeight: 400, ml: 0.625 }}>non poussé</Box>
                           ) : calendarPriceMode(r) === 'manual' ? (
-                            <Box component="span" sx={{ fontSize: 9.5, color: T.info, fontWeight: 400, ml: 0.625 }}>M</Box>
+                            <Box component="span" sx={{ fontSize: 9.5, color: T.info, fontWeight: 400, ml: 0.625 }}>Manu</Box>
                           ) : null}
                         </Box>
                       </Box>
@@ -1041,7 +1066,7 @@ export default function PricePreviewCard({
           {/* Pied : aide */}
           <Typography sx={{ fontSize: 11, color: T.text3, mt: 1.75 }}>
             Cochez des jours libres → « Modifier » dans le bandeau en haut.
-            Les jours réservés affichent le prix figé à la réservation (bleu) · les bloqués ne sont jamais poussés.
+            Hover sur le prix dynamique pour le détail du calcul · jours réservés : prix à la résa masqué sauf toggle.
           </Typography>
         </>
       ) : null}

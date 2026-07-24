@@ -13,6 +13,7 @@ import { formatReservationPaid } from '../../utils/reservationPaidDisplay';
 import { formatDateInputValue } from '../../utils/reservationEditPayload';
 import * as fulltaskApi from '../../services/fulltaskApi';
 import { toast } from 'react-toastify';
+import { useSearchParams } from 'react-router-dom';
 import { ReservationRegistrationActions } from '../reservations/ReservationRegistrationActions';
 
 moment.locale('fr');
@@ -496,6 +497,8 @@ export function GuestInfoTab({
   reservationId,
   onRefresh,
 }: GuestInfoTabProps) {
+  const [, setSearchParams] = useSearchParams();
+
   if (!reservationDetails) {
     return (
       <Box sx={{ p: 3 }}>
@@ -633,9 +636,25 @@ export function GuestInfoTab({
                 </TableContainer>
               ) : (
                 <Typography sx={{ fontSize: 12, color: T.text3 }}>
-                  Cliquez sur {regDone}/{regTotal || 0} pour enregistrer ou « Tout enregistrer ».
+                  Cliquez sur {regDone}/{regTotal || 0} pour enregistrer, ou ouvrez l’onglet Enregistrement.
                 </Typography>
               )}
+              <Button
+                size="small"
+                onClick={() => setSearchParams({ tab: 'enregistrement' })}
+                sx={{
+                  mt: 1,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: 11.5,
+                  color: T.primaryDeep,
+                  px: 0,
+                  minWidth: 0,
+                  '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
+                }}
+              >
+                Voir passeports & détails →
+              </Button>
             </SectionCard>
           )}
 

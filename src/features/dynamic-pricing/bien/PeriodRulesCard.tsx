@@ -77,6 +77,7 @@ export default function PeriodRulesCard({
   onToggleEventEnabled,
   onDuplicateEvent,
 }: PeriodRulesCardProps) {
+  const [listOpen, setListOpen] = React.useState(false);
   const [formOpen, setFormOpen] = React.useState(false);
   const [name, setName] = React.useState('');
   const [from, setFrom] = React.useState('');
@@ -122,6 +123,44 @@ export default function PeriodRulesCard({
 
   return (
     <Box>
+      <Stack
+        direction="row"
+        onClick={() => setListOpen((o) => !o)}
+        sx={{
+          alignItems: 'center',
+          gap: 1,
+          mb: listOpen ? 1.25 : 0,
+          cursor: 'pointer',
+          userSelect: 'none',
+          py: 0.75,
+          px: 1,
+          mx: -1,
+          borderRadius: 1.25,
+          '&:hover': { bgcolor: T.bg2 },
+        }}
+      >
+        <Typography sx={{ fontSize: 13, fontWeight: 800 }}>
+          {events.length} règle{events.length !== 1 ? 's' : ''}
+        </Typography>
+        <Typography sx={{ fontSize: 11.5, color: T.text3, flex: 1 }}>
+          — events / périodes (prioritaires sur le dynamique)
+          {!eventsEnabled ? ' · globalement off' : ''}
+        </Typography>
+        <Box
+          component="span"
+          sx={{
+            color: T.text4,
+            fontSize: 11,
+            transition: 'transform 0.15s',
+            transform: listOpen ? 'rotate(90deg)' : 'none',
+          }}
+        >
+          ▶
+        </Box>
+      </Stack>
+
+      {listOpen ? (
+        <>
       {!eventsEnabled ? (
         <Typography sx={{ fontSize: 12, color: T.warning, mb: 1.25 }}>
           ⚠ Les règles sont globalement désactivées (interrupteur du bloc) — elles sont conservées mais ignorées au calcul.
@@ -275,6 +314,8 @@ export default function PeriodRulesCard({
           </Button>
         </Stack>
       )}
+        </>
+      ) : null}
     </Box>
   );
 }
