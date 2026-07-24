@@ -834,6 +834,12 @@ export default function PricePreviewCard({
               <Box component="span" sx={{ display: 'inline-block', width: 9, height: 9, borderRadius: '2px', bgcolor: T.success, opacity: 0.65, mr: 0.625, verticalAlign: '-1px' }} />
               réservé
             </Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.info, fontWeight: 700 }}>
+              prix bleu = dernière minute appliquée
+            </Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.warning, fontWeight: 700 }}>
+              prix orange = ajustement occupation
+            </Typography>
             <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
               <Box component="span" sx={{ display: 'inline-block', fontFamily: MONO, fontWeight: 900, fontSize: 9, borderRadius: '3px', bgcolor: T.infoTint, color: T.info, border: `1px solid ${T.info}`, mr: 0.5, px: 0.5 }}>Manu</Box>
               prix manuel
@@ -909,8 +915,8 @@ export default function PricePreviewCard({
                     </Box>
                   ) : null}
                   {(ownerMode
-                    ? ['Date', 'Statut', 'Min stay', 'Prix dynamique', 'Prix cal. / réservé']
-                    : ['Date', 'Statut', 'Min stay', 'Prix dynamique', 'Prix cal. / réservé', 'Δ']
+                    ? ['Date', 'Prix dynamique', 'Prix cal. / réservé', 'Min stay', 'Statut']
+                    : ['Date', 'Prix dynamique', 'Prix cal. / réservé', 'Δ', 'Min stay', 'Statut']
                   ).map((h, i) => (
                     <Box
                       key={h}
@@ -922,7 +928,7 @@ export default function PricePreviewCard({
                         letterSpacing: '0.07em',
                         textTransform: 'uppercase',
                         color: T.text3,
-                        textAlign: i === 0 ? 'left' : i === 1 || i === 2 ? 'center' : 'right',
+                        textAlign: i === 0 ? 'left' : /Min stay|Statut/.test(h) ? 'center' : 'right',
                         p: '9px 12px',
                         whiteSpace: 'nowrap',
                       }}
@@ -997,21 +1003,34 @@ export default function PricePreviewCard({
                         <Box component="td" sx={{ ...cellSx, textAlign: 'left', fontFamily: 'inherit', fontWeight: 700, whiteSpace: 'nowrap' }}>
                           {dayLabelFr(r.date)}
                         </Box>
-                        <Box component="td" sx={{ ...cellSx, textAlign: 'center' }}>
-                          <DayStatusBadge row={r} st={st} rule={rule} />
-                        </Box>
-                        <Box component="td" sx={{ ...cellSx, textAlign: 'center', fontWeight: 700 }}>
-                          <MinStayCell row={r} />
-                        </Box>
                         <Box component="td" sx={{ ...cellSx, fontWeight: 800 }}>
                           {r.g7ProposedMad != null ? (
                             <Tooltip
-                              title={<DynamicPriceHover row={r} rule={rule} />}
+                              title={<DynamicPriceHover row={r} rule={rule} ownerMode={ownerMode} />}
                               arrow
                               placement="left"
                               slotProps={LIGHT_TOOLTIP_SLOTS}
                             >
-                              <Box component="span" sx={{ cursor: 'help', borderBottom: `1px dotted ${T.goldDeep}` }}>
+                              <Box
+                                component="span"
+                                sx={{
+                                  cursor: 'help',
+                                  // Couleur = ajustement appliqué : last-minute bleu · occupation orange
+                                  color:
+                                    r.applied?.lastMinutePct != null
+                                      ? T.info
+                                      : r.applied?.occupancyPct != null
+                                        ? T.warning
+                                        : undefined,
+                                  borderBottom: `1px dotted ${
+                                    r.applied?.lastMinutePct != null
+                                      ? T.info
+                                      : r.applied?.occupancyPct != null
+                                        ? T.warning
+                                        : T.goldDeep
+                                  }`,
+                                }}
+                              >
                                 {fmt(r.g7ProposedMad)}
                               </Box>
                             </Tooltip>
@@ -1074,6 +1093,12 @@ export default function PricePreviewCard({
                           ) : null}
                         </Box>
                         ) : null}
+                        <Box component="td" sx={{ ...cellSx, textAlign: 'center', fontWeight: 700 }}>
+                          <MinStayCell row={r} />
+                        </Box>
+                        <Box component="td" sx={{ ...cellSx, textAlign: 'center' }}>
+                          <DayStatusBadge row={r} st={st} rule={rule} />
+                        </Box>
                       </Box>
                     </React.Fragment>
                   );
