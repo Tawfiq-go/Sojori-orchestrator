@@ -58,7 +58,7 @@ export function sanitizeInventoryUpdatePayload(item) {
 }
 
 export default function UpdateInventoryModal({
-  open, onClose, selectedCells = [], currency = 'MAD', inventoryData = {}, listings = [], onSave,
+  open, onClose, dpEnabled = true, selectedCells = [], currency = 'MAD', inventoryData = {}, listings = [], onSave,
   sojoriMinStayByDate = {},
 }) {
   const [step, setStep] = useState('form'); // 'form' | 'confirm'
@@ -549,6 +549,7 @@ export default function UpdateInventoryModal({
                 </Section>
               )}
 
+              {dpEnabled ? (
               <Section label="Prix dynamique">
                 <ToggleGroup
                   value={
@@ -572,6 +573,7 @@ export default function UpdateInventoryModal({
                   (historique) si la date est encore dans l’inventaire actif.
                 </p>
               </Section>
+              ) : null}
 
               <details style={{ marginTop: 10, borderTop: `1px dashed ${T.border}`, paddingTop: 10 }}>
                 <summary style={{
