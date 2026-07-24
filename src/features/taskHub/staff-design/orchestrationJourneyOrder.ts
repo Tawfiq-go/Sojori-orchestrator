@@ -7,6 +7,7 @@ export const ORCHESTRATION_JOURNEY_SLOTS: Array<
   | { kind: 'workflow'; taskTypeId: FulltaskTaskTypeId }
 > = [
   { kind: 'message', catalogMessageId: 'welcome_sojori_v2' },
+  { kind: 'message', catalogMessageId: 'inform_syndic' },
   { kind: 'workflow', taskTypeId: 'arrival_choose' },
   { kind: 'workflow', taskTypeId: 'receive_arrival' },
   { kind: 'workflow', taskTypeId: 'registration' },
@@ -29,6 +30,7 @@ export const ORCHESTRATION_JOURNEY_SLOTS: Array<
 
 export const SCHEDULED_MESSAGE_EMOJI: Record<string, string> = {
   welcome_sojori_v2: '👋',
+  inform_syndic: '🏢',
   checkin_feedback: '☺️',
   departure_instructions: '⭐',
   checkout_feedback: '💌',

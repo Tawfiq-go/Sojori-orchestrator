@@ -10,6 +10,7 @@ export const ORCH_FLAG_KEYS = [
   'orchestration_declare_departure',
   'orchestration_receive_arrival',
   'orchestration_receive_departure',
+  'orchestration_inform_syndic',
   'orchestration_registration',
   'orchestration_cleaning_free',
   'orchestration_cleaning_paid',

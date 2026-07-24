@@ -16,9 +16,10 @@ Votre réservation {reservationNumber} pour {listingName} est confirmée.
 Arrivée : {arrivalDate} · Départ : {departureDate} · {nights} nuit(s)
 
 Pour préparer votre arrivée, écrivez-nous sur WhatsApp :
-• consignes d'accès et parcours jusqu'au logement
-{babyCotBlock}• navette aéroport
-• ménage, courses, conciergerie et autres services
+• Choisir votre heure d'arrivée
+• Consignes d'accès et parcours jusqu'au logement
+{babyCotBlock}• Navette aéroport
+• Ménage, courses, conciergerie et autres services
 
 👉 WhatsApp (réf. {reservationNumber}) :
 ${WHATSAPP_RESERVATION_LINK_VAR}
@@ -32,9 +33,10 @@ Votre réservation {reservationNumber} pour {listingName} est confirmée.
 Arrivée : {arrivalDate} · Départ : {departureDate} · {nights} nuit(s)
 
 Pour préparer votre arrivée, écrivez-nous sur WhatsApp :
-• consignes d'accès et parcours jusqu'au logement
-{babyCotBlock}• navette aéroport
-• ménage, courses, conciergerie et autres services
+• Choisir votre heure d'arrivée
+• Consignes d'accès et parcours jusqu'au logement
+{babyCotBlock}• Navette aéroport
+• Ménage, courses, conciergerie et autres services
 
 👉 WhatsApp (réf. {reservationNumber}) :
 ${WHATSAPP_RESERVATION_LINK_VAR}

@@ -1,12 +1,12 @@
 // ════════════════════════════════════════════════════════════════════
 // PricePreviewCard — Aperçu des prix (« super vue » de confiance)
-// Compare par jour : prix estimé (marché) → prix Sojori (après réglages)
-// → prix calendrier actuel, avec statut réservé/bloqué en couleurs.
+// Compare par jour : prix dynamique (après réglages) ↔ calendrier,
+// avec statut réservé/bloqué. Hover = détail du calcul (estimé → mode → …).
 // Sélecteur 7 j → 12 mois · chips synthèse · strip visuel · tableau
 // groupé par mois. Source : apply-preview-diff (aucun nouveau endpoint).
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
-import { Box, Stack, Typography, Button, CircularProgress, Tooltip, Checkbox } from '@mui/material';
+import { Box, Stack, Typography, Button, CircularProgress, Tooltip, Checkbox, Switch, FormControlLabel } from '@mui/material';
 import { T } from '../_tokens';
 import type { ApplyPreviewDiffDto, ApplyPreviewDiffRowDto } from '../../../services/dynamicPricingApi';
 import type { PricingEvent } from './PricingControls';
@@ -26,6 +26,7 @@ const PERIODS = [
 
 type RowStatus = 'reserved' | 'blocked' | 'free';
 type CalendarPriceMode = 'manual' | 'dynamic';
+type DayRule = { name: string; emoji?: string };
 
 function rowStatus(row: ApplyPreviewDiffRowDto): RowStatus {
   if (row.skipReason === 'has_reservation' || row.alert === 'reserved') return 'reserved';
@@ -39,12 +40,8 @@ function calendarPriceMode(row: ApplyPreviewDiffRowDto): CalendarPriceMode {
   return 'dynamic';
 }
 
-function priceModeLetter(mode: CalendarPriceMode): 'M' | 'D' {
-  return mode === 'manual' ? 'M' : 'D';
-}
-
 function priceModeLabel(mode: CalendarPriceMode): string {
-  return mode === 'manual' ? 'Prix manuel calendrier' : 'Prix dynamique Sojori';
+  return mode === 'manual' ? 'Prix manuel calendrier' : 'Prix dynamique';
 }
 
 function statusWord(st: RowStatus): string {
@@ -53,13 +50,29 @@ function statusWord(st: RowStatus): string {
   return 'LIBRE';
 }
 
-function DayStatusBadge({ row, st }: { row: ApplyPreviewDiffRowDto; st: RowStatus }) {
+/** Badge statut : Manu si manuel · nom d’event si règle · rien si dynamique pur. */
+function DayStatusBadge({
+  row,
+  st,
+  rule,
+}: {
+  row: ApplyPreviewDiffRowDto;
+  st: RowStatus;
+  rule?: DayRule;
+}) {
   const mode = calendarPriceMode(row);
-  const letter = priceModeLetter(mode);
+  const tag = rule
+    ? `${rule.emoji ? `${rule.emoji} ` : ''}${rule.name}`
+    : mode === 'manual'
+      ? 'Manu'
+      : null;
+  const title = rule
+    ? `Event « ${rule.name} » (remplace le dynamique) · ${statusWord(st)}`
+    : `${priceModeLabel(mode)} · ${statusWord(st)}`;
   return (
     <Box
       component="span"
-      title={`${priceModeLabel(mode)} · ${statusWord(st)}`}
+      title={title}
       sx={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -67,38 +80,92 @@ function DayStatusBadge({ row, st }: { row: ApplyPreviewDiffRowDto; st: RowStatu
         fontSize: 10,
         fontWeight: 800,
         borderRadius: 999,
-        pl: 0.5,
+        pl: tag ? 0.5 : 1,
         pr: 1.125,
         py: 0.25,
         fontFamily: MONO,
         whiteSpace: 'nowrap',
+        maxWidth: 220,
         bgcolor: st === 'reserved' ? T.success : st === 'blocked' ? T.bg3 : T.goldTint2,
         color: st === 'reserved' ? '#fff' : st === 'blocked' ? T.text3 : T.goldDeep,
       }}
     >
-      <Box
-        component="span"
-        sx={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minWidth: 16,
-          height: 16,
-          px: 0.375,
-          borderRadius: '4px',
-          fontSize: 9,
-          fontWeight: 900,
-          lineHeight: 1,
-          bgcolor: mode === 'manual' ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.08)',
-          color: mode === 'manual' ? T.info : st === 'reserved' ? T.success : T.text2,
-          border: mode === 'manual' ? `1px solid ${T.info}` : 'none',
-        }}
-      >
-        {letter}
-      </Box>
+      {tag ? (
+        <Box
+          component="span"
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            maxWidth: 110,
+            height: 16,
+            px: 0.5,
+            borderRadius: '4px',
+            fontSize: 9,
+            fontWeight: 900,
+            lineHeight: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            bgcolor: rule ? T.warningTint : 'rgba(255,255,255,0.92)',
+            color: rule ? T.warning : T.info,
+            border: rule ? `1px solid ${T.warning}` : `1px solid ${T.info}`,
+          }}
+        >
+          {tag}
+        </Box>
+      ) : null}
       {statusWord(st)}
       {st === 'blocked' ? ' ⚠' : ''}
     </Box>
+  );
+}
+
+/** Hover sur le prix dynamique : chaîne de calcul lisible. */
+function DynamicPriceHover({
+  row,
+  rule,
+}: {
+  row: ApplyPreviewDiffRowDto;
+  rule?: DayRule;
+}) {
+  const lineSx = { fontSize: 10.5, fontFamily: MONO, lineHeight: 1.45, fontVariantNumeric: 'tabular-nums' };
+  const base =
+    row.applied?.baseFixeMad != null
+      ? { label: 'Prix de base (fixe)', value: row.applied.baseFixeMad }
+      : row.airroiMad != null
+        ? { label: 'Prix estimé (marché)', value: row.airroiMad }
+        : null;
+  const steps: string[] = [];
+  if (base) steps.push(`${base.label} : ${fmt(base.value)} MAD`);
+  if (rule) steps.push(`Event « ${rule.name} » (remplace le dynamique)`);
+  if (row.applied?.occupancyPct != null) {
+    steps.push(`Occupation : ${row.applied.occupancyPct > 0 ? '+' : ''}${row.applied.occupancyPct} %`);
+  }
+  if (row.applied?.lastMinutePct != null) {
+    steps.push(`Dernière minute : ${row.applied.lastMinutePct > 0 ? '+' : ''}${row.applied.lastMinutePct} %`);
+  }
+  if (row.applied?.clamp === 'floor') steps.push('Plancher appliqué');
+  if (row.applied?.clamp === 'ceiling') steps.push('Plafond appliqué');
+  if (row.applied?.gapMinStay) {
+    steps.push(`Trou : min stay ${row.applied.gapMinStay.from}→${row.applied.gapMinStay.to} n`);
+  }
+
+  return (
+    <Stack spacing={0.35} sx={{ py: 0.25, maxWidth: 260 }}>
+      <Typography sx={{ fontSize: 11, fontWeight: 800 }}>Prix dynamique</Typography>
+      {steps.length ? (
+        steps.map((s) => (
+          <Typography key={s} sx={{ ...lineSx, color: T.text2 }}>
+            · {s}
+          </Typography>
+        ))
+      ) : (
+        <Typography sx={{ ...lineSx, color: T.text3 }}>Calcul standard (estimé → bornes)</Typography>
+      )}
+      <Typography sx={{ ...lineSx, fontWeight: 800, color: T.goldDeep, pt: 0.25 }}>
+        = {row.g7ProposedMad != null ? `${fmt(row.g7ProposedMad)} MAD` : '—'}
+      </Typography>
+    </Stack>
   );
 }
 
@@ -179,26 +246,31 @@ function ChartDayTooltipContent({
 }: {
   row: ApplyPreviewDiffRowDto;
   status: RowStatus;
-  rule?: { name: string; emoji?: string };
+  rule?: DayRule;
 }) {
   const marche = row.airroiMad;
-  const sojori = row.g7ProposedMad;
+  const dynamique = row.g7ProposedMad;
   const cal = row.calendarCurrentMad;
   const booked = row.bookedPriceMad ?? null;
-  const deltaMarcheCal = priceDelta(marche, cal);
-  const deltaSojoriCal = priceDelta(sojori, cal);
+  const mode = calendarPriceMode(row);
+  const deltaDynCal = priceDelta(dynamique, cal);
   const deltaBookedMarche = priceDelta(booked, marche);
   const lineSx = { fontSize: 10.5, fontFamily: MONO, lineHeight: 1.5, fontVariantNumeric: 'tabular-nums' };
+  const modeBit = rule
+    ? `event « ${rule.name} »`
+    : mode === 'manual'
+      ? 'Manu'
+      : 'dynamique';
 
   return (
     <Stack spacing={0.375} sx={{ py: 0.125 }}>
       <Typography sx={{ fontSize: 11.5, fontWeight: 800, lineHeight: 1.3 }}>{dayLabelFr(row.date)}</Typography>
       <Typography sx={{ fontSize: 10, color: T.text3 }}>
-        {STATUS_LABEL[status]} · {priceModeLetter(calendarPriceMode(row))} = {priceModeLabel(calendarPriceMode(row)).toLowerCase()}
+        {STATUS_LABEL[status]} · {modeBit}
       </Typography>
       <Box sx={{ height: 4 }} />
       <Typography sx={lineSx}>Prix estimé (marché) : {fmtMad(marche)}</Typography>
-      <Typography sx={{ ...lineSx, fontWeight: 800, color: T.goldDeep }}>Prix Sojori : {fmtMad(sojori)}</Typography>
+      <Typography sx={{ ...lineSx, fontWeight: 800, color: T.goldDeep }}>Prix dynamique : {fmtMad(dynamique)}</Typography>
       {status === 'reserved' ? (
         <>
           <Typography sx={{ ...lineSx, fontWeight: 800, color: T.info }}>
@@ -217,14 +289,9 @@ function ChartDayTooltipContent({
           Δ résa − estimation : {fmtSignedDelta(deltaBookedMarche)}
         </Typography>
       ) : (
-        <>
-          <Typography sx={{ ...lineSx, color: deltaTone(deltaMarcheCal) }}>
-            Δ1 marché − cal. : {fmtSignedDelta(deltaMarcheCal)}
-          </Typography>
-          <Typography sx={{ ...lineSx, color: deltaTone(deltaSojoriCal), fontWeight: 700 }}>
-            Δ2 Sojori − cal. : {fmtSignedDelta(deltaSojoriCal)}
-          </Typography>
-        </>
+        <Typography sx={{ ...lineSx, color: deltaTone(deltaDynCal), fontWeight: 700 }}>
+          Δ dynamique − cal. : {fmtSignedDelta(deltaDynCal)}
+        </Typography>
       )}
       {rule ? (
         <Typography sx={{ fontSize: 10, color: T.warning, mt: 0.25 }}>
@@ -253,6 +320,8 @@ export default function PricePreviewCard({
 }: PricePreviewCardProps) {
   const selection = usePricePreviewSelectionOptional();
   const [periodKey, setPeriodKey] = React.useState<(typeof PERIODS)[number]['key']>('30');
+  /** Prix figés à la résa (colonne cal.) — masqués par défaut. */
+  const [showBookedCalPrices, setShowBookedCalPrices] = React.useState(false);
 
   const period = PERIODS.find((p) => p.key === periodKey) ?? PERIODS[2];
 

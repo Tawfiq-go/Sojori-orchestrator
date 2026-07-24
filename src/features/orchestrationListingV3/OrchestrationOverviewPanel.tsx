@@ -64,6 +64,7 @@ import {
 import type { CatalogMessage, ScheduledOrchestrationMessage } from '../taskHub/staff-design/types';
 import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
 import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
+import V3InformSyndicPanel from './V3InformSyndicPanel';
 import OrchestrationGlobalSwitch from './OrchestrationGlobalSwitch';
 import CapabilityAuditStrip from './CapabilityAuditStrip';
 import { V3Section } from './V3Primitives';
@@ -160,6 +161,13 @@ const TIMING_PRESETS: Record<
     fin: 'J0',
     anchor: 'checkin',
     hint: 'Accueil staff le jour d’arrivée (lié à D1)',
+  },
+  inform_syndic: {
+    label: 'Avant arrivée',
+    start: 2,
+    fin: 'J0',
+    anchor: 'checkin',
+    hint: 'Informer le syndic J-2 → J0 (texte WA + option images)',
   },
   receive_departure: {
     label: 'Jour J départ',
@@ -2702,6 +2710,13 @@ export default function OrchestrationOverviewPanel({
                     configDef.key === 'receive_departure' ? (
                     <V3ReceiveChecklistPanel
                       kind={configDef.key === 'receive_arrival' ? 'arrival' : 'departure'}
+                      gestion={configGestionValues}
+                      onSave={async (nextGestion) => {
+                        await onGestionPatch(configDef.key, nextGestion);
+                      }}
+                    />
+                  ) : configDef.key === 'inform_syndic' ? (
+                    <V3InformSyndicPanel
                       gestion={configGestionValues}
                       onSave={async (nextGestion) => {
                         await onGestionPatch(configDef.key, nextGestion);
