@@ -3,7 +3,7 @@
 // Restaure l’UI legacy « Travellers » sur la fiche résa Atelier 2026.
 // ════════════════════════════════════════════════════════════════════
 
-import { useMemo, useState, type ChangeEvent } from 'react';
+import { useMemo, useState, useEffect, type ChangeEvent } from 'react';
 import {
   Box,
   Stack,
@@ -26,6 +26,7 @@ import { useDispatch } from 'react-redux';
 import { ReservationRegistrationActions } from '../reservations/ReservationRegistrationActions';
 import reservationsService from '../../services/reservationsService';
 import { uploadImageToAPI } from '../../redux/slices/UploadSlice';
+import { getListingMediaDisplayUrl, isListingsBucketUrl } from '../../features/finances/services/listingMediaApi';
 
 const T = {
   primary: '#b8851a',
@@ -483,10 +484,10 @@ export function RegistrationTab({
                 {(front || back) ? (
                   <Stack direction="row" spacing={1}>
                     {front ? (
-                      <DocThumb src={front} label="Recto" onClick={() => setPreviewUrl(front)} />
+                      <SignedDocThumb src={front} label="Recto" onPreview={setPreviewUrl} />
                     ) : null}
                     {back ? (
-                      <DocThumb src={back} label="Verso" onClick={() => setPreviewUrl(back)} />
+                      <SignedDocThumb src={back} label="Verso" onPreview={setPreviewUrl} />
                     ) : null}
                   </Stack>
                 ) : (
@@ -755,6 +756,63 @@ function DocThumb({
       />
     </Box>
   );
+}
+
+/** GCS documents are private — resolve a signed URL before display. */
+function SignedDocThumb({
+  src,
+  label,
+  onPreview,
+}: {
+  src: string;
+  label: string;
+  onPreview: (url: string) => void;
+}) {
+  const [displayUrl, setDisplayUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setFailed(false);
+    setDisplayUrl(null);
+    void (async () => {
+      try {
+        const url = isListingsBucketUrl(src)
+          ? await getListingMediaDisplayUrl(src)
+          : src;
+        if (url.startsWith('blob:')) objectUrl = url;
+        if (!cancelled) setDisplayUrl(url);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [src]);
+
+  if (failed) {
+    return (
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography sx={{ fontSize: 10, fontWeight: 700, color: T.text4, mb: 0.35 }}>
+          {label}
+        </Typography>
+        <Typography sx={{ fontSize: 11, color: T.error }}>Image indisponible</Typography>
+      </Box>
+    );
+  }
+
+  if (!displayUrl) {
+    return (
+      <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 88 }}>
+        <CircularProgress size={18} />
+      </Box>
+    );
+  }
+
+  return <DocThumb src={displayUrl} label={label} onClick={() => onPreview(displayUrl)} />;
 }
 
 function formDate(raw: string): string {
