@@ -19,7 +19,10 @@ export function extractHttpErrorMessage(error: unknown, fallback = 'Erreur incon
       }
     }
     if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-      return 'Délai dépassé — Meta WhatsApp ne répond pas (timeout). Réessayez ou vérifiez le token.';
+      return 'Délai dépassé — réseau lent ou coupé. Réessayez.';
+    }
+    if (!error.response && (error.code === 'ERR_NETWORK' || /network error/i.test(error.message || ''))) {
+      return 'Connexion impossible — vérifiez le réseau (4G / Wi‑Fi).';
     }
     if (error.response?.status === 502) {
       return 'srv-fullchatbot injoignable ou WhatsApp a refusé l’envoi (502).';

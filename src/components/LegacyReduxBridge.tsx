@@ -59,8 +59,19 @@ export function setupLegacyAxiosAuth() {
       if (response.data?.newToken) {
         setTokens(response.data.newToken, getRefreshToken() || '');
       }
+      void import('../utils/networkError').then(({ reportNetworkSuccess }) =>
+        reportNetworkSuccess(),
+      );
       return response;
     },
-    (error) => Promise.reject(error),
+    (error) => {
+      void import('../utils/networkError').then(({ classifyNetworkError, reportNetworkFailure, toastNetworkError, isTransientNetworkError }) => {
+        if (isTransientNetworkError(error)) {
+          reportNetworkFailure(classifyNetworkError(error) || 'network');
+          toastNetworkError(error);
+        }
+      });
+      return Promise.reject(error);
+    },
   );
 }

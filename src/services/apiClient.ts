@@ -14,6 +14,13 @@ import { hasDevTokenBypass, invalidateSession } from '../utils/devApiAccess';
 import store from '../redux/store';
 import { isLandlordMutationAllowlisted, isLandlordRole } from '../utils/writeAccess';
 import { toast } from 'react-toastify';
+import {
+  classifyNetworkError,
+  isTransientNetworkError,
+  reportNetworkFailure,
+  reportNetworkSuccess,
+  toastNetworkError,
+} from '../utils/networkError';
 
 /**
  * VITE_DISABLE_AUTH : ne concerne que le garde `ProtectedRoute` (éviter la redirection login).
@@ -216,6 +223,7 @@ apiClient.interceptors.response.use(
       setTokens(newToken, getRefreshToken() || '');
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
     }
+    reportNetworkSuccess();
     return response;
   },
   async (error) => {
@@ -224,6 +232,35 @@ apiClient.interceptors.response.use(
 
     /** Appels internes refresh — ne pas re-déclencher logout / boucle. */
     if (originalRequest?._internalTokenRefresh) {
+      return Promise.reject(error);
+    }
+
+    // Réseau / timeout / hors ligne — retry léger GET + bandeau (anti-spam toast).
+    const netKind = classifyNetworkError(error);
+    if (netKind && isTransientNetworkError(error)) {
+      const method = String(originalRequest?.method || 'get').toLowerCase();
+      const canRetryGet =
+        method === 'get' &&
+        originalRequest &&
+        !originalRequest._networkRetry &&
+        !originalRequest.url?.includes('/valid-token-check');
+
+      if (canRetryGet) {
+        originalRequest._networkRetry = true;
+        await new Promise((r) => setTimeout(r, 700));
+        try {
+          return await apiClient(originalRequest);
+        } catch (retryErr) {
+          reportNetworkFailure(classifyNetworkError(retryErr) || netKind);
+          toastNetworkError(retryErr);
+          logApiHttpFailure(retryErr, { networkRetry: true });
+          return Promise.reject(retryErr);
+        }
+      }
+
+      reportNetworkFailure(netKind);
+      toastNetworkError(error);
+      logApiHttpFailure(error, { network: netKind });
       return Promise.reject(error);
     }
 
