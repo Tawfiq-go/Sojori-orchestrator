@@ -45,7 +45,14 @@ export function DynamicPricingPage() {
   const portfolio = usePortfolio(requestOwnerId || undefined, cityScope, {
     enabled: scopeFetchReady,
   });
-  const bienDetail = useBienDetail(listingId, requestOwnerId || undefined);
+  const seedRow = useMemo(() => {
+    if (!listingId) return null;
+    return portfolio.rows.find((r) => r.listing._id === listingId) ?? null;
+  }, [listingId, portfolio.rows]);
+  const bienDetail = useBienDetail(listingId, requestOwnerId || undefined, {
+    seedRow,
+    portfolioReady: !portfolio.loading,
+  });
   // Express d'abord : l'étude de marché complète est repliée par défaut.
   const [bienAdvancedOpen, setBienAdvancedOpen] = useState<boolean>(
     () => localStorage.getItem('dp-bien-advanced') === '1',

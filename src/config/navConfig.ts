@@ -355,7 +355,6 @@ export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
       { id: 'temp/settings-admin-config', label: 'Pays & villes', icon: '🌍' },
       { id: 'temp/channel-distribution', label: 'Distribution channels', icon: '📡' },
       { id: 'temp/equipe-groups', label: 'Groupes staff', icon: '👨‍👩‍👧‍👦' },
-      { id: 'temp/tasks-team-legacy', label: 'Équipe (legacy)', icon: '👷' },
       { id: 'temp/booking-clients', label: 'Clients Sojori Booking', icon: '🛒' },
     ],
   },

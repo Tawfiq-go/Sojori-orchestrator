@@ -100,17 +100,8 @@ const ListingCreatePage = lazyWithReload(() =>
 const ReviewsPage = lazyWithReload(() =>
   import('./pages/ReviewsPage').then((module) => ({ default: module.ReviewsPage }))
 );
-const TasksTeamPage = lazyWithReload(() =>
-  import('./pages/TasksTeamPage').then((module) => ({ default: module.TasksTeamPage }))
-);
-const TasksPlanningPage = lazyWithReload(() =>
-  import('./pages/TasksPlanningPage').then((module) => ({ default: module.TasksPlanningPage }))
-);
 const TasksPlanningPageV2 = lazyWithReload(() =>
   import('./pages/TasksPlanningPageV2').then((module) => ({ default: module.default }))
-);
-const TasksTeamPageV2 = lazyWithReload(() =>
-  import('./pages/TasksTeamPageV2').then((module) => ({ default: module.default }))
 );
 const TasksKanbanPage = lazyWithReload(() =>
   import('./pages/TasksKanbanPage').then((module) => ({ default: module.default }))
@@ -377,10 +368,6 @@ function App() {
               <Route path="/chatbot/whitelist/:reservationId" element={<LazyRoute><ChatbotWhitelistDetailPage /></LazyRoute>} />
               <Route path="/chatbot/whitelist" element={<LazyRoute><ChatbotWhitelistPage /></LazyRoute>} />
               <Route path="/chatbot/listing" element={<LazyRoute><ChatbotListingSnapshotPage /></LazyRoute>} />
-
-              {/* Anciennes vues (backup) */}
-              <Route path="/tasks/team-legacy" element={<LazyRoute><TasksTeamPage /></LazyRoute>} />
-              <Route path="/tasks/planning-legacy" element={<LazyRoute><TasksPlanningPage /></LazyRoute>} />
 
               {/* Communications Hub - Page principale avec onglets */}
               <Route path="/communications" element={<LazyRoute><CommunicationsHubPage /></LazyRoute>} />

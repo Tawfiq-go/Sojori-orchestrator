@@ -34,6 +34,7 @@ import { useAuth } from '../hooks/useAuth';
 import type { ListingSummary } from '../types/listings.types';
 import { useSocketIO } from '../hooks/useSocketIO';
 import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
+import { useTaskDetailDrawer } from '../features/tasksNew/hooks/useTaskDetailDrawer';
 
 /**
  * TaskNew planning :
@@ -53,6 +54,7 @@ export default function TasksPlanningPageV2() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { openTaskById, drawer: taskDetailDrawer } = useTaskDetailDrawer();
   const { loading: authLoading } = useAuth();
   const scope = usePmTasksScope();
   const listingsCacheKey = scope.scopeCacheKey;
@@ -259,6 +261,7 @@ export default function TasksPlanningPageV2() {
     },
   });
 
+
   const listings: ListingRow[] = useMemo(() => {
     const ownerKey = scope.filterOwnerId || scope.ownerId ? String(scope.filterOwnerId || scope.ownerId) : '';
     const activeById = buildListingIdIndex(activeListings);
@@ -327,7 +330,7 @@ export default function TasksPlanningPageV2() {
           guestName: String(r.guestName || 'Guest'),
           arrivalDate: String(r.arrivalDate || ''),
           departureDate: String(r.departureDate || ''),
-          status: String(r.status || 'confirmed'),
+          status: String(r.status || 'confirmed') as ListingRow['reservations'][0]['status'],
           channelName: String(r.channelName || 'direct'),
           numberOfGuests: Number(r.numberOfGuests || 0),
           reservationNumber: String(r.reservationNumber || ''),
@@ -347,9 +350,19 @@ export default function TasksPlanningPageV2() {
     });
   }, [activeListings, rawData, opSyncTick, scope.ownerId, scope.filterOwnerId]);
 
-  const handleTaskClick = (_item: TimelineItem) => {
-    // TODO: Ouvrir drawer détail tâche
-  };
+  const handleTaskClick = useCallback(
+    (item: TimelineItem) => {
+      const d = (item.data || {}) as Record<string, unknown>;
+      const taskId = String(d.taskId || d._id || '').trim();
+      if (taskId) {
+        void openTaskById(taskId);
+        return;
+      }
+      const resNum = String(d.reservationNumber || d.reservationCode || '').trim();
+      if (resNum) navigate(`/reservations/${encodeURIComponent(resNum)}`);
+    },
+    [navigate, openTaskById],
+  );
 
   const handleReservationClick = useCallback(
     (routeId: string) => {
@@ -572,6 +585,7 @@ export default function TasksPlanningPageV2() {
         )}
 
         {listFullscreenLayer}
+        {taskDetailDrawer}
 
         {!isLoading && !calendarReady && error && (
           <Box sx={{ maxWidth: 800, mx: 'auto', mt: 4, p: 3 }}>
