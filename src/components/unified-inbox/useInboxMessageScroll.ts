@@ -53,12 +53,21 @@ export function useInboxMessageScroll(
   }, [threadId, highlightKeyword]);
 
   useLayoutEffect(() => {
-    if (loadingMessages) {
-      prevLoadingRef.current = true;
+    if (messageCount === 0) {
+      if (loadingMessages) prevLoadingRef.current = true;
       return;
     }
-    if (messageCount === 0) {
-      prevLoadingRef.current = false;
+
+    // Cache déjà affiché pendant le fetch — coller en bas tout de suite (style WA Web).
+    if (loadingMessages) {
+      prevLoadingRef.current = true;
+      if (isFirstLoadRef.current) {
+        if (!scrollToKeywordMatch()) {
+          scrollToBottom('auto');
+        }
+        isFirstLoadRef.current = false;
+        prevCountRef.current = messageCount;
+      }
       return;
     }
 
@@ -74,7 +83,7 @@ export function useInboxMessageScroll(
       return;
     }
 
-    // Reload finished (e.g. after send) — stay at bottom instead of stuck at top.
+    // Fin de chargement / refresh — rester en bas (pas de saut vers le haut).
     if (resumedFromLoad && !highlightKeyword?.trim()) {
       scrollToBottom('auto');
       prevCountRef.current = messageCount;

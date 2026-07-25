@@ -173,6 +173,9 @@ const UnifiedInboxPage = lazyWithReload(() =>
 const CommunicationsHubPage = lazyWithReload(() =>
   import('./pages/CommunicationsHubPage').then((module) => ({ default: module.default }))
 );
+const PlanningOpsPage = lazyWithReload(() =>
+  import('./pages/PlanningOpsPage').then((module) => ({ default: module.default }))
+);
 const CRMPage = lazyWithReload(() =>
   import('./pages/CRMPage').then((module) => ({ default: module.CRMPage }))
 );
@@ -368,6 +371,9 @@ function App() {
               <Route path="/chatbot/whitelist/:reservationId" element={<LazyRoute><ChatbotWhitelistDetailPage /></LazyRoute>} />
               <Route path="/chatbot/whitelist" element={<LazyRoute><ChatbotWhitelistPage /></LazyRoute>} />
               <Route path="/chatbot/listing" element={<LazyRoute><ChatbotListingSnapshotPage /></LazyRoute>} />
+
+              {/* Planning ops (Vue ops) — résas / tasks / messages */}
+              <Route path="/planning" element={<LazyRoute><PlanningOpsPage /></LazyRoute>} />
 
               {/* Communications Hub - Page principale avec onglets */}
               <Route path="/communications" element={<LazyRoute><CommunicationsHubPage /></LazyRoute>} />

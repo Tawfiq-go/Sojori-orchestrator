@@ -598,6 +598,9 @@ export type DayPlanStep = {
   /** Mode à l'arrivée — affiché, non bloquant, accès WhatsApp OK. */
   registrationAtArrival?: boolean;
   state: 'done' | 'pending' | 'attention';
+  /** Dates du séjour (ISO) — arrivée → départ, pour situer la réservation. */
+  stayFrom?: string;
+  stayTo?: string;
   /** Heure par défaut estimée ('HH:mm' — départ 11:00 / arrivée 15:00) quand hourUnknown. */
   estimatedTime?: string;
   /** Prochaine relance client planifiée (ISO) — quand l'heure n'est pas encore choisie. */

@@ -86,60 +86,62 @@ export const DEFAULT_TASK_NOTIFY_ENABLED: Record<(typeof FULLTASK_TASK_TYPES)[nu
   service_client: true,
 };
 
+/** Types tâches exposés dans l’UI admin (simplifié). */
+export const WA_ADMIN_TASK_NOTIFY_TYPES = [
+  'transport',
+  'groceries',
+  'concierge',
+  'support',
+  'service_client',
+] as const;
+
 export function defaultTaskNotifyFlags(): Record<string, boolean> {
   const out: Record<string, boolean> = {};
   for (const t of FULLTASK_TASK_TYPES) {
-    const on = DEFAULT_TASK_NOTIFY_ENABLED[t];
+    const on = (WA_ADMIN_TASK_NOTIFY_TYPES as readonly string[]).includes(t)
+      ? DEFAULT_TASK_NOTIFY_ENABLED[t]
+      : false;
     out[taskNotifyKey(t, 'created')] = on;
-    out[taskNotifyKey(t, 'cancelled')] = on;
+    out[taskNotifyKey(t, 'cancelled')] = false;
   }
   return out;
 }
 
-export const WA_TASK_NOTIFY_CREATED = FULLTASK_TASK_TYPES.map((t) => ({
+export const WA_TASK_NOTIFY_CREATED = WA_ADMIN_TASK_NOTIFY_TYPES.map((t) => ({
   key: taskNotifyKey(t, 'created'),
   taskType: t,
   label: labelForTaskTypeId(t),
   emoji: FULLTASK_TASK_TYPE_EMOJI[t] || '📋',
 }));
 
-export const WA_TASK_NOTIFY_CANCELLED = FULLTASK_TASK_TYPES.map((t) => ({
-  key: taskNotifyKey(t, 'cancelled'),
-  taskType: t,
-  label: labelForTaskTypeId(t),
-  emoji: FULLTASK_TASK_TYPE_EMOJI[t] || '📋',
-}));
+/** @deprecated — section UI retirée. */
+export const WA_TASK_NOTIFY_CANCELLED: typeof WA_TASK_NOTIFY_CREATED = [];
 
-/** Aligné apps/srv-fulltask/src/routes/adminWhatsapp/getNotificationTypes.ts */
+/** Notifs push exposées (UI simplifiée). */
 export const WA_ADMIN_NOTIFICATION_GROUPS: {
   title: string;
   hint?: string;
   items: { key: string; label: string }[];
 }[] = [
   {
-    title: 'Réservation',
+    title: 'Réservation & inbox',
     items: [
-      { key: 'reservation_new', label: 'Nouvelle réservation' },
-      { key: 'airbnb_new_request', label: 'Demande Airbnb (pending)' },
+      { key: 'reservation_new', label: 'Réservation créée' },
       { key: 'reservation_cancelled', label: 'Réservation annulée' },
-      { key: 'reservation_modified', label: 'Réservation modifiée' },
+      { key: 'message_received', label: 'Message OTA' },
+      { key: 'lead_new', label: 'Message Lead' },
+      { key: 'review_new', label: 'Avis OTA' },
     ],
-  },
-  {
-    title: 'Inbox OTA',
-    hint: 'Lié aux menus M · V · L',
-    items: [
-      { key: 'message_received', label: 'Message reçu' },
-      { key: 'review_new', label: 'Nouvel avis' },
-      { key: 'lead_new', label: 'Nouveau lead' },
-      { key: 'message_automated_sent', label: 'Message auto envoyé (peu utilisé)' },
-    ],
-  },
-  {
-    title: 'Divers',
-    items: [{ key: 'registration_started', label: 'Enregistrement démarré (bientôt)' }],
   },
 ];
+
+/** Clés retirées de l’UI — forcées à false à la sauvegarde. */
+export const WA_ADMIN_NOTIFICATION_KEYS_REMOVED = [
+  'message_automated_sent',
+  'registration_started',
+  'airbnb_new_request',
+  'reservation_modified',
+] as const;
 
 export const WA_ADMIN_NOTIFICATION_KEYS = [
   ...WA_ADMIN_NOTIFICATION_GROUPS.flatMap((g) => g.items.map((i) => i.key)),
@@ -301,10 +303,22 @@ export function designWhatsappAdminToApi(
   const notifications: Record<string, boolean> = {};
   const keys = new Set([
     ...WA_ADMIN_NOTIFICATION_KEYS,
+    ...Object.keys(defaultTaskNotifyFlags()),
     ...Object.keys(form.notifications).filter(isTaskNotifyKey),
   ]);
   for (const key of keys) {
     notifications[key] = form.notifications[key] !== false;
+  }
+  // Clés retirées de l’UI : toujours OFF.
+  for (const key of WA_ADMIN_NOTIFICATION_KEYS_REMOVED) {
+    notifications[key] = false;
+  }
+  // Types tâches hors liste simplifiée → OFF.
+  for (const t of FULLTASK_TASK_TYPES) {
+    if (!(WA_ADMIN_TASK_NOTIFY_TYPES as readonly string[]).includes(t)) {
+      notifications[taskNotifyKey(t, 'created')] = false;
+      notifications[taskNotifyKey(t, 'cancelled')] = false;
+    }
   }
 
   const body: Record<string, unknown> = {

@@ -26,6 +26,18 @@ export interface Thread {
   channelColor: string;
   preview: string;
   time: string;
+  /** Liste : Q = question voyageur, R = réponse manuelle (hors plan). */
+  lastMessageKind?: 'Q' | 'R';
+  /**
+   * Ligne A — envoi programmé plan, seulement s’il est le dernier msg du fil.
+   * `label` = nom du flow (ex. Feedback · après départ).
+   */
+  programmedAuto?: {
+    label: string;
+    catalogKey: string;
+    time: string;
+    sentAt?: string;
+  };
   unread: number;
   avatarColor: string;
   active?: boolean;
@@ -76,6 +88,8 @@ export interface Message {
   aiModel?: string;
   tokensUsed?: number;
   contentType?: MessageContentType | null;
+  /** Résumé PM (ownerSummary) — libellé non technique. */
+  ownerSummary?: string | null;
   /** Inbox Resa — tags (audio, demande, confirmation…) */
   tags?: string[];
   /** Inbox Resa — URL blob locale pour lecture audio */

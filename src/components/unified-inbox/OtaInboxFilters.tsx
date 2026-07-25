@@ -32,6 +32,8 @@ interface OtaInboxFiltersProps {
   stayQuickFilter?: OtaStayQuickFilter;
   onStayQuickFilterChange?: (f: OtaStayQuickFilter) => void;
   stayQuickCounts?: OtaStayQuickFilterCounts;
+  /** Hub chrome : uniquement le panneau avancé (chips déjà dans subBar). */
+  hubAdvancedOnly?: boolean;
 }
 
 const CHANNEL_TABS: Array<{ id: OtaChannelFilter; label: string; emoji?: string }> = [
@@ -41,7 +43,9 @@ const CHANNEL_TABS: Array<{ id: OtaChannelFilter; label: string; emoji?: string 
   { id: 'direct', label: 'Direct', emoji: '◎' },
 ];
 
+/** Ligne séjour : Créé auj en tête (comme WA), puis arr/dep. */
 const STAY_QUICK_TABS: Array<{ id: Exclude<OtaStayQuickFilter, 'none'>; label: string }> = [
+  { id: 'created_today', label: 'Créé auj' },
   { id: 'arr_today', label: 'Arr auj' },
   { id: 'arr_tomorrow', label: 'Arr dem' },
   { id: 'dep_today', label: 'Dép auj' },
@@ -70,6 +74,7 @@ export default function OtaInboxFilters({
   stayQuickFilter = 'none',
   onStayQuickFilterChange,
   stayQuickCounts,
+  hubAdvancedOnly = false,
 }: OtaInboxFiltersProps) {
   const toutActive =
     channelFilter === 'all' &&
@@ -78,11 +83,101 @@ export default function OtaInboxFilters({
     !unrepliedSearchActive &&
     stayQuickFilter === 'none';
 
+  if (hubAdvancedOnly) {
+    if (!expanded) return null;
+    return (
+      <Box sx={{ mb: 0.5 }}>
+        <Box
+          sx={{
+            borderRadius: '8px',
+            border: `1px solid ${T.border}`,
+            bgcolor: T.bg1,
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: 300,
+            overflow: 'hidden',
+          }}
+        >
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              overscrollBehavior: 'contain',
+              p: '8px',
+            }}
+          >
+            <AdvancedFormFields
+              advanced={advanced}
+              onAdvancedChange={onAdvancedChange}
+              keywordMatchTotal={keywordMatchTotal}
+              activeKeyword={activeKeyword}
+            />
+          </Box>
+          <Box
+            sx={{
+              flexShrink: 0,
+              display: 'flex',
+              gap: 0.75,
+              p: '8px',
+              borderTop: `1px solid ${T.border}`,
+              bgcolor: T.bg2,
+            }}
+          >
+            <Box
+              component="button"
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                onAdvancedSubmit();
+              }}
+              disabled={loading}
+              sx={{
+                flex: 1,
+                border: 0,
+                borderRadius: '8px',
+                py: '8px',
+                cursor: loading ? 'wait' : 'pointer',
+                bgcolor: T.primary,
+                color: '#fff',
+                fontFamily: 'inherit',
+                fontSize: 12,
+                fontWeight: 700,
+                opacity: loading ? 0.65 : 1,
+              }}
+            >
+              {loading ? 'Recherche…' : 'Rechercher'}
+            </Box>
+            <Box
+              component="button"
+              type="button"
+              onClick={onAdvancedReset}
+              sx={{
+                px: '12px',
+                border: `1px solid ${T.border}`,
+                borderRadius: '8px',
+                py: '8px',
+                cursor: 'pointer',
+                bgcolor: T.bg1,
+                color: T.text3,
+                fontFamily: 'inherit',
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              Effacer
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ flexShrink: 0, borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
-      {/* Ligne 1 — Tout | Non répondu | Filtre avancé */}
+      {/* Ligne 1 — Tout | Non répondu | Créé auj | Filtre avancé */}
       <Box sx={{ px: '10px', pt: '8px', pb: '6px' }}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '4px' }}>
           <FilterChip
             label="Tout"
             count={counts.all}
@@ -106,6 +201,20 @@ export default function OtaInboxFilters({
             countInline
             onClick={() => onUnrepliedOnlyChange(!unrepliedOnly)}
           />
+          {onStayQuickFilterChange && stayQuickCounts && (
+            <FilterChip
+              label="Créé auj"
+              count={stayQuickCounts.created_today}
+              active={stayQuickFilter === 'created_today'}
+              compact
+              countInline
+              onClick={() =>
+                onStayQuickFilterChange(
+                  stayQuickFilter === 'created_today' ? 'none' : 'created_today',
+                )
+              }
+            />
+          )}
           <Box
             component="button"
             type="button"
@@ -255,7 +364,7 @@ export default function OtaInboxFilters({
         </Box>
       </Box>
 
-      {/* Ligne 3 — Arrivée / départ auj. & dem. */}
+      {/* Ligne 3 — Arrivée / départ auj. & dem. (Créé auj est sur la ligne 1) */}
       {onStayQuickFilterChange && stayQuickCounts && (
         <Box sx={{ px: '10px', pb: '8px' }}>
           <Box
@@ -265,7 +374,7 @@ export default function OtaInboxFilters({
               gap: '4px',
             }}
           >
-            {STAY_QUICK_TABS.map((tab) => (
+            {STAY_QUICK_TABS.filter((tab) => tab.id !== 'created_today').map((tab) => (
               <FilterChip
                 key={tab.id}
                 label={tab.label}
@@ -308,6 +417,21 @@ function AdvancedFormFields({
         placeholder="Mot-clé dans le corps des messages"
         value={advanced.messageText || ''}
         onChange={(v) => onAdvancedChange({ ...advanced, messageText: v || undefined })}
+      />
+      <SelectField
+        label="Statut résa"
+        value={advanced.reservationStatus || ''}
+        options={[
+          { value: '', label: 'Actives (défaut)' },
+          { value: 'completed', label: 'Completed' },
+          { value: 'cancelled', label: 'Cancelled / Annulée' },
+        ]}
+        onChange={(v) =>
+          onAdvancedChange({
+            ...advanced,
+            reservationStatus: (v || undefined) as OtaAdvancedSearch['reservationStatus'],
+          })
+        }
       />
       <SelectField
         label="Période séjour"

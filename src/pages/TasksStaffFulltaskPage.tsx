@@ -24,13 +24,15 @@ import { filterStaffSelectableCities } from '../features/taskHub/staff-design/st
 import { ONBOARDING_LEGACY_TAB } from '../utils/teamUrlUtils';
 import { PM_ONBOARDING_WIZARD_PATH } from '../features/onboarding/wizardNavigation';
 import TeamWeekView from '../features/taskHub/staff-design/TeamWeekView';
+import StaffScheduleListView from '../features/taskHub/staff-design/StaffScheduleListView';
 import './tasksTeamPage.css';
 
-type HubTab = 'planning' | 'equipe' | 'admin';
+type HubTab = 'planning' | 'horaires' | 'equipe' | 'admin';
 
 function hubTabFromParam(tab: string | null): HubTab {
   if (tab === 'admin') return 'admin';
-  if (tab === 'annuaire') return 'equipe';
+  if (tab === 'annuaire' || tab === 'config') return 'equipe';
+  if (tab === 'horaires') return 'horaires';
   return 'planning';
 }
 
@@ -270,7 +272,8 @@ function TasksStaffFulltaskPageInner() {
     setHubTab(tab);
     const next = new URLSearchParams(searchParams);
     if (tab === 'admin') next.set('tab', 'admin');
-    else if (tab === 'equipe') next.set('tab', 'annuaire');
+    else if (tab === 'equipe') next.set('tab', 'config');
+    else if (tab === 'horaires') next.set('tab', 'horaires');
     else next.delete('tab');
     const qs = next.toString();
     navigate(qs ? `/tasks/team?${qs}` : '/tasks/team', { replace: true });
@@ -295,10 +298,17 @@ function TasksStaffFulltaskPageInner() {
           </button>
           <button
             type="button"
+            className={`tasks-team-tab${hubTab === 'horaires' ? ' on' : ''}`}
+            onClick={() => selectTab('horaires')}
+          >
+            Horaires
+          </button>
+          <button
+            type="button"
             className={`tasks-team-tab${hubTab === 'equipe' ? ' on' : ''}`}
             onClick={() => selectTab('equipe')}
           >
-            Annuaire
+            Config Équipe
           </button>
           <button
             type="button"
@@ -317,6 +327,26 @@ function TasksStaffFulltaskPageInner() {
             filterOwnerId={filterOwnerId}
             ownerOptions={ownerOptions}
             onOpenStaff={() => selectTab('equipe')}
+          />
+        )}
+
+        {hubTab === 'horaires' && (
+          <StaffScheduleListView
+            staff={staff}
+            loading={loadingStaff}
+            onOpenConfig={() => selectTab('equipe')}
+            onSaveSchedule={async (staffId, schedule) => {
+              const current = staff.find((s) => s._id === staffId);
+              if (!current) throw new Error('Staff introuvable');
+              const body = designStaffToApi(
+                { ...current, schedule } as Record<string, unknown>,
+                { ownerId: current.ownerId },
+              );
+              await fulltaskApi.updateStaff(staffId, {
+                schedule: body.schedule,
+              });
+              await loadStaff();
+            }}
           />
         )}
 
@@ -360,10 +390,20 @@ function TasksStaffFulltaskPageInner() {
                   isCreate: !editingId,
                   ownerId: resolvedOwnerId,
                 });
-                if (editingId) await fulltaskApi.updateStaff(editingId, body);
-                else await fulltaskApi.createStaff(body);
-                toast.success('Staff enregistré');
+                if (editingId) {
+                  await fulltaskApi.updateStaff(editingId, body);
+                  toast.success('Enregistré');
+                  await loadStaff();
+                  return editingId;
+                }
+                const created = (await fulltaskApi.createStaff(body)) as {
+                  data?: { _id?: string };
+                  _id?: string;
+                };
+                const newId = String(created?.data?._id || created?._id || '');
+                toast.success('Enregistré');
                 await loadStaff();
+                return newId || undefined;
               } catch (e: unknown) {
                 const err = e as { response?: { data?: { error?: string } }; message?: string };
                 toast.error(err.response?.data?.error || err.message || 'Erreur');

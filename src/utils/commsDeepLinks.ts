@@ -18,10 +18,11 @@ export function otaInboxUrl(opts: { threadId?: number | string; reservationNumbe
 }
 
 export function resasInboxUrl(opts?: { reservationNumber?: string; q?: string }): string {
-  const params = new URLSearchParams({ section: 'guest', tab: 'resas' });
+  const params = new URLSearchParams();
   if (opts?.reservationNumber) params.set('reservation', opts.reservationNumber);
   if (opts?.q) params.set('q', opts.q);
-  return `/communications?${params.toString()}`;
+  const qs = params.toString();
+  return qs ? `/planning?${qs}` : '/planning';
 }
 
 export function last9Phone(phone: string): string {

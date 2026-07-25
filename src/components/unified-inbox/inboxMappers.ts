@@ -11,11 +11,14 @@ import { conversationThreadId } from '../../utils/conversationThreadId';
 import {
   checkInDaysLabel,
   flagFromPhone,
+  formatReservationCreatedDisplay,
   formatStayDateShort,
+  formatThreadWhenExact,
   nightsBetween,
   stayStatusLabel,
 } from './inboxFormat';
 import { resolveReservationSourceKind } from '../reservations/ReservationSourceIcon';
+import { buildWaListPreview } from './waThreadPreview';
 
 function bookingSourceLabel(conv: Conversation): string {
   const kind = resolveReservationSourceKind(conversationReservationSourceInput(conv));
@@ -76,21 +79,32 @@ export function mapConversationToThread(
       : bookingPlatform === 'bk'
         ? '#003580'
         : opts.channelColor;
-  const preview =
-    conv.recent_exchanges[conv.recent_exchanges.length - 1]?.user_message ||
-    conv.recent_exchanges[conv.recent_exchanges.length - 1]?.ai_response ||
-    conv.recent_exchanges[0]?.user_message ||
-    conv.recent_exchanges[0]?.ai_response ||
-    'Aucun message';
-  const isAuto = preview.startsWith('[Auto]');
+  const waPreview = opts.isOta ? null : buildWaListPreview(conv);
+  const preview = waPreview
+    ? waPreview.preview
+    : conv.recent_exchanges[0]?.user_message ||
+      conv.recent_exchanges[0]?.ai_response ||
+      (conv.provisional || (conv.messages_count || 0) === 0
+        ? 'Aucun message · Initier WhatsApp'
+        : 'Aucun message');
+  // Liste guest : Q/R réel seulement. Relances plan (A) → « Aucun message » (cohérent avec le fil).
+  const hasQr = waPreview?.lastMessageKind === 'Q' || waPreview?.lastMessageKind === 'R';
+  const isAuto =
+    Boolean(waPreview?.programmedAuto) ||
+    Boolean(preview.startsWith('[Auto]')) ||
+    Boolean(preview.startsWith('Auto ·')) ||
+    Boolean(preview.startsWith('Relance ·')) ||
+    Boolean(preview.startsWith('Message auto'));
   return {
     id: conversationThreadId(conv),
     name: conv.name || conv.phone,
     phone: conv.phone,
     channel: displayChannel,
     channelColor: displayColor,
-    preview: isAuto ? preview : preview,
-    time: '',
+    preview: hasQr ? preview : 'Aucun message',
+    time: hasQr ? formatThreadWhenExact(waPreview?.lastMessageAt) : '',
+    lastMessageKind: hasQr ? waPreview?.lastMessageKind : undefined,
+    programmedAuto: undefined,
     unread: conv.unread_count,
     avatarColor: '',
     listingName: conv.listing_name,
@@ -108,6 +122,8 @@ export function mapConversationToThread(
     taskCount: undefined,
     bookingSourceKind,
     bookingPlatform,
+    reservationCreatedAt: conv.reservation_created_at || undefined,
+    reservationCreatedDisplay: formatReservationCreatedDisplay(conv.reservation_created_at),
   };
 }
 

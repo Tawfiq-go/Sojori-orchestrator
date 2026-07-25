@@ -6,6 +6,7 @@ import ThreadsList from '../unified-inbox/ThreadsList';
 import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
+import { useCommsHubChrome } from './CommsHubChromeContext';
 import messagesService from '../../services/messagesService';
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
@@ -24,6 +25,15 @@ import {
 } from '../../services/communicationsAi.helpers';
 import { formatThreadWhen, nightsBetween, normalizeBookingSource } from '../unified-inbox/inboxFormat';
 import { T } from '../unified-inbox/_tokens';
+
+const LEAD_FILTERS = [
+  { id: 'all', label: 'Tout' },
+  { id: 'unreplied', label: 'Non rép.' },
+  { id: 'replied', label: 'Répondus' },
+  { id: 'airbnb', label: 'Airbnb' },
+  { id: 'booking', label: 'Booking' },
+  { id: 'recent', label: '24h' },
+] as const;
 
 interface LeadRow {
   id: string;
@@ -45,6 +55,7 @@ interface LeadRow {
 
 export default function LeadsTabV2() {
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
+  const { setLeading, setSubBar } = useCommsHubChrome();
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [active, setActive] = useState<LeadRow | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -176,6 +187,127 @@ export default function LeadsTabV2() {
     [filteredLeads],
   );
 
+  /* Barre hub : Demandes + recherche (petit bloc, place de Guest) ; chips juste en dessous. */
+  useEffect(() => {
+    setLeading(
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.75,
+          width: '100%',
+          maxWidth: 520,
+          minWidth: 0,
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 800,
+            color: T.text,
+            flexShrink: 0,
+            lineHeight: 1.1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          🎯 Demandes
+        </Typography>
+        <Box
+          sx={{
+            fontFamily: '"Geist Mono", monospace',
+            fontSize: 10,
+            fontWeight: 700,
+            px: 0.75,
+            py: '2px',
+            borderRadius: 999,
+            bgcolor: T.airbnbBg,
+            color: '#c0353a',
+            flexShrink: 0,
+          }}
+        >
+          {filteredLeads.length}
+        </Box>
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            px: '8px',
+            py: '4px',
+            bgcolor: T.bg1,
+            border: `1px solid ${T.border}`,
+            borderRadius: '8px',
+            '&:focus-within': {
+              borderColor: T.primary,
+              boxShadow: `0 0 0 2px ${T.primaryTint}`,
+            },
+          }}
+        >
+          <Box sx={{ fontSize: 12, color: T.text3, lineHeight: 1 }}>🔍</Box>
+          <Box
+            component="input"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Résa, listing, voyageur, tél., owner…"
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              border: 0,
+              outline: 0,
+              font: 'inherit',
+              fontSize: 11.5,
+              color: T.text,
+              bgcolor: 'transparent',
+              '&::placeholder': { color: T.text4 },
+            }}
+          />
+        </Box>
+      </Box>,
+    );
+  }, [setLeading, filteredLeads.length, searchTerm]);
+
+  useEffect(() => {
+    setSubBar(
+      <Box sx={{ display: 'flex', gap: '3px', flexWrap: 'nowrap', overflowX: 'auto', scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
+        {LEAD_FILTERS.map((f) => (
+          <Box
+            key={f.id}
+            component="button"
+            type="button"
+            onClick={() => setFilter(f.id)}
+            sx={{
+              px: 0.875,
+              py: 0.3,
+              borderRadius: '6px',
+              border: `1px solid ${filter === f.id ? '#FF5A5F' : T.border}`,
+              bgcolor: filter === f.id ? T.airbnbBg : T.bg1,
+              color: filter === f.id ? '#c0353a' : T.text3,
+              fontSize: 10,
+              fontWeight: 650,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              lineHeight: 1.2,
+            }}
+          >
+            {f.label}
+          </Box>
+        ))}
+      </Box>,
+    );
+  }, [setSubBar, filter]);
+
+  useEffect(
+    () => () => {
+      setLeading(null);
+      setSubBar(null);
+    },
+    [setLeading, setSubBar],
+  );
+
   const handleSelect = async (lead: LeadRow) => {
     setComposerDraft('');
     setAiSourceDraft('');
@@ -285,44 +417,15 @@ export default function LeadsTabV2() {
   }
 
   return (
-    <>
-      <Box sx={{ display: 'flex', gap: 0.75, mb: 1.5, flexWrap: 'wrap' }}>
-        {[
-          { id: 'all', label: 'Tout' },
-          { id: 'unreplied', label: 'Non répondus' },
-          { id: 'replied', label: 'Répondus' },
-          { id: 'airbnb', label: '🏠 Airbnb' },
-          { id: 'booking', label: '🏨 Booking' },
-          { id: 'recent', label: '24h' },
-        ].map((f) => (
-          <Box
-            key={f.id}
-            component="button"
-            onClick={() => setFilter(f.id)}
-            sx={{
-              px: 1.25,
-              py: 0.5,
-              borderRadius: '6px',
-              border: `1px solid ${filter === f.id ? '#FF5A5F' : t.border}`,
-              bgcolor: filter === f.id ? T.airbnbBg : T.bg1,
-              color: filter === f.id ? '#c0353a' : t.text3,
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            {f.label}
-          </Box>
-        ))}
-      </Box>
-
-      <InboxLayout>
+    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <InboxLayout fillViewport>
         <ThreadsList
           threads={threads}
           channels={[{ id: 'ab', label: 'Demande', icon: '🎯', color: '#FF5A5F', count: leads.length }]}
           listTitle="Demandes"
           mode="ota"
+          hideListHeader
+          ultraCompact
           activeThreadId={activeThread?.id ?? null}
           searchTerm={searchTerm}
           onSelectThread={(th) => {
@@ -387,6 +490,6 @@ export default function LeadsTabV2() {
           type: 'leads',
         }}
       />
-    </>
+    </Box>
   );
 }

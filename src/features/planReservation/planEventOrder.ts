@@ -1,11 +1,16 @@
 import type { PlanEvent } from './types';
 
-/** Ordre par défaut = parcours voyageur (`ORCHESTRATION_JOURNEY_SLOTS`). */
+/**
+ * Ordre par défaut = parcours voyageur.
+ * Informer syndic (message) juste avant Déclarer arrivée.
+ * Aligné `apps/srv-fulltask/src/data/uiPlanListOrder.ts`.
+ */
 export const DEFAULT_UI_PLAN_LIST_ORDER: string[] = [
   'sched:welcome_sojori_v2',
   'wf:arrival_choose',
   'wf:receive_arrival',
   'wf:registration',
+  'sched:inform_syndic',
   'wf:arrival_declare',
   'sched:checkin_feedback',
   'wf:departure_choose',
@@ -51,7 +56,7 @@ export function sortPlanEventsByListOrder(
   return sorted.map((ev, i) => ({ ...ev, planStep: i + 1 }));
 }
 
-/** Place Accueil après choisir / avant déclarer (configs owner legacy). */
+/** Place Accueil + Informer syndic (configs owner legacy). */
 export function normalizeUiPlanListOrder(order: string[]): string[] {
   let next = order.filter((k) => typeof k === 'string' && k.length > 0);
   if (next.length === 0) return [...DEFAULT_UI_PLAN_LIST_ORDER];
@@ -60,7 +65,12 @@ export function normalizeUiPlanListOrder(order: string[]): string[] {
     {
       key: 'wf:receive_arrival',
       after: 'wf:arrival_choose',
-      before: ['wf:registration', 'wf:arrival_declare', 'sched:checkin_feedback'],
+      before: ['wf:registration', 'sched:inform_syndic', 'wf:arrival_declare', 'sched:checkin_feedback'],
+    },
+    {
+      key: 'sched:inform_syndic',
+      after: 'wf:registration',
+      before: ['wf:arrival_declare', 'sched:checkin_feedback'],
     },
     {
       key: 'wf:receive_departure',

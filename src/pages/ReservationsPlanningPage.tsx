@@ -8,10 +8,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { addDays, format, startOfDay } from 'date-fns';
 import { Box, CircularProgress, Alert, useMediaQuery, useTheme } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import StayView from '../components/calendar-views/StayView';
 import type { ListingRow } from '../components/calendar-views/_shared';
+import { usePlanningReservationDrawer } from '../features/planning/usePlanningReservationDrawer';
 import reservationsService from '../services/reservationsService';
 import listingsService from '../services/listingsService';
 import { usePmTasksScope } from '../hooks/usePmTasksScope';
@@ -59,12 +59,12 @@ function toIsoDate(d: Date | string | undefined): string {
 }
 
 export function ReservationsPlanningPage() {
-  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { loading: authLoading } = useAuth();
   const scope = usePmTasksScope();
   const listingsCacheKey = scope.scopeCacheKey;
+  const { openReservation, drawer: reservationDrawer } = usePlanningReservationDrawer();
 
   const [startDate, setStartDate] = useState<Date>(() => getPlanningDefaultStartDate());
   const [daysCount] = useState(PLANNING_LOOKBACK_DAYS + PLANNING_FORWARD_DAYS);
@@ -406,11 +406,13 @@ export function ReservationsPlanningPage() {
   }, []);
 
   const handleReservationClick = useCallback(
-    (routeId: string) => {
-      if (!routeId) return;
-      navigate(`/reservations/${encodeURIComponent(routeId)}`);
+    (
+      reservation: ListingRow['reservations'][0],
+      listing: Pick<ListingRow, 'listingId' | 'listingName' | 'city'>,
+    ) => {
+      openReservation(reservation, listing);
     },
-    [navigate],
+    [openReservation],
   );
 
   const stayViewProps = {
@@ -569,6 +571,7 @@ export function ReservationsPlanningPage() {
         )}
 
         {listFullscreenLayer}
+        {reservationDrawer}
 
         {!isLoading && !calendarReady && error && (
           <Box sx={{ maxWidth: 800, mx: 'auto', mt: 4, p: 3 }}>

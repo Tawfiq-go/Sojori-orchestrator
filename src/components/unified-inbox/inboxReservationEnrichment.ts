@@ -43,7 +43,7 @@ function mapPaymentStatus(status?: string, alreadyPaid?: number, total?: number)
 function mapReservationStatus(status?: string): string {
   const s = (status || '').toLowerCase();
   if (s.includes('confirm')) return 'Confirmée';
-  if (s.includes('cancel')) return 'Annulée';
+  if (s.includes('cancel') || s.includes('annul')) return 'Annulée';
   if (s.includes('pending')) return 'En attente';
   return status || 'Confirmée';
 }

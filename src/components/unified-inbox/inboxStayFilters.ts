@@ -1,21 +1,25 @@
-/** Filtres rapides arrivée / départ (OTA + WhatsApp guest). */
+/** Filtres rapides arrivée / départ / créé auj (OTA + WhatsApp guest). */
 export type StayQuickFilter =
   | 'none'
   | 'arr_today'
   | 'arr_tomorrow'
   | 'dep_today'
-  | 'dep_tomorrow';
+  | 'dep_tomorrow'
+  | 'created_today';
 
 export interface StayQuickFilterCounts {
   arr_today: number;
   arr_tomorrow: number;
   dep_today: number;
   dep_tomorrow: number;
+  created_today: number;
 }
 
 export interface StayDateFields {
   checkInDate?: string;
   checkOutDate?: string;
+  /** Création résa (createdAt / reservationDate) — filtre « Créé auj ». */
+  reservationCreatedAt?: string;
 }
 
 function toCalendarDay(iso?: string): Date | null {
@@ -52,6 +56,12 @@ export function isDepartureOn(dates: StayDateFields, offsetDays: 0 | 1): boolean
   return isSameCalendarDay(departure, addCalendarDays(startOfTodayLocal(), offsetDays));
 }
 
+export function isCreatedToday(dates: StayDateFields): boolean {
+  const created = toCalendarDay(dates.reservationCreatedAt);
+  if (!created) return false;
+  return isSameCalendarDay(created, startOfTodayLocal());
+}
+
 export function applyStayQuickFilter<T>(
   rows: T[],
   filter: StayQuickFilter,
@@ -67,6 +77,8 @@ export function applyStayQuickFilter<T>(
       return rows.filter((r) => isDepartureOn(getDates(r), 0));
     case 'dep_tomorrow':
       return rows.filter((r) => isDepartureOn(getDates(r), 1));
+    case 'created_today':
+      return rows.filter((r) => isCreatedToday(getDates(r)));
     default:
       return rows;
   }
@@ -81,5 +93,6 @@ export function countStayQuickFilters<T>(
     arr_tomorrow: rows.filter((r) => isArrivalOn(getDates(r), 1)).length,
     dep_today: rows.filter((r) => isDepartureOn(getDates(r), 0)).length,
     dep_tomorrow: rows.filter((r) => isDepartureOn(getDates(r), 1)).length,
+    created_today: rows.filter((r) => isCreatedToday(getDates(r))).length,
   };
 }

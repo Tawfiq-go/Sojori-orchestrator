@@ -772,6 +772,7 @@ class MessagesService {
     arrivalTo?: string;
     stayPeriod?: string;
     messageStatus?: string;
+    reservationStatus?: string;
     unreplied?: boolean;
     otaChannel?: string;
     cursor?: string;
@@ -799,6 +800,9 @@ class MessagesService {
             ...(params?.arrivalTo ? { arrivalTo: params.arrivalTo } : {}),
             ...(params?.stayPeriod ? { stayPeriod: params.stayPeriod } : {}),
             ...(params?.messageStatus ? { messageStatus: params.messageStatus } : {}),
+            ...(params?.reservationStatus
+              ? { reservationStatus: params.reservationStatus }
+              : {}),
             ...(params?.unreplied ? { unreplied: '1' } : {}),
             ...(params?.otaChannel ? { otaChannel: params.otaChannel } : {}),
           },
@@ -861,6 +865,31 @@ class MessagesService {
             ? 'Session expirée — reconnectez-vous.'
             : 'Erreur lors de l\'envoi du message OTA.'),
       );
+    }
+  }
+
+  /**
+   * Marquer un fil OTA répondu / ignoré (sans envoyer de message).
+   * PUT /api/v1/reservations/rentals/update-thread/:threadId
+   */
+  async updateOTAThreadMessageStatus(
+    threadId: string | number,
+    messageStatus: 'responded' | 'ignored',
+  ): Promise<any> {
+    const numericThreadId = Number(String(threadId).replace(/\D/g, '')) || threadId;
+    try {
+      const response = await apiClient.put(
+        `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/rentals/update-thread/${numericThreadId}`,
+        { messageStatus },
+      );
+      return response.data;
+    } catch (error: any) {
+      const msg =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        extractHttpErrorMessage(error) ||
+        'Impossible de mettre à jour le statut du fil.';
+      throw new Error(msg);
     }
   }
 }

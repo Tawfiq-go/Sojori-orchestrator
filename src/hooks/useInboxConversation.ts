@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import messagesService from '../services/messagesService';
 import tasksService from '../services/tasksService';
 import reservationsService from '../services/reservationsService';
@@ -13,6 +13,13 @@ import {
   mapReservationToInboxData,
 } from '../components/unified-inbox/inboxReservationEnrichment';
 
+/** Cache session — ouverture style WhatsApp Web. */
+const waMessagesCache = new Map<string, MessageExchange[]>();
+
+function conversationCacheKey(conv: Conversation): string {
+  return String(conv.phone || '').trim();
+}
+
 export function useInboxConversation() {
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<MessageExchange[]>([]);
@@ -22,12 +29,19 @@ export function useInboxConversation() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [loadingReservation, setLoadingReservation] = useState(false);
+  const selectGenRef = useRef(0);
+  const activeKeyRef = useRef<string | null>(null);
 
   const appendOutboundMessage = useCallback((text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     const exchange = outboundInboxExchange(trimmed);
-    setMessages((prev) => [...prev, exchange]);
+    setMessages((prev) => {
+      const next = [...prev, exchange];
+      const key = activeKeyRef.current;
+      if (key) waMessagesCache.set(key, next);
+      return next;
+    });
     setActiveConversation((prev) => {
       if (!prev) return prev;
       const recent = [...(prev.recent_exchanges || []), exchange];
@@ -46,7 +60,10 @@ export function useInboxConversation() {
       if (!prev.length) return prev;
       const last = prev[prev.length - 1];
       if (!last.ai_response || last.user_message) return prev;
-      return prev.slice(0, -1);
+      const next = prev.slice(0, -1);
+      const key = activeKeyRef.current;
+      if (key) waMessagesCache.set(key, next);
+      return next;
     });
     setActiveConversation((prev) => {
       if (!prev) return prev;
@@ -65,13 +82,17 @@ export function useInboxConversation() {
   const refreshMessages = useCallback(async (conv?: Conversation) => {
     const target = conv || activeConversation;
     if (!target) return;
+    const key = conversationCacheKey(target);
     try {
       const messagesResponse = await messagesService.getConversationMessages(target.phone, {
         limit: 50,
         scope: 'phone',
       });
+      if (activeKeyRef.current !== key) return;
       if (messagesResponse.status === 'success') {
-        setMessages(messagesResponse.data.exchanges || []);
+        const exchanges = messagesResponse.data.exchanges || [];
+        waMessagesCache.set(key, exchanges);
+        setMessages(exchanges);
       }
     } catch (err) {
       console.error('❌ Erreur refresh messages:', err);
@@ -79,14 +100,30 @@ export function useInboxConversation() {
   }, [activeConversation]);
 
   const selectConversation = useCallback(async (conv: Conversation) => {
+    const key = conversationCacheKey(conv);
+    const same = activeKeyRef.current === key;
+    const gen = ++selectGenRef.current;
+    const cached = key ? waMessagesCache.get(key) : undefined;
+
+    activeKeyRef.current = key || null;
     setActiveConversation(conv);
-    setLoadingMessages(true);
     setLoadingTasks(true);
     setLoadingReservation(true);
-    setMessages([]);
-    setTasks([]);
     setReservation(mapConversationOnlyToInboxData(conv));
-    setRawReservation(null);
+
+    if (!same) {
+      setRawReservation(null);
+      setTasks([]);
+      if (cached?.length) {
+        setMessages(cached);
+        setLoadingMessages(true);
+      } else {
+        setMessages([]);
+        setLoadingMessages(true);
+      }
+    } else {
+      setLoadingMessages(true);
+    }
 
     const resaNum = getConversationReservationNumber(conv);
 
@@ -102,12 +139,16 @@ export function useInboxConversation() {
         resaNum ? reservationsService.getByReservationNumber(resaNum) : Promise.resolve(null),
       ]);
 
+      if (gen !== selectGenRef.current) return;
+
       const messagesResponse = messagesResult.status === 'fulfilled' ? messagesResult.value : null;
       const tasksResponse = tasksResult.status === 'fulfilled' ? tasksResult.value : null;
       const reservationRow = reservationResult.status === 'fulfilled' ? reservationResult.value : null;
 
       if (messagesResponse?.status === 'success') {
-        setMessages(messagesResponse.data.exchanges || []);
+        const exchanges = messagesResponse.data.exchanges || [];
+        if (key) waMessagesCache.set(key, exchanges);
+        setMessages(exchanges);
         if (messagesResponse.data.user_context) {
           const ctx = messagesResponse.data.user_context;
           setReservation((prev) => ({
@@ -119,6 +160,7 @@ export function useInboxConversation() {
           }));
         }
       }
+      setLoadingMessages(false);
 
       if (tasksResponse?.success) {
         setTasks(tasksResponse.data.tasks);
@@ -133,11 +175,14 @@ export function useInboxConversation() {
         setReservation(mapReservationToInboxData(reservationRow, conv));
       }
     } catch (err) {
+      if (gen !== selectGenRef.current) return;
       console.error('❌ Erreur chargement conversation inbox:', err);
     } finally {
-      setLoadingMessages(false);
-      setLoadingTasks(false);
-      setLoadingReservation(false);
+      if (gen === selectGenRef.current) {
+        setLoadingMessages(false);
+        setLoadingTasks(false);
+        setLoadingReservation(false);
+      }
     }
   }, []);
 

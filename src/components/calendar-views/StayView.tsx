@@ -1,19 +1,21 @@
 // ════════════════════════════════════════════════════════════════════
-// StayView.tsx — Vue Séjour redesignée (Gantt + tasks chips)
-// • Ligne fixe 76px (plus de hauteur dynamique)
-// • Max 2 chips visibles + badge "+N" popover inline
+// StayView.tsx — Vue Séjour / cockpit ops
+// • Messages GLOBAUX sous barre résa (WA + OTA)
+// • Arr/Enreg sur jour d’arrivée · Dép sur jour de départ (colonnes)
+// • Tâches PAR JOUR dans les colonnes (2–6 lignes selon charge)
 // • Couleur barre par canal (Airbnb/Booking/Vrbo/Direct)
-// • Mini-map 30j au-dessus
-// • Groupement par ville
 // ════════════════════════════════════════════════════════════════════
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Stack, Typography, Popover, Dialog, DialogTitle, DialogContent, DialogActions, Button, useMediaQuery, useTheme } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import CalendarDatePicker from '../calendar-v3/CalendarDatePicker';
 import {
-  T, STAY, stayMetrics, type StayMetrics, type ListingRow, type TimelineItem, channelFromName, genDays,
-  KpiPill, DayHeader, TaskChip, GanttBar, SOJORI_KEYFRAMES, computeReservationBarLayout,
-  planningDaySurfaceSx,
+  T, STAY, STAY_COMPACT, COCKPIT_META, stayMetrics, type StayMetrics, type ListingRow, type TimelineItem,
+  channelFromName, genDays, listingCockpitRowHeight, dayTaskLaneTop, taskLaneHeightForLines,
+  commsMetaLineCount,
+  KpiPill, DayHeader, TaskChip, StayOpsDayLane, CockpitCommsDualRow, GanttBar, SOJORI_KEYFRAMES,
+  computeReservationBarLayout, computeReservationMessagesLayout, planningDaySurfaceSx,
+  stayOpsDayPillCount, dayIsTurnover,
 } from './_shared';
 import { CleanlinessBadgeInteractive } from './CleanlinessBadgeInteractive';
 import {
@@ -25,8 +27,12 @@ import {
 } from '../../utils/cleanlinessDisplay';
 import { PLANNING_VISIBLE_DAYS, getPlanningGridScrollLeft } from '../../utils/planningViewDates';
 import { DASHBOARD_PAGE, DASHBOARD_PAGE_FILL_SX } from '../../constants/dashboardLayout';
+import ListingGroupMultiFilter from './ListingGroupMultiFilter';
 
 export type StayViewVariant = 'tasks' | 'reservations';
+
+/** Couches cockpit planning : vue globale filtrable. */
+export type StayCockpitLayer = 'all' | 'resas' | 'tasks' | 'messages';
 
 export interface StayViewProps {
   startDate: Date;
@@ -34,8 +40,21 @@ export interface StayViewProps {
   listings: ListingRow[];
   /** tasks = chips tâches + KPI ops ; reservations = barres séjour uniquement + filtres statut */
   variant?: StayViewVariant;
+  /** Filtre couche cockpit (défaut all). */
+  cockpitLayer?: StayCockpitLayer;
+  onCockpitLayerChange?: (layer: StayCockpitLayer) => void;
   onTaskClick?: (item: TimelineItem) => void;
-  onReservationClick?: (resId: string) => void;
+  /** Clic barre résa → drawer (pas de navigation). */
+  onReservationClick?: (
+    reservation: ListingRow['reservations'][0],
+    listing: Pick<ListingRow, 'listingId' | 'listingName' | 'city'>,
+  ) => void;
+  /** Clic carte WA / OTA → drawer résa (focus canal). */
+  onCommsClick?: (
+    kind: 'wa' | 'ota',
+    reservation: ListingRow['reservations'][0],
+    listing: Pick<ListingRow, 'listingId' | 'listingName' | 'city'>,
+  ) => void;
   onCellClick?: (listingId: string, iso: string) => void;
   onGoToday?: () => void;
   onPrevDay?: () => void;
@@ -58,6 +77,14 @@ export interface StayViewProps {
   /** Affiche le bouton ⛶ dans la toolbar */
   showFullscreenEnter?: boolean;
   onEnterFullscreen?: () => void;
+  /**
+   * Cockpit Communications (onglet Résas) :
+   * tâches par jour + filtres Tout/Résas/Tâches.
+   * Pas de cartes WA/OTA sous la barre (ça masque le nom / bloque les clics) —
+   * la comm se fait via le panneau au clic résa.
+   * Le planning /tasks reste classique si false.
+   */
+  enableCommsCockpit?: boolean;
 }
 
 const VISIBLE_DAYS = PLANNING_VISIBLE_DAYS;
@@ -114,6 +141,7 @@ function PlanningNavBtn({
 
 export default function StayView({
   startDate, daysCount = 30, listings, variant = 'tasks', onTaskClick, onReservationClick,
+  onCommsClick,
   onGoToday, onPrevDay, onNextDay, onPrevWeek, onNextWeek, onDateChange, onCleanlinessChange,
   todayBackDays = 2,
   compactLayout = false,
@@ -122,12 +150,30 @@ export default function StayView({
   fillViewport = false,
   showFullscreenEnter = false,
   onEnterFullscreen,
+  cockpitLayer: cockpitLayerProp,
+  onCockpitLayerChange,
+  enableCommsCockpit = false,
 }: StayViewProps) {
   const isReservations = variant === 'reservations';
+  const [internalCockpitLayer, setInternalCockpitLayer] = useState<StayCockpitLayer>('all');
+  const cockpitLayer = cockpitLayerProp ?? internalCockpitLayer;
+  const setCockpitLayer = onCockpitLayerChange ?? setInternalCockpitLayer;
+  /** Planning classique : tâches seulement. Cockpit Résas : tâches + msgs. */
+  const showTaskChips = enableCommsCockpit
+    ? cockpitLayer === 'all' || cockpitLayer === 'tasks'
+    : !isReservations && cockpitLayer !== 'resas';
+  const showMessageSnippets = enableCommsCockpit
+    && (cockpitLayer === 'all' || cockpitLayer === 'messages');
+  const showCockpitFilters = enableCommsCockpit;
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
   const useDenseChrome = compactLayout || denseToolbar;
-  const m = useMemo(() => stayMetrics(compactLayout, isNarrow), [compactLayout, isNarrow]);
+  /** Résas cockpit : +25 % largeur jour pour chips tâches plus lisibles. */
+  const m = useMemo(() => {
+    const base = stayMetrics(compactLayout, isNarrow);
+    if (!enableCommsCockpit) return base;
+    return { ...base, CELL_W: Math.round(base.CELL_W * 1.25) };
+  }, [compactLayout, isNarrow, enableCommsCockpit]);
   const minimapDays = useMemo(() => genDays(startDate, daysCount), [startDate, daysCount]);
   const days = useMemo(() => genDays(startDate, VISIBLE_DAYS), [startDate]);
   const gridScrollRef = useRef<HTMLDivElement>(null);
@@ -166,11 +212,19 @@ export default function StayView({
     () => new Set(['confirmed', 'pending']),
   );
   const [cleanlinessFilters, setCleanlinessFilters] = useState<Set<CleanlinessFilter>>(new Set());
+  /** Groupes (villes) sélectionnés — vide = tous. */
+  const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  /** Listings multi — vide = tous. */
+  const [selectedListingIds, setSelectedListingIds] = useState<string[]>([]);
+  /** Recherche globale (listing, ville, guest, n° résa, téléphone). */
+  const [searchQuery, setSearchQuery] = useState('');
   const [filtersModalOpen, setFiltersModalOpen] = useState(false);
   const [tempCleanlinessFilters, setTempCleanlinessFilters] = useState<Set<CleanlinessFilter>>(new Set());
   const [tempStatusFilters, setTempStatusFilters] = useState<Set<'confirmed' | 'pending'>>(
     () => new Set(['confirmed', 'pending']),
   );
+  /** Cockpit ops : les barres résa ne sont jamais filtrées (statut / tâches). */
+  const keepAllReservations = enableCommsCockpit;
 
   const toggleCleanlinessFilter = (f: CleanlinessFilter) => {
     setCleanlinessFilters((prev) => {
@@ -196,12 +250,22 @@ export default function StayView({
 
   const displayListings = useMemo(() => {
     let rows = listings;
-    if (isReservations) {
+    // Planning classique résas : filtre statut. Cockpit ops : résas toujours visibles.
+    if (isReservations && !keepAllReservations) {
       rows = rows.map((l) => ({
         ...l,
         reservations: l.reservations.filter((r) => statusFilters.has(r.status)),
       }));
     }
+
+    // Couche « Résas » : masquer les chips tâches (timeline vide), pas les barres.
+    if (enableCommsCockpit && cockpitLayer === 'resas') {
+      rows = rows.map((l) => ({
+        ...l,
+        reservations: l.reservations.map((r) => ({ ...r, timeline: [] })),
+      }));
+    }
+
     if (cleanlinessFilters.size === 0) return rows;
     return rows.filter((l) =>
       matchesCleanlinessFilter(
@@ -209,14 +273,88 @@ export default function StayView({
         cleanlinessFilters,
       ),
     );
-  }, [listings, isReservations, statusFilters, cleanlinessFilters]);
+  }, [
+    listings,
+    isReservations,
+    statusFilters,
+    cleanlinessFilters,
+    cockpitLayer,
+    enableCommsCockpit,
+    keepAllReservations,
+  ]);
+
+  const listingGroupOptions = useMemo(() => {
+    const map = new Map<string, number>();
+    listings.forEach((l) => {
+      const c = l.city || 'Sans ville';
+      map.set(c, (map.get(c) || 0) + 1);
+    });
+    return Array.from(map.entries())
+      .map(([id, count]) => ({ id, label: id, count }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+  }, [listings]);
+
+  const listingPickOptions = useMemo(
+    () =>
+      [...listings]
+        .map((l) => ({
+          id: l.listingId,
+          label: l.listingName || l.listingId,
+          count: l.reservations?.length || 0,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'fr')),
+    [listings],
+  );
+
+  // Écarte les groupes / listings disparus du portefeuille courant.
+  useEffect(() => {
+    if (selectedCities.length === 0) return;
+    const allowed = new Set(listingGroupOptions.map((o) => o.id));
+    const next = selectedCities.filter((c) => allowed.has(c));
+    if (next.length !== selectedCities.length) setSelectedCities(next);
+  }, [listingGroupOptions, selectedCities]);
+
+  useEffect(() => {
+    if (selectedListingIds.length === 0) return;
+    const allowed = new Set(listingPickOptions.map((o) => o.id));
+    const next = selectedListingIds.filter((id) => allowed.has(id));
+    if (next.length !== selectedListingIds.length) setSelectedListingIds(next);
+  }, [listingPickOptions, selectedListingIds]);
+
+  const filteredByGroup = useMemo(() => {
+    let rows = displayListings;
+    if (selectedCities.length > 0) {
+      const set = new Set(selectedCities);
+      rows = rows.filter((l) => set.has(l.city || 'Sans ville'));
+    }
+    if (selectedListingIds.length > 0) {
+      const set = new Set(selectedListingIds);
+      rows = rows.filter((l) => set.has(l.listingId));
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    const digits = q.replace(/\D/g, '');
+    return rows.filter((l) => {
+      if ((l.listingName || '').toLowerCase().includes(q)) return true;
+      if ((l.city || '').toLowerCase().includes(q)) return true;
+      if ((l.listingId || '').toLowerCase().includes(q)) return true;
+      return (l.reservations || []).some((r) => {
+        if ((r.guestName || '').toLowerCase().includes(q)) return true;
+        if ((r.reservationNumber || '').toLowerCase().includes(q)) return true;
+        if ((r.reservationId || '').toLowerCase().includes(q)) return true;
+        const phone = String(r.lastWa?.phone || '').replace(/\D/g, '');
+        if (digits.length >= 4 && phone.includes(digits)) return true;
+        return false;
+      });
+    });
+  }, [displayListings, selectedCities, selectedListingIds, searchQuery]);
 
   // KPI "aujourd'hui"
   const kpis = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     if (isReservations) {
       let arr = 0, dep = 0, confirmed = 0, pending = 0;
-      displayListings.forEach(l => l.reservations.forEach(r => {
+      filteredByGroup.forEach(l => l.reservations.forEach(r => {
         const arrIso = (r.arrivalDate || '').slice(0, 10);
         const depIso = (r.departureDate || '').slice(0, 10);
         if (arrIso === today) arr++;
@@ -227,7 +365,7 @@ export default function StayView({
       return { arr, dep, confirmed, pending };
     }
     let arr = 0, dep = 0, cln = 0, na = 0;
-    listings.forEach(l => l.reservations.forEach(r => r.timeline?.forEach(t => {
+    filteredByGroup.forEach(l => l.reservations.forEach(r => r.timeline?.forEach(t => {
       if ((t.scheduledFor || '').slice(0, 10) !== today) return;
       if (t.type === 'arrival')   arr++;
       if (t.type === 'departure') dep++;
@@ -235,18 +373,18 @@ export default function StayView({
       if (!t.staffId && t.status !== 'COMPLETED') na++;
     })));
     return { arr, dep, cln, na };
-  }, [listings, displayListings, isReservations]);
+  }, [filteredByGroup, isReservations]);
 
   // Group by city
   const byCity = useMemo(() => {
     const map = new Map<string, ListingRow[]>();
-    displayListings.forEach(l => {
+    filteredByGroup.forEach(l => {
       const c = l.city || 'Sans ville';
       if (!map.has(c)) map.set(c, []);
       map.get(c)!.push(l);
     });
     return Array.from(map.entries());
-  }, [displayListings]);
+  }, [filteredByGroup]);
 
   const showChrome = !gridOnly;
   const showMinimap = showChrome && !compactLayout && !denseToolbar;
@@ -254,11 +392,22 @@ export default function StayView({
 
   const activePlanningFiltersCount = useMemo(() => {
     let n = cleanlinessFilters.size;
-    if (isReservations) {
+    if (selectedCities.length > 0) n += 1;
+    if (selectedListingIds.length > 0) n += 1;
+    if (searchQuery.trim()) n += 1;
+    if (isReservations && !keepAllReservations) {
       if (!statusFilters.has('confirmed') || !statusFilters.has('pending')) n += 1;
     }
     return n;
-  }, [cleanlinessFilters, statusFilters, isReservations]);
+  }, [
+    cleanlinessFilters,
+    statusFilters,
+    isReservations,
+    selectedCities,
+    selectedListingIds,
+    searchQuery,
+    keepAllReservations,
+  ]);
 
   const openPlanningFiltersModal = () => {
     setTempCleanlinessFilters(new Set(cleanlinessFilters));
@@ -275,6 +424,9 @@ export default function StayView({
   const resetPlanningFiltersModal = () => {
     setTempCleanlinessFilters(new Set());
     setTempStatusFilters(new Set(['confirmed', 'pending']));
+    setSelectedCities([]);
+    setSelectedListingIds([]);
+    setSearchQuery('');
   };
 
   const toggleTempCleanliness = (f: CleanlinessFilter) => {
@@ -300,7 +452,7 @@ export default function StayView({
   };
 
   const kpiRow = (
-    <Stack sx={{ flexDirection: 'row', flexWrap: 'wrap', gap: compactLayout ? 0.5 : 1.25 }}>
+    <Stack sx={{ flexDirection: 'row', flexWrap: 'wrap', gap: compactLayout ? 0.5 : 1.25, alignItems: 'center' }}>
       <KpiPill icon="🏠" count={kpis.arr} label={compactLayout ? 'Arr.aj' : 'Arrivées auj.'} tone="success" />
       <KpiPill icon="🚪" count={kpis.dep} label={compactLayout ? 'Dép.aj' : 'Départs auj.'} tone="warning" />
       {isReservations ? (
@@ -313,6 +465,64 @@ export default function StayView({
           <KpiPill icon="🧹" count={kpis.cln} label="Ménages" tone="primary" />
           <KpiPill icon="⚠" count={kpis.na} label="Non assigné" tone="error" alert={kpis.na > 0} />
         </>
+      )}
+      {showCockpitFilters && (
+        <Stack direction="row" sx={{ gap: 0.75, ml: { xs: 0, md: 0.5 }, flexWrap: 'wrap', alignItems: 'center' }}>
+          {(
+            [
+              { id: 'all' as const, label: 'Tout', hint: 'résas + tâches + messages' },
+              { id: 'resas' as const, label: 'Résas', hint: 'barres seules (toujours visibles)' },
+              { id: 'tasks' as const, label: 'Tâches', hint: 'chips tâches (résas restent)' },
+              { id: 'messages' as const, label: 'Msgs', hint: 'aperçus WA / OTA' },
+            ] as const
+          ).map((tab) => {
+            const active = cockpitLayer === tab.id;
+            return (
+              <Box
+                key={tab.id}
+                component="button"
+                type="button"
+                onClick={() => setCockpitLayer(tab.id)}
+                sx={{
+                  all: 'unset',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: compactLayout ? 11 : 12.5,
+                  fontWeight: active ? 700 : 500,
+                  letterSpacing: '-0.01em',
+                  px: compactLayout ? '10px' : '13px',
+                  py: compactLayout ? '5px' : '6px',
+                  borderRadius: '7px',
+                  border: `1px solid ${active ? T.ink : T.borderStrong}`,
+                  bgcolor: active ? T.ink : T.bg1,
+                  color: active ? T.cream : T.text2,
+                  transition: 'background 0.16s, color 0.16s, border-color 0.16s',
+                }}
+              >
+                {tab.label}
+              </Box>
+            );
+          })}
+          {!compactLayout && (
+            <Box
+              component="span"
+              sx={{
+                ml: 0.5,
+                fontFamily: '"Geist Mono", monospace',
+                fontSize: 10.5,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: T.text4,
+              }}
+            >
+              {cockpitLayer === 'all'
+                ? 'tout visible · hover = détail'
+                : cockpitLayer === 'resas'
+                  ? 'barres seules · hover = détail'
+                  : 'résas avec tâches · hover = détail'}
+            </Box>
+          )}
+        </Stack>
       )}
     </Stack>
   );
@@ -366,7 +576,7 @@ export default function StayView({
             {denseToolbar ? (
               <>
                 <Typography sx={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {isReservations ? 'Planning Réservations' : 'Planning Tâches'}
+                  {enableCommsCockpit ? 'Planning' : isReservations ? 'Planning Réservations' : 'Planning Tâches'}
                 </Typography>
                 <Typography sx={{ fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   {displayListings.length} prop. · {daysCount}j · {VISIBLE_DAYS}j vis.
@@ -418,6 +628,46 @@ export default function StayView({
             {denseToolbar ? (
               <>
                 <Box sx={{ width: '1px', height: 16, bgcolor: T.border, flexShrink: 0 }} />
+                {showCockpitFilters && (
+                  <>
+                    {(
+                      [
+                        { id: 'all' as const, label: 'Tout' },
+                        { id: 'resas' as const, label: 'Résas' },
+                        { id: 'tasks' as const, label: 'Tâches' },
+                        { id: 'messages' as const, label: 'Msgs' },
+                      ] as const
+                    ).map((tab) => {
+                      const active = cockpitLayer === tab.id;
+                      return (
+                        <Box
+                          key={tab.id}
+                          component="button"
+                          type="button"
+                          onClick={() => setCockpitLayer(tab.id)}
+                          sx={{
+                            all: 'unset',
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                            fontSize: 11,
+                            fontWeight: active ? 700 : 500,
+                            px: '10px',
+                            py: '4px',
+                            borderRadius: '7px',
+                            border: `1px solid ${active ? T.ink : T.borderStrong}`,
+                            bgcolor: active ? T.ink : T.bg1,
+                            color: active ? T.cream : T.text2,
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {tab.label}
+                        </Box>
+                      );
+                    })}
+                    <Box sx={{ width: '1px', height: 16, bgcolor: T.border, flexShrink: 0 }} />
+                  </>
+                )}
                 {(['clean', 'dirty', 'in_progress', 'occupied', 'emergency'] as CleanlinessFilter[]).map((f) => (
                   <FilterTogglePill
                     key={f}
@@ -441,22 +691,64 @@ export default function StayView({
                   </Box>
                 ) : null}
                 <Box sx={{ width: '1px', height: 16, bgcolor: T.border, flexShrink: 0 }} />
+                <Box
+                  component="input"
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                  placeholder="🔍 Listing, guest, n°…"
+                  sx={{
+                    all: 'unset',
+                    boxSizing: 'border-box',
+                    height: 22,
+                    width: 150,
+                    maxWidth: '28vw',
+                    px: 1,
+                    borderRadius: '6px',
+                    border: `1px solid ${searchQuery.trim() ? T.primary : T.border}`,
+                    bgcolor: searchQuery.trim() ? T.primaryTint : T.bg1,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: T.text,
+                    flexShrink: 0,
+                    '&::placeholder': { color: T.text3, fontWeight: 500 },
+                  }}
+                />
+                <ListingGroupMultiFilter
+                  dense
+                  buttonLabel="🏘 Villes"
+                  allLabel="Toutes les villes"
+                  searchPlaceholder="🔍 Ville…"
+                  options={listingGroupOptions}
+                  selected={selectedCities}
+                  onChange={setSelectedCities}
+                />
+                <ListingGroupMultiFilter
+                  dense
+                  buttonLabel="🏠 Listings"
+                  allLabel="Tous les listings"
+                  searchPlaceholder="🔍 Listing…"
+                  emptyLabel="Aucun listing"
+                  options={listingPickOptions}
+                  selected={selectedListingIds}
+                  onChange={setSelectedListingIds}
+                />
                 <Box component="span" sx={{
                   display: 'inline-flex', alignItems: 'center', gap: 0.5, height: 22, px: 0.75, borderRadius: 1,
                   bgcolor: T.bg2, border: `1px solid ${T.border}`, fontSize: 10, fontWeight: 600, color: T.text2, flexShrink: 0,
                 }}>
-                  🏘 {byCity.length}
+                  🏠 {filteredByGroup.length}
                 </Box>
-                <Box component="span" sx={{
-                  display: 'inline-flex', alignItems: 'center', gap: 0.5, height: 22, px: 0.75, borderRadius: 1,
-                  bgcolor: T.bg2, border: `1px solid ${T.border}`, fontSize: 10, fontWeight: 600, color: T.text2, flexShrink: 0,
-                }}>
-                  🏠 {listings.length}
-                </Box>
-                {isReservations ? (
+                {isReservations && !keepAllReservations ? (
                   <>
                     <FilterTogglePill dense label="Conf." active={statusFilters.has('confirmed')} onClick={() => toggleStatus('confirmed')} color={T.success} />
                     <FilterTogglePill dense label="Att." active={statusFilters.has('pending')} onClick={() => toggleStatus('pending')} color={T.warning} />
+                    <ChannelLegendPill dense label="Ab" color={T.airbnb} />
+                    <ChannelLegendPill dense label="Bk" color={T.booking} />
+                    <ChannelLegendPill dense label="Vr" color={T.vrbo} />
+                    <ChannelLegendPill dense label="Di" color={T.primary} />
+                  </>
+                ) : isReservations ? (
+                  <>
                     <ChannelLegendPill dense label="Ab" color={T.airbnb} />
                     <ChannelLegendPill dense label="Bk" color={T.booking} />
                     <ChannelLegendPill dense label="Vr" color={T.vrbo} />
@@ -624,7 +916,7 @@ export default function StayView({
                 />
               ))}
             </Stack>
-            {isReservations ? (
+            {isReservations && !keepAllReservations ? (
               <>
                 <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 1 }}>
                   Réservations
@@ -779,32 +1071,59 @@ export default function StayView({
           )}
         </Stack>
 
-        {/* Filtres Villes + Toutes */}
-        <Box component="button" sx={{
-          all: 'unset', cursor: 'pointer', height: 30, px: 1.375, borderRadius: 1,
+        <Box
+          component="input"
+          value={searchQuery}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+          placeholder="🔍 Listing, ville, guest, n° résa, téléphone…"
+          sx={{
+            all: 'unset',
+            boxSizing: 'border-box',
+            height: 30,
+            width: 220,
+            maxWidth: '36vw',
+            px: 1.25,
+            borderRadius: '8px',
+            border: `1px solid ${searchQuery.trim() ? T.primary : T.border}`,
+            bgcolor: searchQuery.trim() ? T.primaryTint : T.bg1,
+            fontSize: 12,
+            fontWeight: 600,
+            color: T.text,
+            flexShrink: 0,
+            '&::placeholder': { color: T.text3, fontWeight: 500 },
+          }}
+        />
+
+        <ListingGroupMultiFilter
+          buttonLabel="🏘 Villes"
+          allLabel="Toutes les villes"
+          searchPlaceholder="🔍 Ville…"
+          options={listingGroupOptions}
+          selected={selectedCities}
+          onChange={setSelectedCities}
+        />
+        <ListingGroupMultiFilter
+          buttonLabel="🏠 Listings"
+          allLabel="Tous les listings"
+          searchPlaceholder="🔍 Listing…"
+          emptyLabel="Aucun listing"
+          options={listingPickOptions}
+          selected={selectedListingIds}
+          onChange={setSelectedListingIds}
+        />
+
+        <Box component="span" sx={{
+          height: 30, px: 1.375, borderRadius: 1,
           bgcolor: T.bg1, border: `1px solid ${T.border}`, fontSize: 11.5, fontWeight: 600,
           color: T.text2, display: 'inline-flex', alignItems: 'center', gap: 0.75,
-          '&:hover': { borderColor: T.borderStrong },
         }}>
-          🏘 Villes <Box component="span" sx={{
+          🏠 Listings <Box component="span" sx={{
             fontFamily: '"Geist Mono", monospace', fontSize: 9.5, bgcolor: T.bg3, color: T.text3,
             px: 0.625, borderRadius: 999, fontWeight: 700,
-          }}>{byCity.length}</Box> ▾
+          }}>{filteredByGroup.length}</Box>
         </Box>
 
-        <Box component="button" sx={{
-          all: 'unset', cursor: 'pointer', height: 30, px: 1.375, borderRadius: 1,
-          bgcolor: T.bg1, border: `1px solid ${T.border}`, fontSize: 11.5, fontWeight: 600,
-          color: T.text2, display: 'inline-flex', alignItems: 'center', gap: 0.75,
-          '&:hover': { borderColor: T.borderStrong },
-        }}>
-          🏠 Toutes <Box component="span" sx={{
-            fontFamily: '"Geist Mono", monospace', fontSize: 9.5, bgcolor: T.bg3, color: T.text3,
-            px: 0.625, borderRadius: 999, fontWeight: 700,
-          }}>{listings.length}</Box> ▾
-        </Box>
-
-        {isReservations ? (
+        {isReservations && !keepAllReservations ? (
           <Stack direction="row" gap={0.625} sx={{ flexWrap: 'wrap',  ml: 'auto' }}>
             <FilterTogglePill
               label="Confirmées"
@@ -818,6 +1137,13 @@ export default function StayView({
               onClick={() => toggleStatus('pending')}
               color={T.warning}
             />
+            <ChannelLegendPill label="Airbnb" color={T.airbnb} />
+            <ChannelLegendPill label="Booking" color={T.booking} />
+            <ChannelLegendPill label="Vrbo" color={T.vrbo} />
+            <ChannelLegendPill label="Direct" color={T.primary} />
+          </Stack>
+        ) : isReservations ? (
+          <Stack direction="row" gap={0.625} sx={{ flexWrap: 'wrap',  ml: 'auto' }}>
             <ChannelLegendPill label="Airbnb" color={T.airbnb} />
             <ChannelLegendPill label="Booking" color={T.booking} />
             <ChannelLegendPill label="Vrbo" color={T.vrbo} />
@@ -845,7 +1171,7 @@ export default function StayView({
       {showMinimap && (
       <MiniMap
         days={minimapDays}
-        listings={displayListings}
+        listings={filteredByGroup}
         visibleStart={0}
         visibleEnd={VISIBLE_DAYS}
         mode={isReservations ? 'reservations' : 'tasks'}
@@ -904,8 +1230,12 @@ export default function StayView({
             {lists.map(l => (
               <ListingRowComp key={l.listingId} listing={l} days={days} metrics={m}
                 compactListing={compactLayout}
-                showTaskChips={!isReservations}
-                onTaskClick={onTaskClick} onReservationClick={onReservationClick}
+                showTaskChips={showTaskChips}
+                showMessageSnippets={showMessageSnippets}
+                richTaskChips={enableCommsCockpit}
+                onTaskClick={onTaskClick}
+                onReservationClick={onReservationClick}
+                onCommsClick={onCommsClick}
                 onCleanlinessChange={onCleanlinessChange} />
             ))}
           </React.Fragment>
@@ -918,18 +1248,120 @@ export default function StayView({
 
 /* ─── Listing row ─── */
 function ListingRowComp({
-  listing, days, metrics, compactListing = false, showTaskChips = true, onTaskClick, onReservationClick, onCleanlinessChange,
+  listing, days, metrics, compactListing = false, showTaskChips = true, showMessageSnippets = false,
+  richTaskChips = false,
+  onTaskClick, onReservationClick, onCommsClick, onCleanlinessChange,
 }: {
   listing: ListingRow; days: ReturnType<typeof genDays>; metrics: StayMetrics;
   compactListing?: boolean;
   showTaskChips?: boolean;
+  showMessageSnippets?: boolean;
+  /** Colonnes élargies Résas : label + heure + staff sur le chip. */
+  richTaskChips?: boolean;
   onTaskClick?: (i: TimelineItem) => void;
-  onReservationClick?: (id: string) => void;
+  onReservationClick?: (
+    reservation: ListingRow['reservations'][0],
+    listing: Pick<ListingRow, 'listingId' | 'listingName' | 'city'>,
+  ) => void;
+  onCommsClick?: (
+    kind: 'wa' | 'ota',
+    reservation: ListingRow['reservations'][0],
+    listing: Pick<ListingRow, 'listingId' | 'listingName' | 'city'>,
+  ) => void;
   onCleanlinessChange?: (listingId: string, status: DisplayCleanliness) => void | Promise<void>;
 }) {
+  const listingCtx = {
+    listingId: listing.listingId,
+    listingName: listing.listingName,
+    city: listing.city,
+  };
   const numTasks = listing.reservations.reduce((n, r) => n + (r.timeline?.length || 0), 0);
   const displayStatus = deriveDisplayCleanliness(listing, listing.reservations);
-  const rowHeight = showTaskChips ? metrics.TASK_ROW_H : metrics.ROW_H;
+
+  const barTop = compactListing ? STAY_COMPACT.RES_BAR_TOP : metrics.RES_BAR_TOP;
+  const barH = compactListing ? STAY_COMPACT.RES_BAR_HEIGHT : metrics.RES_BAR_HEIGHT;
+
+  /** Max lignes jour (tâches + 1 lane StayOps) pour hauteur cockpit. */
+  const maxTasksOnDay = useMemo(() => {
+    if (!showTaskChips && !showMessageSnippets) return 0;
+    let max = 0;
+    for (const d of days) {
+      let n = 0;
+      let hasStayOps = false;
+      for (const r of listing.reservations) {
+        for (const t of r.timeline || []) {
+          if ((t.scheduledFor || '').slice(0, 10) !== d.iso) continue;
+          if (showMessageSnippets) {
+            const ty = String(t.type || '');
+            if (ty === 'arrival' || ty === 'departure' || ty === 'registration') continue;
+          }
+          n += 1;
+        }
+        if (showMessageSnippets && stayOpsDayPillCount(r.stayOps, d.iso) > 0) hasStayOps = true;
+      }
+      if (hasStayOps) n += 1; // une seule ligne horizontale Dép | Arr
+      if (n > max) max = n;
+    }
+    return max;
+  }, [days, listing.reservations, showTaskChips, showMessageSnippets]);
+
+  const taskLines = showTaskChips
+    ? Math.max(
+        COCKPIT_META.TASK_LANE_MIN_LINES,
+        Math.min(COCKPIT_META.TASK_LANE_MAX_LINES, maxTasksOnDay || COCKPIT_META.TASK_LANE_MIN_LINES),
+      )
+    : 2;
+
+  /** Résa courte sur la ligne → messages empilés (hauteur +), sans déborder. */
+  const narrowMessages = useMemo(() => {
+    if (!showMessageSnippets || !days.length) return false;
+    const firstDay = days[0].date;
+    const cellPct = 100 / days.length;
+    for (const r of listing.reservations) {
+      const arr = new Date(r.arrivalDate);
+      const dep = new Date(r.departureDate);
+      const arrIdx = Math.floor((+arr - +firstDay) / 86400000);
+      const depIdx = Math.floor((+dep - +firstDay) / 86400000);
+      if (depIdx < 0 || arrIdx > days.length - 1) continue;
+      const startIdx = Math.max(0, arrIdx);
+      const endIdx = Math.min(days.length - 1, depIdx);
+      const { widthPct } = computeReservationBarLayout(startIdx, endIdx, days.length, 0);
+      if (widthPct < cellPct * 1.25) return true;
+    }
+    return false;
+  }, [days, listing.reservations, showMessageSnippets]);
+
+  /** Q/R + A sur une cellule → hauteur msg + (comme onglet OTA). */
+  const dualMsgLines = useMemo(() => {
+    if (!showMessageSnippets) return 1;
+    let max = 1;
+    for (const r of listing.reservations) {
+      max = Math.max(max, commsMetaLineCount(r.lastWa), commsMetaLineCount(r.lastOta));
+    }
+    return max;
+  }, [listing.reservations, showMessageSnippets]);
+
+  // Planning classique = TASK_ROW_H. Cockpit Résas = barre + msgs + lane tâches.
+  const rowHeight = compactListing
+    ? (showTaskChips ? metrics.TASK_ROW_H : metrics.ROW_H)
+    : showMessageSnippets
+      ? listingCockpitRowHeight({
+          barTop,
+          barH,
+          showMessages: true,
+          showTasks: showTaskChips,
+          taskLines,
+          fallback: metrics.ROW_H,
+          narrowMessages,
+          dualMsgLines,
+        })
+      : (showTaskChips ? metrics.TASK_ROW_H : metrics.ROW_H);
+
+  const taskLaneTopPx = compactListing
+    ? STAY_COMPACT.RES_BAR_TOP + STAY_COMPACT.RES_BAR_HEIGHT + STAY_COMPACT.RES_TASK_GAP
+    : showMessageSnippets
+      ? dayTaskLaneTop({ barTop, barH, showMessages: true, narrowMessages, dualMsgLines })
+      : metrics.RES_BAR_TOP + metrics.RES_BAR_HEIGHT + metrics.RES_TASK_GAP;
 
   return (
     <Box sx={{
@@ -1020,25 +1452,51 @@ function ListingRowComp({
         )}
       </Stack>
 
-      {/* Day cells */}
+      {/* Day cells : StayOps (Arr/Enreg → arrivée, Dép → départ) + tâches */}
       {days.map(d => {
         const tasks = showTaskChips
-          ? (listing.reservations || []).flatMap(r =>
-              (r.timeline || []).filter(t => (t.scheduledFor || '').slice(0, 10) === d.iso)
+          ? (listing.reservations || []).flatMap((r) =>
+              (r.timeline || [])
+                .filter((t) => {
+                  if ((t.scheduledFor || '').slice(0, 10) !== d.iso) return false;
+                  // Cockpit Résas : pas les workflows guest (Arr/Dép/Enreg = pastilles StayOps)
+                  if (showMessageSnippets) {
+                    const ty = String(t.type || '');
+                    if (ty === 'arrival' || ty === 'departure' || ty === 'registration') return false;
+                  }
+                  return true;
+                })
+                .map((t) => ({
+                  ...t,
+                  data: {
+                    ...(t.data || {}),
+                    reservationNumber: r.reservationNumber || (t.data as { reservationNumber?: string } | undefined)?.reservationNumber,
+                    reservationId: r.reservationId,
+                  },
+                })),
             )
+          : [];
+        const dayStayOps = showMessageSnippets
+          ? (listing.reservations || [])
+              .map((r) => r.stayOps)
+              .filter((ops): ops is NonNullable<typeof ops> => Boolean(ops && stayOpsDayPillCount(ops, d.iso) > 0))
           : [];
         return (
           <DayCell
             key={d.iso}
             day={d}
             tasks={tasks}
+            stayOpsList={dayStayOps}
             onTaskClick={onTaskClick}
-            reserveTaskLane={showTaskChips}
+            reserveTaskLane={showTaskChips || dayStayOps.length > 0}
+            taskLaneTop={taskLaneTopPx}
+            maxVisible={showMessageSnippets ? Math.max(COCKPIT_META.TASK_LANE_MIN_LINES, taskLines) : 2}
+            richChips={richTaskChips}
           />
         );
       })}
 
-      {/* Gantt bars overlay */}
+      {/* Gantt + MESSAGES GLOBAUX (par résa, sous la barre — pas par jour) */}
       <Box sx={{
         position: 'absolute', top: 0, left: metrics.STICKY_W,
         width: days.length * metrics.CELL_W, height: rowHeight, pointerEvents: 'none', zIndex: 3,
@@ -1072,10 +1530,37 @@ function ListingRowComp({
             days.length,
             sameDaySlot,
           );
+          // Messages = strictement la barre (jamais sur la résa voisine)
+          const msgLayout = computeReservationMessagesLayout(
+            startIdx,
+            endIdx,
+            days.length,
+            sameDaySlot,
+          );
           const channel = channelFromName(r.channelName);
+          const metaTop = barTop + barH + COCKPIT_META.BAR_GAP;
+          const hasWa = Boolean(
+            r.lastWa?.exists ||
+              r.lastWa?.lastMessageKind ||
+              r.lastWa?.text ||
+              (r.lastWa?.count || 0) > 0,
+          );
+          const hasOta = Boolean(
+            r.lastOta?.exists ||
+              r.lastOta?.lastMessageKind ||
+              r.lastOta?.text ||
+              (r.lastOta?.count || 0) > 0,
+          );
           return (
-            <Box key={r.reservationId} onClick={() => onReservationClick?.(r.reservationNumber || r.reservationId)}
-              sx={{ pointerEvents: 'auto' }}>
+            <Box
+              key={r.reservationId}
+              onClick={
+                onReservationClick
+                  ? () => onReservationClick(r, listingCtx)
+                  : undefined
+              }
+              sx={{ pointerEvents: 'auto', cursor: onReservationClick ? 'pointer' : 'default' }}
+            >
               <GanttBar
                 channel={channel}
                 guestName={r.guestName}
@@ -1084,7 +1569,43 @@ function ListingRowComp({
                 leftPct={leftPct}
                 widthPct={widthPct}
                 compact={compactListing}
+                hasOtaMsg={hasOta}
+                hasWaMsg={hasWa}
+                numberOfGuests={r.numberOfGuests}
+                arrivalDate={r.arrivalDate}
+                departureDate={r.departureDate}
+                lastWa={r.lastWa}
+                lastOta={r.lastOta}
               />
+              {showMessageSnippets && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: metaTop,
+                    left: `${msgLayout.leftPct}%`,
+                    width: `${msgLayout.widthPct}%`,
+                    maxWidth: `${msgLayout.widthPct}%`,
+                    boxSizing: 'border-box',
+                    px: '2px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: `${COCKPIT_META.CARD_GAP}px`,
+                    zIndex: 5,
+                    pointerEvents: 'auto',
+                    overflow: 'hidden',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <CockpitCommsDualRow
+                    wa={r.lastWa}
+                    ota={r.lastOta}
+                    otaChannel={channel}
+                    narrow={msgLayout.narrow}
+                    onWaClick={onCommsClick ? () => onCommsClick('wa', r, listingCtx) : undefined}
+                    onOtaClick={onCommsClick ? () => onCommsClick('ota', r, listingCtx) : undefined}
+                  />
+                </Box>
+              )}
             </Box>
           );
           });
@@ -1095,38 +1616,85 @@ function ListingRowComp({
 }
 
 /* ─── Day cell with chip overflow popover ─── */
-function DayCell({ day, tasks, onTaskClick, reserveTaskLane = false }: {
+function DayCell({
+  day,
+  tasks,
+  stayOpsList = [],
+  onTaskClick,
+  reserveTaskLane = false,
+  taskLaneTop,
+  maxVisible,
+  richChips = false,
+}: {
   day: ReturnType<typeof genDays>[0];
   tasks: TimelineItem[];
+  stayOpsList?: NonNullable<ListingRow['reservations'][0]['stayOps']>[];
   onTaskClick?: (i: TimelineItem) => void;
   reserveTaskLane?: boolean;
+  taskLaneTop?: number;
+  /** Nombre de chips empilés visibles (2 lignes min → jusqu’à 6). */
+  maxVisible?: number;
+  richChips?: boolean;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const visible = tasks.slice(0, STAY.MAX_CHIPS);
-  const overflow = tasks.length - STAY.MAX_CHIPS;
-  const taskLaneTop = STAY.RES_BAR_TOP + STAY.RES_BAR_HEIGHT + STAY.RES_TASK_GAP;
+  const cleaningTasks = tasks.filter((t) => String(t.type || '') === 'cleaning');
+  const otherTasks = tasks.filter((t) => String(t.type || '') !== 'cleaning');
+  const turnover = dayIsTurnover(stayOpsList, day.iso);
+  // Ménage toujours sur sa ligne (pas à côté Arr/Dép).
+  // Turnover même jour → centré (moitié fin resa / début suivante).
+  const restTasks = otherTasks;
+  const limit = maxVisible ?? STAY.MAX_CHIPS;
+  const visible = restTasks.slice(0, limit);
+  const overflow = restTasks.length - limit;
+  const laneTop = taskLaneTop ?? (STAY.RES_BAR_TOP + STAY.RES_BAR_HEIGHT + STAY.RES_TASK_GAP);
+  const hasLaneContent = tasks.length > 0 || stayOpsList.length > 0;
 
   return (
     <Box sx={{
       borderRight: `1px solid ${T.border}`, position: 'relative',
       ...planningDaySurfaceSx(day),
     }}>
-      {tasks.length > 0 && (
+      {hasLaneContent && (
         <Stack sx={{
           position: 'absolute',
-          left: 3,
-          right: 3,
+          left: 2,
+          right: 2,
           flexDirection: 'column',
           gap: 0.25,
-          zIndex: 4,
+          zIndex: 6,
+          overflow: 'visible',
           ...(reserveTaskLane
-            ? { top: taskLaneTop, bottom: 4 }
+            ? { top: laneTop, bottom: 4 }
             : { bottom: 5 }),
         }}>
-          {visible.map((t, i) => (
-            <Box key={i} onClick={() => onTaskClick?.(t)} sx={{ cursor: 'pointer' }}>
-              <TaskChip item={t} />
+          {stayOpsList.length > 0 && (
+            <StayOpsDayLane opsList={stayOpsList} dayIso={day.iso} />
+          )}
+          {cleaningTasks.map((t, i) => (
+            <Box
+              key={`cl-${i}`}
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%',
+                // Aligné STAY_RES_BAR : zone entre checkout (~40%) et checkin (~40%)
+                ...(turnover
+                  ? {
+                      px: '8%',
+                    }
+                  : {}),
+              }}
+            >
+              <TaskChip
+                item={t}
+                rich={richChips}
+                fitContent
+                onClick={() => onTaskClick?.(t)}
+              />
             </Box>
+          ))}
+          {visible.map((t, i) => (
+            <TaskChip key={i} item={t} rich={richChips} onClick={() => onTaskClick?.(t)} />
           ))}
           {overflow > 0 && (
             <>
@@ -1153,7 +1721,7 @@ function DayCell({ day, tasks, onTaskClick, reserveTaskLane = false }: {
                 <Stack gap={0.5}>
                   {tasks.map((t, i) => (
                     <Box key={i} onClick={() => { onTaskClick?.(t); setAnchor(null); }} sx={{ cursor: 'pointer' }}>
-                      <TaskChip item={t} />
+                      <TaskChip item={t} rich={richChips} />
                     </Box>
                   ))}
                 </Stack>

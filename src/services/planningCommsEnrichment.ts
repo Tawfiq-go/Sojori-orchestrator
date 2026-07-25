@@ -161,37 +161,37 @@ function fromOtaRow(row: OtaThreadRow): PlanningLastMessage {
   const empty = effective.empty || isEmptyThreadPreview(preview) || !rawPreview;
   const lastMessageKind = empty ? undefined : resolveOtaLastMessageKind(effective);
   const autoLine = resolveOtaProgrammedAutoLine(row);
-  const programmedAuto = autoLine
-    ? {
-        catalogKey: autoLine.catalogKey,
-        // catalogKey 'auto' = fallback messages préchargés (pas de denorm) → libellé depuis le preview
-        label:
-          autoLine.catalogKey !== 'auto'
-            ? ownerLabelForPlanCatalog(autoLine.catalogKey)
-            : humanizeOwnerPreview(autoLine.preview || '') || 'Message programmé',
-        time: formatThreadWhenExact(autoLine.sentAt),
-        sentAt: autoLine.sentAt,
-      }
-    : undefined;
+  // Comme mapOtaRowToThread / onglet OTA : A seulement s’il y a un Q/R réel.
+  const programmedAuto =
+    !empty && lastMessageKind && autoLine
+      ? {
+          catalogKey: autoLine.catalogKey,
+          // catalogKey 'auto' = fallback messages préchargés (pas de denorm) → libellé depuis le preview
+          label:
+            autoLine.catalogKey !== 'auto'
+              ? ownerLabelForPlanCatalog(autoLine.catalogKey)
+              : humanizeOwnerPreview(autoLine.preview || '') || 'Message programmé',
+          time: formatThreadWhenExact(autoLine.sentAt),
+          sentAt: autoLine.sentAt,
+        }
+      : undefined;
   const at = empty ? row.lastMessageTime : effective.at || row.lastMessageTime;
   const text = empty
-    ? programmedAuto
-      ? programmedAuto.label
-      : row.unreadCount > 0
-        ? 'Message non lu'
-        : 'Aucun message'
+    ? row.unreadCount > 0
+      ? 'Message non lu'
+      : 'Aucun message'
     : clip(preview);
 
   return {
     text,
     at,
-    time: empty ? programmedAuto?.time || '' : formatThreadWhenExact(at),
+    time: empty ? '' : formatThreadWhenExact(at),
     lastMessageKind: empty ? undefined : lastMessageKind,
     programmedAuto,
     channel: 'ota',
     threadId: row.threadId,
     phone: row.guestPhone || undefined,
-    count: Math.max(row.messageMatchCount || 0, row.unreadCount || 0, empty && !programmedAuto ? 0 : 1),
+    count: Math.max(row.messageMatchCount || 0, row.unreadCount || 0, empty ? 0 : 1),
     unread: row.unreadCount || 0,
     needsReply: otaNeedsReply(row),
     exists: true,

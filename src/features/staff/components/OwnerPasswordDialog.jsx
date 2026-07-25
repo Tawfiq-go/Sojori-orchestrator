@@ -11,6 +11,10 @@ import {
   Typography,
 } from '@mui/material';
 
+/**
+ * Dialog mot de passe PM — un scope à la fois pour éviter l'autofill croisé dashboard ↔ RU.
+ * @param {'dashboard' | 'ru'} mode
+ */
 export default function OwnerPasswordDialog({
   open,
   onClose,
@@ -19,57 +23,60 @@ export default function OwnerPasswordDialog({
   ruEmail,
   loading,
   onSubmit,
+  mode = 'dashboard',
 }) {
-  const [sojoriPassword, setSojoriPassword] = useState('');
-  const [ruExtranetPassword, setRuExtranetPassword] = useState('');
+  const isRu = mode === 'ru';
+  const [password, setPassword] = useState('');
 
   const handleClose = () => {
-    setSojoriPassword('');
-    setRuExtranetPassword('');
+    setPassword('');
     onClose();
   };
 
   const handleSubmit = () => {
-    const payload = {};
-    if (sojoriPassword.trim().length >= 6) payload.sojoriPassword = sojoriPassword.trim();
-    if (ruExtranetPassword.trim().length >= 6) payload.ruExtranetPassword = ruExtranetPassword.trim();
-    if (!payload.sojoriPassword && !payload.ruExtranetPassword) return;
-    void onSubmit(payload);
+    const value = password.trim();
+    if (value.length < 6) return;
+    if (isRu) {
+      void onSubmit({ ruExtranetPassword: value });
+    } else {
+      // ⚠️ CRITICAL: ne jamais envoyer ruExtranetPassword ici
+      void onSubmit({ sojoriPassword: value });
+    }
   };
 
-  const canSubmit =
-    sojoriPassword.trim().length >= 6 || ruExtranetPassword.trim().length >= 6;
+  const canSubmit = password.trim().length >= 6;
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Modifier les mots de passe — {ownerLabel || 'PM'}</DialogTitle>
+      <DialogTitle>
+        {isRu
+          ? `Mot de passe extranet R.U. — ${ownerLabel || 'PM'}`
+          : `Mot de passe dashboard Sojori — ${ownerLabel || 'PM'}`}
+      </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
-          <Alert severity="info" sx={{ fontSize: 13 }}>
-            Laissez un champ vide pour ne pas le modifier. Minimum 6 caractères par mot de passe
-            renseigné.
+          <Alert severity={isRu ? 'warning' : 'info'} sx={{ fontSize: 13 }}>
+            {isRu
+              ? 'Modifie UNIQUEMENT le password extranet Rental United (API calendrier / prix). Ne change pas le login dashboard.'
+              : 'Modifie UNIQUEMENT le password dashboard Sojori. Le password R.U. n’est jamais touché.'}
           </Alert>
           <Typography variant="body2" color="text.secondary">
-            Dashboard : {sojoriEmail || '—'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Extranet R.U. : {ruEmail || '—'}
+            {isRu ? `Extranet R.U. : ${ruEmail || '—'}` : `Dashboard : ${sojoriEmail || '—'}`}
           </Typography>
           <TextField
-            label="Nouveau mot de passe dashboard Sojori"
+            label={isRu ? 'Nouveau mot de passe extranet R.U.' : 'Nouveau mot de passe dashboard'}
             type="password"
-            value={sojoriPassword}
-            onChange={(e) => setSojoriPassword(e.target.value)}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             fullWidth
             autoComplete="new-password"
-          />
-          <TextField
-            label="Nouveau mot de passe extranet R.U."
-            type="password"
-            value={ruExtranetPassword}
-            onChange={(e) => setRuExtranetPassword(e.target.value)}
-            fullWidth
-            autoComplete="new-password"
+            inputProps={{
+              'data-lpignore': 'true',
+              'data-1p-ignore': 'true',
+              autoCorrect: 'off',
+              spellCheck: false,
+            }}
+            name={isRu ? 'sojori-ru-extranet-password-only' : 'sojori-dashboard-password-only'}
           />
         </Stack>
       </DialogContent>

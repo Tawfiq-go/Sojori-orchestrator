@@ -62,6 +62,7 @@ Ces classes forcent une scrollbar visible (`scrollbar-width: thin`, couleurs Soj
 | Mise à jour calendrier (pricing) | `src/features/dynamic-pricing/bien/CalendarUpdateModal.tsx` | `calendar-update-modal-scroll` |
 | Modifier inventaire (calendrier V3) | `src/components/calendar-v3/UpdateInventoryModal.jsx` | `calendar-update-inventory-scroll` |
 | Audit disponibilité (calendrier V3) | `src/components/calendar-v3/AuditBlockedDaysModal.jsx` | `calendar-audit-modal-scroll` |
+| Drawer résa planning (Vue ops) | `src/features/planning/PlanningReservationDrawer.tsx` | `planning-reservation-drawer-scroll`, `planning-thread-scroll` |
 
 ### Cas particulier : modale hors layout (portal)
 

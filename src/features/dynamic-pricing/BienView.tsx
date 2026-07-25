@@ -435,7 +435,7 @@ export default function BienView(props: BienViewProps) {
         </Stack>
       </Box>
 
-      {/* ── Réglages pricing (réglages + aperçu prix) ── */}
+      {/* ── Réglages pricing + aperçu prix ── */}
       {advTab === 'reglages' ? (<>
       <Box sx={{ position: 'relative' }}>
         {configSaveStatus !== 'idle' ? (
@@ -510,7 +510,6 @@ export default function BienView(props: BienViewProps) {
         />
       </Box>
 
-      {/* ── Aperçu des prix (super vue) ── */}
       <Section
         num="02"
         title="Aperçu des prix"

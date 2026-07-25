@@ -27,8 +27,10 @@ export interface Staff {
   avatarColor?: 1 | 2 | 3 | 4 | 5 | 6;
   status: StaffStatus;
   isAdmin: boolean;
+  /** false = pas de notifs WhatsApp tâches (assign / cancel). Défaut true. */
+  whatsappNotificationsEnabled?: boolean;
   contractType: ContractType;
-  /** Freelance only · prix par type de tâche en MAD (clés fulltask) */
+  /** Prix par type de tâche en MAD (clés fulltask) — salarié ou freelance. */
   rates?: Record<string, number>;
   allowedTaskTypes: string[];
   /** Sentinel « All » ou ids listing — [] sans cityIds = tous (legacy). */
@@ -37,8 +39,15 @@ export interface Staff {
   allowedCityIds: string[];
   maxTasksPerDay?: number;
   schedule: {
-    daysOfWeek: number[];             // 0=L → 6=D
-    timeWindows: { start: string; end: string }[]; // HH:mm
+    /** Jours actifs (0=dim … 6=sam). */
+    daysOfWeek: number[];
+    /** Fenêtres partagées (legacy / résumé carte). */
+    timeWindows: { start: string; end: string }[];
+    /**
+     * Créneaux par jour (prioritaire).
+     * Ex. { 1: [{08:00–12:00},{14:00–18:00}] } = lundi matin + après-midi.
+     */
+    dayWindows?: Partial<Record<number, { start: string; end: string }[]>>;
   };
   notes?: string;
 }

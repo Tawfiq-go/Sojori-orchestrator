@@ -7,6 +7,7 @@ import ThreadsList from '../unified-inbox/ThreadsList';
 import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
+import { useCommsHubChrome } from './CommsHubChromeContext';
 import messagesService from '../../services/messagesService';
 import {
   fetchInboxResas,
@@ -24,22 +25,23 @@ import {
   mapOtaRowToThread,
   mapOtaThreadDetailToRow,
   mergeOtaThreadPages,
+  clearOtaGhostPreview,
   type OtaThreadRow,
 } from '../unified-inbox/inboxOtaMappers';
 import {
-  applyOtaInboxFilters,
+  applyOtaChannelFilter,
+  applyOtaInboxView,
   buildOtaAdvancedApiParams,
   buildOtaGlobalSearchParams,
   countOtaFilters,
-  countOtaStayQuickFilters,
   hasActiveOtaAdvancedSearch,
-  sortOtaThreadsByActivity,
   type OtaAdvancedSearch,
   type OtaChannelFilter,
-  type OtaStayQuickFilter,
+  type OtaInboxView,
 } from '../unified-inbox/otaThreadFilters';
+import OtaInboxFilters from '../unified-inbox/OtaInboxFilters';
+import { T } from '../unified-inbox/_tokens';
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
-import { OTA_QUICK_REPLIES, OTA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
 import {
   buildOtaThreadContextForAi,
   getLastGuestMessageFromInbox,
@@ -50,7 +52,35 @@ import {
   invalidateOtaInboxCache,
   setCachedOtaInbox,
 } from '../../utils/otaInboxCache';
-import { last9Phone, resasInboxUrl, waInboxUrl } from '../../utils/commsDeepLinks';
+import { last9Phone, otaInboxUrl, waInboxUrl } from '../../utils/commsDeepLinks';
+
+const OTA_VIEW_CHIPS: Array<{
+  id: OtaInboxView;
+  label: string;
+  countKey: keyof ReturnType<typeof countOtaFilters>;
+  urgent?: boolean;
+  title?: string;
+}> = [
+  { id: 'exchanges', label: 'Échanges', countKey: 'exchanges' },
+  { id: 'unreplied', label: 'Non rép.', countKey: 'unreplied', urgent: true },
+  { id: 'created_today', label: 'Créé auj', countKey: 'created_today' },
+  {
+    id: 'stay',
+    label: 'Séjour',
+    countKey: 'stay',
+    title: 'En cours → À venir → Terminées récemment',
+  },
+  { id: 'arr_today', label: 'Arr auj', countKey: 'arr_today' },
+  { id: 'dep_today', label: 'Dép auj', countKey: 'dep_today' },
+  { id: 'arr_tomorrow', label: 'Arr dem', countKey: 'arr_tomorrow' },
+  { id: 'dep_tomorrow', label: 'Dép dem', countKey: 'dep_tomorrow' },
+];
+
+const OTA_CHANNEL_CHIPS: Array<{ id: OtaChannelFilter; label: string }> = [
+  { id: 'ab', label: 'Airbnb' },
+  { id: 'bk', label: 'Booking' },
+  { id: 'direct', label: 'Direct' },
+];
 const OTA_INBOX_PAGE_SIZE = 50;
 
 function inboxCursorFromRows(rows: OtaThreadRow[]): string | undefined {
@@ -78,8 +108,11 @@ function mapApiThreads(response: unknown): OtaThreadRow[] {
 
 export default function MessagesOTATabV2() {
   const navigate = useNavigate();
+  const { setLeading, setSubBar } = useCommsHubChrome();
   /** Liste inbox : actives seulement (Tout / canaux) */
-  const [inboxRows, setInboxRows] = useState<OtaThreadRow[]>(() => getCachedOtaInbox() ?? []);
+  const [inboxRows, setInboxRows] = useState<OtaThreadRow[]>(
+    () => filterOtaInboxDefault(getCachedOtaInbox() ?? []),
+  );
   /** Résultats recherche BD (avancée = toutes resa ; non répondu = actives seulement) */
   const [searchRows, setSearchRows] = useState<OtaThreadRow[]>([]);
   const [searchMode, setSearchMode] = useState<OtaSearchMode>('none');
@@ -98,8 +131,7 @@ export default function MessagesOTATabV2() {
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [searchTerm, setSearchTerm] = useState('');
   const [otaChannelFilter, setOtaChannelFilter] = useState<OtaChannelFilter>('all');
-  const [otaStayQuickFilter, setOtaStayQuickFilter] = useState<OtaStayQuickFilter>('none');
-  const [otaUnrepliedOnly, setOtaUnrepliedOnly] = useState(false);
+  const [otaView, setOtaView] = useState<OtaInboxView>('exchanges');
   const [otaAdvancedDraft, setOtaAdvancedDraft] = useState<OtaAdvancedSearch>(EMPTY_ADVANCED);
   const [appliedAdvanced, setAppliedAdvanced] = useState<OtaAdvancedSearch>(EMPTY_ADVANCED);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
@@ -127,7 +159,7 @@ export default function MessagesOTATabV2() {
     const hasCache = Boolean(cached);
 
     if (hasCache && cached) {
-      setInboxRows(cached);
+      setInboxRows(filterOtaInboxDefault(cached));
       setSearchRows([]);
       setSearchMode('none');
       setTableReady(true);
@@ -420,37 +452,12 @@ export default function MessagesOTATabV2() {
     requestOwnerId,
   ]);
 
-  const openWhatsAppForActive = useCallback(() => {
-    const row = inbox.activeRow;
-    const phone =
-      whatsappGuest?.phone ||
-      inbox.reservation?.guestPhone ||
-      row?.guestPhone ||
-      '';
-    const reservationNumber =
-      inbox.reservation?.reservationNumber || row?.reservationNumber || '';
-    if (whatsappGuest?.kind === 'nonum' || (!phone && !reservationNumber)) {
-      navigate(resasInboxUrl({ reservationNumber: reservationNumber || undefined }));
-      return;
-    }
-    if (whatsappGuest?.kind === 'jamais') {
-      navigate(
-        resasInboxUrl({
-          reservationNumber: reservationNumber || undefined,
-          q: reservationNumber || phone,
-        }),
-      );
-      return;
-    }
-    navigate(waInboxUrl({ phone, reservationNumber }));
-  }, [inbox.activeRow, inbox.reservation, whatsappGuest, navigate]);
-
   const initiateWhatsAppForActive = useCallback(async () => {
     const reservationNumber = String(
       inbox.reservation?.reservationNumber || inbox.activeRow?.reservationNumber || '',
     ).trim();
     if (!reservationNumber) {
-      navigate(resasInboxUrl());
+      window.alert('N° de réservation manquant — impossible d’initier WhatsApp.');
       return;
     }
     setInitiatingWhatsApp(true);
@@ -460,7 +467,9 @@ export default function MessagesOTATabV2() {
         (r) => String(r.reservationNumber || '').toUpperCase() === reservationNumber.toUpperCase(),
       );
       if (!match) {
-        navigate(resasInboxUrl({ reservationNumber, q: reservationNumber }));
+        window.alert(
+          `Réservation ${reservationNumber} introuvable côté Résas pour initier WhatsApp. Les messages OTA restent ouverts.`,
+        );
         return;
       }
       const result = await initiateWhatsAppForResa(match.id);
@@ -470,9 +479,13 @@ export default function MessagesOTATabV2() {
         navigate(waInboxUrl({ phone, reservationNumber }));
         return;
       }
-      navigate(resasInboxUrl({ reservationNumber, q: reservationNumber }));
+      window.alert(
+        result.notWhatsApp
+          ? 'Ce numéro ne semble pas avoir WhatsApp.'
+          : result.error || 'Envoi WhatsApp impossible — tu restes sur le fil OTA.',
+      );
     } catch {
-      navigate(resasInboxUrl({ reservationNumber, q: reservationNumber }));
+      window.alert('Erreur initiation WhatsApp — tu restes sur le fil OTA.');
     } finally {
       setInitiatingWhatsApp(false);
     }
@@ -484,52 +497,66 @@ export default function MessagesOTATabV2() {
     navigate,
   ]);
 
-  const handleChannelFilterChange = (filter: OtaChannelFilter) => {
-    setOtaChannelFilter(filter);
-    if (searchMode === 'global' && searchTerm.trim().length >= GLOBAL_SEARCH_MIN_LEN) {
-      void loadServerSearch({ mode: 'global', globalQuery: searchTerm.trim(), channelFilter: filter });
-    } else if (searchMode === 'advanced') {
-      void loadServerSearch({ mode: 'advanced', channelFilter: filter, unrepliedOnly: otaUnrepliedOnly });
-    } else if (searchMode === 'unreplied') {
-      void loadServerSearch({ mode: 'unreplied', channelFilter: filter, unrepliedOnly: true });
-    }
-  };
+  /** WA depuis OTA : ne jamais envoyer vers Résas (ça ferme le fil OTA). */
+  const openWhatsAppForActive = useCallback(() => {
+    const row = inbox.activeRow;
+    const phone =
+      whatsappGuest?.phone ||
+      inbox.reservation?.guestPhone ||
+      row?.guestPhone ||
+      '';
+    const reservationNumber =
+      inbox.reservation?.reservationNumber || row?.reservationNumber || '';
 
-  const handleUnrepliedOnlyChange = (on: boolean) => {
-    setOtaUnrepliedOnly(on);
-    if (on) {
-      void loadServerSearch({ mode: 'unreplied', unrepliedOnly: true });
+    if (whatsappGuest?.kind === 'actif') {
+      navigate(waInboxUrl({ phone, reservationNumber }));
       return;
     }
-    if (searchMode === 'unreplied' && !hasActiveOtaAdvancedSearch(appliedAdvanced)) {
+    if (whatsappGuest?.kind === 'jamais') {
+      // Initier sur place — pas de navigation Résas qui fait perdre les messages OTA
+      void initiateWhatsAppForActive();
+      return;
+    }
+    if (whatsappGuest?.kind === 'nonum' || (!phone && !reservationNumber)) {
+      window.alert('Pas de numéro WhatsApp pour ce voyageur.');
+      return;
+    }
+    // loading / inconnu : tenter l’onglet WA sans passer par Résas
+    navigate(waInboxUrl({ phone, reservationNumber }));
+  }, [inbox.activeRow, inbox.reservation, whatsappGuest, navigate, initiateWhatsAppForActive]);
+
+  const handleChannelFilterChange = useCallback(
+    (filter: OtaChannelFilter) => {
+      setOtaChannelFilter(filter);
+      if (searchMode === 'global' && searchTerm.trim().length >= GLOBAL_SEARCH_MIN_LEN) {
+        void loadServerSearch({ mode: 'global', globalQuery: searchTerm.trim(), channelFilter: filter });
+      } else if (searchMode === 'advanced') {
+        void loadServerSearch({ mode: 'advanced', channelFilter: filter });
+      }
+    },
+    [searchMode, searchTerm, loadServerSearch],
+  );
+
+  const handleAdvancedSearch = useCallback(() => {
+    setAppliedAdvanced(otaAdvancedDraft);
+    setAdvancedExpanded(false);
+    void loadServerSearch({ advanced: otaAdvancedDraft, mode: 'advanced' });
+  }, [otaAdvancedDraft, loadServerSearch]);
+
+  const handleResetAdvanced = useCallback(() => {
+    setOtaAdvancedDraft(EMPTY_ADVANCED);
+    setAppliedAdvanced(EMPTY_ADVANCED);
+    setAdvancedExpanded(false);
+    if (searchMode === 'advanced') {
       setSearchRows([]);
       setSearchMode('none');
     }
-  };
+  }, [searchMode]);
 
-  const handleAdvancedSearch = () => {
-    setAppliedAdvanced(otaAdvancedDraft);
-    setAdvancedExpanded(false);
-    void loadServerSearch({ advanced: otaAdvancedDraft, mode: 'advanced', unrepliedOnly: otaUnrepliedOnly });
-  };
-
-  const handleResetAdvanced = () => {
-    setOtaAdvancedDraft(EMPTY_ADVANCED);
-    setAppliedAdvanced(EMPTY_ADVANCED);
+  const handleResetAllFilters = useCallback(() => {
     setSearchTerm('');
     setOtaChannelFilter('all');
-    setOtaStayQuickFilter('none');
-    setOtaUnrepliedOnly(false);
-    setAdvancedExpanded(false);
-    invalidateOtaInboxCache();
-    void loadInbox({ skipCache: true });
-  };
-
-  const handleResetAllFilters = () => {
-    setSearchTerm('');
-    setOtaChannelFilter('all');
-    setOtaStayQuickFilter('none');
-    setOtaUnrepliedOnly(false);
+    setOtaView('exchanges');
     setOtaAdvancedDraft(EMPTY_ADVANCED);
     setAppliedAdvanced(EMPTY_ADVANCED);
     setAdvancedExpanded(false);
@@ -537,22 +564,21 @@ export default function MessagesOTATabV2() {
     setSearchMode('none');
     invalidateOtaInboxCache();
     void loadInbox({ skipCache: true });
-  };
+  }, [loadInbox]);
 
   /** Compteurs sur la liste affichée (inbox ou résultats recherche) */
   const otaGlobalQueryActive = searchTerm.trim().length >= GLOBAL_SEARCH_MIN_LEN;
+  const advancedActive = hasActiveOtaAdvancedSearch(appliedAdvanced);
 
   const otaBaseRows = useMemo(() => {
     if (otaGlobalQueryActive || searchMode !== 'none') return searchRows;
     return inboxRows;
   }, [otaGlobalQueryActive, searchMode, searchRows, inboxRows]);
 
-  const otaFilterCounts = useMemo(() => countOtaFilters(otaBaseRows), [otaBaseRows]);
-
-  const otaStayQuickCounts = useMemo(() => {
-    const scoped = applyOtaInboxFilters(otaBaseRows, otaChannelFilter, otaUnrepliedOnly, 'none');
-    return countOtaStayQuickFilters(scoped);
-  }, [otaBaseRows, otaChannelFilter, otaUnrepliedOnly]);
+  const otaFilterCounts = useMemo(() => {
+    const scoped = applyOtaChannelFilter(otaBaseRows, otaChannelFilter);
+    return countOtaFilters(scoped);
+  }, [otaBaseRows, otaChannelFilter]);
 
   const activeKeyword = useMemo(() => {
     const kw = appliedAdvanced.messageText?.trim();
@@ -568,39 +594,319 @@ export default function MessagesOTATabV2() {
   const otaFiltersActive = useMemo(
     () =>
       otaGlobalQueryActive ||
-      searchMode !== 'none' ||
+      searchMode === 'advanced' ||
       otaChannelFilter !== 'all' ||
-      otaStayQuickFilter !== 'none' ||
-      otaUnrepliedOnly ||
-      hasActiveOtaAdvancedSearch(appliedAdvanced),
-    [
-      otaGlobalQueryActive,
-      searchMode,
-      otaChannelFilter,
-      otaStayQuickFilter,
-      otaUnrepliedOnly,
-      appliedAdvanced,
-    ],
+      otaView !== 'exchanges' ||
+      advancedActive,
+    [otaGlobalQueryActive, searchMode, otaChannelFilter, otaView, advancedActive],
   );
 
-  const displayRows = useMemo(() => {
-    const rows = applyOtaInboxFilters(
-      otaBaseRows,
-      otaChannelFilter,
-      otaUnrepliedOnly,
-      otaStayQuickFilter,
-    );
-    return sortOtaThreadsByActivity(rows);
-  }, [otaBaseRows, otaChannelFilter, otaUnrepliedOnly, otaStayQuickFilter]);
+  const displayRows = useMemo(
+    () => applyOtaInboxView(otaBaseRows, otaView, otaChannelFilter),
+    [otaBaseRows, otaView, otaChannelFilter],
+  );
 
   const formattedThreads: Thread[] = useMemo(
     () =>
-      displayRows.map((row) => ({
-        ...mapOtaRowToThread(row, taskCounts[row.threadId]),
-        time: formatThreadWhen(row.lastMessageTime),
-      })),
+      displayRows.map((row) => {
+        const base = mapOtaRowToThread(row, taskCounts[row.threadId]);
+        return {
+          ...base,
+          time: base.time || formatThreadWhen(row.lastMessageTime),
+        };
+      }),
     [displayRows, taskCounts],
   );
+
+  /* Même chrome que WhatsApp : titre + search + Avancé (leading) ; chips (subBar). */
+  useEffect(() => {
+    setLeading(
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.75,
+          width: '100%',
+          maxWidth: 560,
+          minWidth: 0,
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 800,
+            color: T.text,
+            flexShrink: 0,
+            lineHeight: 1.1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          🏨 OTA
+        </Typography>
+        <Box
+          sx={{
+            fontFamily: '"Geist Mono", monospace',
+            fontSize: 10,
+            fontWeight: 700,
+            px: 0.75,
+            py: '2px',
+            borderRadius: 999,
+            bgcolor: T.airbnbBg,
+            color: '#c0353a',
+            flexShrink: 0,
+          }}
+        >
+          {displayRows.length}
+        </Box>
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            px: '8px',
+            py: '4px',
+            bgcolor: T.bg1,
+            border: `1px solid ${T.border}`,
+            borderRadius: '8px',
+            '&:focus-within': {
+              borderColor: T.primary,
+              boxShadow: `0 0 0 2px ${T.primaryTint}`,
+            },
+          }}
+        >
+          <Box sx={{ fontSize: 12, color: T.text3, lineHeight: 1 }}>🔍</Box>
+          <Box
+            component="input"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Résa, listing, voyageur, tél…"
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              border: 0,
+              outline: 0,
+              font: 'inherit',
+              fontSize: 11.5,
+              color: T.text,
+              bgcolor: 'transparent',
+              '&::placeholder': { color: T.text4 },
+            }}
+          />
+          {otaFiltersActive && (
+            <Box
+              component="button"
+              type="button"
+              title="Réinitialiser filtres"
+              onClick={handleResetAllFilters}
+              sx={{
+                border: 0,
+                bgcolor: 'transparent',
+                color: T.text3,
+                fontSize: 12,
+                cursor: 'pointer',
+                p: 0,
+                lineHeight: 1,
+                '&:hover': { color: T.error },
+              }}
+            >
+              ✕
+            </Box>
+          )}
+        </Box>
+        <Box
+          component="button"
+          type="button"
+          title="Recherche avancée"
+          onClick={() => setAdvancedExpanded((v) => !v)}
+          sx={{
+            flexShrink: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 0.35,
+            px: '8px',
+            py: '5px',
+            border: `1px solid ${advancedExpanded || advancedActive ? T.primary : T.border}`,
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            fontSize: 10.5,
+            fontWeight: advancedExpanded || advancedActive ? 700 : 650,
+            color: advancedExpanded || advancedActive ? T.primaryDeep : T.text2,
+            bgcolor: advancedExpanded || advancedActive ? T.primaryTint : T.bg1,
+            whiteSpace: 'nowrap',
+            lineHeight: 1.2,
+            '&:hover': { bgcolor: T.primaryTint },
+          }}
+        >
+          Avancé {advancedExpanded ? '▲' : '▼'}
+        </Box>
+      </Box>,
+    );
+  }, [
+    setLeading,
+    displayRows.length,
+    searchTerm,
+    otaFiltersActive,
+    handleResetAllFilters,
+    advancedExpanded,
+    advancedActive,
+  ]);
+
+  useEffect(() => {
+    const chip = (
+      id: string,
+      label: string,
+      active: boolean,
+      count: number | undefined,
+      onClick: () => void,
+      opts?: { urgent?: boolean; title?: string },
+    ) => (
+      <Box
+        key={id}
+        component="button"
+        type="button"
+        title={opts?.title || label}
+        onClick={onClick}
+        sx={{
+          px: 1.15,
+          py: 0.55,
+          borderRadius: '8px',
+          border: `1px solid ${active ? T.green : T.border}`,
+          bgcolor: active ? T.greenBg : T.bg1,
+          color: active ? '#0e8c4d' : opts?.urgent && (count ?? 0) > 0 ? T.error : T.text3,
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+          lineHeight: 1.25,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.5,
+        }}
+      >
+        {label}
+        {typeof count === 'number' && (
+          <Box
+            component="span"
+            sx={{
+              fontFamily: '"Geist Mono", monospace',
+              fontSize: 10.5,
+              fontWeight: 800,
+              opacity: count > 0 || active ? 1 : 0.45,
+            }}
+          >
+            {count}
+          </Box>
+        )}
+      </Box>
+    );
+
+    setSubBar(
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
+        {advancedExpanded && (
+          <OtaInboxFilters
+            hubAdvancedOnly
+            channelFilter={otaChannelFilter}
+            counts={otaFilterCounts}
+            onChannelFilterChange={handleChannelFilterChange}
+            unrepliedOnly={false}
+            onUnrepliedOnlyChange={() => undefined}
+            advanced={otaAdvancedDraft}
+            onAdvancedChange={setOtaAdvancedDraft}
+            onAdvancedSubmit={handleAdvancedSearch}
+            onAdvancedReset={handleResetAdvanced}
+            serverSearchActive={searchMode === 'advanced'}
+            loading={loading || globalSearchPending}
+            expanded
+            onToggleExpanded={() => setAdvancedExpanded(false)}
+            searchResultCount={searchMode === 'advanced' ? searchRows.length : null}
+            keywordMatchTotal={keywordMatchTotal}
+            activeKeyword={activeKeyword}
+          />
+        )}
+        <Box
+          sx={{
+            display: 'flex',
+            gap: '6px',
+            flexWrap: 'nowrap',
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            '&::-webkit-scrollbar': { display: 'none' },
+          }}
+        >
+          {OTA_VIEW_CHIPS.map((f) =>
+            chip(
+              f.id,
+              f.label,
+              otaView === f.id,
+              otaFilterCounts[f.countKey],
+              () => {
+                if (otaView === f.id && f.id !== 'exchanges') setOtaView('exchanges');
+                else setOtaView(f.id);
+              },
+              { urgent: f.urgent, title: f.title },
+            ),
+          )}
+          <Box sx={{ width: '1px', alignSelf: 'stretch', bgcolor: T.border, mx: '2px', flexShrink: 0 }} />
+          {OTA_CHANNEL_CHIPS.map((f) =>
+            chip(
+              f.id,
+              f.label,
+              otaChannelFilter === f.id,
+              otaFilterCounts[f.id],
+              () =>
+                handleChannelFilterChange(otaChannelFilter === f.id ? 'all' : f.id),
+            ),
+          )}
+        </Box>
+      </Box>,
+    );
+  }, [
+    setSubBar,
+    otaView,
+    otaChannelFilter,
+    otaFilterCounts,
+    advancedExpanded,
+    otaAdvancedDraft,
+    handleAdvancedSearch,
+    handleResetAdvanced,
+    handleChannelFilterChange,
+    loading,
+    globalSearchPending,
+    searchMode,
+    searchRows.length,
+    keywordMatchTotal,
+    activeKeyword,
+  ]);
+
+  useEffect(
+    () => () => {
+      setLeading(null);
+      setSubBar(null);
+    },
+    [setLeading, setSubBar],
+  );
+
+  // Fil chargé vide → liste alignée (plus de Q/A fantôme type « 28 mai »).
+  useEffect(() => {
+    if (!inbox.activeRow || inbox.loadingMessages) return;
+    if (inbox.messages.length > 0) return;
+    const tid = String(inbox.activeRow.threadId);
+    setInboxRows((prev) => {
+      let changed = false;
+      const next = prev.map((r) => {
+        if (String(r.threadId) !== tid) return r;
+        if (!r.lastRealMessage && !r.lastGuestMessage && !r.lastMessage) return r;
+        changed = true;
+        return clearOtaGhostPreview(r);
+      });
+      return changed ? next : prev;
+    });
+  }, [inbox.activeRow, inbox.loadingMessages, inbox.messages.length]);
 
   const activeThread: Thread | null = useMemo(() => {
     if (!inbox.activeRow) return null;
@@ -610,8 +916,17 @@ export default function MessagesOTATabV2() {
       inbox.activeRow.guestPhone ||
       base.phone ||
       undefined;
+    const emptyFil = !inbox.loadingMessages && inbox.messages.length === 0;
     return {
       ...base,
+      ...(emptyFil
+        ? {
+            preview: 'Aucun message',
+            lastMessageKind: undefined,
+            programmedAuto: undefined,
+            time: '',
+          }
+        : {}),
       phone,
       unread: inbox.activeRow.unreadCount ?? 0,
       listingName:
@@ -625,17 +940,18 @@ export default function MessagesOTATabV2() {
       tasks: inbox.tasks,
       tasksLoading: inbox.loadingTasks,
     };
-  }, [inbox.activeRow, inbox.tasks, inbox.loadingTasks, inbox.reservation]);
+  }, [
+    inbox.activeRow,
+    inbox.tasks,
+    inbox.loadingTasks,
+    inbox.reservation,
+    inbox.loadingMessages,
+    inbox.messages.length,
+  ]);
 
   const otaPlatform = inbox.activeRow
     ? normalizeBookingSource(inbox.activeRow.channel)
     : 'Airbnb';
-
-  const handleSelect = async (row: OtaThreadRow) => {
-    setComposerDraft('');
-    setAiSourceDraft('');
-    await inbox.selectOtaThread(row);
-  };
 
   const [searchParams] = useSearchParams();
   const deepLinkThread = searchParams.get('thread');
@@ -643,6 +959,22 @@ export default function MessagesOTATabV2() {
     searchParams.get('reservation') || searchParams.get('res') || null;
   const otaDeepLinkedRef = useRef<string | null>(null);
   const otaDeepLinkFetchRef = useRef<string | null>(null);
+
+  const handleSelect = async (row: OtaThreadRow) => {
+    setComposerDraft('');
+    setAiSourceDraft('');
+    // Marquer le deep-link avant navigate — évite un 2e selectOtaThread (clignotement).
+    const linkKey = `thread:${String(row.threadId).trim()}`;
+    otaDeepLinkedRef.current = linkKey;
+    await inbox.selectOtaThread(row);
+    navigate(
+      otaInboxUrl({
+        threadId: row.threadId,
+        reservationNumber: row.reservationNumber || undefined,
+      }),
+      { replace: true },
+    );
+  };
 
   useEffect(() => {
     if (!scopeFetchReady) return;
@@ -763,10 +1095,62 @@ export default function MessagesOTATabV2() {
     [inbox],
   );
 
-  const showBlockingSpinner = (loading && !tableReady) || (tableReady && isRefreshing);
+  const [markingOtaStatus, setMarkingOtaStatus] = useState(false);
+
+  const applyOtaMessageStatusLocal = useCallback(
+    (threadId: string, messageStatus: 'responded' | 'ignored') => {
+      const patch = (rows: OtaThreadRow[]) =>
+        rows.map((r) =>
+          String(r.threadId) === String(threadId)
+            ? {
+                ...r,
+                messageStatus,
+                unreadCount: messageStatus === 'responded' ? 0 : r.unreadCount,
+              }
+            : r,
+        );
+      setInboxRows((prev) => {
+        const next = patch(prev);
+        setCachedOtaInbox(next);
+        return next;
+      });
+      setSearchRows((prev) => patch(prev));
+      inbox.setActiveRow((prev) =>
+        prev && String(prev.threadId) === String(threadId)
+          ? {
+              ...prev,
+              messageStatus,
+              unreadCount: messageStatus === 'responded' ? 0 : prev.unreadCount,
+            }
+          : prev,
+      );
+    },
+    [inbox],
+  );
+
+  const handleMarkOtaThreadStatus = useCallback(
+    async (status: 'responded' | 'ignored') => {
+      const row = inbox.activeRow;
+      if (!row) return;
+      setMarkingOtaStatus(true);
+      try {
+        await messagesService.updateOTAThreadMessageStatus(row.threadId, status);
+        applyOtaMessageStatusLocal(row.threadId, status);
+      } catch (err) {
+        console.error('[OTA] mark thread status failed', err);
+        throw err;
+      } finally {
+        setMarkingOtaStatus(false);
+      }
+    },
+    [inbox.activeRow, applyOtaMessageStatusLocal],
+  );
+
+  // Ne pas bloquer la liste pendant un refresh arrière-plan (évite le clignotement au clic / deep-link).
+  const showBlockingSpinner = loading && !tableReady;
 
   return (
-    <>
+    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {isRefreshing && (
         <Box
           sx={{
@@ -786,7 +1170,8 @@ export default function MessagesOTATabV2() {
           Mise à jour OTA…
         </Box>
       )}
-      <InboxLayout>
+      {/* fillViewport : reste dans la page (pas de hauteur fixe qui déborde en bas). */}
+      <InboxLayout fillViewport>
         <ThreadsList
           threads={formattedThreads}
           channels={[
@@ -802,19 +1187,13 @@ export default function MessagesOTATabV2() {
           onRetryLoad={() => void loadInbox({ skipCache: true })}
           otaChannelFilter={otaChannelFilter}
           onOtaChannelFilterChange={handleChannelFilterChange}
-          otaUnrepliedOnly={otaUnrepliedOnly}
-          onOtaUnrepliedOnlyChange={handleUnrepliedOnlyChange}
-          onOtaToutReset={handleResetAllFilters}
           otaFilterCounts={otaFilterCounts}
-          otaStayQuickFilter={otaStayQuickFilter}
-          onOtaStayQuickFilterChange={setOtaStayQuickFilter}
-          otaStayQuickCounts={otaStayQuickCounts}
+          otaView={otaView}
           otaAdvancedSearch={otaAdvancedDraft}
           onOtaAdvancedSearchChange={setOtaAdvancedDraft}
           onOtaAdvancedSearchSubmit={handleAdvancedSearch}
           onOtaAdvancedSearchReset={handleResetAdvanced}
           otaServerSearchActive={searchMode === 'advanced'}
-          otaUnrepliedSearchActive={searchMode === 'unreplied'}
           otaGlobalSearchActive={otaGlobalQueryActive}
           otaSearchPending={globalSearchPending}
           otaAdvancedExpanded={advancedExpanded}
@@ -827,6 +1206,9 @@ export default function MessagesOTATabV2() {
           onOtaLoadMore={() => void loadMoreInbox()}
           otaHasMore={inboxHasMore && searchMode === 'none' && !otaGlobalQueryActive}
           otaLoadingMore={inboxLoadingMore}
+          hideListHeader
+          compactToolbar
+          ultraCompact
           onSelectThread={(thread) => {
             const row = displayRows.find((r) => r.threadId === thread.id);
             if (row) void handleSelect(row);
@@ -842,8 +1224,8 @@ export default function MessagesOTATabV2() {
               messagesLoadError={inbox.messagesLoadError}
               messagesTotal={inbox.messagesTotal}
               highlightKeyword={activeKeyword}
-              quickTemplates={OTA_QUICK_TEMPLATES}
-              quickReplies={OTA_QUICK_REPLIES}
+              quickTemplates={[]}
+              quickReplies={[]}
               otaPlatform={otaPlatform}
               composerValue={composerDraft}
               onComposerValueChange={setComposerDraft}
@@ -857,6 +1239,9 @@ export default function MessagesOTATabV2() {
               }}
               whatsappGuestKind={whatsappGuest?.kind ?? null}
               onOpenWhatsApp={openWhatsAppForActive}
+              otaMessageStatus={inbox.activeRow?.messageStatus}
+              onMarkOtaThreadStatus={handleMarkOtaThreadStatus}
+              markingOtaThreadStatus={markingOtaStatus}
             />
             <ConversationDetails
               thread={activeThread}
@@ -920,6 +1305,6 @@ export default function MessagesOTATabV2() {
           type: 'ota',
         }}
       />
-    </>
+    </Box>
   );
 }

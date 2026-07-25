@@ -7,7 +7,6 @@ import WhatsAppTabV2 from '../components/communications/WhatsAppTabV2';
 import BookingWhatsAppTabV2 from '../components/communications/BookingWhatsAppTabV2';
 import StaffWhatsAppTabV2 from '../components/communications/StaffWhatsAppTabV2';
 import MessagesOTATabV2 from '../components/communications/MessagesOTATabV2';
-import ResasTabV2 from '../components/communications/ResasTabV2';
 import LeadsTabV2 from '../components/communications/LeadsTabV2';
 import ReviewsTabV2 from '../components/communications/ReviewsTabV2';
 import InboxHubTabs from '../components/unified-inbox/InboxHubTabs';
@@ -54,6 +53,17 @@ export default function CommunicationsHubPage() {
     String(user?.role || '').toLowerCase() === 'superadmin';
 
   useEffect(() => {
+    // Ancien onglet Résas → Planning ops dédié
+    if (tabParam === 'resas') {
+      const params = new URLSearchParams();
+      const reservation = searchParams.get('reservation');
+      const q = searchParams.get('q');
+      if (reservation) params.set('reservation', reservation);
+      if (q) params.set('q', q);
+      const qs = params.toString();
+      navigate(qs ? `/planning?${qs}` : '/planning', { replace: true });
+      return;
+    }
     const needsSection = !searchParams.get('section');
     const legacyTemplates = tabParam === 'templates';
     const wrongTab = tabParam != null && tabParam !== activeTab;
@@ -232,8 +242,10 @@ export default function CommunicationsHubPage() {
         <Box
           sx={{
             ...DASHBOARD_PAGE_FILL_SX,
-            minHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
-            maxHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
+            // Marge basse : ne pas coller / dépasser le bas de la fenêtre
+            minHeight: { xs: 'calc(100dvh - 96px)', md: 'calc(100dvh - 112px)' },
+            maxHeight: { xs: 'calc(100dvh - 96px)', md: 'calc(100dvh - 112px)' },
+            mb: { xs: 1.5, md: 2 },
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -248,7 +260,6 @@ export default function CommunicationsHubPage() {
             {activeTab === 'staff' && <StaffWhatsAppTabV2 inboxParty="staff" />}
             {activeTab === 'admin' && <StaffWhatsAppTabV2 inboxParty="admin" />}
             {activeTab === 'ota' && <MessagesOTATabV2 />}
-            {activeTab === 'resas' && <ResasTabV2 />}
             {activeTab === 'leads' && <LeadsTabV2 />}
             {activeTab === 'reviews' && <ReviewsTabV2 />}
           </Box>

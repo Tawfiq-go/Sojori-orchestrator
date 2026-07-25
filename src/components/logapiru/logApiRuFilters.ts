@@ -42,6 +42,9 @@ const CATEGORY_ACTIONS: Record<Exclude<LogApiRuCategory, 'other'>, string[]> = {
     'Push_RejectRequest_RQ',
     'Push_ModifyStay_RQ',
     'Push_CancelReservation_RQ',
+    'LNM_PutConfirmedReservation_RQ',
+    'LNM_PutUnconfirmedReservation_RQ',
+    'LNM_CancelReservation_RQ',
   ],
   listing: [
     'ListingOtaSync_From_Channels',
@@ -67,8 +70,18 @@ const CATEGORY_ACTIONS: Record<Exclude<LogApiRuCategory, 'other'>, string[]> = {
     'LNM_PutHandlerUrl_RQ',
     'subscribeJsonWebhook',
   ],
-  lead: ['Pull_GetLeads_RQ'],
-  messaging: ['RU_REST_GET_api_messaging_threads', 'RU_REST_GET_api_messaging_threads_x_messages'],
+  lead: [
+    'Pull_GetLeads_RQ',
+    'LNM_PutLeadReservation_RQ',
+  ],
+  messaging: [
+    'RU_REST_GET_api_messaging_threads',
+    'RU_REST_GET_api_messaging_threads_x_messages',
+    'WEBHOOK_JSON_NewMessage',
+    'WEBHOOK_JSON_ModifiedMessage',
+    'WEBHOOK_JSON_ReadMessage',
+    'WEBHOOK_JSON_NewThread',
+  ],
   distribution: [
     'Pull_ListSalesChannels_RQ',
     'CM_Pull_PropertiesStatus_RQ',

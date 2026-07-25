@@ -16,10 +16,13 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import {
-  defaultInformSyndicGestion,
+  INFORM_SYNDIC_ACCESS_UNTIL_OPTIONS,
+  INFORM_SYNDIC_SEND_TIMES,
   normalizeInformSyndicGestion,
   type InformSyndicDayOffset,
   type InformSyndicGestion,
+  type InformSyndicAccessUntil,
+  type InformSyndicSendTime,
   type InformSyndicTravelersMode,
 } from './informSyndicDefaults';
 import { V3 } from './theme';
@@ -56,35 +59,24 @@ export function normalizeSyndicContacts(raw: unknown): SyndicContactDraft[] {
     .filter((s) => s.name || s.phone);
 }
 
-function listingNameFromValues(listingValues?: Record<string, unknown>): string {
-  if (!listingValues) return '';
-  const name = listingValues.name;
-  if (typeof name === 'string') return name.trim();
-  if (name && typeof name === 'object') {
-    const o = name as Record<string, unknown>;
-    return String(o.fr || o.en || o.value || '').trim();
-  }
-  return '';
-}
-
 type Props = {
   gestion: Record<string, unknown>;
-  /** Listing scope — contacts stockés sur listing.syndics */
   listingId?: string;
   listingValues?: Record<string, unknown>;
-  listingNameHint?: string;
-  /** Template owner : pas de contacts (ils sont par listing). */
   ownerTemplateMode?: boolean;
   onSave: (next: Record<string, unknown>) => Promise<void>;
-  /** Après save des contacts listing (pour refresh listingValues). */
   onSyndicsSaved?: (next: SyndicContactDraft[]) => void;
 };
 
+/**
+ * Config listing « Informer syndic » = message planifié (pas une tâche / flow staff).
+ * Contacts WhatsApp = listing.syndics (par annonce).
+ * Jour / champs résa & voyageurs / passeports = capabilities.inform_syndic.gestion (orchestration listing).
+ */
 export default function V3InformSyndicPanel({
   gestion,
   listingId,
   listingValues,
-  listingNameHint,
   ownerTemplateMode = false,
   onSave,
   onSyndicsSaved,
@@ -94,15 +86,14 @@ export default function V3InformSyndicPanel({
     () => normalizeSyndicContacts(listingValues?.syndics),
     [listingValues?.syndics],
   );
+  const canEditSyndics = Boolean(listingId) && !ownerTemplateMode;
+
   const [cfg, setCfg] = useState<InformSyndicGestion>(initial);
   const [syndics, setSyndics] = useState<SyndicContactDraft[]>(
-    initialSyndics.length ? initialSyndics : [emptySyndic()],
+    initialSyndics.length ? initialSyndics : canEditSyndics ? [emptySyndic()] : [],
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const nameHint = listingNameHint || listingNameFromValues(listingValues);
-  const canEditSyndics = Boolean(listingId) && !ownerTemplateMode;
 
   useEffect(() => {
     setCfg(initial);
@@ -112,18 +103,22 @@ export default function V3InformSyndicPanel({
     setSyndics(initialSyndics.length ? initialSyndics : canEditSyndics ? [emptySyndic()] : []);
   }, [initialSyndics, canEditSyndics]);
 
-  const patch = (partial: Partial<InformSyndicGestion>) => {
-    setCfg((prev) => ({ ...prev, ...partial }));
-  };
-
   const patchSyndic = (index: number, partial: Partial<SyndicContactDraft>) => {
     setSyndics((prev) => prev.map((row, i) => (i === index ? { ...row, ...partial } : row)));
   };
 
-  const addSyndic = () => setSyndics((prev) => [...prev, emptySyndic()]);
+  const patchReservationField = (key: keyof InformSyndicGestion['reservationFields'], checked: boolean) => {
+    setCfg((prev) => ({
+      ...prev,
+      reservationFields: { ...prev.reservationFields, [key]: checked },
+    }));
+  };
 
-  const removeSyndic = (index: number) => {
-    setSyndics((prev) => prev.filter((_, i) => i !== index));
+  const patchTravelerField = (key: keyof InformSyndicGestion['travelerFields'], checked: boolean) => {
+    setCfg((prev) => ({
+      ...prev,
+      travelerFields: { ...prev.travelerFields, [key]: checked },
+    }));
   };
 
   const save = async () => {
@@ -131,7 +126,6 @@ export default function V3InformSyndicPanel({
     setError(null);
     try {
       if (canEditSyndics && listingId) {
-        const cleaned = normalizeSyndicContacts(syndics).filter((s) => s.phone);
         if (syndics.some((s) => s.phone.trim() && !s.name.trim())) {
           setError('Chaque contact avec téléphone doit avoir un nom.');
           setSaving(false);
@@ -142,16 +136,28 @@ export default function V3InformSyndicPanel({
           setSaving(false);
           return;
         }
-        const payload = cleaned.map((s) => ({
-          name: s.name || 'Syndic',
-          phone: s.phone.replace(/\s+/g, ''),
-          language: s.language || 'fr',
-        }));
+        const payload = normalizeSyndicContacts(syndics)
+          .filter((s) => s.phone)
+          .map((s) => ({
+            name: s.name || 'Syndic',
+            phone: s.phone.replace(/\s+/g, ''),
+            language: s.language || 'fr',
+          }));
+        if (!payload.length) {
+          setError('Ajoutez au moins un numéro WhatsApp syndic.');
+          setSaving(false);
+          return;
+        }
         await listingsService.updateListingProperty(listingId, { syndics: payload });
         setSyndics(payload);
         onSyndicsSaved?.(payload);
       }
-      await onSave(normalizeInformSyndicGestion(cfg) as unknown as Record<string, unknown>);
+      await onSave(
+        normalizeInformSyndicGestion({
+          ...cfg,
+          useListingNameFromDb: true,
+        }) as unknown as Record<string, unknown>,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Enregistrement impossible');
     } finally {
@@ -159,25 +165,32 @@ export default function V3InformSyndicPanel({
     }
   };
 
-  const resetDefaults = () => setCfg(defaultInformSyndicGestion());
-
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, py: 0.5 }}>
-      <Typography sx={{ fontSize: 13, fontWeight: 700, color: V3.t1 }}>
-        Informer syndic · avant arrivée
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 700, color: V3.t1 }}>
+          Informer syndic
+        </Typography>
+        <Box
+          component="span"
+          sx={{
+            fontSize: 10.5,
+            fontWeight: 700,
+            px: 0.75,
+            py: 0.25,
+            borderRadius: 1,
+            bgcolor: V3.pt,
+            color: V3.pd,
+          }}
+        >
+          Message planifié
+        </Box>
+      </Box>
       <Typography sx={{ fontSize: 11.5, color: V3.t3, lineHeight: 1.45 }}>
-        Message template Meta (numéro staff) hors fenêtre 24h, bouton Flow « Voir passeports ».
-        Destinataires = contacts ci-dessous (<code>listing.syndics</code>).
-        {nameHint ? (
-          <>
-            {' '}
-            Nom BD : <strong>{nameHint}</strong>
-          </>
-        ) : null}
+        Envoi unique au syndic (template Meta + bouton Voir passeports). Pas de tâche staff, pas de
+        relances. Chaque listing garde ses contacts et sa config.
       </Typography>
 
-      {/* ——— Contacts syndic (listing) ——— */}
       <Box
         sx={{
           border: `1px solid ${V3.b}`,
@@ -191,10 +204,15 @@ export default function V3InformSyndicPanel({
       >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
           <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: V3.t1 }}>
-            Contacts syndic
+            Contacts WhatsApp
           </Typography>
           {canEditSyndics ? (
-            <Button size="small" startIcon={<AddIcon />} onClick={addSyndic} sx={{ textTransform: 'none' }}>
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={() => setSyndics((prev) => [...prev, emptySyndic()])}
+              sx={{ textTransform: 'none' }}
+            >
               Ajouter
             </Button>
           ) : null}
@@ -202,23 +220,8 @@ export default function V3InformSyndicPanel({
 
         {!canEditSyndics ? (
           <Typography sx={{ fontSize: 11.5, color: V3.t3 }}>
-            Les numéros syndic se configurent sur chaque listing (pas dans le template owner).
+            Les numéros se configurent sur chaque listing.
           </Typography>
-        ) : syndics.length === 0 ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Typography sx={{ fontSize: 11.5, color: V3.warn }}>
-              Aucun contact — ajoutez au moins un numéro WhatsApp pour que le message parte.
-            </Typography>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={addSyndic}
-              sx={{ alignSelf: 'flex-start', textTransform: 'none' }}
-            >
-              Ajouter un syndic
-            </Button>
-          </Box>
         ) : (
           syndics.map((row, index) => (
             <Box
@@ -244,7 +247,6 @@ export default function V3InformSyndicPanel({
                 value={row.phone}
                 onChange={(e) => patchSyndic(index, { phone: e.target.value })}
                 fullWidth
-                helperText={index === 0 ? 'Format international, ex. +212662113193' : undefined}
               />
               <TextField
                 size="small"
@@ -263,7 +265,7 @@ export default function V3InformSyndicPanel({
               <IconButton
                 size="small"
                 aria-label="Supprimer"
-                onClick={() => removeSyndic(index)}
+                onClick={() => setSyndics((prev) => prev.filter((_, i) => i !== index))}
                 sx={{ mt: 0.5 }}
               >
                 <DeleteIcon fontSize="small" />
@@ -273,32 +275,17 @@ export default function V3InformSyndicPanel({
         )}
       </Box>
 
-      <FormControlLabel
-        control={
-          <Checkbox
-            size="small"
-            checked={cfg.useListingNameFromDb}
-            onChange={(e) => patch({ useListingNameFromDb: e.target.checked })}
-          />
-        }
-        label="Utiliser le nom du listing (BD)"
-      />
-      {!cfg.useListingNameFromDb ? (
-        <TextField
-          size="small"
-          label="Nom affiché au syndic"
-          value={cfg.listingDisplayName}
-          onChange={(e) => patch({ listingDisplayName: e.target.value })}
-          fullWidth
-        />
-      ) : null}
-
       <FormControl>
-        <FormLabel sx={{ fontSize: 12, fontWeight: 600 }}>Jour d’envoi (check-in)</FormLabel>
+        <FormLabel sx={{ fontSize: 12, fontWeight: 600 }}>Quand envoyer (avant check-in)</FormLabel>
         <RadioGroup
           row
           value={String(cfg.dayOffset)}
-          onChange={(e) => patch({ dayOffset: Number(e.target.value) as InformSyndicDayOffset })}
+          onChange={(e) =>
+            setCfg((prev) => ({
+              ...prev,
+              dayOffset: Number(e.target.value) as InformSyndicDayOffset,
+            }))
+          }
         >
           <FormControlLabel value="0" control={<Radio size="small" />} label="J0" />
           <FormControlLabel value="-1" control={<Radio size="small" />} label="J-1" />
@@ -306,111 +293,191 @@ export default function V3InformSyndicPanel({
         </RadioGroup>
       </FormControl>
 
-      <TextField
-        size="small"
-        label="Message (aperçu / fallback)"
-        value={cfg.messageBody}
-        onChange={(e) => patch({ messageBody: e.target.value })}
-        multiline
-        minRows={5}
-        fullWidth
-        helperText="Placeholders : {{listingName}} {{checkIn}} {{checkOut}} {{reservationBlock}} {{guestsBlock}}"
-      />
+      <FormControl>
+        <FormLabel sx={{ fontSize: 12, fontWeight: 600 }}>Heure d’envoi (plan)</FormLabel>
+        <RadioGroup
+          row
+          value={cfg.sendTime}
+          onChange={(e) =>
+            setCfg((prev) => ({
+              ...prev,
+              sendTime: e.target.value as InformSyndicSendTime,
+            }))
+          }
+        >
+          {INFORM_SYNDIC_SEND_TIMES.map((t) => (
+            <FormControlLabel
+              key={t}
+              value={t}
+              control={<Radio size="small" />}
+              label={`${Number.parseInt(t, 10)}h`}
+            />
+          ))}
+        </RadioGroup>
+      </FormControl>
 
-      <Typography sx={{ fontSize: 12, fontWeight: 700, color: V3.t1, mt: 0.5 }}>
-        Infos réservation
-      </Typography>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-        {(
-          [
-            ['lastName', 'Nom'],
-            ['firstName', 'Prénom'],
-            ['nationality', 'Nationalité'],
-          ] as const
-        ).map(([key, label]) => (
+      <FormControl>
+        <FormLabel sx={{ fontSize: 12, fontWeight: 600 }}>
+          Durée d’accès au contenu (Flow / pièces)
+        </FormLabel>
+        <Typography sx={{ fontSize: 11, color: V3.t3, mb: 0.5, lineHeight: 1.4 }}>
+          Utile en cas de retard ou arrivée très tôt (ex. 6h). Après la date, les images ne sont plus
+          injectées.
+        </Typography>
+        <RadioGroup
+          value={cfg.accessUntil}
+          onChange={(e) =>
+            setCfg((prev) => ({
+              ...prev,
+              accessUntil: e.target.value as InformSyndicAccessUntil,
+            }))
+          }
+        >
+          {INFORM_SYNDIC_ACCESS_UNTIL_OPTIONS.map((o) => (
+            <FormControlLabel
+              key={o.value}
+              value={o.value}
+              control={<Radio size="small" />}
+              label={o.label}
+            />
+          ))}
+        </RadioGroup>
+      </FormControl>
+
+      <Box>
+        <Typography sx={{ fontSize: 12, fontWeight: 600, color: V3.t2, mb: 0.5 }}>
+          Champs réservation (dans le message / Flow)
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
           <FormControlLabel
-            key={key}
             control={
               <Checkbox
                 size="small"
-                checked={cfg.reservationFields[key]}
-                onChange={(e) =>
-                  patch({
-                    reservationFields: { ...cfg.reservationFields, [key]: e.target.checked },
-                  })
-                }
+                checked={cfg.reservationFields.firstName}
+                onChange={(e) => patchReservationField('firstName', e.target.checked)}
               />
             }
-            label={label}
+            label="Prénom"
           />
-        ))}
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={cfg.reservationFields.lastName}
+                onChange={(e) => patchReservationField('lastName', e.target.checked)}
+              />
+            }
+            label="Nom"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={cfg.reservationFields.nationality}
+                onChange={(e) => patchReservationField('nationality', e.target.checked)}
+              />
+            }
+            label="Nationalité"
+          />
+        </Box>
       </Box>
 
       <FormControl>
-        <FormLabel sx={{ fontSize: 12, fontWeight: 600 }}>Voyageurs enregistrés</FormLabel>
+        <FormLabel sx={{ fontSize: 12, fontWeight: 600 }}>Voyageurs à inclure</FormLabel>
         <RadioGroup
+          row
           value={cfg.travelersMode}
-          onChange={(e) => patch({ travelersMode: e.target.value as InformSyndicTravelersMode })}
+          onChange={(e) =>
+            setCfg((prev) => ({
+              ...prev,
+              travelersMode: e.target.value as InformSyndicTravelersMode,
+            }))
+          }
         >
-          <FormControlLabel
-            value="reservation_guest"
-            control={<Radio size="small" />}
-            label="Celui qui matche la résa (nom / prénom)"
-          />
           <FormControlLabel
             value="all_registered"
             control={<Radio size="small" />}
             label="Tous les voyageurs enregistrés"
           />
+          <FormControlLabel
+            value="reservation_guest"
+            control={<Radio size="small" />}
+            label="Voyageur réservation (match nom)"
+          />
         </RadioGroup>
       </FormControl>
 
-      <Typography sx={{ fontSize: 12, fontWeight: 700, color: V3.t1 }}>Champs voyageurs</Typography>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-        {(
-          [
-            ['lastName', 'Nom'],
-            ['firstName', 'Prénom'],
-            ['nationality', 'Nationalité'],
-            ['passportNumber', 'N° passeport'],
-            ['passportImage', 'Image passeport'],
-          ] as const
-        ).map(([key, label]) => (
+      <Box>
+        <Typography sx={{ fontSize: 12, fontWeight: 600, color: V3.t2, mb: 0.5 }}>
+          Champs voyageur (dans le Flow)
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
           <FormControlLabel
-            key={key}
             control={
               <Checkbox
                 size="small"
-                checked={cfg.travelerFields[key]}
-                onChange={(e) =>
-                  patch({
-                    travelerFields: { ...cfg.travelerFields, [key]: e.target.checked },
-                  })
-                }
+                checked={cfg.travelerFields.firstName}
+                onChange={(e) => patchTravelerField('firstName', e.target.checked)}
               />
             }
-            label={label}
+            label="Prénom"
           />
-        ))}
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={cfg.travelerFields.lastName}
+                onChange={(e) => patchTravelerField('lastName', e.target.checked)}
+              />
+            }
+            label="Nom"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={cfg.travelerFields.nationality}
+                onChange={(e) => patchTravelerField('nationality', e.target.checked)}
+              />
+            }
+            label="Nationalité"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={cfg.travelerFields.passportNumber}
+                onChange={(e) => patchTravelerField('passportNumber', e.target.checked)}
+              />
+            }
+            label="N° passeport"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={cfg.travelerFields.passportImage === true}
+                onChange={(e) => patchTravelerField('passportImage', e.target.checked)}
+              />
+            }
+            label="Inclure les images passeport dans le Flow (si disponibles)"
+          />
+        </Box>
       </Box>
-      {cfg.travelerFields.passportImage ? (
-        <Typography sx={{ fontSize: 11, color: V3.t3, lineHeight: 1.4 }}>
-          Images passeport : jusqu’à 3 dans le Flow Meta (si URL scan stockée sur le membre).
-        </Typography>
-      ) : null}
 
       {error ? (
         <Typography sx={{ fontSize: 12, color: 'error.main' }}>{error}</Typography>
       ) : null}
 
-      <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-        <Button size="small" variant="contained" disabled={saving} onClick={() => void save()}>
-          {saving ? 'Enregistrement…' : 'Enregistrer'}
-        </Button>
-        <Button size="small" variant="text" onClick={resetDefaults}>
-          Défauts message
-        </Button>
-      </Box>
+      <Button
+        size="small"
+        variant="contained"
+        disabled={saving}
+        onClick={() => void save()}
+        sx={{ alignSelf: 'flex-start' }}
+      >
+        {saving ? 'Enregistrement…' : 'Enregistrer'}
+      </Button>
     </Box>
   );
 }

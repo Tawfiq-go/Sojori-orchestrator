@@ -71,8 +71,14 @@ export interface Reservation {
   departureDate: Date | string;
   checkInTime?: string | null;
   checkOutTime?: string | null;
+  confirmedCheckInTime?: boolean;
+  confirmedCheckOutTime?: boolean;
+  arrival_time_chosen?: boolean;
+  arrival_time?: string | null;
+  departure_time_chosen?: boolean;
   actualArrivalTime?: Date | string | null;
   actualDepartureTime?: Date | string | null;
+  customerStatus?: 'expected' | 'arrived' | 'on_site' | 'departed' | string;
   nights?: number;
 
   // Guests

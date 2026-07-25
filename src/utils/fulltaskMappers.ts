@@ -368,9 +368,22 @@ export function staffHasAllAccess(ids: string[] | undefined): boolean {
 
 export function apiStaffToDesign(row: Record<string, unknown>) {
   const schedule = Array.isArray(row.schedule) ? row.schedule : [];
-  const daysOfWeek = [...new Set(schedule.map((s: { dayOfWeek: number }) => s.dayOfWeek))].sort(
-    (a, b) => a - b,
-  );
+  const dayWindows: Partial<Record<number, { start: string; end: string }[]>> = {};
+  for (const slot of schedule as { dayOfWeek?: number; start?: string; end?: string }[]) {
+    const dow = Number(slot.dayOfWeek);
+    if (!Number.isFinite(dow) || dow < 0 || dow > 6) continue;
+    const start = String(slot.start || '').trim();
+    const end = String(slot.end || '').trim();
+    if (!start || !end) continue;
+    const list = dayWindows[dow] || [];
+    if (!list.some((w) => w.start === start && w.end === end)) {
+      list.push({ start, end });
+    }
+    dayWindows[dow] = list;
+  }
+  const daysOfWeek = Object.keys(dayWindows)
+    .map(Number)
+    .sort((a, b) => a - b);
   const timeWindows = uniqueScheduleTimeWindows(schedule);
   const rates: Record<string, number> = {};
   (row.pricing as { taskType: string; amount: number }[] | undefined)?.forEach((p) => {
@@ -386,13 +399,14 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     ownerId: row.ownerId ? String(row.ownerId) : undefined,
     status: (row.active === false ? 'off' : 'active') as 'active' | 'off',
     isAdmin: Boolean(row.isAdmin),
+    whatsappNotificationsEnabled: row.whatsappNotificationsEnabled !== false,
     contractType: row.contractType === 'salaried' ? ('employee' as const) : ('freelance' as const),
     rates,
     allowedTaskTypes: normalizeStaffAllowedTaskTypes(row.taskTypes as string[] | undefined),
     allowedListingIds: ((row.listingIds as unknown[]) || []).map(String),
     allowedCityIds: ((row.cityIds as unknown[]) || []).map(String),
     maxTasksPerDay: row.maxTasksPerDay as number | undefined,
-    schedule: { daysOfWeek, timeWindows },
+    schedule: { daysOfWeek, timeWindows, dayWindows },
     lang: (['fr', 'en', 'ar'].includes(String(row.lang)) ? row.lang : 'fr') as 'fr' | 'en' | 'ar',
     notes: '',
   };
@@ -409,28 +423,45 @@ export function designStaffToApi(
   staff: Record<string, unknown>,
   opts?: { isCreate?: boolean; ownerId?: string },
 ) {
-  const sched = staff.schedule as { daysOfWeek?: number[]; timeWindows?: { start: string; end: string }[] };
+  const sched = staff.schedule as {
+    daysOfWeek?: number[];
+    timeWindows?: { start: string; end: string }[];
+    dayWindows?: Partial<Record<number, { start: string; end: string }[]>>;
+  };
   const schedule: { dayOfWeek: number; start: string; end: string }[] = [];
-  const days = Array.isArray(sched?.daysOfWeek)
-    ? sched.daysOfWeek
-    : opts?.isCreate
-      ? [0, 1, 2, 3, 4]
-      : [];
-  const windows = uniqueScheduleTimeWindows(
-    sched?.timeWindows?.length
-      ? sched.timeWindows
+  const dayWindows = sched?.dayWindows;
+  if (dayWindows && Object.keys(dayWindows).length > 0) {
+    for (const [dayKey, windows] of Object.entries(dayWindows)) {
+      const dayOfWeek = Number(dayKey);
+      if (!Number.isFinite(dayOfWeek)) continue;
+      for (const w of uniqueScheduleTimeWindows(windows || [])) {
+        schedule.push({ dayOfWeek, start: w.start, end: w.end });
+      }
+    }
+  } else {
+    const days = Array.isArray(sched?.daysOfWeek)
+      ? sched.daysOfWeek
       : opts?.isCreate
-        ? [{ start: '09:00', end: '18:00' }]
-        : [],
-  );
-  days.forEach((dayOfWeek) => {
-    windows.forEach((w) => schedule.push({ dayOfWeek, start: w.start, end: w.end }));
-  });
+        ? [1, 2, 3, 4, 5]
+        : [];
+    const windows = uniqueScheduleTimeWindows(
+      sched?.timeWindows?.length
+        ? sched.timeWindows
+        : opts?.isCreate
+          ? [{ start: '08:00', end: '17:00' }]
+          : [],
+    );
+    days.forEach((dayOfWeek) => {
+      windows.forEach((w) => schedule.push({ dayOfWeek, start: w.start, end: w.end }));
+    });
+  }
 
   const pricing: { taskType: string; amount: number }[] = [];
-  if (staff.contractType === 'freelance' && staff.rates) {
+  if (staff.rates) {
     Object.entries(staff.rates as Record<string, number>).forEach(([taskType, amount]) => {
-      if (amount != null) pricing.push({ taskType, amount: Number(amount) });
+      if (amount != null && Number.isFinite(Number(amount))) {
+        pricing.push({ taskType, amount: Number(amount) });
+      }
     });
   }
 
@@ -439,13 +470,16 @@ export function designStaffToApi(
     phone: staff.whatsappE164 || staff.phoneE164,
     email: staff.email ? String(staff.email).trim() : '',
     lang: staff.lang || 'fr',
-    contractType: staff.contractType === 'employee' ? 'salaried' : 'freelance',
+    // Défaut salarié (UI) — freelance seulement si choisi explicitement.
+    contractType: staff.contractType === 'freelance' ? 'freelance' : 'salaried',
     taskTypes: staff.allowedTaskTypes || [],
     listingIds: staff.allowedListingIds || [],
     cityIds: staff.allowedCityIds || [],
     schedule,
-    maxTasksPerDay: Math.max(1, Number(staff.maxTasksPerDay) || 8),
+    // Capacité : défaut moteur (plus exposé dans l’UI équipe).
+    maxTasksPerDay: 8,
     isAdmin: Boolean(staff.isAdmin),
+    whatsappNotificationsEnabled: staff.whatsappNotificationsEnabled !== false,
     // Le bouton « désactiver » de l'UI n'envoyait rien : le staff restait assignable.
     active: staff.status !== 'off',
     pricing,

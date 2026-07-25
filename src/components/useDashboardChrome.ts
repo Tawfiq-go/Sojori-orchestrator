@@ -28,8 +28,14 @@ export function useDashboardChrome() {
     if (path === '/tasks' || path === '/tasks/list') {
       return 'tasks/list';
     }
+    if (path === '/planning' || path.startsWith('/planning/')) {
+      return 'planning';
+    }
+    // Deep-links planning → entrée unique « Planning » (worker = Mon planning)
     if (path.startsWith('/tasks/planning')) {
-      return 'tasks/planning';
+      const role = String(user?.role || '').toLowerCase();
+      if (role === 'worker' || role === 'landlord') return 'my-sched';
+      return 'planning';
     }
     if (path.startsWith('/tasks/kanban')) {
       return 'tasks/kanban';
@@ -58,7 +64,7 @@ export function useDashboardChrome() {
       return 'reservations';
     }
     if (path.startsWith('/reservations/planning')) {
-      return 'reservations/planning';
+      return 'planning';
     }
 
     if (path.startsWith('/clients/contacts')) {
@@ -72,6 +78,7 @@ export function useDashboardChrome() {
     if (path.startsWith('/communications')) {
       const tab = new URLSearchParams(location.search).get('tab') || 'whatsapp';
       const section = new URLSearchParams(location.search).get('section');
+      if (tab === 'resas') return 'planning';
       if (section === 'staff' || tab === 'staff' || tab === 'admin' || tab === 'booking') {
         if (tab === 'admin') return 'comms/admin';
         if (tab === 'booking') return 'comms/booking';

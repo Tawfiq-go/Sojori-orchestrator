@@ -5,24 +5,30 @@ import type { Staff, ContractType } from './types';
 import {
   STAFF_TASK_PILLS,
   DAY_LABELS,
+  DAY_FULL_LABELS,
   DAY_DISPLAY_ORDER,
   LANG_OPTIONS,
   initials,
   pillLabelForType,
+  sanitizeStaffAllowedTaskTypes,
   type WorkLang,
 } from './staffDesignConstants';
-import { FULLTASK_TASK_TYPES } from './fulltaskTaskTypes';
-import {
-  STAFF_JOB_PRESETS,
-  jobPresetForTaskTypes,
-  type StaffJobPresetId,
-} from './staffDesignConstants';
 import { MOCK_STAFF_DESIGN, MOCK_LISTINGS_DESIGN } from './mockStaffDesign';
-import StaffAccessMultiSelect from './StaffAccessMultiSelect';
 
 type FilterKey = 'all' | 'active' | 'admin' | 'freelance';
-type ListingOpt = { id: string; name: string; ownerId?: string; cityId?: string };
+/** Panneau d’édition accès — un seul contenu visible à la fois. */
+type AccessPanel = 'all' | 'city' | 'listing' | null;
+type ListingOpt = { id: string; name: string; ownerId?: string; cityId?: string; city?: string };
 type CityOpt = { id: string; name: string };
+
+function deriveAccessPanel(s: Pick<Staff, 'allowedListingIds' | 'allowedCityIds'>): AccessPanel {
+  if (hasAllAccess(s.allowedListingIds)) return 'all';
+  const listings = (s.allowedListingIds || []).filter((id) => id !== 'All' && id !== 'ALL');
+  const cities = (s.allowedCityIds || []).filter((id) => id !== 'All' && id !== 'ALL');
+  if (listings.length) return 'listing';
+  if (cities.length || hasAllAccess(s.allowedCityIds)) return 'city';
+  return null;
+}
 
 function hasAllAccess(ids: string[] | undefined): boolean {
   if (!ids?.length) return false;
@@ -63,32 +69,49 @@ function emptyStaff(): Staff {
     whatsappE164: '',
     status: 'active',
     isAdmin: false,
+    whatsappNotificationsEnabled: true,
     contractType: 'employee',
-    // ⚠️ CRITICAL : le moteur exige une correspondance exacte de type
-    // (assignmentService.taskTypeMatch). Un tableau vide = staff jamais assigné,
-    // sans aucun message. On coche tout par défaut, comme le wizard d'onboarding.
-    allowedTaskTypes: [...FULLTASK_TASK_TYPES],
+    // Aucun type par défaut — l’utilisateur choisit explicitement (salarié ou freelance).
+    allowedTaskTypes: [],
+    rates: {},
     allowedListingIds: [],
     allowedCityIds: [],
-    maxTasksPerDay: 5,
     lang: 'fr',
-    schedule: { daysOfWeek: [1, 2, 3, 4, 5], timeWindows: [{ start: '08:00', end: '17:00' }] },
+    schedule: {
+      daysOfWeek: [1, 2, 3, 4, 5],
+      timeWindows: [{ start: '08:00', end: '17:00' }],
+      dayWindows: {
+        1: [{ start: '08:00', end: '17:00' }],
+        2: [{ start: '08:00', end: '17:00' }],
+        3: [{ start: '08:00', end: '17:00' }],
+        4: [{ start: '08:00', end: '17:00' }],
+        5: [{ start: '08:00', end: '17:00' }],
+      },
+    },
   };
 }
 
 function scheduleHours(s: Staff): string {
+  const dw = s.schedule?.dayWindows;
+  if (dw && Object.keys(dw).length) {
+    const all = Object.values(dw).flat();
+    if (!all.length) return '—';
+    if (all.every((w) => w.start === '00:00' && (w.end === '23:59' || w.end === '24:00'))) {
+      return '24/24';
+    }
+    const uniq = [...new Set(all.map((w) => `${w.start}–${w.end}`))];
+    return uniq.slice(0, 2).join(' · ') + (uniq.length > 2 ? '…' : '');
+  }
   const w = s.schedule?.timeWindows?.[0];
   if (!w) return '—';
-  if (w.start === '00:00' && (w.end === '23:59' || w.end === '24:00')) return '24/7';
+  if (w.start === '00:00' && (w.end === '23:59' || w.end === '24:00')) return '24/24';
   return `${w.start} → ${w.end}`;
 }
 
 function roleLine(s: Staff): string {
   if (s.status === 'off') return `${s.contractType === 'freelance' ? 'FREELANCE' : 'SALARIÉ'} · DÉSACTIVÉ`;
-  if (s.isAdmin) return 'FREELANCE · ESCALADES AUTO';
-  const contract = s.contractType === 'freelance' ? 'FREELANCE' : 'SALARIÉ';
-  const max = s.maxTasksPerDay ? `${s.maxTasksPerDay} TÂCHES/J` : '';
-  return [contract, max].filter(Boolean).join(' · ');
+  if (s.isAdmin) return `${s.contractType === 'freelance' ? 'FREELANCE' : 'SALARIÉ'} · ADMIN`;
+  return s.contractType === 'freelance' ? 'FREELANCE' : 'SALARIÉ';
 }
 
 function avClass(color?: number): string {
@@ -102,7 +125,7 @@ interface Props {
   staff: Staff[];
   listings: ListingOpt[];
   loading?: boolean;
-  onSave: (form: Staff, editingId: string | null) => Promise<void>;
+  onSave: (form: Staff, editingId: string | null) => Promise<string | void>;
   onDelete?: (id: string) => Promise<void>;
   useMockFallback?: boolean;
   /** Villes Sojori pour permissions par ville. */
@@ -132,14 +155,18 @@ export default function StaffPageView({
   cities: citiesProp = [],
 }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
-  /** Réglages techniques repliés par défaut (V0 simple). */
-  const [advOpen, setAdvOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Staff>(emptyStaff());
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /** Quel panneau accès est ouvert (null = rien). Villes + listings se cumulent en DB. */
+  const [accessPanel, setAccessPanel] = useState<AccessPanel>(null);
+  /** Filtre ville dans le panneau « Par listing » uniquement. */
+  const [listingCityFilter, setListingCityFilter] = useState<string | null>(null);
+  /** Jour sélectionné pour éditer ses créneaux (null = panneau fermé). */
+  const [planningDay, setPlanningDay] = useState<number | null>(1);
 
   const staff = useMemo(() => {
     if (staffProp.length > 0) return staffProp;
@@ -155,7 +182,6 @@ export default function StaffPageView({
   const cities = useMemo(() => citiesProp, [citiesProp]);
 
   const allListingsMode = hasAllAccess(form.allowedListingIds);
-  const allCitiesMode = hasAllAccess(form.allowedCityIds);
 
   const formListings = useMemo(() => {
     const formOwnerId = form.ownerId?.trim();
@@ -193,6 +219,9 @@ export default function StaffPageView({
       ...emptyStaff(),
       ownerId: showOwnerPicker ? filterOwnerId || '' : sessionOwnerId || '',
     });
+    setAccessPanel(null);
+    setListingCityFilter(null);
+    setPlanningDay(1);
     setDrawerOpen(true);
     setSelectedId(null);
   };
@@ -210,70 +239,59 @@ export default function StaffPageView({
 
   const openEdit = (s: Staff) => {
     setEditingId(s._id || null);
-    setForm({ ...s, rates: { ...s.rates } });
+    let dayWindows: Partial<Record<number, { start: string; end: string }[]>> =
+      s.schedule?.dayWindows || {};
+    if (!Object.keys(dayWindows).length) {
+      const tw = s.schedule?.timeWindows?.length
+        ? s.schedule.timeWindows
+        : [{ start: '08:00', end: '17:00' }];
+      dayWindows = {};
+      for (const d of s.schedule?.daysOfWeek || []) {
+        // Ignore créneaux inversés hérités (ex. 09:00→08:59)
+        const clean = tw.filter((w) => String(w.end) > String(w.start) || (w.start === '00:00' && w.end === '23:59'));
+        dayWindows[d] = (clean.length ? clean : [{ start: '08:00', end: '17:00' }]).map((w) => ({
+          ...w,
+        }));
+      }
+    } else {
+      const cleaned: Partial<Record<number, { start: string; end: string }[]>> = {};
+      for (const [k, windows] of Object.entries(dayWindows)) {
+        const list = (windows || []).filter(
+          (w) =>
+            String(w.end) > String(w.start) || (w.start === '00:00' && (w.end === '23:59' || w.end === '24:00')),
+        );
+        if (list.length) cleaned[Number(k)] = list;
+      }
+      dayWindows = cleaned;
+    }
+    const daysOfWeek = Object.keys(dayWindows)
+      .map(Number)
+      .filter((d) => (dayWindows[d] || []).length > 0)
+      .sort((a, b) => a - b);
+    setForm({
+      ...s,
+      rates: { ...s.rates },
+      allowedTaskTypes: sanitizeStaffAllowedTaskTypes(s.allowedTaskTypes as string[]),
+      schedule: {
+        daysOfWeek,
+        timeWindows: [{ start: '08:00', end: '17:00' }],
+        dayWindows,
+      },
+    });
+    setAccessPanel(deriveAccessPanel(s));
+    setListingCityFilter(null);
+    setPlanningDay(daysOfWeek[0] ?? null);
     setDrawerOpen(true);
     setSelectedId(s._id);
   };
 
   const patchForm = (patch: Partial<Staff>) => setForm((f) => ({ ...f, ...patch }));
 
-  /** Métier actif = la sélection de types correspond exactement à un préréglage. */
-  const activeJobPreset: StaffJobPresetId | null = useMemo(
-    () => jobPresetForTaskTypes(form.allowedTaskTypes as string[]),
-    [form.allowedTaskTypes],
-  );
-
-  const applyJobPreset = (id: StaffJobPresetId) => {
-    const preset = STAFF_JOB_PRESETS.find((j) => j.id === id);
-    if (preset) patchForm({ allowedTaskTypes: [...preset.taskTypes] });
-  };
-
-  /** Phrase de récap : le client relit en français ce qu'il vient de configurer. */
-  const recapSentence = useMemo(() => {
-    const name = form.fullName.trim() || 'Ce membre';
-    const job = STAFF_JOB_PRESETS.find((j) => j.id === activeJobPreset);
-    const jobLabel = job ? job.label.toLowerCase() : `${form.allowedTaskTypes.length} type(s) de tâche`;
-    const scope = hasAllAccess(form.allowedListingIds)
-      || (!form.allowedListingIds?.length && !form.allowedCityIds?.length)
-      ? 'toutes vos annonces'
-      : `${form.allowedListingIds?.length ?? 0} annonce(s)`;
-    const days = [...(form.schedule.daysOfWeek ?? [])].sort((a, b) => a - b);
-    const dayLabel =
-      days.length === 7
-        ? 'tous les jours'
-        : days.length === 0
-          ? 'sans jour défini'
-          : DAY_DISPLAY_ORDER.filter((d) => days.includes(d))
-              .map((d) => DAY_LABELS[d])
-              .join(' ');
-    const w = form.schedule.timeWindows?.[0];
-    const hours = w ? `${w.start}–${w.end}` : 'horaires libres';
-    return `${name} fera « ${jobLabel} » sur ${scope}, ${dayLabel}, ${hours}, jusqu'à ${form.maxTasksPerDay ?? 5} tâches par jour. Les missions arrivent sur WhatsApp.`;
-  }, [form, activeJobPreset]);
-
-
   const toggleTaskType = (key: string) => {
     const set = new Set(form.allowedTaskTypes as string[]);
     if (set.has(key)) set.delete(key);
     else set.add(key);
     patchForm({ allowedTaskTypes: [...set] as Staff['allowedTaskTypes'] });
-  };
-
-  const toggleAllListings = () => {
-    if (allListingsMode) {
-      patchForm({ allowedListingIds: [], allowedCityIds: [] });
-      return;
-    }
-    patchForm({ allowedListingIds: ['All'], allowedCityIds: ['All'] });
-  };
-
-  const toggleAllCities = () => {
-    if (allListingsMode) return;
-    if (allCitiesMode) {
-      patchForm({ allowedCityIds: [] });
-      return;
-    }
-    patchForm({ allowedCityIds: ['All'] });
   };
 
   const selectedCityIds = useMemo(
@@ -286,21 +304,179 @@ export default function StaffPageView({
     [form.allowedListingIds],
   );
 
-  const cityOptions = useMemo(
-    () => formCities.map((c) => ({ id: c.id, label: c.name, emoji: '📍' })),
-    [formCities],
-  );
+  /** Bascule le panneau visible ; recliquer ferme. « Tous » active l’accès total. */
+  const selectAccessPanel = (panel: Exclude<AccessPanel, null>) => {
+    if (accessPanel === panel) {
+      setAccessPanel(null);
+      return;
+    }
+    if (panel === 'all') {
+      patchForm({ allowedListingIds: ['All'], allowedCityIds: ['All'] });
+      setAccessPanel('all');
+      return;
+    }
+    // Quitter « Tous » : garder les sélections spécifiques déjà présentes
+    if (allListingsMode) {
+      patchForm({ allowedListingIds: [], allowedCityIds: [] });
+    }
+    setAccessPanel(panel);
+  };
 
-  const listingOptions = useMemo(
-    () => formListings.map((l) => ({ id: l.id, label: l.name, emoji: '🏠' })),
-    [formListings],
-  );
+  const toggleCityId = (cityId: string) => {
+    const set = new Set(selectedCityIds);
+    if (set.has(cityId)) set.delete(cityId);
+    else set.add(cityId);
+    patchForm({
+      allowedCityIds: [...set],
+      allowedListingIds: selectedListingIds,
+    });
+  };
 
-  const toggleDay = (d: number) => {
-    const set = new Set(form.schedule.daysOfWeek);
-    if (set.has(d)) set.delete(d);
-    else set.add(d);
-    patchForm({ schedule: { ...form.schedule, daysOfWeek: [...set].sort() } });
+  const removeCityId = (cityId: string) => {
+    patchForm({
+      allowedCityIds: selectedCityIds.filter((id) => id !== cityId),
+      allowedListingIds: selectedListingIds,
+    });
+  };
+
+  const toggleListingId = (listingId: string) => {
+    const set = new Set(selectedListingIds);
+    if (set.has(listingId)) set.delete(listingId);
+    else set.add(listingId);
+    patchForm({
+      allowedListingIds: [...set],
+      allowedCityIds: selectedCityIds,
+    });
+  };
+
+  const removeListingId = (listingId: string) => {
+    patchForm({
+      allowedListingIds: selectedListingIds.filter((id) => id !== listingId),
+      allowedCityIds: selectedCityIds,
+    });
+  };
+
+  const listingsForPicker = useMemo(() => {
+    if (!listingCityFilter) return formListings;
+    return formListings.filter(
+      (l) =>
+        String(l.cityId || '') === listingCityFilter ||
+        formCities.find((c) => c.id === listingCityFilter)?.name === l.city,
+    );
+  }, [formListings, listingCityFilter, formCities]);
+
+  const normalizeHm = (raw: string, fallback: string): string => {
+    const m = String(raw || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return fallback;
+    const h = Math.min(23, Math.max(0, Number(m[1])));
+    const min = Math.min(59, Math.max(0, Number(m[2])));
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  };
+
+  const sanitizeWindows = (
+    windows: { start: string; end: string }[],
+  ): { start: string; end: string }[] => {
+    const out: { start: string; end: string }[] = [];
+    for (const w of windows || []) {
+      const start = normalizeHm(w.start, '08:00');
+      let end = normalizeHm(w.end, '17:00');
+      // Évite les créneaux inversés type 09:00 → 08:59
+      if (end <= start && !(start === '00:00' && end === '23:59')) {
+        end = '17:00';
+        if (end <= start) end = '23:59';
+      }
+      out.push({ start, end });
+    }
+    return out;
+  };
+
+  const dayWindowsOf = (day: number): { start: string; end: string }[] => {
+    const dw = form.schedule.dayWindows?.[day];
+    if (dw?.length) return sanitizeWindows(dw);
+    return [];
+  };
+
+  const isDayOn = (day: number): boolean => dayWindowsOf(day).length > 0;
+
+  const syncScheduleFromDayWindows = (
+    dayWindows: Partial<Record<number, { start: string; end: string }[]>>,
+  ) => {
+    const cleaned: Partial<Record<number, { start: string; end: string }[]>> = {};
+    for (const [k, windows] of Object.entries(dayWindows)) {
+      const day = Number(k);
+      const list = sanitizeWindows(windows || []);
+      if (list.length) cleaned[day] = list;
+    }
+    const daysOfWeek = Object.keys(cleaned)
+      .map(Number)
+      .sort((a, b) => a - b);
+    const timeWindows = [
+      ...new Map(
+        daysOfWeek
+          .flatMap((d) => cleaned[d] || [])
+          .map((w) => [`${w.start}:${w.end}`, w] as const),
+      ).values(),
+    ];
+    patchForm({ schedule: { daysOfWeek, timeWindows, dayWindows: cleaned } });
+  };
+
+  const selectPlanningDay = (day: number) => {
+    setPlanningDay((prev) => (prev === day ? null : day));
+  };
+
+  const setDayOn = (day: number, on: boolean) => {
+    if (on) {
+      setDayWindows(day, [{ start: '08:00', end: '17:00' }]);
+    } else {
+      setDayWindows(day, []);
+    }
+  };
+
+  const setDayWindows = (day: number, windows: { start: string; end: string }[]) => {
+    const next = { ...(form.schedule.dayWindows || {}) };
+    if (!windows.length) delete next[day];
+    else next[day] = sanitizeWindows(windows);
+    syncScheduleFromDayWindows(next);
+  };
+
+  const patchDayWindow = (
+    day: number,
+    index: number,
+    patch: Partial<{ start: string; end: string }>,
+  ) => {
+    const windows = [...dayWindowsOf(day)];
+    windows[index] = { ...windows[index], ...patch };
+    setDayWindows(day, windows);
+  };
+
+  const addDayWindow = (day: number, preset?: { start: string; end: string }) => {
+    setDayWindows(day, [...dayWindowsOf(day), preset || { start: '14:00', end: '18:00' }]);
+  };
+
+  const removeDayWindow = (day: number, index: number) => {
+    setDayWindows(
+      day,
+      dayWindowsOf(day).filter((_, i) => i !== index),
+    );
+  };
+
+  const applyPresetToDay = (day: number, windows: { start: string; end: string }[]) => {
+    setDayWindows(day, windows);
+  };
+
+  const applyDayToActiveDays = (sourceDay: number) => {
+    const source = dayWindowsOf(sourceDay);
+    if (!source.length) return;
+    const next = { ...(form.schedule.dayWindows || {}) };
+    for (const d of Object.keys(next).map(Number)) {
+      if ((next[d] || []).length) next[d] = source.map((w) => ({ ...w }));
+    }
+    // aussi les jours déjà actifs via daysOfWeek
+    for (const d of form.schedule.daysOfWeek) {
+      next[d] = source.map((w) => ({ ...w }));
+    }
+    syncScheduleFromDayWindows(next);
+    toast.info('Créneaux appliqués aux jours actifs');
   };
 
   const handleSave = async () => {
@@ -310,9 +486,15 @@ export default function StaffPageView({
     }
     setSaving(true);
     try {
-      await onSave(form, editingId);
-      setDrawerOpen(false);
-      setEditingId(null);
+      const payload: Staff = {
+        ...form,
+        allowedTaskTypes: sanitizeStaffAllowedTaskTypes(form.allowedTaskTypes as string[]),
+      };
+      const savedId = await onSave(payload, editingId);
+      if (!editingId && savedId) {
+        setEditingId(savedId);
+        setForm((f) => ({ ...f, _id: savedId }));
+      }
     } finally {
       setSaving(false);
     }
@@ -391,7 +573,10 @@ export default function StaffPageView({
       ) : (
         <div className="staff-grid">
           {filtered.map((s) => {
-            const chipTypes = (s.allowedTaskTypes || []).slice(0, 6);
+            const chipTypes = sanitizeStaffAllowedTaskTypes(s.allowedTaskTypes as string[]).slice(
+              0,
+              6,
+            );
             const firstRate = s.rates && Object.entries(s.rates)[0];
             return (
               <div
@@ -451,9 +636,10 @@ export default function StaffPageView({
                   </span>
                   <span style={{ fontFamily: 'var(--mono)', color: 'var(--t)' }}>
                     {s.whatsappE164 || s.phoneE164}
+                    {s.whatsappNotificationsEnabled === false ? ' · notifs off' : ''}
                   </span>
                 </div>
-                {firstRate && s.contractType === 'freelance' && (
+                {firstRate && (
                   <div className="meta-line">
                     <span style={{ textTransform: 'uppercase', fontSize: 9.5, fontWeight: 700 }}>
                       Tarif
@@ -512,7 +698,7 @@ export default function StaffPageView({
             </button>
           </div>
 
-          <div className={`form-grid${advOpen ? ' adv-open' : ''}`}>
+          <div className="form-grid">
             <div className="form-section full">
               <div className="form-section-h">Propriétaire (PM)</div>
               {showOwnerPicker ? (
@@ -543,91 +729,81 @@ export default function StaffPageView({
               )}
             </div>
 
-            <div className="form-section">
+            <div className="form-section full">
               <div className="form-section-h">Identité</div>
-              <div className="field">
-                <div className="field-label">
-                  Nom complet<span className="req">*</span>
+              <div className="field-row field-row--3">
+                <div className="field">
+                  <div className="field-label">
+                    Nom complet<span className="req">*</span>
+                  </div>
+                  <input
+                    className="input"
+                    value={form.fullName}
+                    onChange={(e) => patchForm({ fullName: e.target.value })}
+                    placeholder="ex: Ahmed Benali"
+                  />
                 </div>
-                <input
-                  className="input"
-                  value={form.fullName}
-                  onChange={(e) => patchForm({ fullName: e.target.value })}
-                  placeholder="ex: Ahmed Benali"
-                />
-              </div>
-              <div className="field">
-                <div className="field-label">
-                  Téléphone WhatsApp<span className="req">*</span>
-                  <span className="hint">Format E.164 · ex : +212 6XX XXX XXX</span>
+                <div className="field">
+                  <div className="field-label">
+                    WhatsApp<span className="req">*</span>
+                    <span className="hint">E.164 · +212…</span>
+                  </div>
+                  <input
+                    className="input"
+                    value={form.whatsappE164}
+                    onChange={(e) =>
+                      patchForm({ whatsappE164: e.target.value, phoneE164: e.target.value })
+                    }
+                    placeholder="+2126…"
+                  />
                 </div>
-                <input
-                  className="input"
-                  value={form.whatsappE164}
-                  onChange={(e) =>
-                    patchForm({ whatsappE164: e.target.value, phoneE164: e.target.value })
-                  }
-                />
-              </div>
-              <div className="field">
-                <div className="field-label">Langue de travail</div>
-                <div className="pill-group">
-                  {LANG_OPTIONS.map((lg) => (
-                    <button
-                      key={lg.value}
-                      type="button"
-                      className={`pill-toggle${form.lang === lg.value ? ' on' : ''}`}
-                      onClick={() => patchForm({ lang: lg.value as WorkLang })}
-                    >
-                      {lg.label}
-                    </button>
-                  ))}
+                <div className="field">
+                  <div className="field-label">Langue</div>
+                  <div className="pill-group">
+                    {LANG_OPTIONS.map((lg) => (
+                      <button
+                        key={lg.value}
+                        type="button"
+                        className={`pill-toggle${form.lang === lg.value ? ' on' : ''}`}
+                        onClick={() => patchForm({ lang: lg.value as WorkLang })}
+                      >
+                        {lg.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Métier : préréglage qui remplit les types de tâches (V0 simple) */}
+            {/* Types de tâches terrain (plus de « Métier » ni parcours voyageur) */}
             <div className="form-section full">
               <div className="form-section-h">
-                Métier<span className="req">*</span>
+                Tâches autorisées<span className="req">*</span>
               </div>
-              <div className="job-grid">
-                {STAFF_JOB_PRESETS.map((job) => {
-                  const on = activeJobPreset === job.id;
-                  return (
-                    <button
-                      key={job.id}
-                      type="button"
-                      className={`job-card${on ? ' on' : ''}`}
-                      onClick={() => applyJobPreset(job.id)}
-                    >
-                      <span className="job-emo">{job.emoji}</span>
-                      <b>{job.label}</b>
-                      <span className="job-desc">{job.desc}</span>
-                    </button>
-                  );
-                })}
+              <div className="pill-group">
+                {STAFF_TASK_PILLS.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    className={`pill-toggle${
+                      (form.allowedTaskTypes as string[]).includes(p.key) ? ' on' : ''
+                    }`}
+                    onClick={() => toggleTaskType(p.key)}
+                  >
+                    <span style={{ marginRight: 3 }}>{p.emoji}</span>
+                    {p.label}
+                  </button>
+                ))}
               </div>
-              {activeJobPreset === null && form.allowedTaskTypes.length > 0 ? (
-                <p className="job-custom-note">
-                  Sélection personnalisée · {form.allowedTaskTypes.length} type(s) — modifiable dans
-                  les réglages avancés.
-                </p>
-              ) : null}
-            </div>
-
-            {/* Récap en français — on relit ce qu'on vient de créer */}
-            <div className="form-section full">
-              <div className="staff-recap">{recapSentence}</div>
               {form.allowedTaskTypes.length === 0 ? (
                 <p className="staff-recap-warn">
-                  ⚠ Aucune tâche autorisée — ce staff ne recevra jamais d'assignation.
+                  ⚠ Aucune tâche autorisée — ce staff ne recevra jamais d&apos;assignation.
                 </p>
               ) : null}
             </div>
 
             <div className="form-section">
-              <div data-adv="1" className="form-section-h">Contrat & rémunération</div>
+              <div className="form-section-h">Contrat & rémunération</div>
               <div className="field">
                 <div className="field-label">
                   Type de contrat<span className="req">*</span>
@@ -650,15 +826,15 @@ export default function StaffPageView({
                   ))}
                 </div>
               </div>
-              <div className="field" style={{ opacity: form.contractType === 'freelance' ? 1 : 0.5 }}>
+              <div className="field">
                 <div className="field-label">
-                  Tarifs freelance
-                  <span className="hint">Activé si Freelance · prix par type de tâche</span>
+                  Tarifs (MAD)
+                  <span className="hint">Optionnel · ajoutez un type avec son montant</span>
                 </div>
                 <div className="pricing-grid">
-                  {STAFF_TASK_PILLS.filter((p) => form.rates?.[p.key as keyof typeof form.rates] != null ||
-                    ['cleaning_free', 'cleaning_paid'].includes(p.key),
-                  ).slice(0, 4).map((p) => (
+                  {STAFF_TASK_PILLS.filter(
+                    (p) => form.rates?.[p.key as keyof typeof form.rates] != null,
+                  ).map((p) => (
                     <div key={p.key} className="price-row">
                       <span style={{ fontSize: 12.5, fontWeight: 600 }}>
                         {p.emoji} {p.label}
@@ -666,6 +842,7 @@ export default function StaffPageView({
                       <input
                         className="input"
                         type="number"
+                        min={0}
                         value={form.rates?.[p.key as keyof typeof form.rates] ?? ''}
                         onChange={(e) =>
                           patchForm({
@@ -675,8 +852,8 @@ export default function StaffPageView({
                             },
                           })
                         }
-                        disabled={form.contractType !== 'freelance'}
                       />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)' }}>MAD</span>
                       <button
                         type="button"
                         style={{
@@ -698,10 +875,11 @@ export default function StaffPageView({
                 <button
                   type="button"
                   className="add-btn"
-                  disabled={form.contractType !== 'freelance'}
                   onClick={() => {
-                    const first = STAFF_TASK_PILLS.find((p) => form.rates?.[p.key as keyof typeof form.rates] == null);
-                    if (first) patchForm({ rates: { ...form.rates, [first.key]: 150 } });
+                    const first = STAFF_TASK_PILLS.find(
+                      (p) => form.rates?.[p.key as keyof typeof form.rates] == null,
+                    );
+                    if (first) patchForm({ rates: { ...form.rates, [first.key]: 0 } });
                   }}
                 >
                   + Ajouter un type
@@ -710,109 +888,35 @@ export default function StaffPageView({
             </div>
 
             <div className="form-section full">
-              <div data-adv="1" className="form-section-h">Tâches autorisées · multi-sélection</div>
-              <div className="pill-group">
-                {STAFF_TASK_PILLS.map((p) => (
+              <div className="form-section-h">Accès annonces</div>
+              <div className="access-mode-row">
+                {(
+                  [
+                    ['all', '🌍', 'Tous les listings'],
+                    ['city', '📍', 'Par ville'],
+                    ['listing', '🏠', 'Par listing'],
+                  ] as const
+                ).map(([key, emoji, label]) => (
                   <button
-                    key={p.key}
+                    key={key}
                     type="button"
-                    className={`pill-toggle${
-                      (form.allowedTaskTypes as string[]).includes(p.key) ? ' on' : ''
+                    className={`access-mode-btn${accessPanel === key ? ' on' : ''}${
+                      key === 'all' && allListingsMode ? ' active-value' : ''
+                    }${key === 'city' && selectedCityIds.length > 0 && !allListingsMode ? ' active-value' : ''}${
+                      key === 'listing' && selectedListingIds.length > 0 && !allListingsMode
+                        ? ' active-value'
+                        : ''
                     }`}
-                    onClick={() => toggleTaskType(p.key)}
+                    onClick={() => selectAccessPanel(key)}
                   >
-                    <span style={{ marginRight: 3 }}>{p.emoji}</span>
-                    {p.label}
+                    <span>{emoji}</span>
+                    {label}
                   </button>
                 ))}
               </div>
-              {form.allowedTaskTypes.length === 0 ? (
-                <p
-                  style={{
-                    margin: '8px 0 0',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: '#c0392b',
-                  }}
-                >
-                  ⚠ Aucune tâche autorisée — ce staff ne recevra jamais d'assignation.
-                </p>
-              ) : null}
-            </div>
 
-            <div className="form-section full">
-              <div className="form-section-h">Accès annonces</div>
-              <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--pd)' }}>
-                Par ville : les nouvelles annonces de la ville sont incluses automatiquement.
-              </p>
-              <button
-                type="button"
-                className={`access-all-chip${allListingsMode ? ' on' : ''}`}
-                onClick={toggleAllListings}
-              >
-                <span>🌍</span>
-                Tous les listings
-              </button>
-              {!allListingsMode ? (
-                <>
-                  <div className="form-section-h" style={{ marginTop: 4, marginBottom: 6 }}>
-                    Villes autorisées
-                  </div>
-                  <button
-                    type="button"
-                    className={`access-all-chip${allCitiesMode ? ' on' : ''}`}
-                    style={{ marginBottom: 8 }}
-                    onClick={toggleAllCities}
-                  >
-                    Toutes les villes
-                  </button>
-                  {allCitiesMode ? (
-                    <div className="access-selected-chips" style={{ marginBottom: 12 }}>
-                      <span className="access-chip">
-                        <span className="access-chip-emoji">📍</span>
-                        <span className="access-chip-label">Toutes les villes</span>
-                        <button
-                          type="button"
-                          className="access-chip-x"
-                          aria-label="Retirer toutes les villes"
-                          onClick={toggleAllCities}
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    </div>
-                  ) : (
-                    <StaffAccessMultiSelect
-                      options={cityOptions}
-                      selectedIds={selectedCityIds}
-                      onChange={(ids) => patchForm({ allowedCityIds: ids })}
-                      placeholder="Aucune ville — ajoutez Casablanca, Rabat…"
-                      searchPlaceholder="Rechercher une ville…"
-                      addLabel="+ Ajouter des villes"
-                      emptyLabel="Aucune ville trouvée"
-                    />
-                  )}
-                  <div className="form-section-h" style={{ marginTop: 14, marginBottom: 6 }}>
-                    Annonces spécifiques (optionnel)
-                  </div>
-                  {showOwnerPicker && !form.ownerId ? (
-                    <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--pd)' }}>
-                      Choisissez d&apos;abord un propriétaire pour afficher ses annonces.
-                    </p>
-                  ) : null}
-                  <StaffAccessMultiSelect
-                    options={listingOptions}
-                    selectedIds={selectedListingIds}
-                    onChange={(ids) => patchForm({ allowedListingIds: ids })}
-                    disabled={!formListings.length}
-                    placeholder="Aucune annonce spécifique"
-                    searchPlaceholder="Rechercher une annonce…"
-                    addLabel="+ Ajouter des annonces"
-                    emptyLabel="Aucune annonce trouvée"
-                  />
-                </>
-              ) : (
-                <div className="access-selected-chips">
+              {allListingsMode ? (
+                <div className="access-selected-chips access-selected-chips--compact">
                   <span className="access-chip">
                     <span className="access-chip-emoji">🌍</span>
                     <span className="access-chip-label">Tous les listings</span>
@@ -820,39 +924,153 @@ export default function StaffPageView({
                       type="button"
                       className="access-chip-x"
                       aria-label="Retirer accès total"
-                      onClick={toggleAllListings}
+                      onClick={() => {
+                        patchForm({ allowedListingIds: [], allowedCityIds: [] });
+                        setAccessPanel(null);
+                      }}
                     >
                       ✕
                     </button>
                   </span>
                 </div>
-              )}
+              ) : selectedCityIds.length > 0 || selectedListingIds.length > 0 ? (
+                <div className="access-selected-chips access-selected-chips--compact">
+                  {selectedCityIds.map((id) => {
+                    const name = formCities.find((c) => c.id === id)?.name || id;
+                    return (
+                      <span key={`c-${id}`} className="access-chip">
+                        <span className="access-chip-emoji">📍</span>
+                        <span className="access-chip-label">{name}</span>
+                        <button
+                          type="button"
+                          className="access-chip-x"
+                          aria-label={`Retirer ${name}`}
+                          onClick={() => removeCityId(id)}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    );
+                  })}
+                  {selectedListingIds.map((id) => {
+                    const name = formListings.find((l) => l.id === id)?.name || id;
+                    return (
+                      <span key={`l-${id}`} className="access-chip">
+                        <span className="access-chip-emoji">🏠</span>
+                        <span className="access-chip-label">{name}</span>
+                        <button
+                          type="button"
+                          className="access-chip-x"
+                          aria-label={`Retirer ${name}`}
+                          onClick={() => removeListingId(id)}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {accessPanel === 'all' && allListingsMode ? (
+                <p className="access-panel-hint">Accès à toutes les annonces du propriétaire.</p>
+              ) : null}
+
+              {accessPanel === 'city' ? (
+                <div className="access-check-grid">
+                  {formCities.length === 0 ? (
+                    <p className="access-panel-hint">Aucune ville disponible.</p>
+                  ) : (
+                    formCities.map((c) => (
+                      <label key={c.id} className="access-check">
+                        <input
+                          type="checkbox"
+                          checked={selectedCityIds.includes(c.id)}
+                          onChange={() => toggleCityId(c.id)}
+                        />
+                        <span>📍 {c.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              ) : null}
+
+              {accessPanel === 'listing' ? (
+                <div className="access-listing-panel">
+                  {formCities.length > 0 ? (
+                    <div className="access-city-filter">
+                      <button
+                        type="button"
+                        className={`access-city-filter-btn${!listingCityFilter ? ' on' : ''}`}
+                        onClick={() => setListingCityFilter(null)}
+                      >
+                        Toutes
+                      </button>
+                      {formCities.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className={`access-city-filter-btn${
+                            listingCityFilter === c.id ? ' on' : ''
+                          }`}
+                          onClick={() =>
+                            setListingCityFilter((prev) => (prev === c.id ? null : c.id))
+                          }
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {showOwnerPicker && !form.ownerId ? (
+                    <p className="access-panel-hint">
+                      Choisissez d&apos;abord un propriétaire.
+                    </p>
+                  ) : (
+                    <div className="access-check-grid access-check-grid--listings">
+                      {listingsForPicker.length === 0 ? (
+                        <p className="access-panel-hint">Aucune annonce.</p>
+                      ) : (
+                        listingsForPicker.map((l) => (
+                          <label key={l.id} className="access-check">
+                            <input
+                              type="checkbox"
+                              checked={selectedListingIds.includes(l.id)}
+                              onChange={() => toggleListingId(l.id)}
+                            />
+                            <span title={l.name}>🏠 {l.name}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
 
-            <div className="form-section">
-              <div data-adv="1" className="form-section-h">Limite quotidienne</div>
-              <div className="field">
-                <div className="field-label">
-                  Max tâches/jour
-                  <span className="hint">Le système n&apos;assignera pas au-delà</span>
+            <div className="form-section full">
+              <div className="form-section-h">Notifications &amp; admin</div>
+              <div className="admin-row">
+                <span style={{ fontSize: 18 }}>💬</span>
+                <div style={{ flex: 1 }}>
+                  <div className="nm">WhatsApp · notifs tâches</div>
+                  <div className="ds">
+                    Yes = reçoit assignation / annulation sur WhatsApp · No = silencieux
+                  </div>
                 </div>
-                <input
-                  className="input"
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={form.maxTasksPerDay ?? 5}
-                  onChange={(e) => {
-                    const n = Number(e.target.value);
-                    patchForm({ maxTasksPerDay: Number.isFinite(n) && n >= 1 ? n : 1 });
-                  }}
+                <div
+                  className={`toggle${form.whatsappNotificationsEnabled !== false ? ' on' : ''}`}
+                  onClick={() =>
+                    patchForm({
+                      whatsappNotificationsEnabled: form.whatsappNotificationsEnabled === false,
+                    })
+                  }
+                  onKeyDown={() => {}}
+                  role="switch"
+                  aria-checked={form.whatsappNotificationsEnabled !== false}
                 />
               </div>
-            </div>
-
-            <div className="form-section">
-              <div data-adv="1" className="form-section-h">Statut admin</div>
-              <div className="admin-row">
+              <div className="admin-row" style={{ marginTop: 10 }}>
                 <span style={{ fontSize: 18 }}>👑</span>
                 <div style={{ flex: 1 }}>
                   <div className="nm">Admin · escalades + auto-accept</div>
@@ -869,83 +1087,159 @@ export default function StaffPageView({
             </div>
 
             <div className="form-section full">
-              <div data-adv="1" className="form-section-h">Planning de travail</div>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 100px 100px',
-                  gap: 12,
-                  alignItems: 'flex-end',
-                }}
-              >
-                <div className="field">
-                  <div className="field-label">Jours actifs</div>
-                  <div className="day-pills">
-                    {DAY_DISPLAY_ORDER.map((i) => (
-                      <button
-                        key={`d-${i}`}
-                        type="button"
-                        className={`day-pill${form.schedule.daysOfWeek.includes(i) ? ' on' : ''}`}
-                        onClick={() => toggleDay(i)}
-                      >
-                        {DAY_LABELS[i]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="field">
-                  <div className="field-label">Début</div>
-                  <input
-                    className="input"
-                    value={form.schedule.timeWindows[0]?.start || '08:00'}
-                    onChange={(e) =>
-                      patchForm({
-                        schedule: {
-                          ...form.schedule,
-                          timeWindows: [
-                            {
-                              start: e.target.value,
-                              end: form.schedule.timeWindows[0]?.end || '17:00',
-                            },
-                          ],
-                        },
-                      })
-                    }
-                  />
-                </div>
-                <div className="field">
-                  <div className="field-label">Fin</div>
-                  <input
-                    className="input"
-                    value={form.schedule.timeWindows[0]?.end || '17:00'}
-                    onChange={(e) =>
-                      patchForm({
-                        schedule: {
-                          ...form.schedule,
-                          timeWindows: [
-                            {
-                              start: form.schedule.timeWindows[0]?.start || '08:00',
-                              end: e.target.value,
-                            },
-                          ],
-                        },
-                      })
-                    }
-                  />
-                </div>
+              <div className="form-section-h">Planning de travail</div>
+              <div className="day-pills">
+                {DAY_DISPLAY_ORDER.map((i) => {
+                  const active = isDayOn(i);
+                  const selected = planningDay === i;
+                  return (
+                    <button
+                      key={`d-${i}`}
+                      type="button"
+                      className={`day-pill${active ? ' on' : ''}${selected ? ' selected' : ''}`}
+                      onClick={() => selectPlanningDay(i)}
+                      title={DAY_FULL_LABELS[i]}
+                    >
+                      {DAY_LABELS[i]}
+                    </button>
+                  );
+                })}
               </div>
-            </div>
-            <div className="form-section full adv-bar">
-              <button
-                type="button"
-                className="adv-toggle"
-                onClick={() => setAdvOpen((o) => !o)}
-                aria-expanded={advOpen}
-              >
-                <b>Réglages avancés</b>
-                <span>— contrat &amp; tarifs · types de tâches · limite/jour · admin · planning</span>
-                <span className={`adv-chev${advOpen ? ' open' : ''}`}>▶</span>
-              </button>
+
+              {planningDay == null ? (
+                <p className="access-panel-hint" style={{ marginTop: 10 }}>
+                  Cliquez un jour · activez-le · définissez ses créneaux.
+                </p>
+              ) : (
+                <div className="planning-day-panel">
+                  <div className="planning-day-toggle-row">
+                    <div>
+                      <strong>{DAY_FULL_LABELS[planningDay]}</strong>
+                      <div className="hint">
+                        {isDayOn(planningDay) ? 'Jour travaillé' : 'Jour off'}
+                      </div>
+                    </div>
+                    <div className="planning-onoff">
+                      <span className={!isDayOn(planningDay) ? 'on' : ''}>Off</span>
+                      <div
+                        className={`toggle${isDayOn(planningDay) ? ' on' : ''}`}
+                        onClick={() => setDayOn(planningDay, !isDayOn(planningDay))}
+                        onKeyDown={() => {}}
+                        role="switch"
+                        aria-checked={isDayOn(planningDay)}
+                      />
+                      <span className={isDayOn(planningDay) ? 'on' : ''}>On</span>
+                    </div>
+                  </div>
+
+                  {isDayOn(planningDay) ? (
+                    <>
+                      <div className="planning-presets">
+                        <button
+                          type="button"
+                          className="planning-preset-btn"
+                          onClick={() =>
+                            applyPresetToDay(planningDay, [{ start: '08:00', end: '12:00' }])
+                          }
+                        >
+                          8h–12h
+                        </button>
+                        <button
+                          type="button"
+                          className="planning-preset-btn"
+                          onClick={() =>
+                            applyPresetToDay(planningDay, [{ start: '14:00', end: '18:00' }])
+                          }
+                        >
+                          14h–18h
+                        </button>
+                        <button
+                          type="button"
+                          className="planning-preset-btn"
+                          onClick={() =>
+                            applyPresetToDay(planningDay, [
+                              { start: '08:00', end: '12:00' },
+                              { start: '14:00', end: '18:00' },
+                            ])
+                          }
+                        >
+                          8–12 + 14–18
+                        </button>
+                        <button
+                          type="button"
+                          className="planning-preset-btn"
+                          onClick={() =>
+                            applyPresetToDay(planningDay, [{ start: '08:00', end: '17:00' }])
+                          }
+                        >
+                          8h–17h
+                        </button>
+                        <button
+                          type="button"
+                          className="planning-preset-btn"
+                          onClick={() =>
+                            applyPresetToDay(planningDay, [{ start: '00:00', end: '23:59' }])
+                          }
+                        >
+                          24/24
+                        </button>
+                      </div>
+                      <div className="planning-slots">
+                        {dayWindowsOf(planningDay).map((w, idx) => (
+                          <div key={`slot-${planningDay}-${idx}`} className="planning-slot-row">
+                            <input
+                              className="input"
+                              type="time"
+                              value={w.start}
+                              onChange={(e) =>
+                                patchDayWindow(planningDay, idx, { start: e.target.value })
+                              }
+                            />
+                            <span className="planning-slot-sep">→</span>
+                            <input
+                              className="input"
+                              type="time"
+                              value={w.end}
+                              onChange={(e) =>
+                                patchDayWindow(planningDay, idx, { end: e.target.value })
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="access-chip-x"
+                              aria-label="Supprimer créneau"
+                              onClick={() => removeDayWindow(planningDay, idx)}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="planning-day-actions">
+                        <button
+                          type="button"
+                          className="add-btn"
+                          onClick={() => addDayWindow(planningDay)}
+                        >
+                          + Ajouter un créneau
+                        </button>
+                        <button
+                          type="button"
+                          className="add-btn"
+                          onClick={() => applyDayToActiveDays(planningDay)}
+                        >
+                          Appliquer aux jours actifs
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="access-panel-hint">
+                      Jour off — aucune assignation ce jour-là. Activez le toggle pour définir un
+                      planning.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -962,7 +1256,12 @@ export default function StaffPageView({
                 </button>
               ) : null}
             </div>
-            <button type="button" className="btn btn-ghost" disabled={deleting} onClick={() => setDrawerOpen(false)}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={deleting}
+              onClick={() => setDrawerOpen(false)}
+            >
               Annuler
             </button>
             <button
