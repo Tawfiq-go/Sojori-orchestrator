@@ -12,6 +12,11 @@ import {
   type WorkLang,
 } from './staffDesignConstants';
 import { FULLTASK_TASK_TYPES } from './fulltaskTaskTypes';
+import {
+  STAFF_JOB_PRESETS,
+  jobPresetForTaskTypes,
+  type StaffJobPresetId,
+} from './staffDesignConstants';
 import { MOCK_STAFF_DESIGN, MOCK_LISTINGS_DESIGN } from './mockStaffDesign';
 import StaffAccessMultiSelect from './StaffAccessMultiSelect';
 
@@ -127,6 +132,8 @@ export default function StaffPageView({
   cities: citiesProp = [],
 }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
+  /** Réglages techniques repliés par défaut (V0 simple). */
+  const [advOpen, setAdvOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -209,6 +216,41 @@ export default function StaffPageView({
   };
 
   const patchForm = (patch: Partial<Staff>) => setForm((f) => ({ ...f, ...patch }));
+
+  /** Métier actif = la sélection de types correspond exactement à un préréglage. */
+  const activeJobPreset: StaffJobPresetId | null = useMemo(
+    () => jobPresetForTaskTypes(form.allowedTaskTypes as string[]),
+    [form.allowedTaskTypes],
+  );
+
+  const applyJobPreset = (id: StaffJobPresetId) => {
+    const preset = STAFF_JOB_PRESETS.find((j) => j.id === id);
+    if (preset) patchForm({ allowedTaskTypes: [...preset.taskTypes] });
+  };
+
+  /** Phrase de récap : le client relit en français ce qu'il vient de configurer. */
+  const recapSentence = useMemo(() => {
+    const name = form.fullName.trim() || 'Ce membre';
+    const job = STAFF_JOB_PRESETS.find((j) => j.id === activeJobPreset);
+    const jobLabel = job ? job.label.toLowerCase() : `${form.allowedTaskTypes.length} type(s) de tâche`;
+    const scope = hasAllAccess(form.allowedListingIds)
+      || (!form.allowedListingIds?.length && !form.allowedCityIds?.length)
+      ? 'toutes vos annonces'
+      : `${form.allowedListingIds?.length ?? 0} annonce(s)`;
+    const days = [...(form.schedule.daysOfWeek ?? [])].sort((a, b) => a - b);
+    const dayLabel =
+      days.length === 7
+        ? 'tous les jours'
+        : days.length === 0
+          ? 'sans jour défini'
+          : DAY_DISPLAY_ORDER.filter((d) => days.includes(d))
+              .map((d) => DAY_LABELS[d])
+              .join(' ');
+    const w = form.schedule.timeWindows?.[0];
+    const hours = w ? `${w.start}–${w.end}` : 'horaires libres';
+    return `${name} fera « ${jobLabel} » sur ${scope}, ${dayLabel}, ${hours}, jusqu'à ${form.maxTasksPerDay ?? 5} tâches par jour. Les missions arrivent sur WhatsApp.`;
+  }, [form, activeJobPreset]);
+
 
   const toggleTaskType = (key: string) => {
     const set = new Set(form.allowedTaskTypes as string[]);
@@ -470,7 +512,7 @@ export default function StaffPageView({
             </button>
           </div>
 
-          <div className="form-grid">
+          <div className={`form-grid${advOpen ? ' adv-open' : ''}`}>
             <div className="form-section full">
               <div className="form-section-h">Propriétaire (PM)</div>
               {showOwnerPicker ? (
@@ -544,8 +586,48 @@ export default function StaffPageView({
               </div>
             </div>
 
+            {/* Métier : préréglage qui remplit les types de tâches (V0 simple) */}
+            <div className="form-section full">
+              <div className="form-section-h">
+                Métier<span className="req">*</span>
+              </div>
+              <div className="job-grid">
+                {STAFF_JOB_PRESETS.map((job) => {
+                  const on = activeJobPreset === job.id;
+                  return (
+                    <button
+                      key={job.id}
+                      type="button"
+                      className={`job-card${on ? ' on' : ''}`}
+                      onClick={() => applyJobPreset(job.id)}
+                    >
+                      <span className="job-emo">{job.emoji}</span>
+                      <b>{job.label}</b>
+                      <span className="job-desc">{job.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {activeJobPreset === null && form.allowedTaskTypes.length > 0 ? (
+                <p className="job-custom-note">
+                  Sélection personnalisée · {form.allowedTaskTypes.length} type(s) — modifiable dans
+                  les réglages avancés.
+                </p>
+              ) : null}
+            </div>
+
+            {/* Récap en français — on relit ce qu'on vient de créer */}
+            <div className="form-section full">
+              <div className="staff-recap">{recapSentence}</div>
+              {form.allowedTaskTypes.length === 0 ? (
+                <p className="staff-recap-warn">
+                  ⚠ Aucune tâche autorisée — ce staff ne recevra jamais d'assignation.
+                </p>
+              ) : null}
+            </div>
+
             <div className="form-section">
-              <div className="form-section-h">Contrat & rémunération</div>
+              <div data-adv="1" className="form-section-h">Contrat & rémunération</div>
               <div className="field">
                 <div className="field-label">
                   Type de contrat<span className="req">*</span>
@@ -628,7 +710,7 @@ export default function StaffPageView({
             </div>
 
             <div className="form-section full">
-              <div className="form-section-h">Tâches autorisées · multi-sélection</div>
+              <div data-adv="1" className="form-section-h">Tâches autorisées · multi-sélection</div>
               <div className="pill-group">
                 {STAFF_TASK_PILLS.map((p) => (
                   <button
@@ -748,7 +830,7 @@ export default function StaffPageView({
             </div>
 
             <div className="form-section">
-              <div className="form-section-h">Limite quotidienne</div>
+              <div data-adv="1" className="form-section-h">Limite quotidienne</div>
               <div className="field">
                 <div className="field-label">
                   Max tâches/jour
@@ -769,7 +851,7 @@ export default function StaffPageView({
             </div>
 
             <div className="form-section">
-              <div className="form-section-h">Statut admin</div>
+              <div data-adv="1" className="form-section-h">Statut admin</div>
               <div className="admin-row">
                 <span style={{ fontSize: 18 }}>👑</span>
                 <div style={{ flex: 1 }}>
@@ -787,7 +869,7 @@ export default function StaffPageView({
             </div>
 
             <div className="form-section full">
-              <div className="form-section-h">Planning de travail</div>
+              <div data-adv="1" className="form-section-h">Planning de travail</div>
               <div
                 style={{
                   display: 'grid',
@@ -852,6 +934,18 @@ export default function StaffPageView({
                   />
                 </div>
               </div>
+            </div>
+            <div className="form-section full adv-bar">
+              <button
+                type="button"
+                className="adv-toggle"
+                onClick={() => setAdvOpen((o) => !o)}
+                aria-expanded={advOpen}
+              >
+                <b>Réglages avancés</b>
+                <span>— contrat &amp; tarifs · types de tâches · limite/jour · admin · planning</span>
+                <span className={`adv-chev${advOpen ? ' open' : ''}`}>▶</span>
+              </button>
             </div>
           </div>
 
