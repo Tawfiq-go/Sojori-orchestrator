@@ -5,6 +5,8 @@ import type { Staff, ContractType } from './types';
 import {
   STAFF_TASK_PILLS,
   DAY_LABELS,
+  DAY_DISPLAY_ORDER,
+  FULLTASK_TASK_TYPES,
   LANG_OPTIONS,
   initials,
   pillLabelForType,
@@ -57,12 +59,15 @@ function emptyStaff(): Staff {
     status: 'active',
     isAdmin: false,
     contractType: 'employee',
-    allowedTaskTypes: [],
+    // ⚠️ CRITICAL : le moteur exige une correspondance exacte de type
+    // (assignmentService.taskTypeMatch). Un tableau vide = staff jamais assigné,
+    // sans aucun message. On coche tout par défaut, comme le wizard d'onboarding.
+    allowedTaskTypes: [...FULLTASK_TASK_TYPES],
     allowedListingIds: [],
     allowedCityIds: [],
     maxTasksPerDay: 5,
     lang: 'fr',
-    schedule: { daysOfWeek: [0, 1, 2, 3, 4], timeWindows: [{ start: '08:00', end: '17:00' }] },
+    schedule: { daysOfWeek: [1, 2, 3, 4, 5], timeWindows: [{ start: '08:00', end: '17:00' }] },
   };
 }
 
@@ -418,12 +423,12 @@ export default function StaffPageView({
                 )}
                 <div className="schedule">
                   <div className="days">
-                    {DAY_LABELS.map((lbl, i) => (
+                    {DAY_DISPLAY_ORDER.map((i) => (
                       <span
-                        key={`${lbl}-${i}`}
+                        key={`day-${i}`}
                         className={`day${s.schedule.daysOfWeek.includes(i) ? ' on' : ''}`}
                       >
-                        {lbl}
+                        {DAY_LABELS[i]}
                       </span>
                     ))}
                   </div>
@@ -639,6 +644,18 @@ export default function StaffPageView({
                   </button>
                 ))}
               </div>
+              {form.allowedTaskTypes.length === 0 ? (
+                <p
+                  style={{
+                    margin: '8px 0 0',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#c0392b',
+                  }}
+                >
+                  ⚠ Aucune tâche autorisée — ce staff ne recevra jamais d'assignation.
+                </p>
+              ) : null}
             </div>
 
             <div className="form-section full">
@@ -782,14 +799,14 @@ export default function StaffPageView({
                 <div className="field">
                   <div className="field-label">Jours actifs</div>
                   <div className="day-pills">
-                    {DAY_LABELS.map((lbl, i) => (
+                    {DAY_DISPLAY_ORDER.map((i) => (
                       <button
-                        key={`d-${lbl}-${i}`}
+                        key={`d-${i}`}
                         type="button"
                         className={`day-pill${form.schedule.daysOfWeek.includes(i) ? ' on' : ''}`}
                         onClick={() => toggleDay(i)}
                       >
-                        {lbl}
+                        {DAY_LABELS[i]}
                       </button>
                     ))}
                   </div>
