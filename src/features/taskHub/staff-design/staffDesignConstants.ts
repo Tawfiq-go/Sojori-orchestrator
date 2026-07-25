@@ -28,7 +28,17 @@ export const STAFF_TASK_PILLS = FULLTASK_TASK_TYPES.map((key) => ({
   emoji: FULLTASK_TASK_TYPE_EMOJI[key] ?? '📋',
 }));
 
-export const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'] as const;
+/**
+ * ⚠️ CRITICAL : l'index DOIT suivre la convention JS/backend (Dimanche = 0),
+ * car il est envoyé tel quel dans Staff.schedule[].dayOfWeek et lu par
+ * assignmentService (map { Sun:0, Mon:1, ... }). Un tableau commençant par
+ * Lundi décalait tous les plannings d'un jour.
+ * L'ordre d'AFFICHAGE (lundi d'abord) est géré par DAY_DISPLAY_ORDER.
+ */
+export const DAY_LABELS = ['D', 'L', 'M', 'M', 'J', 'V', 'S'] as const;
+
+/** Ordre d'affichage lundi → dimanche, valeurs = index DAY_LABELS. */
+export const DAY_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
 
 export const LANG_OPTIONS = [
   { value: 'fr', label: 'Français' },

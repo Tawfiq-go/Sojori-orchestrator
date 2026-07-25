@@ -384,7 +384,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     whatsappE164: String(row.phone),
     email: row.email ? String(row.email) : '',
     ownerId: row.ownerId ? String(row.ownerId) : undefined,
-    status: 'active' as const,
+    status: (row.active === false ? 'off' : 'active') as 'active' | 'off',
     isAdmin: Boolean(row.isAdmin),
     contractType: row.contractType === 'salaried' ? ('employee' as const) : ('freelance' as const),
     rates,
@@ -446,6 +446,8 @@ export function designStaffToApi(
     schedule,
     maxTasksPerDay: Math.max(1, Number(staff.maxTasksPerDay) || 8),
     isAdmin: Boolean(staff.isAdmin),
+    // Le bouton « désactiver » de l'UI n'envoyait rien : le staff restait assignable.
+    active: staff.status !== 'off',
     pricing,
   };
   const resolvedOwnerId = normalizeOwnerId(opts?.ownerId ?? staff.ownerId);
