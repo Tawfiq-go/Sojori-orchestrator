@@ -55,7 +55,6 @@ interface ConversationThreadProps {
   composerValue?: string;
   onComposerValueChange?: (value: string) => void;
   otaPlatform?: string;
-  whatsappBusinessLine?: string;
   loadingMessages?: boolean;
   messagesLoadError?: string | null;
   messagesTotal?: number;
@@ -71,6 +70,11 @@ interface ConversationThreadProps {
   /** OTA : statut WhatsApp guest + ouverture du fil */
   whatsappGuestKind?: 'loading' | 'actif' | 'jamais' | 'nonum' | null;
   onOpenWhatsApp?: () => void;
+  /** OTA : cycle messageStatus (created / received / responded / ignored) */
+  otaMessageStatus?: string | null;
+  /** OTA : marquer le fil répondu ou ignoré (sans envoyer) */
+  onMarkOtaThreadStatus?: (status: 'responded' | 'ignored') => void | Promise<void>;
+  markingOtaThreadStatus?: boolean;
 }
 
 export default function ConversationThread({
@@ -93,7 +97,6 @@ export default function ConversationThread({
   onComposerValueChange,
   otaPlatform = 'Airbnb',
   quickReplies = [],
-  whatsappBusinessLine = import.meta.env.VITE_WHATSAPP_BUSINESS_DISPLAY || '+33 7 56 84 21 09',
   loadingMessages = false,
   messagesLoadError = null,
   messagesTotal = 0,
@@ -101,7 +104,11 @@ export default function ConversationThread({
   threadMode = 'auto',
   whatsappGuestKind = null,
   onOpenWhatsApp,
+  otaMessageStatus = null,
+  onMarkOtaThreadStatus,
+  markingOtaThreadStatus = false,
 }: ConversationThreadProps) {
+
   const { user } = useAuth();
   const { readOnly } = useWriteAccess();
   const normalizedRole = String(user?.role || '').toLowerCase();
@@ -118,7 +125,7 @@ export default function ConversationThread({
   const [expandedTraceSteps, setExpandedTraceSteps] = useState<Record<string, boolean>>({});
   const [flowMenuOpen, setFlowMenuOpen] = useState(false);
   const hasRenderableMessages =
-    !loadingMessages && messages.filter((m) => m.type !== 'day-separator').length > 0;
+    messages.filter((m) => m.type !== 'day-separator').length > 0;
 
   const { containerRef: messagesContainerRef, endRef: messagesEndRef } = useInboxMessageScroll(
     thread.id,
@@ -130,6 +137,13 @@ export default function ConversationThread({
 
   const kw = highlightKeyword?.trim() ?? '';
   void quickActions;
+  const otaStatusRaw = String(otaMessageStatus || '').toLowerCase().trim();
+  const otaStatusNorm =
+    otaStatusRaw === 'replied'
+      ? 'responded'
+      : otaStatusRaw === 'pending'
+        ? 'received'
+        : otaStatusRaw;
 
   const guestMenuKindStyle = (kind: GuestMenuDispatchOption['kind']) => {
     if (kind === 'flow') {
@@ -266,13 +280,6 @@ export default function ConversationThread({
 
   const avatarBg = isOta ? otaTheme.avatarGradient : thread.avatarColor || T.green;
 
-  const checkInSub =
-    thread.checkInBadge && thread.checkInDate
-      ? `Check-in ${thread.checkInBadge} · ${formatStayDateShort(thread.checkInDate)}`
-      : thread.checkInBadge
-        ? `Check-in ${thread.checkInBadge}`
-        : undefined;
-
   return (
     <Box
       sx={{
@@ -285,64 +292,26 @@ export default function ConversationThread({
         bgcolor: T.bg1,
       }}
     >
-      {isOta ? (
-        <Box
-          sx={{
-            px: '18px',
-            py: '7px',
-            fontSize: 10,
-            fontFamily: '"Geist Mono", monospace',
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            borderBottom: `1px solid ${T.border}`,
-            bgcolor: otaTheme.bgTint,
-            color: otaTheme.textAccent,
-            flexShrink: 0,
-          }}
-        >
-          {otaTheme.headerIcon} {platformLabel} · Hosting reply window 24h
-        </Box>
-      ) : (
-        <Box
-          sx={{
-            px: '18px',
-            py: '7px',
-            fontSize: 10,
-            fontFamily: '"Geist Mono", monospace',
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            borderBottom: `1px solid ${T.border}`,
-            bgcolor: T.greenBg,
-            color: '#0e8c4d',
-            flexShrink: 0,
-          }}
-        >
-          💬 WhatsApp Business · {whatsappBusinessLine}
-        </Box>
-      )}
-
       <Box
         sx={{
-          px: '18px',
-          py: '11px',
+          px: isOta ? '12px' : '18px',
+          py: isOta ? '6px' : '11px',
           borderBottom: `1px solid ${T.border}`,
           bgcolor: T.bg2,
           display: 'flex',
           alignItems: 'center',
-          gap: 1.5,
+          gap: isOta ? 1 : 1.5,
           flexShrink: 0,
         }}
       >
         <Box sx={{ position: 'relative', flexShrink: 0 }}>
           <Box
             sx={{
-              width: 42,
-              height: 42,
+              width: isOta ? 28 : 42,
+              height: isOta ? 28 : 42,
               borderRadius: '50%',
               background: avatarBg,
-              fontSize: 14,
+              fontSize: isOta ? 11 : 14,
               fontWeight: 700,
               color: '#fff',
               display: 'flex',
@@ -369,11 +338,25 @@ export default function ConversationThread({
         </Box>
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Stack direction="row" sx={{ gap: 0.875, alignItems: 'center', mb: '2px' }}>
-            <Typography sx={{ fontSize: 14.5, fontWeight: 700, letterSpacing: '-0.015em' }}>
-              {thread.name}
+          <Stack
+            direction="row"
+            sx={{ gap: 0.75, alignItems: 'center', mb: isOta ? 0 : '2px' }}
+          >
+            <Typography
+              sx={{
+                fontSize: isOta ? 13 : 14.5,
+                fontWeight: 700,
+                letterSpacing: '-0.015em',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {isOta ? `${otaTheme.headerIcon} ${thread.name}` : thread.name}
             </Typography>
-            {flag && <Typography sx={{ fontSize: 14, lineHeight: 1 }}>{flag}</Typography>}
+            {!isOta && flag && (
+              <Typography sx={{ fontSize: 14, lineHeight: 1 }}>{flag}</Typography>
+            )}
             {thread.isVip && (
               <Box
                 sx={{
@@ -393,80 +376,121 @@ export default function ConversationThread({
             )}
           </Stack>
 
-          <Box
-            sx={{
-              fontSize: 10.5,
-              color: T.text3,
-              fontFamily: '"Geist Mono", monospace',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 1,
-              alignItems: 'center',
-            }}
-          >
-            {isOta ? (
-              <>
-                {thread.listingName && thread.listingName !== '—' && (
-                  <span style={{ color: T.text2, fontWeight: 600, maxWidth: '100%' }}>
-                    {thread.listingName}
-                  </span>
-                )}
-                {thread.listingName && thread.listingName !== '—' && thread.reservationNumber && (
+          {/* OTA : méta (listing, résa, check-in…) déjà dans Contexte réservation — une seule ligne nom. */}
+          {!isOta && (
+            <Box
+              sx={{
+                fontSize: 10.5,
+                color: T.text3,
+                fontFamily: '"Geist Mono", monospace',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 1,
+                alignItems: 'center',
+              }}
+            >
+              {thread.phone && <span>📱 {thread.phone}</span>}
+              {thread.guestPresence && (
+                <>
                   <span style={{ color: T.text4 }}>·</span>
-                )}
-                {thread.reservationNumber && <span>{thread.reservationNumber}</span>}
-                {thread.reservationCreatedDisplay && (
-                  <>
-                    <span style={{ color: T.text4 }}>·</span>
-                    <span>Créée {thread.reservationCreatedDisplay}</span>
-                  </>
-                )}
-                {checkInSub && (
-                  <>
-                    <span style={{ color: T.text4 }}>·</span>
-                    <span>{checkInSub}</span>
-                  </>
-                )}
-                {thread.guestsLabel && (
-                  <>
-                    <span style={{ color: T.text4 }}>·</span>
-                    <span>{thread.guestsLabel}</span>
-                  </>
-                )}
-                {thread.phone && (
-                  <>
-                    <span style={{ color: T.text4 }}>·</span>
-                    <a
-                      href={`tel:${thread.phone.replace(/\s/g, '')}`}
-                      style={{ color: T.primaryDeep, fontWeight: 700, textDecoration: 'none' }}
-                      title="Appeler"
-                    >
-                      📱 {thread.phone}
-                    </a>
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                {thread.phone && <span>📱 {thread.phone}</span>}
-                {thread.guestPresence && (
-                  <>
-                    <span style={{ color: T.text4 }}>·</span>
-                    <span style={{ color: T.success, fontWeight: 700 }}>🟢 {thread.guestPresence}</span>
-                  </>
-                )}
-                {thread.reservationNumber && (
-                  <>
-                    <span style={{ color: T.text4 }}>·</span>
-                    <span>{thread.reservationNumber}</span>
-                  </>
-                )}
-              </>
-            )}
-          </Box>
+                  <span style={{ color: T.success, fontWeight: 700 }}>🟢 {thread.guestPresence}</span>
+                </>
+              )}
+              {thread.reservationNumber && (
+                <>
+                  <span style={{ color: T.text4 }}>·</span>
+                  <span>{thread.reservationNumber}</span>
+                </>
+              )}
+            </Box>
+          )}
         </Box>
 
         <Stack direction="row" sx={{ gap: 0.5, flexShrink: 0, alignItems: 'center' }}>
+          {isOta && onMarkOtaThreadStatus ? (
+            <>
+              <Box
+                component="button"
+                type="button"
+                disabled={readOnly || markingOtaThreadStatus || otaStatusNorm === 'responded'}
+                onClick={() => {
+                  setSendError(null);
+                  void Promise.resolve(onMarkOtaThreadStatus('responded')).catch((err) => {
+                    setSendError(extractHttpErrorMessage(err, 'Impossible de marquer comme répondu'));
+                  });
+                }}
+                sx={{
+                  ...headerActionBtnSx,
+                  width: 'auto',
+                  height: 28,
+                  px: 0.875,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  border: '1px solid',
+                  ...(otaStatusNorm === 'responded'
+                    ? {
+                        bgcolor: 'rgba(16,185,129,0.14)',
+                        color: '#047857',
+                        borderColor: 'rgba(16,185,129,0.4)',
+                        cursor: 'default',
+                      }
+                    : {
+                        bgcolor: 'rgba(16,185,129,0.06)',
+                        color: '#059669',
+                        borderColor: 'rgba(16,185,129,0.28)',
+                        '&:hover': {
+                          bgcolor: 'rgba(16,185,129,0.14)',
+                          borderColor: '#10b981',
+                        },
+                        '&:disabled': { opacity: 0.45, cursor: 'not-allowed' },
+                      }),
+                }}
+                title="Marquer comme répondu (sans envoyer de message)"
+              >
+                ✓ Répondu
+              </Box>
+              <Box
+                component="button"
+                type="button"
+                disabled={readOnly || markingOtaThreadStatus || otaStatusNorm === 'ignored'}
+                onClick={() => {
+                  setSendError(null);
+                  void Promise.resolve(onMarkOtaThreadStatus('ignored')).catch((err) => {
+                    setSendError(extractHttpErrorMessage(err, 'Impossible d’ignorer le fil'));
+                  });
+                }}
+                sx={{
+                  ...headerActionBtnSx,
+                  width: 'auto',
+                  height: 28,
+                  px: 0.875,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  border: '1px solid',
+                  ...(otaStatusNorm === 'ignored'
+                    ? {
+                        bgcolor: 'rgba(100,116,139,0.16)',
+                        color: '#475569',
+                        borderColor: 'rgba(100,116,139,0.4)',
+                        cursor: 'default',
+                      }
+                    : {
+                        bgcolor: 'rgba(100,116,139,0.06)',
+                        color: '#64748b',
+                        borderColor: 'rgba(100,116,139,0.28)',
+                        '&:hover': {
+                          bgcolor: 'rgba(100,116,139,0.14)',
+                          borderColor: '#94a3b8',
+                        },
+                        '&:disabled': { opacity: 0.45, cursor: 'not-allowed' },
+                      }),
+                }}
+                title="Ignorer ce fil (ne plus le traiter comme non répondu)"
+              >
+                Ignorer
+              </Box>
+            </>
+          ) : null}
           {isOta && whatsappGuestKind ? (
             <Box
               component="button"
@@ -475,21 +499,30 @@ export default function ConversationThread({
               sx={{
                 ...headerActionBtnSx,
                 width: 'auto',
-                px: 1,
+                height: 28,
+                px: 0.875,
                 gap: 0.5,
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: 700,
                 ...(whatsappGuestKind === 'actif'
-                  ? { bgcolor: 'rgba(18,140,75,0.12)', color: '#0a8f5e' }
+                  ? {
+                      bgcolor: 'rgba(18,140,75,0.16)',
+                      color: '#0a8f5e',
+                      border: '1px solid rgba(18,140,75,0.35)',
+                    }
                   : whatsappGuestKind === 'jamais'
-                    ? { bgcolor: 'rgba(220,38,38,0.08)', color: '#dc2626' }
+                    ? {
+                        bgcolor: 'rgba(234,88,12,0.12)',
+                        color: '#c2410c',
+                        border: '1px solid rgba(234,88,12,0.4)',
+                      }
                     : { color: T.text3 }),
               }}
               title={
                 whatsappGuestKind === 'actif'
-                  ? 'Fil WhatsApp actif — ouvrir'
+                  ? 'Déjà communiqué sur WhatsApp — ouvrir le fil'
                   : whatsappGuestKind === 'jamais'
-                    ? 'Jamais contacté sur WhatsApp — ouvrir / initier'
+                    ? 'Jamais de communication WhatsApp — ouvrir / initier'
                     : whatsappGuestKind === 'nonum'
                       ? 'Pas de numéro WhatsApp'
                       : 'Vérification WhatsApp…'
@@ -501,15 +534,16 @@ export default function ConversationThread({
                 : whatsappGuestKind === 'actif'
                   ? 'WA ✓'
                   : whatsappGuestKind === 'jamais'
-                    ? 'WA ∅'
+                    ? 'WA'
                     : 'WA ⚠'}
             </Box>
           ) : null}
-          {(isOta ? ['🔗', '🌐', '⋮'] : ['📞', '🎥', '🔍', '⋮']).map((icon) => (
-            <Box key={icon} component="button" sx={headerActionBtnSx} title={icon}>
-              {icon}
-            </Box>
-          ))}
+          {!isOta &&
+            ['📞', '🎥', '🔍', '⋮'].map((icon) => (
+              <Box key={icon} component="button" sx={headerActionBtnSx} title={icon}>
+                {icon}
+              </Box>
+            ))}
         </Stack>
       </Box>
 
@@ -526,10 +560,41 @@ export default function ConversationThread({
             : `linear-gradient(180deg, ${T.bg2} 0%, ${T.bg0} 100%)`,
         }}
       >
-        {loadingMessages && (
-          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
-            <CircularProgress size={28} sx={{ color: isOta ? otaTheme.primary : T.primary }} />
+        {loadingMessages && !hasRenderableMessages && (
+          <Box
+            sx={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 1.25,
+              py: 6,
+              color: T.text3,
+            }}
+          >
+            <CircularProgress size={26} thickness={4} sx={{ color: isOta ? otaTheme.primary : T.primary }} />
+            <Typography sx={{ fontSize: 12, fontWeight: 500, color: T.text3 }}>
+              Chargement des messages…
+            </Typography>
           </Box>
+        )}
+        {loadingMessages && hasRenderableMessages && (
+          <Box
+            sx={{
+              height: 2,
+              flexShrink: 0,
+              background: isOta
+                ? `linear-gradient(90deg, ${otaTheme.primary}00, ${otaTheme.primary}, ${otaTheme.primary}00)`
+                : `linear-gradient(90deg, ${T.primary}00, ${T.primary}, ${T.primary}00)`,
+              backgroundSize: '200% 100%',
+              animation: 'inboxMsgShimmer 1.1s linear infinite',
+              '@keyframes inboxMsgShimmer': {
+                '0%': { backgroundPosition: '100% 0' },
+                '100%': { backgroundPosition: '-100% 0' },
+              },
+            }}
+          />
         )}
 
         {!loadingMessages && messagesLoadError && (
@@ -592,6 +657,7 @@ export default function ConversationThread({
         {hasRenderableMessages && (
           <Box
             sx={{
+              /* mt:auto = collé en bas si peu de msgs ; hauteur naturelle = scroll OK */
               mt: 'auto',
               display: 'flex',
               flexDirection: 'column',
@@ -599,10 +665,10 @@ export default function ConversationThread({
               px: '24px',
               py: '18px',
               width: '100%',
+              boxSizing: 'border-box',
             }}
           >
-        {!loadingMessages &&
-          messages.map((message) => {
+        {messages.map((message) => {
           if (message.type === 'system-note') {
             return (
               <Box
@@ -760,7 +826,32 @@ export default function ConversationThread({
                     ✨ SOJORI AI
                   </Typography>
                 )}
-                {contentBadge && (
+                {!!message.ownerSummary && (
+                  <Typography
+                    component="span"
+                    title={message.ownerSummary}
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      alignSelf: 'flex-start',
+                      mb: 0.75,
+                      px: 0.85,
+                      py: 0.3,
+                      borderRadius: '6px',
+                      bgcolor: isOut ? 'rgba(184,133,26,0.12)' : 'rgba(13,148,136,0.12)',
+                      color: isOut ? '#876119' : '#0f766e',
+                      border: `1px solid ${isOut ? 'rgba(184,133,26,0.28)' : 'rgba(13,148,136,0.28)'}`,
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      letterSpacing: '-0.01em',
+                      lineHeight: 1.25,
+                      maxWidth: '100%',
+                    }}
+                  >
+                    {message.ownerSummary}
+                  </Typography>
+                )}
+                {contentBadge && !message.ownerSummary && (
                   <Typography
                     sx={{
                       display: 'inline-flex',
@@ -1363,55 +1454,6 @@ export default function ConversationThread({
       </Box>
       )}
 
-      <Box
-        sx={{
-          px: '18px',
-          pb: 0.75,
-          pt: 0.25,
-          bgcolor: T.bg1,
-          borderTop: `1px solid ${T.border}`,
-          fontSize: 10.5,
-          color: T.text4,
-          fontFamily: '"Geist Mono", monospace',
-          flexShrink: 0,
-        }}
-      >
-        Entrée = nouvelle ligne · Envoi uniquement via le bouton ➤ · glissez le coin pour agrandir
-      </Box>
-
-      {isOta ? (
-        <Box
-          sx={{
-            px: '18px',
-            py: '7px',
-            bgcolor: otaTheme.bgTint,
-            borderTop: `1px solid ${T.border}`,
-            fontSize: 10.5,
-            color: otaTheme.textAccent,
-            fontFamily: '"Geist Mono", monospace',
-            flexShrink: 0,
-            '& b': { fontWeight: 800 },
-          }}
-        >
-          {otaTheme.headerIcon} <b>{platformLabel} sync</b> · message envoyé via API · impact response time ⚡
-        </Box>
-      ) : (
-        <Box
-          sx={{
-            px: '18px',
-            py: '6px',
-            bgcolor: T.aiTint,
-            borderTop: `1px solid ${T.border}`,
-            fontSize: 10.5,
-            color: '#5b21b6',
-            fontFamily: '"Geist Mono", monospace',
-            flexShrink: 0,
-          }}
-        >
-          ⚠ Fenêtre 24h ouverte — réponses libres autorisées
-        </Box>
-      )}
-
       {canInspectAi && inspectedMessage && (
         <>
           <Box
@@ -1581,13 +1623,6 @@ export default function ConversationThread({
       )}
     </Box>
   );
-}
-
-function formatStayDateShort(dateStr?: string): string {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
 const iconBtnSx = {

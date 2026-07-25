@@ -81,6 +81,23 @@ export function formatThreadWhen(timestamp?: string): string {
   return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
+/** Date + heure:minute (liste Q / R / A). Ex. « Aujourd'hui 01:59 », « Hier 18:03 ». */
+export function formatThreadWhenExact(timestamp?: string | Date | null): string {
+  if (!timestamp) return '';
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '';
+  const hm = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dayDiff = Math.round((startOf(date) - startOf(new Date())) / 86400000);
+  if (dayDiff === 0) return `Auj ${hm}`;
+  if (dayDiff === -1) return `Hier ${hm}`;
+  if (dayDiff === 1) return `Dem ${hm}`;
+
+  const day = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  return `${day} ${hm}`;
+}
+
 export function formatInboxDaySeparator(timestamp?: string): string {
   if (!timestamp) return '';
   const date = new Date(timestamp);

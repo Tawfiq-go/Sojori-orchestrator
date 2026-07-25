@@ -533,15 +533,58 @@ export default function PricePreviewCard({
       ) : null}
 
       {loading && !rows.length ? (
-        <Stack sx={{ alignItems: 'center', py: 5 }}>
-          <CircularProgress size={22} sx={{ color: T.goldDeep }} />
-          <Typography sx={{ fontSize: 11.5, color: T.text3, mt: 1.25 }}>Calcul de l'aperçu…</Typography>
-        </Stack>
+        <Box sx={{ mt: 1.75, minHeight: 280 }}>
+          <Stack sx={{ alignItems: 'center', py: 3, gap: 1 }}>
+            <CircularProgress size={22} sx={{ color: T.goldDeep }} />
+            <Typography sx={{ fontSize: 12, color: T.text2, fontWeight: 700 }}>
+              Chargement de l&apos;aperçu des prix…
+            </Typography>
+            <Typography sx={{ fontSize: 11, color: T.text3, textAlign: 'center', maxWidth: 360 }}>
+              Calcul synchronisé des jours — le tableau s&apos;affiche d&apos;un coup.
+            </Typography>
+          </Stack>
+          <Box
+            sx={{
+              mt: 1,
+              borderRadius: 1.5,
+              border: `1px solid ${T.border}`,
+              overflow: 'hidden',
+              bgcolor: T.bg2,
+            }}
+          >
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              <Box
+                key={i}
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: '1.2fr 0.8fr 0.5fr 1fr 1fr 0.6fr',
+                  gap: 1,
+                  px: 1.5,
+                  py: 1.1,
+                  borderBottom: i < 6 ? `1px solid ${T.border}` : 'none',
+                  opacity: 0.55 - i * 0.05,
+                }}
+              >
+                {[0, 1, 2, 3, 4, 5].map((j) => (
+                  <Box
+                    key={j}
+                    sx={{
+                      height: 10,
+                      borderRadius: 0.75,
+                      bgcolor: T.bg3,
+                      maxWidth: j === 0 ? '80%' : '60%',
+                    }}
+                  />
+                ))}
+              </Box>
+            ))}
+          </Box>
+        </Box>
       ) : null}
 
       {!loading && !rows.length && !error ? (
         <Typography sx={{ fontSize: 12.5, color: T.text3, fontStyle: 'italic', mt: 1.75 }}>
-          Aucun jour à afficher — lancez « Recalculer » (nécessite un snapshot de prix).
+          Aucun jour à afficher — lancez une estimation Sojori puis « Recalculer ».
         </Typography>
       ) : null}
 

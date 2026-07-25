@@ -240,7 +240,7 @@ export default function ConversationDetails({
               </DtCard>
             )}
 
-            {type === 'ota' && whatsappGuest && (
+            {(type === 'ota' || type === 'whatsapp') && whatsappGuest && (
               <DtCard title="WhatsApp" emoji="💬">
                 <DtRow label="Canal">
                   {whatsappGuest.kind === 'loading' ? (
@@ -266,7 +266,7 @@ export default function ConversationDetails({
                   </DtRow>
                 )}
                 <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                  {whatsappGuest.kind === 'actif' ? (
+                  {whatsappGuest.kind === 'actif' && type === 'ota' ? (
                     <Box
                       component="button"
                       type="button"
@@ -310,28 +310,31 @@ export default function ConversationDetails({
                       >
                         {initiatingWhatsApp ? 'Envoi…' : '💬 Initier WhatsApp →'}
                       </Box>
-                      <Box
-                        component="button"
-                        type="button"
-                        onClick={onOpenWhatsApp}
-                        sx={{
-                          border: `1.5px solid ${T.border}`,
-                          cursor: 'pointer',
-                          borderRadius: '9px',
-                          px: 1.5,
-                          py: 0.85,
-                          fontWeight: 700,
-                          fontSize: 11.5,
-                          bgcolor: T.bg1,
-                          color: T.text2,
-                          '&:hover': { bgcolor: T.bg2 },
-                        }}
-                      >
-                        Voir dans Résas / WhatsApp
-                      </Box>
+                      {type === 'ota' ? (
+                        <Box
+                          component="button"
+                          type="button"
+                          onClick={onOpenWhatsApp}
+                          sx={{
+                            border: `1.5px solid ${T.border}`,
+                            cursor: 'pointer',
+                            borderRadius: '9px',
+                            px: 1.5,
+                            py: 0.85,
+                            fontWeight: 700,
+                            fontSize: 11.5,
+                            bgcolor: T.bg1,
+                            color: T.text2,
+                            '&:hover': { bgcolor: T.bg2 },
+                          }}
+                        >
+                          Voir dans Résas / WhatsApp
+                        </Box>
+                      ) : null}
                     </>
                   ) : null}
                   {whatsappGuest.kind === 'nonum' ? (
+                    type === 'ota' ? (
                     <Box
                       component="button"
                       type="button"
@@ -350,6 +353,11 @@ export default function ConversationDetails({
                     >
                       Ouvrir Résas (chercher un numéro)
                     </Box>
+                    ) : (
+                      <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
+                        Aucun numéro guest sur cette réservation.
+                      </Typography>
+                    )
                   ) : null}
                 </Box>
               </DtCard>

@@ -23,6 +23,7 @@ export function aggregateActiveNotificationCounts(
 
 /** Facettes agrégées par groupe sidebar. */
 export const SIDEBAR_GROUP_FACETS: Record<string, NotificationFacet[]> = {
+  'Vue ops': ['reservation', 'task'],
   Réservations: ['reservation'],
   Task: ['task'],
   Orchestration: ['orchestration'],
@@ -32,8 +33,8 @@ export const SIDEBAR_GROUP_FACETS: Record<string, NotificationFacet[]> = {
 
 /** Facettes par entrée de menu (sous-items avec facette dédiée). */
 export const SIDEBAR_ITEM_FACETS: Record<string, NotificationFacet[]> = {
+  planning: ['reservation', 'task'],
   reservations: ['reservation'],
-  'reservations/planning': ['reservation'],
   payments: ['finance'],
 
   'comms/leads': ['lead'],

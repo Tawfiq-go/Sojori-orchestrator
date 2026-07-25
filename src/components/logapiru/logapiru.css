@@ -196,6 +196,10 @@
 }
 .logapiru-root .dir.push { background: var(--lru-primaryTint); color: var(--lru-primaryDeep); }
 .logapiru-root .dir.pull { background: var(--lru-infoTint); color: var(--lru-info); }
+.logapiru-root .dir.webhook {
+  background: rgba(168, 85, 247, 0.12);
+  color: #7e22ce;
+}
 .logapiru-root .dir .ar { font-size: 11px; }
 
 /* category pill */
@@ -567,9 +571,79 @@
   border-radius: var(--lru-r);
   overflow: hidden;
 }
+.logapiru-root .jlist .selectable,
+.logapiru-root .jrow.selectable,
+.logapiru-root .batch-head.selectable,
+.logapiru-root .jrow .chip,
+.logapiru-root .jrow .nm,
+.logapiru-root .jrow .tech,
+.logapiru-root .batch-head .cr,
+.logapiru-root .batch-head .lbl {
+  user-select: text;
+  -webkit-user-select: text;
+}
+.logapiru-root .jcopybar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: var(--lru-bg1);
+  border: 1px solid var(--lru-border);
+  border-radius: var(--lru-r);
+}
+.logapiru-root .jcopybar .jcheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lru-text2);
+  cursor: pointer;
+  user-select: none;
+}
+.logapiru-root .jcopy-action {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--lru-border);
+  background: var(--lru-bg2);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lru-text2);
+  cursor: pointer;
+}
+.logapiru-root .jcopy-action:hover:not(:disabled) {
+  background: var(--lru-bg3, var(--lru-bg2));
+  color: var(--lru-text);
+}
+.logapiru-root .jcopy-action.primary {
+  background: var(--lru-primaryTint);
+  border-color: var(--lru-primary);
+  color: var(--lru-primaryDeep);
+}
+.logapiru-root .jcopy-action.ghost {
+  background: transparent;
+}
+.logapiru-root .jcopy-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.logapiru-root .jcopy-flash {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lru-ok, #15803d);
+}
+.logapiru-root .jcopy-hint {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--lru-text4);
+  font-family: var(--lru-mono);
+}
 .logapiru-root .jrow {
   display: grid;
-  grid-template-columns: 74px 128px 1fr 132px 78px 40px;
+  grid-template-columns: 28px 74px 128px 1fr 132px 78px 36px;
   align-items: center;
   gap: 12px;
   padding: 11px 16px;
@@ -581,6 +655,25 @@
 .logapiru-root .jrow:last-child { border-bottom: 0; }
 .logapiru-root .jrow:hover { background: var(--lru-bg2); }
 .logapiru-root .jrow.active { background: var(--lru-primaryTint); }
+.logapiru-root .jrow.picked {
+  background: rgba(59, 130, 246, 0.08);
+  box-shadow: inset 3px 0 0 #3b82f6;
+}
+.logapiru-root .jrow .jcheck {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+.logapiru-root .jrow .jcheck input,
+.logapiru-root .batch-head .jcheck input,
+.logapiru-root .jcopybar .jcheck input {
+  width: 14px;
+  height: 14px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
 .logapiru-root .jrow .jtime {
   font-family: var(--lru-mono);
   font-size: 11px;
@@ -644,15 +737,41 @@
   color: var(--lru-text3);
 }
 .logapiru-root .jdur { text-align: right; }
-.logapiru-root .jchev {
-  text-align: center;
-  color: var(--lru-text4);
-  font-size: 15px;
-  transition: transform 0.15s;
+.logapiru-root .jactions-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
 }
-.logapiru-root .jrow:hover .jchev {
+.logapiru-root .jcopy,
+.logapiru-root .jchev-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--lru-text4);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.logapiru-root .jcopy:hover,
+.logapiru-root .jchev-btn:hover {
+  background: var(--lru-bg3, var(--lru-bg2));
+  color: var(--lru-text);
+}
+.logapiru-root .jcopy.done {
+  color: var(--lru-ok, #15803d);
+}
+.logapiru-root .batch-copy {
+  flex-shrink: 0;
+}
+.logapiru-root .jrow:hover .jchev-btn {
   color: var(--lru-text2);
-  transform: translateX(2px);
+  transform: translateX(1px);
 }
 
 /* batch grouping */
@@ -667,7 +786,7 @@
   padding: 9px 16px;
   background: var(--lru-primaryTint);
   border-bottom: 1px solid var(--lru-border);
-  cursor: pointer;
+  cursor: text;
 }
 .logapiru-root .batch-head .cr {
   font-family: var(--lru-mono);
@@ -1134,11 +1253,12 @@
 }
 @media (max-width: 820px) {
   .logapiru-root .jrow {
-    grid-template-columns: 64px 1fr 90px;
+    grid-template-columns: 28px 64px 1fr 36px;
   }
   .logapiru-root .jdircat,
   .logapiru-root .jdur,
-  .logapiru-root .jchev {
+  .logapiru-root .jstatus {
     display: none;
   }
+  .logapiru-root .jcopy-hint { display: none; }
 }

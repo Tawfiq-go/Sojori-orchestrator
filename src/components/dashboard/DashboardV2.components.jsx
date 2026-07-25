@@ -70,6 +70,7 @@ import InsightsOutlined from '@mui/icons-material/InsightsOutlined';
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined';
 import VillaOutlined from '@mui/icons-material/VillaOutlined';
 import { tokens, pageMetaChipSx as pageMetaChipSxBase } from './dashboardTokens';
+import { hasAdminAccess } from '../../utils/rbac.utils';
 export { tokens } from './dashboardTokens';
 
 const t = tokens;
@@ -695,28 +696,54 @@ function SideLink({ item, active, sub, disabled, notificationCount = 0, onClick 
 // 3. TopBar
 // ════════════════════════════════════════════════════════════════════
 
-/** Raccourcis header owner — l'essentiel du quotidien (la sidebar garde le reste). */
+/**
+ * Raccourcis header owner — ordre = priorité du matin PM.
+ * 1) Voir la journée (Planning) → 2) Créer / lister résas → 3) Inbox → 4) Dispo → 5) Ops / config.
+ */
 const OWNER_QUICK_ACTIONS = [
-  // Ordre = priorité ops (urgent → secondaire)
+  { emoji: '🗓️', label: 'Planning', to: '/planning' },
   { emoji: '➕', label: 'Nouvelle résa', to: '/reservations?action=new' },
   { emoji: '📋', label: 'Réservations', to: '/reservations' },
-  { emoji: '🏨', label: 'Messages OTA', to: '/communications?section=guest&tab=ota' },
   { emoji: '💬', label: 'WhatsApp', to: '/communications?section=guest&tab=whatsapp' },
+  { emoji: '🏨', label: 'Messages OTA', to: '/communications?section=guest&tab=ota' },
   { emoji: '📅', label: 'Calendrier', to: '/calendar?view=multi' },
   { emoji: '✅', label: 'Tâches', to: '/tasks' },
   { emoji: '🧭', label: 'Cockpit IA', to: '/orchestration/cockpit' },
+  { emoji: '☀️', label: 'Plan de journée', to: '/orchestration/day-plan' },
   { emoji: '🎛', label: 'Plans d’orchestration', to: '/orchestration/plans' },
   { emoji: '📈', label: 'Prix dynamique', to: '/dynamic-pricing/portefeuille' },
-  { emoji: '☀️', label: 'Plan de journée', to: '/orchestration/day-plan' },
   { emoji: '🏠', label: 'Annonces', to: '/listings' },
   { emoji: '👷', label: 'Staff', to: '/tasks/team' },
   { emoji: '⭐', label: 'Avis voyageurs', to: '/communications?section=guest&tab=reviews' },
 ];
 
-function OwnerQuickActions({ user, simulationActive = false }) {
+/**
+ * Raccourcis header admin — on enrichira progressivement (Logs RU, monitor…).
+ * Visible uniquement hors simulation PM.
+ */
+const ADMIN_QUICK_ACTIONS = [
+  { emoji: '🛰️', label: 'LogApiRU', to: '/channels?tab=LogApiRU' },
+  { emoji: '🏗️', label: 'Summary infra', to: '/monitor?tab=Infrastructure' },
+];
+
+function isQuickActionActive(pathname, search, to) {
+  const [path, query = ''] = to.split('?');
+  const q = search || '';
+  if (path === '/planning') {
+    return pathname === '/planning' || pathname.startsWith('/planning/');
+  }
+  if (pathname !== path) return false;
+  if (!query) {
+    // Liste résas : pas actif sur « Nouvelle résa »
+    if (path === '/reservations') return !q.includes('action=new');
+    return true;
+  }
+  return q.includes(query);
+}
+
+function QuickActionsRow({ actions }) {
   const navigate = useNavigate();
-  const role = String(user?.role || '').toLowerCase();
-  if (role !== 'owner' && !simulationActive) return null;
+  const location = useLocation();
   return (
     <Stack direction="row" spacing={0.25} sx={{
       alignItems: 'center', flexShrink: 0,
@@ -725,19 +752,49 @@ function OwnerQuickActions({ user, simulationActive = false }) {
       mr: 4,
       pr: 3,
     }}>
-      {OWNER_QUICK_ACTIONS.map((a) => (
-        <Tooltip key={a.to} title={a.label}>
-          <IconButton
-            onClick={() => navigate(a.to)}
-            aria-label={a.label}
-            sx={{ ...iconBtnSx, width: 32, height: 32, fontSize: 16 }}
+      {actions.map((a) => {
+        const active = isQuickActionActive(location.pathname, location.search || '', a.to);
+        return (
+          <Tooltip
+            key={a.to}
+            title={a.label}
+            arrow
+            placement="bottom"
+            enterDelay={150}
+            describeChild
           >
-            <span aria-hidden="true">{a.emoji}</span>
-          </IconButton>
-        </Tooltip>
-      ))}
+            <IconButton
+              onClick={() => navigate(a.to)}
+              aria-label={a.label}
+              aria-current={active ? 'page' : undefined}
+              sx={{
+                ...iconBtnSx,
+                width: 32,
+                height: 32,
+                fontSize: 16,
+                ...(active
+                  ? { bgcolor: t.bg2, color: t.text, boxShadow: `inset 0 0 0 1px ${t.borderStrong || t.border}` }
+                  : null),
+              }}
+            >
+              <span aria-hidden="true">{a.emoji}</span>
+            </IconButton>
+          </Tooltip>
+        );
+      })}
     </Stack>
   );
+}
+
+function OwnerQuickActions({ user, simulationActive = false }) {
+  const role = String(user?.role || '').toLowerCase();
+  if (role !== 'owner' && !simulationActive) return null;
+  return <QuickActionsRow actions={OWNER_QUICK_ACTIONS} />;
+}
+
+function AdminQuickActions({ user, simulationActive = false }) {
+  if (simulationActive || !hasAdminAccess(user?.role)) return null;
+  return <QuickActionsRow actions={ADMIN_QUICK_ACTIONS} />;
 }
 
 export function TopBar({
@@ -786,6 +843,7 @@ export function TopBar({
       {adminScopeInTopBar ? <AdminBusinessScopeTopFilter /> : null}
 
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto', gap: 0.5 }}>
+        <AdminQuickActions user={user} simulationActive={simulationActive} />
         <OwnerQuickActions user={user} simulationActive={simulationActive} />
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', pl: 0.5 }}>
           <AdminSessionTopBarButton />

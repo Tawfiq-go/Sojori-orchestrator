@@ -8,7 +8,10 @@ import ThreadsList from '../unified-inbox/ThreadsList';
 import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
+import { useCommsHubChrome } from './CommsHubChromeContext';
+import { T } from '../unified-inbox/_tokens';
 import messagesService from '../../services/messagesService';
+import { initiateWhatsAppForResa } from '../../services/inboxResasService';
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import type { Conversation } from '../../types/messages.types';
 import type { Thread } from '../../types/unifiedInbox.types';
@@ -17,18 +20,23 @@ import { useInboxRealtimeRefresh } from '../../hooks/useInboxRealtimeRefresh';
 import { mapConversationToThread } from '../unified-inbox/inboxMappers';
 import { enrichThreadFromReservation } from '../unified-inbox/inboxReservationEnrichment';
 import { buildWhatsappThreadContextForAi, getLastGuestMessageFromExchanges } from '../../services/communicationsAi.helpers';
-import { buildInboxMessages, outboundInboxExchange, WA_GUEST_MENU_DISPATCH, WA_QUICK_TEMPLATES } from '../unified-inbox/inboxMessages';
-import { formatThreadWhen } from '../unified-inbox/inboxFormat';
+import { buildInboxMessages, outboundInboxExchange } from '../unified-inbox/inboxMessages';
+import { formatThreadWhenExact } from '../unified-inbox/inboxFormat';
+import WaAdvancedSearchPanel from '../unified-inbox/WaAdvancedSearchPanel';
 import {
-  applyWaInboxFilters,
+  applyWaAdvancedSearch,
+  applyWaChannelFilter,
+  applyWaInboxView,
   countWaFilters,
-  countWaStayQuickFilters,
+  EMPTY_WA_ADVANCED,
+  hasActiveWaAdvancedSearch,
+  type WaAdvancedSearch,
   type WaChannelFilter,
-  type WaStayQuickFilter,
+  type WaInboxView,
 } from '../unified-inbox/waThreadFilters';
 import { findConversationByThreadId } from '../../utils/conversationThreadId';
 
-const WA_INBOX_LIMIT = 100;
+const WA_INBOX_LIMIT = 150;
 const GLOBAL_SEARCH_MIN_LEN = 2;
 const GLOBAL_SEARCH_DEBOUNCE_MS = 500;
 
@@ -47,8 +55,37 @@ function normalizeConversations(raw: Conversation[]): Conversation[] {
     }));
 }
 
+const WA_VIEW_CHIPS: Array<{
+  id: WaInboxView;
+  label: string;
+  countKey: keyof ReturnType<typeof countWaFilters>;
+  urgent?: boolean;
+  title?: string;
+}> = [
+  { id: 'exchanges', label: 'Échanges', countKey: 'exchanges' },
+  { id: 'unreplied', label: 'Non rép.', countKey: 'unreplied', urgent: true },
+  { id: 'created_today', label: 'Créé auj', countKey: 'created_today' },
+  {
+    id: 'stay',
+    label: 'Séjour',
+    countKey: 'stay',
+    title: 'En cours → À venir → Terminées récemment',
+  },
+  { id: 'arr_today', label: 'Arr auj', countKey: 'arr_today' },
+  { id: 'dep_today', label: 'Dép auj', countKey: 'dep_today' },
+  { id: 'arr_tomorrow', label: 'Arr dem', countKey: 'arr_tomorrow' },
+  { id: 'dep_tomorrow', label: 'Dép dem', countKey: 'dep_tomorrow' },
+];
+
+const WA_CHANNEL_CHIPS: Array<{ id: WaChannelFilter; label: string }> = [
+  { id: 'ab', label: 'Airbnb' },
+  { id: 'bk', label: 'Booking' },
+  { id: 'no_resa', label: 'Sans résa' },
+];
+
 export default function WhatsAppTabV2() {
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
+  const { setLeading, setSubBar } = useCommsHubChrome();
   const [inboxConversations, setInboxConversations] = useState<Conversation[]>([]);
   const [searchConversations, setSearchConversations] = useState<Conversation[]>([]);
   const [searchMode, setSearchMode] = useState<'none' | 'global'>('none');
@@ -56,16 +93,19 @@ export default function WhatsAppTabV2() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [advancedExpanded, setAdvancedExpanded] = useState(false);
+  const [advancedDraft, setAdvancedDraft] = useState<WaAdvancedSearch>(EMPTY_WA_ADVANCED);
+  const [appliedAdvanced, setAppliedAdvanced] = useState<WaAdvancedSearch>(EMPTY_WA_ADVANCED);
   const [globalSearchPending, setGlobalSearchPending] = useState(false);
   const [waChannelFilter, setWaChannelFilter] = useState<WaChannelFilter>('all');
-  const [waStayQuickFilter, setWaStayQuickFilter] = useState<WaStayQuickFilter>('none');
-  const [waUnreadOnly, setWaUnreadOnly] = useState(false);
+  const [waView, setWaView] = useState<WaInboxView>('exchanges');
   const [showAIModal, setShowAIModal] = useState(false);
   const [composerDraft, setComposerDraft] = useState('');
   const [sendingGuestMenuCode, setSendingGuestMenuCode] = useState<string | null>(null);
   const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
   const [inboxFullscreen, setInboxFullscreen] = useState(false);
+  const [initiatingWhatsApp, setInitiatingWhatsApp] = useState(false);
 
   useEffect(() => {
     if (!inboxFullscreen) return;
@@ -198,47 +238,331 @@ export default function WhatsAppTabV2() {
   }, [searchTerm, loadServerSearch]);
 
   const waGlobalQueryActive = searchTerm.trim().length >= GLOBAL_SEARCH_MIN_LEN;
+  const advancedActive = hasActiveWaAdvancedSearch(appliedAdvanced);
 
   const baseConversations = useMemo(() => {
-    if (waGlobalQueryActive || searchMode !== 'none') return searchConversations;
-    return inboxConversations;
-  }, [waGlobalQueryActive, searchMode, searchConversations, inboxConversations]);
+    const source =
+      waGlobalQueryActive || searchMode !== 'none' ? searchConversations : inboxConversations;
+    return applyWaAdvancedSearch(source, appliedAdvanced);
+  }, [
+    waGlobalQueryActive,
+    searchMode,
+    searchConversations,
+    inboxConversations,
+    appliedAdvanced,
+  ]);
 
-  const waFilterCounts = useMemo(() => countWaFilters(baseConversations), [baseConversations]);
-
-  const waStayQuickCounts = useMemo(() => {
-    const scoped = applyWaInboxFilters(baseConversations, waChannelFilter, waUnreadOnly, 'none');
-    return countWaStayQuickFilters(scoped);
-  }, [baseConversations, waChannelFilter, waUnreadOnly]);
+  const waFilterCounts = useMemo(() => {
+    const scoped = applyWaChannelFilter(baseConversations, waChannelFilter);
+    return countWaFilters(scoped);
+  }, [baseConversations, waChannelFilter]);
 
   const waFiltersActive = useMemo(
     () =>
       waGlobalQueryActive ||
       waChannelFilter !== 'all' ||
-      waStayQuickFilter !== 'none' ||
-      waUnreadOnly,
-    [waGlobalQueryActive, waChannelFilter, waStayQuickFilter, waUnreadOnly],
+      waView !== 'exchanges' ||
+      advancedActive,
+    [waGlobalQueryActive, waChannelFilter, waView, advancedActive],
   );
 
   const displayConversations = useMemo(
-    () =>
-      applyWaInboxFilters(
-        baseConversations,
-        waChannelFilter,
-        waUnreadOnly,
-        waStayQuickFilter,
-      ),
-    [baseConversations, waChannelFilter, waUnreadOnly, waStayQuickFilter],
+    () => applyWaInboxView(baseConversations, waView, waChannelFilter),
+    [baseConversations, waView, waChannelFilter],
   );
 
-  const handleResetAllFilters = () => {
+  const handleAdvancedSubmit = useCallback(() => {
+    setAppliedAdvanced(advancedDraft);
+    const kw = advancedDraft.messageText?.trim() || '';
+    if (kw.length >= GLOBAL_SEARCH_MIN_LEN) {
+      setSearchTerm(kw);
+      void loadServerSearch(kw);
+    } else if (!kw && searchMode === 'global' && !searchTerm.trim()) {
+      setSearchConversations([]);
+      setSearchMode('none');
+    }
+    setAdvancedExpanded(false);
+  }, [advancedDraft, loadServerSearch, searchMode, searchTerm]);
+
+  const handleAdvancedReset = useCallback(() => {
+    const wasKw = appliedAdvanced.messageText?.trim();
+    setAdvancedDraft(EMPTY_WA_ADVANCED);
+    setAppliedAdvanced(EMPTY_WA_ADVANCED);
+    if (wasKw && searchTerm.trim() === wasKw) {
+      setSearchTerm('');
+      setSearchConversations([]);
+      setSearchMode('none');
+    }
+  }, [appliedAdvanced.messageText, searchTerm]);
+
+  const handleResetAllFilters = useCallback(() => {
     setSearchTerm('');
     setWaChannelFilter('all');
-    setWaStayQuickFilter('none');
-    setWaUnreadOnly(false);
+    setWaView('exchanges');
     setSearchConversations([]);
     setSearchMode('none');
-  };
+    setAdvancedDraft(EMPTY_WA_ADVANCED);
+    setAppliedAdvanced(EMPTY_WA_ADVANCED);
+    setAdvancedExpanded(false);
+  }, []);
+
+  /* Même chrome que Demandes : titre + recherche (leading) ; tous les filtres en chips (subBar). */
+  useEffect(() => {
+    setLeading(
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.75,
+          width: '100%',
+          maxWidth: 560,
+          minWidth: 0,
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 800,
+            color: T.text,
+            flexShrink: 0,
+            lineHeight: 1.1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          💬 WhatsApp
+        </Typography>
+        <Box
+          sx={{
+            fontFamily: '"Geist Mono", monospace',
+            fontSize: 10,
+            fontWeight: 700,
+            px: 0.75,
+            py: '2px',
+            borderRadius: 999,
+            bgcolor: T.greenBg,
+            color: '#0e8c4d',
+            flexShrink: 0,
+          }}
+        >
+          {displayConversations.length}
+        </Box>
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            px: '8px',
+            py: '4px',
+            bgcolor: T.bg1,
+            border: `1px solid ${T.border}`,
+            borderRadius: '8px',
+            '&:focus-within': {
+              borderColor: T.primary,
+              boxShadow: `0 0 0 2px ${T.primaryTint}`,
+            },
+          }}
+        >
+          <Box sx={{ fontSize: 12, color: T.text3, lineHeight: 1 }}>🔍</Box>
+          <Box
+            component="input"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Résa, listing, voyageur, tél…"
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              border: 0,
+              outline: 0,
+              font: 'inherit',
+              fontSize: 11.5,
+              color: T.text,
+              bgcolor: 'transparent',
+              '&::placeholder': { color: T.text4 },
+            }}
+          />
+          {waFiltersActive && (
+            <Box
+              component="button"
+              type="button"
+              title="Réinitialiser filtres"
+              onClick={handleResetAllFilters}
+              sx={{
+                border: 0,
+                bgcolor: 'transparent',
+                color: T.text3,
+                fontSize: 12,
+                cursor: 'pointer',
+                p: 0,
+                lineHeight: 1,
+                '&:hover': { color: T.error },
+              }}
+            >
+              ✕
+            </Box>
+          )}
+        </Box>
+        <Box
+          component="button"
+          type="button"
+          title="Recherche avancée"
+          onClick={() => setAdvancedExpanded((v) => !v)}
+          sx={{
+            flexShrink: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 0.35,
+            px: '8px',
+            py: '5px',
+            border: `1px solid ${advancedExpanded || advancedActive ? T.primary : T.border}`,
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            fontSize: 10.5,
+            fontWeight: advancedExpanded || advancedActive ? 700 : 650,
+            color: advancedExpanded || advancedActive ? T.primaryDeep : T.text2,
+            bgcolor: advancedExpanded || advancedActive ? T.primaryTint : T.bg1,
+            whiteSpace: 'nowrap',
+            lineHeight: 1.2,
+            '&:hover': { bgcolor: T.primaryTint },
+          }}
+        >
+          Avancé {advancedExpanded ? '▲' : '▼'}
+        </Box>
+      </Box>,
+    );
+  }, [
+    setLeading,
+    displayConversations.length,
+    searchTerm,
+    waFiltersActive,
+    handleResetAllFilters,
+    advancedExpanded,
+    advancedActive,
+  ]);
+
+  useEffect(() => {
+    const chip = (
+      id: string,
+      label: string,
+      active: boolean,
+      count: number | undefined,
+      onClick: () => void,
+      opts?: { urgent?: boolean; title?: string },
+    ) => (
+      <Box
+        key={id}
+        component="button"
+        type="button"
+        title={opts?.title || label}
+        onClick={onClick}
+        sx={{
+          px: 1.15,
+          py: 0.55,
+          borderRadius: '8px',
+          border: `1px solid ${active ? T.green : T.border}`,
+          bgcolor: active ? T.greenBg : T.bg1,
+          color: active ? '#0e8c4d' : opts?.urgent && (count ?? 0) > 0 ? T.error : T.text3,
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+          lineHeight: 1.25,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.5,
+        }}
+      >
+        {label}
+        {typeof count === 'number' && (
+          <Box
+            component="span"
+            sx={{
+              fontFamily: '"Geist Mono", monospace',
+              fontSize: 10.5,
+              fontWeight: 800,
+              opacity: count > 0 || active ? 1 : 0.45,
+            }}
+          >
+            {count}
+          </Box>
+        )}
+      </Box>
+    );
+
+    setSubBar(
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
+        {advancedExpanded && (
+          <WaAdvancedSearchPanel
+            advanced={advancedDraft}
+            onChange={setAdvancedDraft}
+            onSubmit={handleAdvancedSubmit}
+            onReset={handleAdvancedReset}
+            loading={searchLoading || globalSearchPending}
+            resultCount={advancedActive ? displayConversations.length : null}
+          />
+        )}
+        <Box
+          sx={{
+            display: 'flex',
+            gap: '6px',
+            flexWrap: 'nowrap',
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            '&::-webkit-scrollbar': { display: 'none' },
+          }}
+        >
+          {WA_VIEW_CHIPS.map((f) =>
+            chip(
+              f.id,
+              f.label,
+              waView === f.id,
+              waFilterCounts[f.countKey],
+              () => {
+                if (waView === f.id && f.id !== 'exchanges') setWaView('exchanges');
+                else setWaView(f.id);
+              },
+              { urgent: f.urgent, title: f.title },
+            ),
+          )}
+          <Box sx={{ width: '1px', alignSelf: 'stretch', bgcolor: T.border, mx: '2px', flexShrink: 0 }} />
+          {WA_CHANNEL_CHIPS.map((f) =>
+            chip(
+              f.id,
+              f.label,
+              waChannelFilter === f.id,
+              waFilterCounts[f.id],
+              () => setWaChannelFilter(waChannelFilter === f.id ? 'all' : f.id),
+            ),
+          )}
+        </Box>
+      </Box>,
+    );
+  }, [
+    setSubBar,
+    waView,
+    waChannelFilter,
+    waFilterCounts,
+    advancedExpanded,
+    advancedDraft,
+    handleAdvancedSubmit,
+    handleAdvancedReset,
+    searchLoading,
+    globalSearchPending,
+    advancedActive,
+    displayConversations.length,
+  ]);
+
+  useEffect(
+    () => () => {
+      setLeading(null);
+      setSubBar(null);
+    },
+    [setLeading, setSubBar],
+  );
 
   const handleSelect = async (conv: Conversation) => {
     setComposerDraft('');
@@ -363,6 +687,42 @@ export default function WhatsAppTabV2() {
     [inbox],
   );
 
+  const initiateWhatsAppForActive = useCallback(async () => {
+    const conv = inbox.activeConversation;
+    if (!conv) return;
+    const resaId = conv.reservation_mongo_id || '';
+    if (!resaId) {
+      window.alert('Réservation introuvable pour initier WhatsApp.');
+      return;
+    }
+    setInitiatingWhatsApp(true);
+    try {
+      const result = await initiateWhatsAppForResa(String(resaId));
+      if (!result.success) {
+        window.alert(
+          result.notWhatsApp
+            ? 'Ce numéro ne semble pas avoir WhatsApp.'
+            : result.error || 'Envoi impossible',
+        );
+        return;
+      }
+      void loadInbox();
+      void inbox.refreshMessages(conv);
+    } finally {
+      setInitiatingWhatsApp(false);
+    }
+  }, [inbox, loadInbox]);
+
+  const waShellGuest = useMemo(() => {
+    const conv = inbox.activeConversation;
+    if (!conv) return null;
+    const empty = conv.provisional === true || (conv.messages_count || 0) === 0;
+    if (!empty) return null;
+    const phone = (conv.phone || '').replace(/\D/g, '');
+    if (!phone) return { kind: 'nonum' as const, phone: '' };
+    return { kind: 'jamais' as const, phone };
+  }, [inbox.activeConversation]);
+
   useEffect(() => {
     if (inbox.activeConversation) {
       setTaskCounts((prev) => ({
@@ -378,7 +738,8 @@ export default function WhatsAppTabV2() {
         const base = mapConversationToThread(conv, { channel: 'wa', channelColor: '#25D366' });
         return {
           ...base,
-          time: formatThreadWhen(conv.last_message_time),
+          // time + lastMessageKind / A déjà posés par mapConversationToThread (owner preview)
+          time: base.time || formatThreadWhenExact(conv.last_message_time),
           taskCount: taskCounts[conv.phone],
         };
       }),
@@ -433,12 +794,11 @@ export default function WhatsAppTabV2() {
         waSearchPending={globalSearchPending}
         waChannelFilter={waChannelFilter}
         onWaChannelFilterChange={setWaChannelFilter}
-        waUnreadOnly={waUnreadOnly}
-        onWaUnreadOnlyChange={setWaUnreadOnly}
         waFilterCounts={waFilterCounts}
-        waStayQuickFilter={waStayQuickFilter}
-        onWaStayQuickFilterChange={setWaStayQuickFilter}
-        waStayQuickCounts={waStayQuickCounts}
+        waView={waView}
+        onWaViewChange={setWaView}
+        waFiltersInHub
+        hideListHeader
         waFiltersActive={waFiltersActive}
         onWaResetAll={handleResetAllFilters}
         compactToolbar
@@ -460,8 +820,8 @@ export default function WhatsAppTabV2() {
             threadMode="whatsapp"
             messages={formattedMessages}
             loadingMessages={inbox.loadingMessages}
-            quickTemplates={WA_QUICK_TEMPLATES}
-            guestMenuDispatch={WA_GUEST_MENU_DISPATCH}
+            quickTemplates={[]}
+            guestMenuDispatch={[]}
             sendingGuestMenuCode={sendingGuestMenuCode}
             onSendGuestMenu={handleGuestSendMenu}
             composerValue={composerDraft}
@@ -479,6 +839,9 @@ export default function WhatsAppTabV2() {
             thread={activeThread}
             type="whatsapp"
             reservation={inbox.reservation ?? undefined}
+            whatsappGuest={waShellGuest}
+            onInitiateWhatsApp={() => void initiateWhatsAppForActive()}
+            initiatingWhatsApp={initiatingWhatsApp}
             onAction={(action) => {
               if (action === 'view-full-reservation' && inbox.reservation?.reservationNumber) {
                 window.open(`/reservations/${inbox.reservation.reservationNumber}`, '_blank');

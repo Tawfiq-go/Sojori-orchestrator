@@ -53,6 +53,26 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
+    group: 'Vue ops',
+    roles: PM_ROLES,
+    items: [
+      {
+        id: 'planning',
+        label: 'Planning',
+        iconType: 'calendar',
+        iconColor: '#E06666',
+        description: 'Résas · tasks · messages — grille par appartement',
+      },
+      {
+        id: 'orch/cockpit',
+        label: 'Cockpit IA',
+        iconType: 'settings',
+        iconColor: '#b8851a',
+        badge: 'AI',
+      },
+    ],
+  },
+  {
     group: 'Calendrier',
     roles: PM_ROLES,
     items: [
@@ -65,7 +85,6 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     roles: OPS_ROLES,
     items: [
       { id: 'reservations', label: 'Liste', iconType: 'calendar', iconColor: '#E06666' },
-      { id: 'reservations/planning', label: 'Planning', iconType: 'calendar', iconColor: '#E06666', roles: PM_ROLES },
       { id: 'payments', label: 'Paiements', iconType: 'chart', iconColor: '#5B9BD5', roles: PM_ROLES },
     ],
   },
@@ -101,7 +120,6 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
     items: [
       { id: 'tasks/list', label: 'Liste', iconType: 'check', iconColor: '#93C47D' },
-      { id: 'tasks/planning', label: 'Planning', iconType: 'check', iconColor: '#93C47D' },
       { id: 'tasks/kanban', label: 'Kanban', iconType: 'check', iconColor: '#93C47D' },
       { id: 'tasks/team', label: 'Équipe', iconType: 'check', iconColor: '#93C47D', description: 'Staff terrain & admin WhatsApp' },
     ],
@@ -111,7 +129,6 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     roles: PM_ROLES,
     core: true,
     items: [
-      { id: 'orch/cockpit', label: 'Cockpit IA', iconType: 'settings', iconColor: '#b8851a', badge: 'AI' },
       { id: 'orch/plans', label: 'Plans par séjour', iconType: 'settings', iconColor: '#666666', badge: 'CORE' },
       { id: 'orch/day-plan', label: 'Plan de journée', iconType: 'settings', iconColor: '#666666', badge: 'NEW' },
       { id: 'orch/workflows', label: 'Workflows · config', iconType: 'settings', iconColor: '#666666' },
@@ -349,7 +366,6 @@ export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
     roles: ADMIN_ROLES,
     items: [
       { id: 'temp/pricing-calendar', label: 'Tarifs calendrier (legacy)', icon: '📈' },
-      { id: 'temp/reservations-planning', label: 'Planning résa (doublon)', icon: '📆' },
       { id: 'temp/settings-template', label: 'Templates mail', icon: '📧' },
       { id: 'temp/settings-currency', label: 'Devises', icon: '💱' },
       { id: 'temp/settings-admin-config', label: 'Pays & villes', icon: '🌍' },

@@ -81,7 +81,14 @@ export function resolveRouteAccess(input: RouteAccessInput): RouteAccessResult {
   const { pathname, search = '', role, featureGrants = [], ownerAccess } = input;
   const navRole = normalizeDashboardRole(role);
   const platformPath = isPlatformAdminPath(pathname);
-  const navId = resolveNavIdFromPath(pathname, search);
+  let navId = resolveNavIdFromPath(pathname, search);
+  // Worker « Mon planning » partage l’URL /tasks/planning — ne pas évaluer le grant « planning » PM.
+  if (
+    pathname.startsWith('/tasks/planning') &&
+    (navRole === Roles.Worker || navRole === Roles.Landlord)
+  ) {
+    navId = 'my-sched';
+  }
 
   // Owner PM items that live under /admin/* (Channel Manager, mon-profil, notifs, onboarding…)
   // must still pass if they appear in OWNER_NAV_GROUPS — not treated as platform-admin-only.

@@ -4,7 +4,8 @@ import { T } from './_tokens';
 
 export const inboxShellSx = {
   display: 'grid',
-  gridTemplateColumns: { xs: '1fr', lg: '360px 1fr 340px' },
+  /* Colonne liste plus étroite → conversation guest (caller) occupe le reste. */
+  gridTemplateColumns: { xs: '1fr', lg: '320px minmax(0, 1fr) 320px' },
   height: { xs: 'auto', lg: 'min(760px, calc(100vh - 200px))' },
   minHeight: { xs: 0, lg: 560 },
   overflow: 'hidden',
@@ -20,6 +21,7 @@ export const inboxShellFillSx = {
   minHeight: { xs: 420, lg: 0 },
   maxHeight: { lg: '100%' },
   flex: 1,
+  alignSelf: 'stretch',
 } as const;
 
 export const inboxShellFullscreenSx = {

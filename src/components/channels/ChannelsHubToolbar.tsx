@@ -41,6 +41,7 @@ export function ChannelsHubToolbar({ sectionHint, sectionTab: sectionTabProp }: 
     Sum: 'Summary',
     Business: 'Business',
     Mapping: 'Mapping',
+    LogApiRU: 'LogApiRU',
     Debug: 'Debug',
     Cron: 'Cron',
   };

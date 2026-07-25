@@ -90,6 +90,15 @@ export const ACTION_LABELS: Record<string, string> = {
   Pull_ListMyUsers_RQ: 'Liste des comptes',
   LNM_PutHandlerUrl_RQ: 'Configuration webhook LNM',
   subscribeJsonWebhook: 'Abonnement webhook JSON',
+  // Webhooks entrants
+  WEBHOOK_JSON_NewMessage: 'Webhook · Nouveau message',
+  WEBHOOK_JSON_ModifiedMessage: 'Webhook · Message modifié',
+  WEBHOOK_JSON_ReadMessage: 'Webhook · Message lu',
+  WEBHOOK_JSON_NewThread: 'Webhook · Nouveau thread',
+  LNM_PutConfirmedReservation_RQ: 'Webhook · Réservation confirmée',
+  LNM_PutUnconfirmedReservation_RQ: 'Webhook · Réservation non confirmée',
+  LNM_CancelReservation_RQ: 'Webhook · Annulation réservation',
+  LNM_PutLeadReservation_RQ: 'Webhook · Lead réservation',
   // Leads / Messagerie
   Pull_GetLeads_RQ: 'Récupération des leads',
   RU_REST_GET_api_messaging_threads: 'Threads messagerie (REST)',
@@ -138,10 +147,20 @@ export function uiStatusLabel(status: UiStatus, statusCode?: string): string {
   return 'Lent';
 }
 
-export type UiDir = 'push' | 'pull';
+export type UiDir = 'push' | 'pull' | 'webhook';
 
+/** Miroir filtre `dir` backend (srv-channels logApiRuBuildFilter). */
 export function actionDir(action: string): UiDir {
-  return /^(Pull_|RU_REST_|CM_Pull)/.test(action) ? 'pull' : 'push';
+  if (/^WEBHOOK_/i.test(action)) return 'webhook';
+  if (
+    /^(LNM_PutConfirmedReservation|LNM_PutUnconfirmedReservation|LNM_CancelReservation|LNM_PutLeadReservation)_RQ$/.test(
+      action,
+    )
+  ) {
+    return 'webhook';
+  }
+  if (/^(Pull_|RU_REST_|CM_Pull)/.test(action)) return 'pull';
+  return 'push';
 }
 
 export const RU_PERIODS: Array<{ id: string; label: string; hours: number }> = [

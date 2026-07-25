@@ -4,16 +4,24 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import { ModalScrollColumn } from '../common/ModalScrollColumn';
 import { T } from './_tokens';
 import type { Thread, Channel } from '../../types/unifiedInbox.types';
-import type { OtaAdvancedSearch, OtaChannelFilter, OtaFilterCounts, OtaStayQuickFilter, OtaStayQuickFilterCounts } from './otaThreadFilters';
+import type {
+  OtaAdvancedSearch,
+  OtaChannelFilter,
+  OtaFilterCounts,
+  OtaInboxView,
+  OtaStayQuickFilter,
+  OtaStayQuickFilterCounts,
+} from './otaThreadFilters';
 import OtaInboxFilters from './OtaInboxFilters';
 import WaInboxFilters, { countWaActiveFilters } from './WaInboxFilters';
+import WaPlansStyleThreadItem from './WaPlansStyleThreadItem';
+import { groupWaThreadsForPlansList } from './waThreadListGroups';
 import airbnbLogo from '../../assets/images/airbnb.png';
 import bookingLogo from '../../assets/images/booking.png';
 import type {
   WaChannelFilter,
   WaFilterCounts,
-  WaStayQuickFilter,
-  WaStayQuickFilterCounts,
+  WaInboxView,
 } from './waThreadFilters';
 
 export type ThreadsListMode = 'whatsapp' | 'ota';
@@ -73,15 +81,19 @@ interface ThreadsListProps {
   waSearchPending?: boolean;
   waChannelFilter?: WaChannelFilter;
   onWaChannelFilterChange?: (filter: WaChannelFilter) => void;
-  waUnreadOnly?: boolean;
-  onWaUnreadOnlyChange?: (on: boolean) => void;
   waFilterCounts?: WaFilterCounts;
-  waStayQuickFilter?: WaStayQuickFilter;
-  onWaStayQuickFilterChange?: (filter: WaStayQuickFilter) => void;
-  waStayQuickCounts?: WaStayQuickFilterCounts;
   waListTotalCount?: number;
   onWaResetAll?: () => void;
   waFiltersActive?: boolean;
+  /** Vue principale WA (activité + calendrier séjour). */
+  waView?: WaInboxView;
+  onWaViewChange?: (view: WaInboxView) => void;
+  /** Filtres déjà dans la barre hub (haut de page) — ne pas les re-afficher ici. */
+  waFiltersInHub?: boolean;
+  /** Vue principale OTA (même chips que WA). */
+  otaView?: OtaInboxView;
+  /** Titre + recherche déjà dans la barre hub — header liste minimal. */
+  hideListHeader?: boolean;
   /** Barre compacte : filtres canaux en modal, ligne rapide séjour */
   compactToolbar?: boolean;
   ultraCompact?: boolean;
@@ -134,15 +146,15 @@ export default function ThreadsList({
   waSearchPending,
   waChannelFilter = 'all',
   onWaChannelFilterChange,
-  waUnreadOnly = false,
-  onWaUnreadOnlyChange,
   waFilterCounts,
-  waStayQuickFilter = 'none',
-  onWaStayQuickFilterChange,
-  waStayQuickCounts,
   waListTotalCount,
   onWaResetAll,
   waFiltersActive,
+  waView = 'exchanges',
+  onWaViewChange,
+  waFiltersInHub = false,
+  otaView = 'exchanges',
+  hideListHeader = false,
   compactToolbar = false,
   ultraCompact = false,
   onEnterFullscreen,
@@ -194,6 +206,13 @@ export default function ThreadsList({
     bk: 0,
     no_resa: 0,
     unreplied: threads.filter((t) => t.unread > 0).length,
+    exchanges: threads.length,
+    arr_today: 0,
+    arr_tomorrow: 0,
+    dep_today: 0,
+    dep_tomorrow: 0,
+    created_today: 0,
+    stay: 0,
   };
 
   const otaCounts: OtaFilterCounts = otaFilterCounts ?? {
@@ -203,9 +222,47 @@ export default function ThreadsList({
     bk: threads.filter((t) => t.channel === 'bk').length,
     direct: 0,
     unreplied: threads.filter((t) => t.needsReply).length,
+    exchanges: threads.length,
+    arr_today: 0,
+    arr_tomorrow: 0,
+    dep_today: 0,
+    dep_tomorrow: 0,
+    created_today: 0,
+    stay: 0,
   };
 
-  const waActiveFilterCount = countWaActiveFilters(waChannelFilter, waStayQuickFilter, waUnreadOnly);
+  const usePlansListStyle = mode === 'whatsapp' || (mode === 'ota' && hideListHeader);
+
+  const waActiveFilterCount = countWaActiveFilters(waChannelFilter, 'none', false, waView);
+
+  const plansListView: WaInboxView | OtaInboxView =
+    mode === 'ota' ? otaView : (waView ?? 'exchanges');
+
+  const waGroups = useMemo(() => {
+    if (!usePlansListStyle) return [];
+    /* Vue Séjour : En cours → À venir → Terminées récemment (pas de liste plate). */
+    if (plansListView === 'stay') {
+      return groupWaThreadsForPlansList(filtered);
+    }
+    const flatMeta: Record<
+      Exclude<WaInboxView, 'stay'>,
+      { label: string; icon: string }
+    > = {
+      exchanges: { label: 'Échanges récents', icon: '💬' },
+      unreplied: { label: 'Non répondu', icon: '❗️' },
+      created_today: { label: 'Créés auj', icon: '✨' },
+      arr_today: { label: 'Arrivées auj', icon: '🛬' },
+      dep_today: { label: 'Départs auj', icon: '🛫' },
+      arr_tomorrow: { label: 'Arrivées demain', icon: '🛬' },
+      dep_tomorrow: { label: 'Départs demain', icon: '🛫' },
+    };
+    const meta = flatMeta[plansListView as Exclude<WaInboxView, 'stay'>] ?? flatMeta.exchanges;
+    return groupWaThreadsForPlansList(filtered, {
+      flatRecent: true,
+      flatLabel: meta.label,
+      flatIcon: meta.icon,
+    });
+  }, [usePlansListStyle, filtered, plansListView]);
 
   const getInitials = (name: string): string =>
     name
@@ -238,18 +295,28 @@ export default function ThreadsList({
   return (
     <Box
       sx={{
-        width: { xs: '100%', lg: 360 },
-        minWidth: { lg: 360 },
+        width: { xs: '100%', lg: usePlansListStyle ? 320 : 360 },
+        minWidth: { lg: usePlansListStyle ? 320 : 360 },
+        maxWidth: { lg: usePlansListStyle ? 340 : undefined },
+        alignSelf: { lg: 'stretch' },
         borderRight: { lg: `1px solid ${T.border}` },
         borderBottom: { xs: `1px solid ${T.border}`, lg: 'none' },
         display: 'flex',
         flexDirection: 'column',
-        height: { lg: '100%' },
+        height: { xs: 'auto', lg: '100%' },
+        maxHeight: { xs: '46vh', lg: '100%' },
         minHeight: 0,
         overflow: 'hidden',
         bgcolor: T.bg1,
+        // Bande canal (WA vert / OTA Airbnb)
+        ...(usePlansListStyle
+          ? {
+              boxShadow: `inset 3px 0 0 ${mode === 'ota' ? '#FF5A5F' : T.green}`,
+            }
+          : {}),
       }}
     >
+      {!hideListHeader && (
       <Box
         sx={{
           px: compactToolbar ? '10px' : '14px',
@@ -260,35 +327,45 @@ export default function ThreadsList({
         }}
       >
         <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: compactToolbar ? 0.625 : 1 }}>
-          <Box
-            sx={{
-              width: compactToolbar ? 20 : 24,
-              height: compactToolbar ? 20 : 24,
-              borderRadius: '6px',
-              bgcolor: accentColor,
-              color: '#fff',
-              fontFamily: '"Geist Mono", monospace',
-              fontSize: compactToolbar ? 11 : 13,
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {mode === 'ota' ? 'A' : icon === '💬' ? 'W' : icon.charAt(0).toUpperCase()}
-          </Box>
-          <Typography sx={{ fontSize: compactToolbar ? 12 : 13.5, fontWeight: 700, flex: 1 }}>{title}</Typography>
+          {mode === 'whatsapp' ? (
+            <Typography sx={{ fontSize: compactToolbar ? 13.5 : 15, fontWeight: 800, flex: 1, color: T.text }}>
+              💬 {title}
+            </Typography>
+          ) : (
+            <>
+              <Box
+                sx={{
+                  width: compactToolbar ? 20 : 24,
+                  height: compactToolbar ? 20 : 24,
+                  borderRadius: '6px',
+                  bgcolor: accentColor,
+                  color: '#fff',
+                  fontFamily: '"Geist Mono", monospace',
+                  fontSize: compactToolbar ? 11 : 13,
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {mode === 'ota' ? 'A' : icon.charAt(0).toUpperCase()}
+              </Box>
+              <Typography sx={{ fontSize: compactToolbar ? 12 : 13.5, fontWeight: 700, flex: 1 }}>{title}</Typography>
+            </>
+          )}
           <Box
             sx={{
               fontFamily: '"Geist Mono", monospace',
               fontSize: compactToolbar ? 9 : 10,
-              color: T.text3,
-              bgcolor: T.bg1,
-              border: `1px solid ${T.border}`,
-              px: 1,
+              color: mode === 'whatsapp' ? T.primaryDeep : T.text3,
+              bgcolor: mode === 'whatsapp' ? T.primaryTint : T.bg1,
+              border: `1px solid ${mode === 'whatsapp' ? 'rgba(184,133,26,0.25)' : T.border}`,
+              px: mode === 'whatsapp' ? 1.1 : 1,
               py: '2px',
               borderRadius: 999,
               fontWeight: 700,
+              minWidth: mode === 'whatsapp' ? 22 : undefined,
+              textAlign: 'center',
             }}
           >
             {loading ? '…' : headerCount}
@@ -486,38 +563,21 @@ export default function ThreadsList({
           )}
         </Box>
 
-        {compactToolbar && waFiltersEnabled && onWaStayQuickFilterChange && waStayQuickCounts && (
-          <Box
-            sx={{
-              mt: 0.625,
-              display: 'flex',
-              flexWrap: 'nowrap',
-              gap: '3px',
-              overflowX: 'auto',
-              WebkitOverflowScrolling: 'touch',
-              pb: 0.125,
-              scrollbarWidth: 'none',
-              '&::-webkit-scrollbar': { display: 'none' },
-            }}
-          >
-            <WaInboxFilters
-              variant="quickInline"
-              channelFilter={waChannelFilter}
-              counts={waCounts}
-              onChannelFilterChange={onWaChannelFilterChange ?? (() => {})}
-              unreadOnly={waUnreadOnly}
-              onUnreadOnlyChange={onWaUnreadOnlyChange ?? (() => {})}
-              stayQuickFilter={waStayQuickFilter}
-              onStayQuickFilterChange={onWaStayQuickFilterChange}
-              stayQuickCounts={waStayQuickCounts}
-              onResetAll={onWaResetAll}
-              filtersActive={waFiltersActive}
-            />
-          </Box>
+        {waFiltersEnabled && onWaViewChange && !waFiltersInHub && (
+          <WaInboxFilters
+            variant="views"
+            view={waView}
+            onViewChange={onWaViewChange}
+            counts={waCounts}
+            channelFilter={waChannelFilter}
+            onChannelFilterChange={onWaChannelFilterChange}
+            onResetAll={onWaResetAll}
+          />
         )}
       </Box>
+      )}
 
-      {mode === 'ota' && onOtaAdvancedSearchChange && (
+      {mode === 'ota' && onOtaAdvancedSearchChange && !hideListHeader && (
         <OtaInboxFilters
           channelFilter={otaChannelFilterProp}
           counts={otaCounts}
@@ -543,19 +603,16 @@ export default function ThreadsList({
         />
       )}
 
-      {waFiltersEnabled && !compactToolbar && (
-        <WaInboxFilters
-          channelFilter={waChannelFilter}
-          counts={waCounts}
-          onChannelFilterChange={onWaChannelFilterChange ?? (() => {})}
-          unreadOnly={waUnreadOnly}
-          onUnreadOnlyChange={onWaUnreadOnlyChange ?? (() => {})}
-          stayQuickFilter={waStayQuickFilter}
-          onStayQuickFilterChange={onWaStayQuickFilterChange}
-          stayQuickCounts={waStayQuickCounts}
-          onResetAll={onWaResetAll}
-          filtersActive={waFiltersActive}
-        />
+      {waFiltersEnabled && !compactToolbar && !waFiltersInHub && onWaViewChange && (
+        <Box sx={{ borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
+          <WaInboxFilters
+            variant="views"
+            view={waView}
+            onViewChange={onWaViewChange}
+            counts={waCounts}
+            onResetAll={onWaResetAll}
+          />
+        </Box>
       )}
 
       {compactToolbar && waFiltersEnabled && (
@@ -564,13 +621,12 @@ export default function ThreadsList({
           <DialogContent sx={{ pt: 0 }}>
             <WaInboxFilters
               variant="channels"
-              channelFilter={waChannelFilter}
+              view={waView}
+              onViewChange={onWaViewChange ?? (() => {})}
               counts={waCounts}
+              channelFilter={waChannelFilter}
               onChannelFilterChange={onWaChannelFilterChange ?? (() => {})}
-              unreadOnly={waUnreadOnly}
-              onUnreadOnlyChange={onWaUnreadOnlyChange ?? (() => {})}
               onResetAll={onWaResetAll}
-              filtersActive={waFiltersActive}
             />
           </DialogContent>
         </Dialog>
@@ -659,7 +715,45 @@ export default function ThreadsList({
             </Typography>
           </Box>
         )}
-        {filtered.map((thread) => {
+
+        {usePlansListStyle
+          ? waGroups.map((group) => (
+              <Box key={group.id}>
+                <Box
+                  sx={{
+                    fontSize: 9.5,
+                    fontFamily: '"Geist Mono", monospace',
+                    fontWeight: 800,
+                    color: T.text4,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    px: '6px',
+                    pt: '12px',
+                    pb: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    '&::after': {
+                      content: '""',
+                      flex: 1,
+                      height: '1px',
+                      bgcolor: T.border,
+                    },
+                  }}
+                >
+                  {group.icon} {group.label} · {group.threads.length}
+                </Box>
+                {group.threads.map((thread) => (
+                  <WaPlansStyleThreadItem
+                    key={thread.id}
+                    thread={thread}
+                    active={activeThreadId === thread.id}
+                    onSelect={() => onSelectThread(thread)}
+                  />
+                ))}
+              </Box>
+            ))
+          : filtered.map((thread) => {
           const isActive = activeThreadId === thread.id;
           const hasUnread = thread.unread > 0;
           const isAirbnb =

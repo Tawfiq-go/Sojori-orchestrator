@@ -5,6 +5,9 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   analytics: '/analytics',
   reports: '/reports',
 
+  // Planning ops unifié (résas · tasks · messages) — deep-links /reservations|tasks/planning gardés
+  planning: '/planning',
+
   // Opérations
   reservations: '/reservations',
   'reservations/list': '/reservations',
@@ -150,7 +153,6 @@ export const NAV_TO_ROUTE: Record<string, string> = {
 
   // Temp — pages legacy / placement à décider
   'temp/pricing-calendar': '/pricing',
-  'temp/reservations-planning': '/reservations/planning',
   'temp/orch-rules': '/orchestration/config',
   'temp/sojori-logs': '/admin/sojori-logs',
   'temp/channel-distribution': '/admin/ChannelManager?tab=distribution',

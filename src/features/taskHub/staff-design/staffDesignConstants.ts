@@ -1,5 +1,6 @@
 /**
- * Labels & pills staff — alignés catalogue admin (13 types fulltask granulaires).
+ * Labels & pills staff — types réellement assignables à l’équipe terrain.
+ * Les parcours voyageur (choix/déclaration/enregistrement) ne sont plus des tâches staff.
  */
 import {
   FULLTASK_TASK_TYPES,
@@ -8,21 +9,35 @@ import {
   type FulltaskTaskTypeId,
 } from './fulltaskTaskTypes';
 
-/** Libellés courts UI équipe terrain (même split que admin push). */
+/**
+ * Types exclus de l’annuaire / assignation staff :
+ * flux client (WhatsApp / OTA), plus de tâches opérationnelles terrain.
+ */
+export const STAFF_EXCLUDED_TASK_TYPES = [
+  'arrival_choose',
+  'departure_choose',
+  'arrival_declare',
+  'departure_declare',
+  'registration',
+] as const;
+
+const EXCLUDED = new Set<string>(STAFF_EXCLUDED_TASK_TYPES);
+
+/** Catalogue staff = fulltask minus parcours voyageur. */
+export const STAFF_ASSIGNABLE_TASK_TYPES = FULLTASK_TASK_TYPES.filter(
+  (t) => !EXCLUDED.has(t),
+) as FulltaskTaskTypeId[];
+
+/** Libellés courts UI équipe terrain. */
 const STAFF_PILL_LABEL_OVERRIDES: Partial<Record<FulltaskTaskTypeId, string>> = {
   cleaning_free: 'Ménage gratuit',
   cleaning_paid: 'Ménage payant',
-  arrival_choose: 'Choisir arrivée',
-  departure_choose: 'Choisir départ',
-  arrival_declare: 'Déclarer arrivée',
-  departure_declare: 'Déclarer départ',
   receive_arrival: 'Accueil arrivée',
   receive_departure: 'Accueil départ',
-  registration: 'Enregistrement',
   checkout_cleaning: 'Ménage Sojori',
 };
 
-export const STAFF_TASK_PILLS = FULLTASK_TASK_TYPES.map((key) => ({
+export const STAFF_TASK_PILLS = STAFF_ASSIGNABLE_TASK_TYPES.map((key) => ({
   key,
   label: STAFF_PILL_LABEL_OVERRIDES[key] ?? labelForTaskTypeId(key),
   emoji: FULLTASK_TASK_TYPE_EMOJI[key] ?? '📋',
@@ -36,6 +51,17 @@ export const STAFF_TASK_PILLS = FULLTASK_TASK_TYPES.map((key) => ({
  * L'ordre d'AFFICHAGE (lundi d'abord) est géré par DAY_DISPLAY_ORDER.
  */
 export const DAY_LABELS = ['D', 'L', 'M', 'M', 'J', 'V', 'S'] as const;
+
+/** Libellés complets (index = dayOfWeek JS). */
+export const DAY_FULL_LABELS = [
+  'Dimanche',
+  'Lundi',
+  'Mardi',
+  'Mercredi',
+  'Jeudi',
+  'Vendredi',
+  'Samedi',
+] as const;
 
 /** Ordre d'affichage lundi → dimanche, valeurs = index DAY_LABELS. */
 export const DAY_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
@@ -57,83 +83,48 @@ export function initials(name: string): string {
 const LEGACY_TASK_TYPE_MAP: Record<string, FulltaskTaskTypeId> = {
   cleaning_in_out: 'cleaning_free',
   cleaning_mid_stay: 'cleaning_paid',
-  check_in: 'arrival_choose',
-  check_out: 'departure_choose',
+  check_in: 'receive_arrival',
+  check_out: 'receive_departure',
+  /** Anciens types voyageur → plus assignables ; mappés vers l’accueil terrain. */
+  arrival_choose: 'receive_arrival',
+  departure_choose: 'receive_departure',
+  arrival_declare: 'receive_arrival',
+  departure_declare: 'receive_departure',
+  registration: 'receive_arrival',
   maintenance: 'support',
   inventory: 'support',
 };
 
 export function normalizeStaffAllowedTaskType(type: string): FulltaskTaskTypeId | null {
   const key = String(type || '').trim();
-  if ((FULLTASK_TASK_TYPES as readonly string[]).includes(key)) {
+  if (EXCLUDED.has(key)) {
+    return LEGACY_TASK_TYPE_MAP[key] ?? null;
+  }
+  if ((STAFF_ASSIGNABLE_TASK_TYPES as readonly string[]).includes(key)) {
     return key as FulltaskTaskTypeId;
   }
-  return LEGACY_TASK_TYPE_MAP[key] ?? null;
+  const mapped = LEGACY_TASK_TYPE_MAP[key];
+  if (mapped && !EXCLUDED.has(mapped)) return mapped;
+  return null;
+}
+
+/** Filtre + dédoublonne les types autorisés (purge parcours voyageur). */
+export function sanitizeStaffAllowedTaskTypes(types: string[] | undefined): FulltaskTaskTypeId[] {
+  const out: FulltaskTaskTypeId[] = [];
+  const seen = new Set<string>();
+  for (const raw of types || []) {
+    const n = normalizeStaffAllowedTaskType(raw);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
 }
 
 export function pillLabelForType(type: string): { label: string; emoji: string } | null {
   const canonical = normalizeStaffAllowedTaskType(type) ?? type;
   const found = STAFF_TASK_PILLS.find((p) => p.key === canonical);
   if (found) return found;
+  if (EXCLUDED.has(canonical)) return null;
   return { label: labelForTaskTypeId(canonical), emoji: '📋' };
-}
-
-/**
- * Métiers = préréglages du formulaire simplifié. Choisir un métier remplit
- * d'un coup les types de tâches (le client n'a pas à trier 15 clés techniques
- * dont les libellés décrivent un modèle de facturation, pas un travail).
- * « Personnalisé » = l'utilisateur a modifié la sélection à la main.
- */
-export const STAFF_JOB_PRESETS = [
-  {
-    id: 'menage',
-    emoji: '🧹',
-    label: 'Ménage',
-    desc: 'Ménages entre séjours et à la demande',
-    taskTypes: ['cleaning_free', 'cleaning_paid', 'checkout_cleaning'],
-  },
-  {
-    id: 'accueil',
-    emoji: '🙋',
-    label: 'Accueil',
-    desc: 'Arrivées, départs, remise des clés',
-    taskTypes: [
-      'receive_arrival',
-      'receive_departure',
-      'arrival_declare',
-      'departure_declare',
-      'registration',
-    ],
-  },
-  {
-    id: 'conciergerie',
-    emoji: '🛎',
-    label: 'Conciergerie',
-    desc: 'Transport, courses, demandes voyageurs',
-    taskTypes: ['transport', 'groceries', 'concierge', 'support', 'service_client'],
-  },
-  {
-    id: 'polyvalent',
-    emoji: '✳️',
-    label: 'Polyvalent',
-    desc: 'Toutes les tâches',
-    taskTypes: [...FULLTASK_TASK_TYPES],
-  },
-] as const;
-
-export type StaffJobPresetId = (typeof STAFF_JOB_PRESETS)[number]['id'];
-
-/** Retrouve le métier correspondant à une sélection, sinon null (= personnalisé). */
-export function jobPresetForTaskTypes(taskTypes: string[] | undefined): StaffJobPresetId | null {
-  const set = new Set(taskTypes ?? []);
-  if (set.size === 0) return null;
-  for (const preset of STAFF_JOB_PRESETS) {
-    if (
-      preset.taskTypes.length === set.size &&
-      preset.taskTypes.every((t) => set.has(t))
-    ) {
-      return preset.id;
-    }
-  }
-  return null;
 }

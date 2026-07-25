@@ -49,6 +49,8 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
           time: formatTime(exchange.timestamp),
           status: exchange.sent_by_admin ? exchange.user_message_status : undefined,
           contentType: exchange.user_message_content_type,
+          // Sur couple user+AI, owner_summary décrit surtout la réponse ; sinon (flow reply) c’est le guest.
+          ownerSummary: exchange.ai_response ? null : exchange.owner_summary ?? null,
         });
       }
     }
@@ -66,6 +68,7 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
           text: `⚙ Auto · ${aiText.slice(0, 80)}`,
           time: '',
           type: 'system-note',
+          ownerSummary: exchange.owner_summary ?? null,
         });
       } else {
         const waStatus = exchange.ai_response_send_status;
@@ -85,6 +88,7 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
           aiModel: exchange.ai_model,
           tokensUsed: exchange.tokens_used,
           contentType: exchange.ai_response_content_type,
+          ownerSummary: exchange.owner_summary ?? null,
         });
       }
     }

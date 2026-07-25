@@ -27,5 +27,6 @@ export function resolveRuEmailDisplay(account: {
   const fn = (account.firstName || '').trim();
   const ln = (account.lastName || '').trim();
   if (fn || ln) return buildDefaultRuEmail(fn, ln);
-  return (account.email || '').trim();
+  // ⚠️ CRITICAL: jamais l'email dashboard comme email R.U.
+  return '';
 }

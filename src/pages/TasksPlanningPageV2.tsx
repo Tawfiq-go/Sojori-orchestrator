@@ -29,12 +29,15 @@ import {
   buildListingIdIndex,
   mergeActiveAndOrphanListings,
 } from '../utils/planningListingMatch';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import type { ListingSummary } from '../types/listings.types';
 import { useSocketIO } from '../hooks/useSocketIO';
 import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 import { useTaskDetailDrawer } from '../features/tasksNew/hooks/useTaskDetailDrawer';
+import {
+  findReservationInListings,
+  usePlanningReservationDrawer,
+} from '../features/planning/usePlanningReservationDrawer';
 
 /**
  * TaskNew planning :
@@ -51,10 +54,16 @@ import {
 } from '../utils/planningViewDates';
 
 export default function TasksPlanningPageV2() {
-  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { openTaskById, drawer: taskDetailDrawer } = useTaskDetailDrawer();
+  const { openReservation, drawer: reservationDrawer } = usePlanningReservationDrawer({
+    onTaskClick: (item) => {
+      const d = (item.data || {}) as Record<string, unknown>;
+      const taskId = String(d.taskId || d._id || '').trim();
+      if (taskId) void openTaskById(taskId);
+    },
+  });
   const { loading: authLoading } = useAuth();
   const scope = usePmTasksScope();
   const listingsCacheKey = scope.scopeCacheKey;
@@ -359,17 +368,21 @@ export default function TasksPlanningPageV2() {
         return;
       }
       const resNum = String(d.reservationNumber || d.reservationCode || '').trim();
-      if (resNum) navigate(`/reservations/${encodeURIComponent(resNum)}`);
+      if (!resNum) return;
+      const hit = findReservationInListings(listings, resNum);
+      if (hit) openReservation(hit.reservation, hit.listing);
     },
-    [navigate, openTaskById],
+    [openTaskById, openReservation, listings],
   );
 
   const handleReservationClick = useCallback(
-    (routeId: string) => {
-      if (!routeId) return;
-      navigate(`/reservations/${encodeURIComponent(routeId)}`);
+    (
+      reservation: ListingRow['reservations'][0],
+      listing: Pick<ListingRow, 'listingId' | 'listingName' | 'city'>,
+    ) => {
+      openReservation(reservation, listing);
     },
-    [navigate],
+    [openReservation],
   );
 
   const goToday = useCallback(() => {
@@ -585,6 +598,7 @@ export default function TasksPlanningPageV2() {
         )}
 
         {listFullscreenLayer}
+        {reservationDrawer}
         {taskDetailDrawer}
 
         {!isLoading && !calendarReady && error && (

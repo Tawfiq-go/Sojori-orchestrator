@@ -148,6 +148,11 @@ export function usePilotPricing(options: {
   manualBasePriceMad: number;
   calendarYear: number;
   eventsEnabled?: boolean;
+  /**
+   * Si false : pas d’appel POST /preview au chargement (évite le double calcul —
+   * apply-preview-diff recalcule déjà le même moteur). Défaut true.
+   */
+  autoPreview?: boolean;
 }) {
   const {
     listingId,
@@ -177,6 +182,7 @@ export function usePilotPricing(options: {
     manualBasePriceMad,
     calendarYear,
     eventsEnabled = true,
+    autoPreview = true,
   } = options;
 
   const [pilotReady, setPilotReady] = useState(false);
@@ -188,6 +194,11 @@ export function usePilotPricing(options: {
   const [hasSojoriPreview, setHasSojoriPreview] = useState(false);
   const [lastApplySummary, setLastApplySummary] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didAutoPreviewRef = useRef(false);
+
+  useEffect(() => {
+    didAutoPreviewRef.current = false;
+  }, [listingId]);
 
   const configPayload = useCallback(() => {
     if (floor == null || ceiling == null) return null;
@@ -313,21 +324,32 @@ export function usePilotPricing(options: {
   }, [listingId, loadConfig]);
 
   useEffect(() => {
+    if (!autoPreview) {
+      setPreviewDays([]);
+      setPreviewMarketDays([]);
+      setPreviewCalendarDays([]);
+      setHasSojoriPreview(false);
+      setPreviewLoading(false);
+      return undefined;
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!listingId || !hasAirroiSnapshot || floor == null || ceiling == null) {
       setPreviewDays([]);
       setPreviewMarketDays([]);
       setPreviewCalendarDays([]);
       setHasSojoriPreview(false);
-      return;
+      return undefined;
     }
+    // Pas de debounce sur le 1er fetch listing (sinon +700 ms inutiles).
+    const isFirst = !didAutoPreviewRef.current;
     debounceRef.current = setTimeout(() => {
+      didAutoPreviewRef.current = true;
       void runPreview();
-    }, 700);
+    }, isFirst ? 0 : 700);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [listingId, hasAirroiSnapshot, configPayload, runPreview, floor, ceiling]);
+  }, [listingId, hasAirroiSnapshot, configPayload, runPreview, floor, ceiling, autoPreview]);
 
   const applyToCalendar = useCallback(async () => {
     const payload = configPayload();

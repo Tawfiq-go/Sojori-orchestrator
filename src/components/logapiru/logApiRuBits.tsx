@@ -21,10 +21,12 @@ export function StatusBadge({
 }
 
 export function DirBadge({ dir }: { dir: UiDir }) {
+  const arrow = dir === 'push' ? '↑' : dir === 'pull' ? '↓' : '↯';
+  const label = dir === 'push' ? 'Push' : dir === 'pull' ? 'Pull' : 'Webhook';
   return (
     <span className={`dir ${dir}`}>
-      <span className="ar">{dir === 'push' ? '↑' : '↓'}</span>
-      {dir === 'push' ? 'Push' : 'Pull'}
+      <span className="ar">{arrow}</span>
+      {label}
     </span>
   );
 }

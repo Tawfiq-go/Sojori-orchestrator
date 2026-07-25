@@ -19,7 +19,7 @@ export type LogApiRuCategory =
   | 'other';
 
 export type LogApiRuStatusFilter = '' | 'success' | 'warning' | 'error';
-export type LogApiRuDirFilter = '' | 'push' | 'pull';
+export type LogApiRuDirFilter = '' | 'push' | 'pull' | 'webhook';
 
 export interface LogApiRuListQuery {
   page?: number;

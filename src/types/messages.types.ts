@@ -60,6 +60,8 @@ export interface MessageExchange {
   /** Outbound WhatsApp delivery (srv-fullchatbot assistant row). */
   ai_response_send_status?: 'pending' | 'sent' | 'failed';
   ai_response_send_error?: string | null;
+  /** Résumé PM (jamais le jargon technique). */
+  owner_summary?: string | null;
 }
 
 export interface ProcessingTraceStep {
@@ -131,6 +133,11 @@ export interface Conversation {
   status?: string;
   checkin_date?: string;
   checkout_date?: string;
+  /** Création résa (ISO) — filtre inbox « Créé auj ». */
+  reservation_created_at?: string | null;
+  /** Shell whitelist sans message — fil initiable. */
+  provisional?: boolean;
+  has_whatsapp?: 'unknown' | 'yes' | 'no' | null;
   /** Source résa (legacy — channelName ou source) — enrichi par srv-fullchatbot */
   booking_source?: string | null;
   /** Champs résa srv-reservations (alignés liste Réservations) */

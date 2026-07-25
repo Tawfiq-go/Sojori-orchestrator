@@ -1,6 +1,8 @@
 export type CommsSection = 'guest' | 'staff';
 
-export type CommsGuestTab = 'whatsapp' | 'ota' | 'resas' | 'leads' | 'reviews';
+export type CommsGuestTab = 'whatsapp' | 'ota' | 'leads' | 'reviews';
+/** @deprecated déplacé vers /planning — gardé pour redirect legacy */
+export type CommsLegacyResasTab = 'resas';
 /** Inbox Resa = ligne booking sans owner → onglet côté staff/admin plateforme. */
 export type CommsStaffTab = 'staff' | 'admin' | 'booking';
 export type CommsHubTab = CommsGuestTab | CommsStaffTab;
@@ -12,7 +14,6 @@ export const GUEST_HUB_TABS: {
 }[] = [
   { id: 'whatsapp', label: 'WhatsApp', emoji: '💬' },
   { id: 'ota', label: 'Messages OTA', emoji: '🏨' },
-  { id: 'resas', label: 'Résas', emoji: '📋' },
   { id: 'leads', label: 'Demande', emoji: '🎯' },
   { id: 'reviews', label: 'Avis', emoji: '⭐' },
 ];

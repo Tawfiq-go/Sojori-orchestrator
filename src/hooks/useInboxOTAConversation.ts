@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import messagesService from '../services/messagesService';
 import tasksService from '../services/tasksService';
 import reservationsService from '../services/reservationsService';
@@ -8,12 +8,22 @@ import type { ReservationTask } from '../types/reservationTask.types';
 import type { Reservation } from '../types/reservations.types';
 import {
   buildOtaPreviewFallbackMessages,
+  clearOtaGhostPreview,
   extractOtaMessagesFromApiResponse,
   mapOtaApiMessagesToInbox,
   mapOtaRowToReservation,
   type OtaThreadRow,
 } from '../components/unified-inbox/inboxOtaMappers';
 import { mapReservationToInboxData } from '../components/unified-inbox/inboxReservationEnrichment';
+
+type CachedThread = {
+  messages: Message[];
+  total: number;
+};
+
+/** Cache session — ouverture style WhatsApp Web (instant si déjà vu). */
+const otaMessagesCache = new Map<string, CachedThread>();
+
 export function useInboxOTAConversation() {
   const [activeRow, setActiveRow] = useState<OtaThreadRow | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -24,6 +34,8 @@ export function useInboxOTAConversation() {
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
   const [messagesTotal, setMessagesTotal] = useState(0);
+  const selectGenRef = useRef(0);
+  const activeThreadIdRef = useRef<string | null>(null);
 
   const appendOutboundMessage = useCallback((text: string) => {
     const trimmed = text.trim();
@@ -35,7 +47,18 @@ export function useInboxOTAConversation() {
       time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       status: 'sent',
     };
-    setMessages((prev) => [...prev, msg]);
+    setMessages((prev) => {
+      const next = [...prev, msg];
+      const key = activeThreadIdRef.current;
+      if (key) {
+        const prevCache = otaMessagesCache.get(key);
+        otaMessagesCache.set(key, {
+          messages: next,
+          total: Math.max(prevCache?.total || 0, next.length),
+        });
+      }
+      return next;
+    });
   }, []);
 
   const removeLastOutboundMessage = useCallback(() => {
@@ -43,22 +66,40 @@ export function useInboxOTAConversation() {
       if (!prev.length) return prev;
       const last = prev[prev.length - 1];
       if (last.from !== 'you' || !String(last.id).startsWith('local-')) return prev;
-      return prev.slice(0, -1);
+      const next = prev.slice(0, -1);
+      const key = activeThreadIdRef.current;
+      if (key) {
+        const prevCache = otaMessagesCache.get(key);
+        otaMessagesCache.set(key, {
+          messages: next,
+          total: prevCache?.total || next.length,
+        });
+      }
+      return next;
     });
   }, []);
 
   const refreshOtaMessages = useCallback(async (row?: OtaThreadRow) => {
     const target = row || activeRow;
     if (!target) return;
+    const threadKey = String(target.threadId);
     try {
-      const msgRes = await messagesService.getOTAMessages(String(target.threadId));
+      const msgRes = await messagesService.getOTAMessages(threadKey);
+      if (activeThreadIdRef.current !== threadKey) return;
       const rawMessages = extractOtaMessagesFromApiResponse(msgRes);
-      let mapped = mapOtaApiMessagesToInbox(rawMessages, target.guestName);
-      if (mapped.length === 0 && target.lastMessage?.trim()) {
-        mapped = buildOtaPreviewFallbackMessages(target);
-      }
-      if (mapped.length > 0) {
-        setMessages((prev) => (mapped.length >= prev.length ? mapped : prev));
+      // API OK + 0 msg = fil vraiment vide — ne pas inventer un aperçu RU fantôme.
+      const mapped = mapOtaApiMessagesToInbox(rawMessages, target.guestName);
+      const total =
+        typeof (msgRes as { total?: number })?.total === 'number'
+          ? (msgRes as { total: number }).total
+          : mapped.length;
+      otaMessagesCache.set(threadKey, { messages: mapped, total });
+      setMessages(mapped);
+      setMessagesTotal(total);
+      if (mapped.length === 0) {
+        setActiveRow((prev) =>
+          prev && String(prev.threadId) === threadKey ? clearOtaGhostPreview(prev) : prev,
+        );
       }
     } catch (err) {
       console.error('❌ Erreur refresh OTA messages:', err);
@@ -66,34 +107,59 @@ export function useInboxOTAConversation() {
   }, [activeRow]);
 
   const selectOtaThread = useCallback(async (row: OtaThreadRow) => {
+    const threadKey = String(row.threadId);
+    const sameThread = activeThreadIdRef.current === threadKey;
+    const gen = ++selectGenRef.current;
+    const cached = otaMessagesCache.get(threadKey);
+
+    activeThreadIdRef.current = threadKey;
     setActiveRow(row);
-    setLoadingMessages(true);
-    setLoadingTasks(true);
-    setMessages([]);
-    setTasks([]);
     setMessagesLoadError(null);
-    setMessagesTotal(0);
     setReservation(mapOtaRowToReservation(row));
-    setRawReservation(null);
+
+    if (!sameThread) {
+      setRawReservation(null);
+      setTasks([]);
+      if (cached?.messages?.length) {
+        // WhatsApp Web : cache → affichage immédiat, refresh silencieux
+        setMessages(cached.messages);
+        setMessagesTotal(cached.total);
+        setLoadingMessages(true);
+      } else {
+        // Pas de cache → panneau vide + spinner (pas d’aperçu partiel)
+        setMessages([]);
+        setMessagesTotal(0);
+        setLoadingMessages(true);
+      }
+    } else {
+      setLoadingMessages(true);
+    }
+    setLoadingTasks(true);
 
     const resaNum = row.reservationNumber?.trim();
-    const threadKey = String(row.threadId);
 
     try {
-      let rawMessages: any[] = [];
       const msgRes = await messagesService.getOTAMessages(threadKey);
-      rawMessages = extractOtaMessagesFromApiResponse(msgRes);
+      if (gen !== selectGenRef.current) return;
+
+      const rawMessages = extractOtaMessagesFromApiResponse(msgRes);
       const total =
         typeof (msgRes as { total?: number })?.total === 'number'
           ? (msgRes as { total: number }).total
           : rawMessages.length;
-      setMessagesTotal(total);
 
-      let mapped = mapOtaApiMessagesToInbox(rawMessages, row.guestName);
-      if (mapped.length === 0 && row.lastMessage?.trim()) {
-        mapped = buildOtaPreviewFallbackMessages(row);
-      }
+      // Succès API vide = pas de fallback lastMessage (évite Q « 28 mai » alors que le fil est vide).
+      const mapped = mapOtaApiMessagesToInbox(rawMessages, row.guestName);
+
+      otaMessagesCache.set(threadKey, { messages: mapped, total });
       setMessages(mapped);
+      setMessagesTotal(total);
+      setLoadingMessages(false);
+      if (mapped.length === 0) {
+        setActiveRow((prev) =>
+          prev && String(prev.threadId) === threadKey ? clearOtaGhostPreview(prev) : prev,
+        );
+      }
 
       const [tasksResponse, reservationRow] = await Promise.all([
         resaNum
@@ -101,6 +167,8 @@ export function useInboxOTAConversation() {
           : Promise.resolve({ success: false, data: { reservationId: '', total: 0, tasks: [] } }),
         resaNum ? reservationsService.getByReservationNumber(resaNum) : Promise.resolve(null),
       ]);
+
+      if (gen !== selectGenRef.current) return;
 
       if (tasksResponse.success) {
         setTasks(tasksResponse.data.tasks);
@@ -111,19 +179,24 @@ export function useInboxOTAConversation() {
         setReservation(mapReservationToInboxData(reservationRow));
       }
     } catch (err) {
+      if (gen !== selectGenRef.current) return;
       console.error('❌ Erreur chargement thread OTA:', err);
-      const fallback = buildOtaPreviewFallbackMessages(row);
-      if (fallback.length > 0) {
-        setMessages(fallback);
-        setMessagesLoadError(
-          'Historique complet indisponible — aperçu Rental United affiché. Lance une sync messages si besoin.',
-        );
-      } else {
-        setMessagesLoadError('Impossible de charger les messages de ce fil.');
+      if (!cached?.messages?.length) {
+        const fallback = buildOtaPreviewFallbackMessages(row);
+        if (fallback.length > 0) {
+          setMessages(fallback);
+          setMessagesLoadError(
+            'Historique complet indisponible — aperçu Rental United affiché. Lance une sync messages si besoin.',
+          );
+        } else {
+          setMessagesLoadError('Impossible de charger les messages de ce fil.');
+        }
       }
     } finally {
-      setLoadingMessages(false);
-      setLoadingTasks(false);
+      if (gen === selectGenRef.current) {
+        setLoadingMessages(false);
+        setLoadingTasks(false);
+      }
     }
   }, []);
 

@@ -167,7 +167,7 @@ const TIMING_PRESETS: Record<
     start: 2,
     fin: 'J0',
     anchor: 'checkin',
-    hint: 'Informer le syndic J-2 → J0 (contacts listing.syndics + template Meta)',
+    hint: 'Message planifié syndic · J0/J-1/J-2 · heure · durée d’accès — pas de tâche staff',
   },
   receive_departure: {
     label: 'Jour J départ',

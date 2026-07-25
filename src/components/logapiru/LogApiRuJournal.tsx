@@ -1,5 +1,5 @@
 /** LogApiRU · Vue B — Journal : échanges enrichis, filtres, batchs corrélés repliables. */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type {
   LogApiRuItem,
   LogApiRuListResponse,
@@ -21,9 +21,87 @@ import { CatPill, DirBadge, EmptyState, ErrorState, StatusBadge, msClass } from 
 import type { LogApiRuFilters } from './logApiRuFilters';
 import { categoryOfAction } from './logApiRuFilters';
 
+const ROW_TSV_HEADER = [
+  'heure',
+  'date',
+  'dir',
+  'catégorie',
+  'libellé',
+  'action',
+  'listing',
+  'owner',
+  'réservation',
+  'source',
+  'statut',
+  'code',
+  'durée',
+  'correlationId',
+  'id',
+].join('\t');
+
 function auditStr(item: LogApiRuItem, key: string): string {
   const v = item.auditContext?.[key];
   return typeof v === 'string' ? v : '';
+}
+
+/** true si l’utilisateur est en train de sélectionner du texte (ne pas ouvrir le drawer). */
+function hasTextSelection(): boolean {
+  const sel = window.getSelection();
+  return Boolean(sel && sel.toString().trim().length > 0);
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fallback below */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+function formatRowPlain(item: LogApiRuItem): string {
+  const status = uiStatus(item.status, item.statusCode, item.responseTime);
+  const source = auditStr(item, 'modificationSource') || auditStr(item, 'trigger');
+  const cid = auditStr(item, 'correlationId');
+  const parts = [
+    clockTime(item.createdAt),
+    absTime(item.createdAt),
+    actionDir(item.action),
+    categoryOfAction(item.action),
+    actionLabel(item.action),
+    item.action,
+    item.listingName || item.listingId || '',
+    item.ownerName || item.ownerId || '',
+    item.sojoriReservationNumber || '',
+    source,
+    status,
+    item.statusCode || '',
+    item.responseTime == null ? '' : `${item.responseTime} ms`,
+    cid,
+    item.id,
+  ];
+  return parts.join('\t');
+}
+
+function formatRowsPlain(items: LogApiRuItem[]): string {
+  if (!items.length) return '';
+  return [ROW_TSV_HEADER, ...items.map(formatRowPlain)].join('\n');
 }
 
 function SkeletonJournal() {
@@ -46,13 +124,19 @@ function SkeletonJournal() {
 function JournalRow({
   item,
   active,
+  selected,
   now,
   onOpen,
+  onToggleSelect,
+  onCheckToggle,
 }: {
   item: LogApiRuItem;
   active: boolean;
+  selected: boolean;
   now: Date;
   onOpen: (id: string) => void;
+  onToggleSelect: (id: string, e?: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean }) => void;
+  onCheckToggle: (id: string) => void;
 }) {
   const status = uiStatus(item.status, item.statusCode, item.responseTime);
   const code = RU_CODES[item.statusCode];
@@ -69,8 +153,26 @@ function JournalRow({
     chips.push({ icon: '🗓', label: item.sojoriReservationNumber });
   }
 
+  const onRowClick = (e: MouseEvent) => {
+    if (hasTextSelection()) return;
+    // Clic ligne = multi-select (Shift = plage, Cmd/Ctrl = toggle)
+    onToggleSelect(item.id, e);
+  };
+
   return (
-    <div className={`jrow ${active ? 'active' : ''}`} onClick={() => onOpen(item.id)}>
+    <div
+      className={`jrow selectable ${active ? 'active' : ''} ${selected ? 'picked' : ''}`}
+      onClick={onRowClick}
+      onDoubleClick={() => onOpen(item.id)}
+    >
+      <label className="jcheck" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onCheckToggle(item.id)}
+          aria-label="Sélectionner la ligne"
+        />
+      </label>
       <div className="jtime" title={absTime(item.createdAt)}>
         <b>{clockTime(item.createdAt)}</b>
         {relTime(item.createdAt, now)}
@@ -111,7 +213,20 @@ function JournalRow({
           {item.responseTime == null ? '—' : `${fmtN(item.responseTime)} ms`}
         </span>
       </div>
-      <div className="jchev">›</div>
+      <div className="jactions-end">
+        <button
+          type="button"
+          className="jchev-btn"
+          title="Ouvrir le détail"
+          aria-label="Ouvrir le détail"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(item.id);
+          }}
+        >
+          ›
+        </button>
+      </div>
     </div>
   );
 }
@@ -149,11 +264,21 @@ export function LogApiRuJournal({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [qLocal, setQLocal] = useState(filters.q);
   const [qTimer, setQTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [copyFlash, setCopyFlash] = useState<string | null>(null);
+  const lastAnchorId = useRef<string | null>(null);
 
   const items = data?.items ?? [];
   const total = data?.pagination.total ?? 0;
   const limit = data?.pagination.limit ?? 50;
   const totalPages = Math.max(1, Math.ceil(total / limit));
+  const itemIds = useMemo(() => items.map((i) => i.id), [items]);
+  const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    lastAnchorId.current = null;
+  }, [page, filters, data?.pagination.total]);
 
   const hasActiveFilters = Boolean(
     filters.status || filters.dir || filters.category || filters.action || filters.ownerId ||
@@ -207,6 +332,70 @@ export function LogApiRuJournal({
     return out;
   }, [items]);
 
+  const flashCopy = (label: string) => {
+    setCopyFlash(label);
+    window.setTimeout(() => setCopyFlash(null), 1400);
+  };
+
+  const checkToggle = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    lastAnchorId.current = id;
+  };
+
+  const toggleSelect = (
+    id: string,
+    e?: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean },
+  ) => {
+    const shift = Boolean(e?.shiftKey);
+    const multi = Boolean(e?.metaKey || e?.ctrlKey);
+    setSelectedIds((prev) => {
+      if (shift && lastAnchorId.current) {
+        const next = new Set(prev);
+        const a = itemIds.indexOf(lastAnchorId.current);
+        const b = itemIds.indexOf(id);
+        if (a >= 0 && b >= 0) {
+          const [lo, hi] = a < b ? [a, b] : [b, a];
+          for (let i = lo; i <= hi; i++) next.add(itemIds[i]);
+          return next;
+        }
+      }
+      if (multi) {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      }
+      if (prev.size === 1 && prev.has(id)) return new Set();
+      return new Set([id]);
+    });
+    if (!shift) lastAnchorId.current = id;
+  };
+
+  const selectAllPage = () => {
+    setSelectedIds(new Set(itemIds));
+    lastAnchorId.current = itemIds[0] ?? null;
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    lastAnchorId.current = null;
+  };
+
+  const copyIds = async (ids: string[], label: string) => {
+    const rows = ids.map((id) => itemById.get(id)).filter(Boolean) as LogApiRuItem[];
+    if (!rows.length) return;
+    const ok = await copyText(formatRowsPlain(rows));
+    if (ok) flashCopy(label);
+  };
+
+  const selectedCount = selectedIds.size;
+  const allPageSelected = itemIds.length > 0 && itemIds.every((id) => selectedIds.has(id));
+
   const statusChips: Array<{ id: '' | 'error' | 'warning' | 'success'; label: string; hint: string }> = [
     { id: '', label: 'Tous', hint: 'Tous les appels' },
     { id: 'error', label: 'Échecs', hint: 'Vrais échecs API RU (code ≠ 0, hors retry)' },
@@ -246,9 +435,10 @@ export function LogApiRuJournal({
           value={filters.dir}
           onChange={(e) => onFiltersChange({ dir: e.target.value as LogApiRuFilters['dir'] })}
         >
-          <option value="">Push & Pull</option>
-          <option value="push">↑ Push</option>
-          <option value="pull">↓ Pull</option>
+          <option value="">Push · Pull · Webhook</option>
+          <option value="push">↑ Push (sortant)</option>
+          <option value="pull">↓ Pull (lecture)</option>
+          <option value="webhook">↯ Webhook (entrant)</option>
         </select>
       </div>
       <div className="fsel">
@@ -325,7 +515,9 @@ export function LogApiRuJournal({
         title="Aucun échange"
         detail={
           hasActiveFilters
-            ? 'Aucun appel ne correspond à ces filtres. Réinitialisez pour voir tous les échanges.'
+            ? filters.dir === 'webhook' && filters.category && !['reservation', 'messaging', 'lead'].includes(filters.category)
+              ? `Webhook + « ${filters.category} » : peu de croisement. Essaie Webhook seul, ou Messagerie / Réservations / Leads.`
+              : 'Aucun appel ne correspond à ces filtres. Réinitialisez, élargis la fenêtre, ou retire une contrainte (dir / catégorie).'
             : 'Aucun échange Rental United sur la période sélectionnée.'
         }
       />
@@ -333,6 +525,42 @@ export function LogApiRuJournal({
   } else {
     body = (
       <>
+        <div className="jcopybar" role="toolbar" aria-label="Copie multi-lignes">
+          <label className="jcheck">
+            <input
+              type="checkbox"
+              checked={allPageSelected}
+              onChange={() => (allPageSelected ? clearSelection() : selectAllPage())}
+              aria-label="Tout sélectionner sur la page"
+            />
+            <span>Page</span>
+          </label>
+          <button type="button" className="jcopy-action" onClick={selectAllPage}>
+            Tout sélectionner
+          </button>
+          <button
+            type="button"
+            className="jcopy-action primary"
+            disabled={selectedCount === 0}
+            onClick={() => void copyIds([...selectedIds], `${selectedCount} ligne(s) copiée(s)`)}
+          >
+            Copier {selectedCount > 0 ? `${selectedCount} ligne${selectedCount > 1 ? 's' : ''}` : 'la sélection'}
+          </button>
+          <button
+            type="button"
+            className="jcopy-action"
+            onClick={() => void copyIds(itemIds, `Page · ${itemIds.length} ligne(s) copiée(s)`)}
+          >
+            Copier la page ({itemIds.length})
+          </button>
+          {selectedCount > 0 && (
+            <button type="button" className="jcopy-action ghost" onClick={clearSelection}>
+              Effacer
+            </button>
+          )}
+          {copyFlash && <span className="jcopy-flash">✓ {copyFlash}</span>}
+          <span className="jcopy-hint">Clic = sélection · Shift = plage · › = détail</span>
+        </div>
         <div className="jlist">
           {grouped.map((g) => {
             if (g.type === 'row') {
@@ -341,8 +569,11 @@ export function LogApiRuJournal({
                   key={g.item.id}
                   item={g.item}
                   active={g.item.id === activeCallId}
+                  selected={selectedIds.has(g.item.id)}
                   now={now}
                   onOpen={onOpenCall}
+                  onToggleSelect={toggleSelect}
+                  onCheckToggle={checkToggle}
                 />
               );
             }
@@ -354,13 +585,48 @@ export function LogApiRuJournal({
                 : 'success';
             const isCollapsed = collapsed[g.cid];
             const label = `${actionLabel(lead.action)}${lead.listingName ? ` — ${lead.listingName}` : ''}`;
+            const batchIds = g.items.map((it) => it.id);
+            const batchAllSelected = batchIds.every((id) => selectedIds.has(id));
             return (
               <div className={`batch ${isCollapsed ? 'collapsed' : ''}`} key={g.cid}>
                 <div
-                  className="batch-head"
-                  onClick={() => setCollapsed((c) => ({ ...c, [g.cid]: !c[g.cid] }))}
+                  className="batch-head selectable"
+                  onClick={() => {
+                    if (hasTextSelection()) return;
+                    setCollapsed((c) => ({ ...c, [g.cid]: !c[g.cid] }));
+                  }}
                 >
-                  <span className="cr">⛓ {g.cid}</span>
+                  <label className="jcheck" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={batchAllSelected}
+                      onChange={() => {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (batchAllSelected) for (const id of batchIds) next.delete(id);
+                          else for (const id of batchIds) next.add(id);
+                          return next;
+                        });
+                        lastAnchorId.current = batchIds[0] ?? null;
+                      }}
+                      aria-label="Sélectionner le batch"
+                    />
+                  </label>
+                  <span className="cr" title="Sélectionner pour copier">
+                    ⛓ {g.cid}
+                  </span>
+                  <button
+                    type="button"
+                    className="jcopy batch-copy"
+                    title="Copier toutes les lignes du batch"
+                    aria-label="Copier toutes les lignes du batch"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await copyIds(batchIds, `Batch · ${batchIds.length} ligne(s) copiée(s)`);
+                    }}
+                  >
+                    ⧉
+                  </button>
                   <span className="lbl">{label}</span>
                   <span className="cnt">{g.items.length} appels</span>
                   <span className="agg">
@@ -376,8 +642,11 @@ export function LogApiRuJournal({
                     key={it.id}
                     item={it}
                     active={it.id === activeCallId}
+                    selected={selectedIds.has(it.id)}
                     now={now}
                     onOpen={onOpenCall}
+                    onToggleSelect={toggleSelect}
+                    onCheckToggle={checkToggle}
                   />
                 ))}
               </div>

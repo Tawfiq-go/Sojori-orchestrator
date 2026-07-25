@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useDispatch, useSelector } from 'react-redux';
@@ -9,6 +10,7 @@ import {
   syncOwnerRu,
   updateOwner,
   sendOwnerPasswordLink,
+  getOwnerRuLoginCredentials,
   updateOwnerWhatsappAiTier,
   updateFillCompany,
   updateFillCompanyLocal,
@@ -313,7 +315,15 @@ function AccountToFillCompanySync({ values, setFieldValue, cities, owner }) {
     const pairs = [
       ['fillCompany.ContactInfo.FirstName', values.firstName || ''],
       ['fillCompany.ContactInfo.LastName', values.lastName || ''],
-      ['fillCompany.ContactInfo.Email', values.email || ''],
+      // ⚠️ CRITICAL: ContactInfo.Email = extranet RU, jamais email dashboard
+      [
+        'fillCompany.ContactInfo.Email',
+        resolveRuEmailDisplay({
+          ruEmail: values.ruEmail,
+          firstName: values.firstName,
+          lastName: values.lastName,
+        }) || '',
+      ],
       ['fillCompany.ContactInfo.Phone', values.phone || ''],
       ['fillCompany.ContactInfo.City', cityName],
       ['fillCompany.CompanyInfo.CompanyCity', cityName],
@@ -405,9 +415,14 @@ const UpdateOwnerSidebar = ({
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
   const ruEmailTouchedRef = useRef(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordDialogMode, setPasswordDialogMode] = useState('dashboard');
   const [passwordDialogLoading, setPasswordDialogLoading] = useState(false);
   const [sendLinkLoading, setSendLinkLoading] = useState(false);
   const [passwordLinkDialog, setPasswordLinkDialog] = useState(null);
+  const [ruCredOpen, setRuCredOpen] = useState(false);
+  const [ruCredLoading, setRuCredLoading] = useState(false);
+  const [ruCredError, setRuCredError] = useState('');
+  const [ruCredData, setRuCredData] = useState(null);
   const [savedOwnerId, setSavedOwnerId] = useState(null);
   const [saveLoading, setSaveLoading] = useState(false);
   const [activateLoading, setActivateLoading] = useState(false);
@@ -1267,7 +1282,6 @@ const UpdateOwnerSidebar = ({
     });
 
     try {
-      const ruPwd = (values.ruExtranetPassword || '').trim();
       let draftEmail = null;
 
       if (canEditDashboardEmail) {
@@ -1285,12 +1299,12 @@ const UpdateOwnerSidebar = ({
         }
       }
 
+      // ⚠️ CRITICAL: jamais ruExtranetPassword ici — uniquement via dialog « Modifier password R.U. »
       const updatePayload = {
         ...buildUpdatePayload(values, selectedCity, {
           includeDashboardEmail: canEditDashboardEmail,
           ownerRef: owner,
         }),
-        ...(ruPwd.length >= 6 ? { ruExtranetPassword: ruPwd } : {}),
       };
       logPmSaveAccountPayload('→ PUT update-account', updatePayload);
       logPmApiStart('PUT /auth/update-account', { ownerId: owner._id, email: updatePayload.email });
@@ -1384,6 +1398,26 @@ const UpdateOwnerSidebar = ({
       );
     } finally {
       setPasswordDialogLoading(false);
+    }
+  };
+
+  const handleViewRuCredentials = async () => {
+    if (!owner?._id || isPmSelfService) return;
+    setRuCredOpen(true);
+    setRuCredData(null);
+    setRuCredError('');
+    setRuCredLoading(true);
+    try {
+      const res = await getOwnerRuLoginCredentials(owner._id);
+      if (res?.success && res.data) {
+        setRuCredData(res.data);
+      } else {
+        setRuCredError(res?.error || 'Impossible de charger les mots de passe');
+      }
+    } catch (e) {
+      setRuCredError(e?.message || 'Impossible de charger les mots de passe');
+    } finally {
+      setRuCredLoading(false);
     }
   };
 
@@ -1777,7 +1811,7 @@ const UpdateOwnerSidebar = ({
                       <div className="field">
                         <CompteFieldLabel plain={isPmSelfService}
                           kind="sojoriLogin"
-                          ruXmlPath="Sojori invite + ContactInfo.Email"
+                          ruXmlPath="Sojori invite (dashboard only)"
                           required
                         >
                           Email dashboard
@@ -1797,13 +1831,13 @@ const UpdateOwnerSidebar = ({
                         <div className="owner-form-hint" style={{ marginTop: 6 }}>
                           {t('ruFieldBadge.hintDashboardEmailCreate', {
                             defaultValue:
-                              'Création du compte dashboard Sojori : invitation par email (24h). Si channel RU, recopié dans ContactInfo.Email (fiche entreprise).',
+                              'Login dashboard Sojori uniquement — invitation par email (24h). Jamais utilisé comme login R.U. ni ContactInfo.Email.',
                           })}
                         </div>
                       </div>
                     ) : canEditDashboardEmail ? (
                       <div className="field">
-                        <CompteFieldLabel plain={isPmSelfService} kind="sojoriLogin" ruXmlPath="Sojori login + ContactInfo.Email">
+                        <CompteFieldLabel plain={isPmSelfService} kind="sojoriLogin" ruXmlPath="Sojori login (dashboard only)">
                           Email dashboard
                         </CompteFieldLabel>
                         <input
@@ -1832,9 +1866,31 @@ const UpdateOwnerSidebar = ({
                           type="button"
                           className="owner-btn secondary"
                           style={{ marginTop: 8 }}
-                          onClick={() => setPasswordDialogOpen(true)}
+                          onClick={() => {
+                            setPasswordDialogMode('dashboard');
+                            setPasswordDialogOpen(true);
+                          }}
                         >
-                          Modifier les mots de passe
+                          Modifier password dashboard
+                        </button>
+                        <button
+                          type="button"
+                          className="owner-btn secondary"
+                          style={{ marginTop: 8, marginLeft: 8 }}
+                          onClick={() => {
+                            setPasswordDialogMode('ru');
+                            setPasswordDialogOpen(true);
+                          }}
+                        >
+                          Modifier password R.U.
+                        </button>
+                        <button
+                          type="button"
+                          className="owner-btn secondary"
+                          style={{ marginTop: 8, marginLeft: 8 }}
+                          onClick={() => void handleViewRuCredentials()}
+                        >
+                          Voir dashboard + RU
                         </button>
                         <button
                           type="button"
@@ -1848,7 +1904,7 @@ const UpdateOwnerSidebar = ({
                       </div>
                     ) : (
                       <div className="field">
-                        <CompteFieldLabel plain={isPmSelfService} kind="sojoriLogin" ruXmlPath="Sojori login + ContactInfo.Email">
+                        <CompteFieldLabel plain={isPmSelfService} kind="sojoriLogin" ruXmlPath="Sojori login (dashboard only)">
                           Email dashboard
                         </CompteFieldLabel>
                         <input className="input owner-input-readonly" value={values.email || owner?.email || ''} readOnly disabled />
@@ -1866,9 +1922,31 @@ const UpdateOwnerSidebar = ({
                           type="button"
                           className="owner-btn secondary"
                           style={{ marginTop: 8 }}
-                          onClick={() => setPasswordDialogOpen(true)}
+                          onClick={() => {
+                            setPasswordDialogMode('dashboard');
+                            setPasswordDialogOpen(true);
+                          }}
                         >
-                          Modifier les mots de passe
+                          Modifier password dashboard
+                        </button>
+                        <button
+                          type="button"
+                          className="owner-btn secondary"
+                          style={{ marginTop: 8, marginLeft: 8 }}
+                          onClick={() => {
+                            setPasswordDialogMode('ru');
+                            setPasswordDialogOpen(true);
+                          }}
+                        >
+                          Modifier password R.U.
+                        </button>
+                        <button
+                          type="button"
+                          className="owner-btn secondary"
+                          style={{ marginTop: 8, marginLeft: 8 }}
+                          onClick={() => void handleViewRuCredentials()}
+                        >
+                          Voir dashboard + RU
                         </button>
                         <button
                           type="button"
@@ -1918,7 +1996,7 @@ const UpdateOwnerSidebar = ({
                       <div className="owner-form-hint" style={{ marginTop: 6 }}>
                         {t('ruFieldBadge.hintRuEmail', {
                           defaultValue:
-                            'Login sur extranet Rental United (Push_CreateUser) — distinct de l’email dashboard. Utilisé pour le widget Channel Manager. Aucun email envoyé par Sojori à cette adresse.',
+                            'Login extranet Rental United (API calendrier / prix / archive). Distinct du dashboard. Aussi utilisé comme ContactInfo.Email (fiche entreprise RU). Aucun email Sojori à cette adresse.',
                         })}
                       </div>
                     </div>
@@ -2059,10 +2137,10 @@ const UpdateOwnerSidebar = ({
                     <div className="form-section-h">Rental United</div>
                     <div className="field">
                       <CompteFieldLabel plain={isPmSelfService} kind="ruCreateUser" ruXmlPath="Push_CreateUser.Password">
-                        Mot de passe extranet RU
+                        Mot de passe extranet RU (création)
                       </CompteFieldLabel>
                       <div className="owner-form-hint" style={{ marginBottom: 6 }}>
-                        Min. 6 caractères si pas encore enregistré
+                        Uniquement à la création du compte RU. Ensuite : bouton « Modifier password R.U. » (jamais mélangé avec le dashboard).
                       </div>
                       <input
                         className="input"
@@ -2072,11 +2150,9 @@ const UpdateOwnerSidebar = ({
                         onChange={handleChange}
                         onBlur={handleBlur}
                         autoComplete="new-password"
-                        placeholder={
-                          owner?.hasRuExtranetPassword
-                            ? 'Laisser vide pour conserver'
-                            : 'Obligatoire pour créer le compte RU'
-                        }
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        placeholder="Obligatoire pour créer le compte RU"
                       />
                       {touched.ruExtranetPassword && errors.ruExtranetPassword ? (
                         <span className="owner-field-err">{errors.ruExtranetPassword}</span>
@@ -2742,7 +2818,128 @@ const UpdateOwnerSidebar = ({
           ruEmail={resolveRuEmailDisplay(owner)}
           loading={passwordDialogLoading}
           onSubmit={handleOwnerPasswordSubmit}
+          mode={passwordDialogMode}
         />
+      ) : null}
+      {!isCreate && owner && !isPmSelfService && ruCredOpen ? (
+        <div
+          className="owner-drawer-host"
+          role="presentation"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1400,
+            background: 'rgba(15,23,42,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => {
+            setRuCredOpen(false);
+            setRuCredData(null);
+            setRuCredError('');
+          }}
+          onKeyDown={() => {}}
+        >
+          <div
+            className="so-staff-root"
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              padding: 20,
+              width: 'min(720px, 100%)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.25)',
+            }}
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={() => {}}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>
+              Les 2 mots de passe — {`${owner.firstName || ''} ${owner.lastName || ''}`.trim() || 'PM'}
+            </div>
+            <div className="owner-form-hint" style={{ marginBottom: 12 }}>
+              À gauche = Dashboard Sojori · À droite = Extranet R.U. (champs séparés en base)
+            </div>
+            {ruCredLoading ? <div>Chargement…</div> : null}
+            {!ruCredLoading && ruCredError ? (
+              <div className="owner-field-err" style={{ marginBottom: 12 }}>
+                {ruCredError}
+              </div>
+            ) : null}
+            {!ruCredLoading && ruCredData ? (
+              <div
+                style={{
+                  display: 'grid',
+                  gap: 12,
+                  gridTemplateColumns: '1fr 1fr',
+                }}
+              >
+                <div
+                  style={{
+                    border: '1px solid #e2e8f0',
+                    background: '#f8fafc',
+                    borderRadius: 8,
+                    padding: 12,
+                    display: 'grid',
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: '#334155' }}>1. Dashboard Sojori</div>
+                  <label className="field">
+                    <span className="owner-form-hint">Email dashboard</span>
+                    <input className="input" readOnly value={ruCredData.email || '—'} />
+                  </label>
+                  <label className="field">
+                    <span className="owner-form-hint">Mot de passe dashboard</span>
+                    <input className="input" readOnly value={ruCredData.sojoriPassword || '—'} />
+                  </label>
+                </div>
+                <div
+                  style={{
+                    border: '2px solid #f59e0b',
+                    background: '#fffbeb',
+                    borderRadius: 8,
+                    padding: 12,
+                    display: 'grid',
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: '#92400e' }}>2. Extranet R.U.</div>
+                  <label className="field">
+                    <span className="owner-form-hint">Email R.U.</span>
+                    <input className="input" readOnly value={ruCredData.ruEmail || '—'} />
+                  </label>
+                  <label className="field">
+                    <span className="owner-form-hint">Mot de passe R.U.</span>
+                    <input
+                      className="input"
+                      readOnly
+                      value={ruCredData.password || '(aucun ruPassword en base)'}
+                      style={{ fontWeight: 600 }}
+                    />
+                  </label>
+                  {ruCredData.ruOwnerId != null && ruCredData.ruOwnerId !== '' ? (
+                    <div className="owner-form-hint">RU OwnerId: {String(ruCredData.ruOwnerId)}</div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  setRuCredOpen(false);
+                  setRuCredData(null);
+                  setRuCredError('');
+                }}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
       <OwnerPasswordLinkDialog
         open={!!passwordLinkDialog}

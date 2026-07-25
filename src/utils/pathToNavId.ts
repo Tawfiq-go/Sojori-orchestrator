@@ -17,7 +17,9 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   const path = pathname;
 
   if (path === '/tasks' || path === '/tasks/list') return 'tasks/list';
-  if (path.startsWith('/tasks/planning')) return 'tasks/planning';
+  if (path === '/planning' || path.startsWith('/planning/')) return 'planning';
+  // Deep-links planning → highlight l’entrée unique « Planning »
+  if (path.startsWith('/tasks/planning')) return 'planning';
   if (path.startsWith('/tasks/kanban')) return 'tasks/kanban';
   if (path.startsWith('/tasks/team')) return 'tasks/team';
   if (path.startsWith('/calendar') || path.startsWith('/calendar-v2')) {
@@ -29,13 +31,14 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   if (path.startsWith('/listings/orchestration-model')) return 'listings/orchestration-model';
   if (path.startsWith('/listings') || path.startsWith('/catalogue/listings')) return 'listings/list';
   if (path === '/reservations' || /^\/reservations\/[^/]+$/.test(path)) return 'reservations';
-  if (path.startsWith('/reservations/planning')) return 'reservations/planning';
+  if (path.startsWith('/reservations/planning')) return 'planning';
   if (path.startsWith('/clients/contacts')) return 'clients';
   if (path.startsWith('/reviews')) return 'reviews';
 
   if (path.startsWith('/communications')) {
     const tab = new URLSearchParams(search).get('tab') || 'whatsapp';
     const section = new URLSearchParams(search).get('section');
+    if (tab === 'resas') return 'planning';
     if (section === 'staff' || tab === 'staff' || tab === 'admin' || tab === 'booking') {
       if (tab === 'admin') return 'comms/admin';
       if (tab === 'booking') return 'comms/booking';

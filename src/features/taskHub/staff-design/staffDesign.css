@@ -433,6 +433,23 @@
   gap: 5px;
   margin-bottom: 8px;
 }
+.so-staff-root .field-row {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+}
+.so-staff-root .field-row--3 {
+  grid-template-columns: 1.2fr 1.1fr 1fr;
+}
+.so-staff-root .field-row .field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .so-staff-root .field-row--3 {
+    grid-template-columns: 1fr;
+  }
+}
 .so-staff-root .field-label {
   font-size: 11px;
   font-weight: 700;
@@ -538,6 +555,99 @@
   background: var(--p);
   border-color: var(--pd);
   color: #1a1408;
+}
+.so-staff-root .day-pill.selected {
+  box-shadow: 0 0 0 2px var(--pd);
+}
+.so-staff-root .planning-day-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--b);
+  border-radius: 12px;
+  background: var(--bg2);
+}
+.so-staff-root .planning-day-h {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.so-staff-root .planning-day-h strong { font-size: 14px; }
+.so-staff-root .planning-day-h .hint {
+  font-size: 11px;
+  color: var(--t3);
+  font-weight: 600;
+}
+.so-staff-root .planning-day-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.so-staff-root .planning-day-toggle-row strong {
+  font-size: 14px;
+  display: block;
+}
+.so-staff-root .planning-day-toggle-row .hint {
+  font-size: 11px;
+  color: var(--t3);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.so-staff-root .planning-onoff {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--t4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.so-staff-root .planning-onoff span.on {
+  color: var(--pd);
+}
+.so-staff-root .planning-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.so-staff-root .planning-preset-btn {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--bs);
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--t2);
+}
+.so-staff-root .planning-preset-btn:hover {
+  border-color: var(--pd);
+  background: var(--pt);
+}
+.so-staff-root .planning-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.so-staff-root .planning-slot-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.so-staff-root .planning-slot-sep {
+  font-weight: 800;
+  color: var(--t3);
+}
+.so-staff-root .planning-day-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .so-staff-root .pricing-grid {
   display: flex;
@@ -816,43 +926,107 @@
   border-color: var(--pd);
   color: #1a1408;
 }
-
-/* ── V0 simple : métier, récap, réglages avancés ─────────────── */
-.so-staff-root .job-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 9px;
+.so-staff-root .access-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
 }
-@media (max-width: 820px) {
-  .so-staff-root .job-grid { grid-template-columns: repeat(2, 1fr); }
-}
-.so-staff-root .job-card {
-  border: 1.5px solid var(--bs);
-  border-radius: 12px;
-  padding: 13px 12px;
-  background: var(--bg2);
+.so-staff-root .access-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--bs);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: inherit;
+  color: var(--t2);
 }
-.so-staff-root .job-card.on {
+.so-staff-root .access-mode-btn.on {
+  background: linear-gradient(180deg, #cb9b2c, var(--p));
+  border-color: var(--pd);
+  color: #1a1408;
+}
+.so-staff-root .access-mode-btn.active-value:not(.on) {
   border-color: var(--pd);
   background: var(--pt);
-  box-shadow: 0 0 0 3px var(--pt);
 }
-.so-staff-root .job-card:focus-visible { outline: 2px solid var(--pd); outline-offset: 2px; }
-.so-staff-root .job-emo { font-size: 21px; display: block; margin-bottom: 5px; }
-.so-staff-root .job-card b { font-size: 13px; display: block; }
-.so-staff-root .job-desc {
-  font-size: 10.5px;
+.so-staff-root .access-panel-hint {
+  margin: 0;
+  font-size: 12px;
   color: var(--t3);
-  display: block;
-  margin-top: 3px;
-  line-height: 1.4;
 }
-.so-staff-root .job-custom-note { margin: 8px 0 0; font-size: 11px; color: var(--t3); }
+.so-staff-root .access-selected-chips--compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.so-staff-root .access-check-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 10px;
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--b);
+  border-radius: 10px;
+  background: var(--bg2);
+}
+.so-staff-root .access-check-grid--listings {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 200px;
+}
+.so-staff-root .access-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t);
+  cursor: pointer;
+  min-width: 0;
+}
+.so-staff-root .access-check span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.so-staff-root .access-check input {
+  flex-shrink: 0;
+}
+.so-staff-root .access-city-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.so-staff-root .access-city-filter-btn {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--bs);
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--t2);
+}
+.so-staff-root .access-city-filter-btn.on {
+  background: var(--pt);
+  border-color: var(--pd);
+  color: var(--pd);
+}
+@media (max-width: 720px) {
+  .so-staff-root .access-check-grid,
+  .so-staff-root .access-check-grid--listings {
+    grid-template-columns: 1fr;
+  }
+}
 
+/* ── Récap + réglages avancés ─────────────── */
 .so-staff-root .staff-recap {
   border: 1.5px solid var(--pd);
   background: linear-gradient(135deg, var(--pt), var(--bg1) 60%);

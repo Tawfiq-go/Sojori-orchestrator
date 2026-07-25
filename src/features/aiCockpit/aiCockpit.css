@@ -90,9 +90,9 @@
   background: transparent;
   color: var(--ck-text2);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 800;
-  padding: 6px 11px;
+  padding: 6px 8px;
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -639,6 +639,17 @@
   align-items: center;
   gap: 0;
   margin: 2px 0 8px;
+}
+
+/* Hors turnover : même piste visuelle, sans faux segments de marge. */
+.ck-strip-solo {
+  gap: 10px;
+  padding: 4px 2px;
+}
+
+.ck-flight.solo .ck-strip-solo .ck-node {
+  flex: 1 1 auto;
+  min-width: 120px;
 }
 
 .ck-node {

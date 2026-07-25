@@ -310,6 +310,12 @@ export type BienDetailResult = {
 export function useBienDetail(
   listingId: string | undefined,
   ownerId?: string | null,
+  opts?: {
+    /** Ligne déjà chargée via usePortfolio — évite un 2ᵉ GET /portfolio. */
+    seedRow?: PortfolioRow | null;
+    /** true quand le portefeuille a fini (même si seedRow null). */
+    portfolioReady?: boolean;
+  },
 ): BienDetailResult | null {
   const [aiEnabled, setAiEnabled] = useState(false);
   const [floor, setFloor] = useState<number | null>(null);
@@ -364,6 +370,8 @@ export function useBienDetail(
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const seedRowRef = useRef(opts?.seedRow ?? null);
+  seedRowRef.current = opts?.seedRow ?? null;
 
   const pilot = usePilotPricing({
     listingId,
@@ -395,6 +403,8 @@ export function useBienDetail(
     manualBasePriceMad,
     eventsEnabled,
     calendarYear,
+    // apply-preview-diff recalcule déjà le moteur — pas de 2ᵉ POST /preview
+    autoPreview: false,
   });
   const previewDiff = useApplyPreviewDiff({
     listingId,
@@ -402,8 +412,6 @@ export function useBienDetail(
       portfolioRow?.hasAirroiSnapshot || portfolioRow?.hasRevenueEstimate,
     ),
     configPayload: pilot.buildConfigPayload,
-    previewReady: pilot.hasSojoriPreview,
-    previewLoading: pilot.previewLoading,
   });
 
 
@@ -466,24 +474,50 @@ export function useBienDetail(
     if (!opts?.background) setLoading(true);
     setError(null);
     try {
-      const portfolioRes = await fetchDynamicPricingPortfolio({
-        year: calendarYear,
-        ...(ownerId ? { ownerId } : {}),
-      });
-      if (!portfolioRes.data?.success) {
-        throw new Error('Portfolio indisponible');
-      }
-      const mappedAll = mapPortfolioApiToView(portfolioRes.data);
-      const row = mappedAll.rows.find((r) => r.listing._id === listingId) ?? null;
+      // Réutilise la ligne portefeuille parent si dispo (évite un 2ᵉ GET /portfolio).
+      const seeded =
+        seedRowRef.current && seedRowRef.current.listing._id === listingId
+          ? seedRowRef.current
+          : null;
+
+      let row = seeded;
+      let marketPayload: Awaited<ReturnType<typeof fetchDynamicPricingPortfolio>>['data'] | null =
+        null;
+
+      const configPromise = fetchPilotConfig(listingId).catch(() => null);
+
       if (!row) {
-        throw new Error('Bien introuvable dans le portefeuille Sojori');
+        const portfolioRes = await fetchDynamicPricingPortfolio({
+          year: calendarYear,
+          ...(ownerId ? { ownerId } : {}),
+        });
+        if (!portfolioRes.data?.success) {
+          throw new Error('Portfolio indisponible');
+        }
+        marketPayload = portfolioRes.data;
+        const mappedAll = mapPortfolioApiToView(portfolioRes.data);
+        row = mappedAll.rows.find((r) => r.listing._id === listingId) ?? null;
+        if (!row) {
+          throw new Error('Bien introuvable dans le portefeuille Sojori');
+        }
       }
+
       setPortfolioRow(row);
       setAiEnabled(row.aiEnabled);
 
       const listingCityKey = normalizeCityKey(row.listing.city);
-      let marketPayload = portfolioRes.data;
-      if (listingCityKey && listingCityKey !== '—') {
+      if (!marketPayload) {
+        try {
+          const scopedRes = await fetchDynamicPricingPortfolio({
+            year: calendarYear,
+            ...(listingCityKey && listingCityKey !== '—' ? { city: listingCityKey } : {}),
+            ...(ownerId ? { ownerId } : {}),
+          });
+          if (scopedRes.data?.success) marketPayload = scopedRes.data;
+        } catch {
+          marketPayload = null;
+        }
+      } else if (listingCityKey && listingCityKey !== '—') {
         const cacheCity = marketPayload.marketCache?.city
           ? normalizeCityKey(marketPayload.marketCache.city)
           : null;
@@ -497,19 +531,21 @@ export function useBienDetail(
         }
       }
 
-      const mappedMarket = mapPortfolioApiToView(marketPayload);
-      const cacheCity = marketPayload.marketCache?.city
-        ? normalizeCityKey(marketPayload.marketCache.city)
-        : null;
-      const marketOk =
-        Boolean(marketPayload.marketCache?.hasCity) &&
-        listingCityKey !== '—' &&
-        cacheCity === listingCityKey;
+      if (marketPayload?.success) {
+        const mappedMarket = mapPortfolioApiToView(marketPayload);
+        const cacheCity = marketPayload.marketCache?.city
+          ? normalizeCityKey(marketPayload.marketCache.city)
+          : null;
+        const marketOk =
+          Boolean(marketPayload.marketCache?.hasCity) &&
+          listingCityKey !== '—' &&
+          cacheCity === listingCityKey;
 
-      setHasMarketProd(marketOk);
-      setMarketFetchedAt(marketPayload.marketCache?.fetchedAt ?? null);
-      setCityKpisProd(marketOk ? mappedMarket.cityKpis : null);
-      setMarketCharts(chartsFromApi(marketPayload.marketCharts));
+        setHasMarketProd(marketOk);
+        setMarketFetchedAt(marketPayload.marketCache?.fetchedAt ?? null);
+        setCityKpisProd(marketOk ? mappedMarket.cityKpis : null);
+        setMarketCharts(chartsFromApi(marketPayload.marketCharts));
+      }
 
       const futureErr =
         row.airroiRaw?.refreshErrors?.find((e) => e.includes('getListingFutureRates')) ?? null;
@@ -528,8 +564,8 @@ export function useBienDetail(
       }
 
       try {
-        const cfgRes = await fetchPilotConfig(listingId);
-        if (cfgRes.data?.success && cfgRes.data.config) {
+        const cfgRes = await configPromise;
+        if (cfgRes?.data?.success && cfgRes.data.config) {
           const c = cfgRes.data.config;
           setMode(c.mode);
           setActiveModeId(c.activeModeId ?? c.mode ?? 'equilibre');
@@ -631,8 +667,14 @@ export function useBienDetail(
   }, [listingId, calendarYear, ownerId]);
 
   useEffect(() => {
+    if (!listingId) return;
+    // Attendre le portefeuille parent pour réutiliser seedRow (évite double GET).
+    if (opts && opts.portfolioReady === false) {
+      setLoading(true);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [listingId, load, opts?.portfolioReady, opts?.seedRow]);
 
   const applyToOps = useCallback(async () => {
     if (!listingId) return;
@@ -858,29 +900,65 @@ export function useBienDetail(
   const hasRevenueEstimate = Boolean(portfolioRow?.hasRevenueEstimate);
   /** Snapshot future/rates (comparaison OTA — pas le moteur de prix) */
   const showAirroiOtaCalendar = calendarFromAirroi && calendarDays.length > 0;
-  /** Preview pilote (estimate + bornes) — affiché avant envoi calendrier */
-  const usesPilotPreview = pilot.hasSojoriPreview && pilot.previewDays.length > 0;
-  const displayCalendarDays = usesPilotPreview
-    ? pilot.previewDays
-    : events.length > 0
-      ? overlayEventsOnCalendarDays(calendarDays, events)
-      : pilot.previewLoading
-        ? pilot.previewDays
-        : calendarDays;
+  /** Aperçu prix (apply-preview-diff) → courbes calendrier, sans 2ᵉ POST /preview */
+  const diffPreviewDays = useMemo(() => {
+    const rows = previewDiff.data?.rows ?? [];
+    return rows
+      .filter((r) => r.g7ProposedMad != null && r.g7ProposedMad > 0)
+      .map((r) => ({
+        date: r.date,
+        recommendedPrice: r.g7ProposedMad as number,
+        status: 'std' as const,
+      }));
+  }, [previewDiff.data]);
+  const diffMarketDays = useMemo(() => {
+    const rows = previewDiff.data?.rows ?? [];
+    return rows
+      .filter((r) => r.airroiMad != null && r.airroiMad > 0)
+      .map((r) => ({
+        date: r.date,
+        recommendedPrice: r.airroiMad as number,
+        status: 'std' as const,
+      }));
+  }, [previewDiff.data]);
+  const diffCalendarOpsDays = useMemo(() => {
+    const rows = previewDiff.data?.rows ?? [];
+    return rows
+      .filter((r) => r.calendarCurrentMad != null && r.calendarCurrentMad > 0)
+      .map((r) => ({
+        date: r.date,
+        recommendedPrice: r.calendarCurrentMad as number,
+        status: 'std' as const,
+      }));
+  }, [previewDiff.data]);
+  const usesPilotPreview = diffPreviewDays.length > 0 || (pilot.hasSojoriPreview && pilot.previewDays.length > 0);
+  const displayCalendarDays = diffPreviewDays.length > 0
+    ? diffPreviewDays
+    : pilot.hasSojoriPreview && pilot.previewDays.length > 0
+      ? pilot.previewDays
+      : events.length > 0
+        ? overlayEventsOnCalendarDays(calendarDays, events)
+        : previewDiff.loading
+          ? []
+          : calendarDays;
   /** Courbe bleue = estimate marché brut (avant corrections Sojori) */
   const calendarMarketDays =
-    usesPilotPreview && pilot.previewMarketDays.length > 0
-      ? pilot.previewMarketDays
-      : undefined;
+    diffMarketDays.length > 0
+      ? diffMarketDays
+      : pilot.hasSojoriPreview && pilot.previewMarketDays.length > 0
+        ? pilot.previewMarketDays
+        : undefined;
   /** Courbe grise = calculatedPrice calendrier ops actuel */
   const calendarOpsDays =
-    usesPilotPreview && pilot.previewCalendarDays.length > 0
-      ? pilot.previewCalendarDays
-      : undefined;
+    diffCalendarOpsDays.length > 0
+      ? diffCalendarOpsDays
+      : pilot.hasSojoriPreview && pilot.previewCalendarDays.length > 0
+        ? pilot.previewCalendarDays
+        : undefined;
   const calendarHasEventOverlay = !usesPilotPreview && events.length > 0;
   const displayHasCalendarProd =
     usesPilotPreview ||
-    pilot.previewLoading ||
+    previewDiff.loading ||
     showAirroiOtaCalendar ||
     hasRevenueEstimate ||
     calendarFromCache;

@@ -530,7 +530,6 @@ export function MessagesTab({ reservationDetails }: MessagesTabProps) {
               composerValue={composer}
               onComposerValueChange={setComposer}
               threadMode="whatsapp"
-              whatsappBusinessLine="Guest WhatsApp"
               loadingMessages={sending}
             />
           ) : (

@@ -1,0 +1,414 @@
+.staff-sched-root {
+  --p: #b8851a;
+  --pd: #876119;
+  --pt: rgba(184, 133, 26, 0.12);
+  --t: #14110a;
+  --t2: #55504a;
+  --t3: #7a756c;
+  --b: rgba(20, 17, 10, 0.08);
+  --bg: #fafaf7;
+}
+
+.staff-sched-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.staff-sched-hero h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--t);
+}
+
+.staff-sched-hero .badge {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--pt);
+  color: var(--pd);
+  vertical-align: middle;
+}
+
+.staff-sched-hero .sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--t3);
+  max-width: 520px;
+  line-height: 1.45;
+}
+
+.staff-sched-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.staff-sched-search {
+  width: min(280px, 70vw);
+  padding: 9px 12px;
+  border: 1px solid var(--b);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.staff-sched-link {
+  all: unset;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--pd);
+}
+
+.staff-sched-empty {
+  color: var(--t3);
+  font-size: 13px;
+}
+
+.staff-sched-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--b);
+  border-radius: 12px;
+  background: #fff;
+  max-height: calc(100vh - 220px);
+}
+
+.staff-sched-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 920px;
+}
+
+.staff-sched-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--t3);
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--b);
+  text-align: center;
+}
+
+.staff-sched-table th.staff-sched-col-name,
+.staff-sched-table td.staff-sched-col-name {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #fff;
+  min-width: 200px;
+  padding-left: 14px;
+}
+
+.staff-sched-table th.staff-sched-col-name {
+  z-index: 4;
+  background: var(--bg);
+}
+
+.staff-sched-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--b);
+  vertical-align: top;
+  text-align: center;
+}
+
+.staff-sched-table tr.dirty td.staff-sched-col-name {
+  background: #fffdf6;
+}
+
+.staff-sched-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.staff-sched-av {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--pt);
+  color: var(--pd);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.staff-sched-identity .nm {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--t);
+}
+
+.staff-sched-identity .ph {
+  font-size: 11px;
+  color: var(--t3);
+  font-family: ui-monospace, monospace;
+}
+
+.staff-sched-day-td {
+  position: relative;
+}
+
+.staff-sched-day-cell {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--b);
+  background: #f3f1ea;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t3);
+  cursor: pointer;
+}
+
+.staff-sched-day-cell.on {
+  background: var(--pt);
+  border-color: rgba(184, 133, 26, 0.35);
+  color: var(--pd);
+}
+
+.staff-sched-day-cell.open {
+  box-shadow: 0 0 0 2px var(--pd);
+}
+
+.staff-sched-backdrop {
+  all: unset;
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(20, 17, 10, 0.18);
+  cursor: default;
+}
+
+.staff-sched-float {
+  position: fixed;
+  z-index: 1201;
+  width: 280px;
+  max-height: min(420px, calc(100vh - 24px));
+  overflow: auto;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--b);
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(20, 17, 10, 0.2);
+  text-align: left;
+}
+
+.staff-sched-float-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t3);
+}
+
+.staff-sched-float-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.staff-sched-float-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--b);
+}
+
+.staff-sched-float-foot .ghost {
+  all: unset;
+  cursor: pointer;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t3);
+}
+
+.staff-sched-float-foot .prim {
+  all: unset;
+  cursor: pointer;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  background: linear-gradient(180deg, #cb9b2c, var(--p));
+  color: #1a1408;
+}
+
+.staff-sched-float-foot .prim:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* legacy class kept for pop header styles */
+.staff-sched-popover {
+  display: none;
+}
+
+.staff-sched-pop-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.staff-sched-pop-h strong {
+  font-size: 13px;
+}
+
+.staff-sched-float .planning-onoff,
+.staff-sched-popover .planning-onoff {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--t3);
+  text-transform: uppercase;
+}
+
+.staff-sched-float .planning-onoff span.on,
+.staff-sched-popover .planning-onoff span.on {
+  color: var(--pd);
+}
+
+.staff-sched-float .toggle,
+.staff-sched-popover .toggle {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: #ddd8ce;
+  position: relative;
+  cursor: pointer;
+}
+
+.staff-sched-float .toggle::after,
+.staff-sched-popover .toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+
+.staff-sched-float .toggle.on,
+.staff-sched-popover .toggle.on {
+  background: var(--p);
+}
+
+.staff-sched-float .toggle.on::after,
+.staff-sched-popover .toggle.on::after {
+  left: 18px;
+}
+
+.staff-sched-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.staff-sched-presets button {
+  all: unset;
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--b);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--t2);
+  background: var(--bg);
+}
+
+.staff-sched-slot {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.staff-sched-slot input {
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.staff-sched-slot .x {
+  all: unset;
+  cursor: pointer;
+  color: var(--t3);
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.staff-sched-add {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pd);
+}
+
+.staff-sched-off-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--t3);
+}
+
+.staff-sched-save {
+  all: unset;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  background: #eeebe3;
+  color: var(--t3);
+}
+
+.staff-sched-save:not(:disabled) {
+  background: linear-gradient(180deg, #cb9b2c, var(--p));
+  color: #1a1408;
+}
+
+.staff-sched-save:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.staff-sched-col-action {
+  width: 100px;
+}

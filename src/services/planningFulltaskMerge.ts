@@ -135,14 +135,21 @@ export function fulltaskToTimelineItem(
   const ftType = String(task.type || 'task');
   const legacyStatus = mapFulltaskStatusToLegacy(task.status, task.assignedTo);
 
+  const stayType = fulltaskTypeToStayTaskType(ftType);
+  const cleaningType =
+    stayType === 'cleaning'
+      ? String(task.cleaning_type || task.cleaningType || ftType || '')
+      : undefined;
+
   return {
-    type: fulltaskTypeToStayTaskType(ftType),
+    type: stayType,
     category: ftType,
     scheduledFor: scheduled,
     isTask: true,
     staffId: assignedTo,
     staffName: staff?.name ? String(staff.name) : null,
     status: legacyStatus,
+    cleaning_type: cleaningType,
     data: {
       taskId: task._id,
       taskCode: task.taskCode,
@@ -211,9 +218,15 @@ export async function fetchTaskNewPlanning(params: {
   );
 
   const reservationsById = new Map<string, Reservation>();
+  const reservationsByAnyKey = new Map<string, Reservation>();
   for (const res of reservationsRes?.data || []) {
     const id = resolveReservationId(res);
-    if (id) reservationsById.set(id, res);
+    if (id) {
+      reservationsById.set(id, res);
+      reservationsByAnyKey.set(id, res);
+    }
+    const num = String(res.reservationNumber || '').trim();
+    if (num) reservationsByAnyKey.set(num, res);
   }
 
   let tasks = (tasksRes?.data || []) as Record<string, unknown>[];
@@ -225,23 +238,36 @@ export async function fetchTaskNewPlanning(params: {
   tasks = tasks.filter((t) => {
     if (String(t.status) === 'cancelled') return false;
     const resId = t.reservationId ? String(t.reservationId) : '';
-    const reservation = resId ? reservationsById.get(resId) : undefined;
+    const reservation = resId ? reservationsByAnyKey.get(resId) : undefined;
     return taskInDateRange(t, params.startDate, params.endDate, reservation);
   });
 
   const tasksByReservation = new Map<string, PlanningTimelineItem[]>();
   const tasksByListingOnly = new Map<string, PlanningTimelineItem[]>();
 
+  const pushTimeline = (listingId: string, resKey: string, item: PlanningTimelineItem) => {
+    if (!listingId || !resKey) return;
+    const key = `${listingId}::${resKey}`;
+    const arr = tasksByReservation.get(key) || [];
+    arr.push(item);
+    tasksByReservation.set(key, arr);
+  };
+
   for (const task of tasks) {
-    const resId = task.reservationId ? String(task.reservationId) : '';
-    const reservation = resId ? reservationsById.get(resId) : undefined;
+    const resRef = task.reservationId ? String(task.reservationId) : '';
+    const reservation = resRef ? reservationsByAnyKey.get(resRef) : undefined;
     const item = fulltaskToTimelineItem(task, staffById, reservation);
-    const listingId = task.listingId ? String(task.listingId) : '';
-    if (resId) {
-      const key = `${listingId}::${resId}`;
-      const arr = tasksByReservation.get(key) || [];
-      arr.push(item);
-      tasksByReservation.set(key, arr);
+    const listingId =
+      (task.listingId ? String(task.listingId) : '') ||
+      (reservation ? resolveListingId(reservation) || '' : '');
+    if (resRef) {
+      pushTimeline(listingId, resRef, item);
+      if (reservation) {
+        const canonical = resolveReservationId(reservation);
+        const num = String(reservation.reservationNumber || '').trim();
+        if (canonical && canonical !== resRef) pushTimeline(listingId, canonical, item);
+        if (num && num !== resRef && num !== canonical) pushTimeline(listingId, num, item);
+      }
     } else if (listingId) {
       const arr = tasksByListingOnly.get(listingId) || [];
       arr.push(item);
@@ -275,9 +301,26 @@ export async function fetchTaskNewPlanning(params: {
     }
 
     const reservationId = resolveReservationId(res);
+    const resaNum = String(res.reservationNumber || '').trim();
     const key = `${listingId}::${reservationId}`;
     reservationKeysSeen.add(key);
-    const timeline = tasksByReservation.get(key) || [];
+    if (resaNum) reservationKeysSeen.add(`${listingId}::${resaNum}`);
+
+    // Rattache les tâches même si task.listingId ≠ listing résa (clés croisées).
+    const timelineMap = new Map<string, PlanningTimelineItem>();
+    for (const [tKey, items] of tasksByReservation) {
+      const resKey = tKey.split('::')[1] || '';
+      if (resKey !== reservationId && !(resaNum && resKey === resaNum)) continue;
+      for (const item of items) {
+        const tid = String(
+          (item.data as { taskId?: unknown } | undefined)?.taskId ||
+            `${item.type}-${item.scheduledFor}-${item.staffId || ''}`,
+        );
+        if (!timelineMap.has(tid)) timelineMap.set(tid, item);
+      }
+      reservationKeysSeen.add(tKey);
+    }
+    const timeline = [...timelineMap.values()];
 
     const row: PlanningReservationRow = {
       reservationId,
@@ -299,25 +342,36 @@ export async function fetchTaskNewPlanning(params: {
   }
 
   // Réservations avec tâches mais hors filtre API initial (ex. pagination)
-  const missingReservationIds = [];
-  for (const [key, timeline] of tasksByReservation) {
+  const missingReservationIds: string[] = [];
+  for (const [key] of tasksByReservation) {
     if (reservationKeysSeen.has(key)) continue;
-    const [listingId, reservationId] = key.split('::');
-    if (!listingId || !reservationId) continue;
+    const [, reservationId] = key.split('::');
+    if (!reservationId) continue;
+    // Déjà couvert via numéro / id sur une autre clé listing ?
+    if ([...reservationKeysSeen].some((k) => k.endsWith(`::${reservationId}`))) continue;
     missingReservationIds.push(reservationId);
   }
 
-  console.log(`⚠️  [fetchTaskNewPlanning] Found ${missingReservationIds.length} reservations with tasks but NOT in initial API response`);
-  console.log(`    ℹ️  This will trigger ${missingReservationIds.length} individual getById() API calls (SLOW!)`);
+  const uniqueMissing = [...new Set(missingReservationIds)];
+  const isMongoId = (id: string) => /^[a-f0-9]{24}$/i.test(id);
+  const missingMongoIds = uniqueMissing.filter(isMongoId);
+  const missingOtherIds = uniqueMissing.filter((id) => !isMongoId(id));
 
-  // ⚡ OPTIMISATION: Batch fetch des réservations manquantes en 1 seul appel
-  if (missingReservationIds.length > 0) {
+  if (uniqueMissing.length > 0) {
+    console.log(`⚠️  [fetchTaskNewPlanning] ${uniqueMissing.length} résa(s) avec tâches hors getList`, {
+      mongoIds: missingMongoIds.length,
+      codes: missingOtherIds.length,
+    });
+  }
+
+  // Batch uniquement les ObjectId Mongo — les SJ-* cassent /batch (500).
+  if (missingMongoIds.length > 0) {
     const batchStart = performance.now();
     try {
-      console.log(`🚀 [fetchTaskNewPlanning] Batch fetching ${missingReservationIds.length} reservations in 1 API call...`);
-      const batchResult = await reservationsService.getBatch(missingReservationIds);
+      console.log(`🚀 [fetchTaskNewPlanning] Batch fetching ${missingMongoIds.length} reservations…`);
+      const batchResult = await reservationsService.getBatch(missingMongoIds, { silent: true });
       const batchMs = performance.now() - batchStart;
-      console.log(`✅ [fetchTaskNewPlanning] Batch fetch completed in ${batchMs.toFixed(0)}ms (vs ${(missingReservationIds.length * 3000).toFixed(0)}ms for individual calls)`);
+      console.log(`✅ [fetchTaskNewPlanning] Batch fetch completed in ${batchMs.toFixed(0)}ms`);
 
       if (batchResult.success && batchResult.data) {
         for (const res of batchResult.data) {
@@ -325,15 +379,16 @@ export async function fetchTaskNewPlanning(params: {
           if (resId) {
             reservationsById.set(resId, res);
           }
+          const num = String(res.reservationNumber || '').trim();
+          if (num) reservationsByAnyKey.set(num, res);
         }
       }
     } catch (error) {
-      console.error(`❌ [fetchTaskNewPlanning] Batch fetch failed:`, error);
-      // Fallback to stub data from tasks
+      console.warn(`[fetchTaskNewPlanning] Batch fetch skipped/failed — stubs from tasks`, error);
     }
   }
 
-  // Créer les lignes de réservations pour les IDs manquants
+  // Créer les lignes de réservations pour les IDs encore manquants (stubs / batch)
   for (const [key, timeline] of tasksByReservation) {
     if (reservationKeysSeen.has(key)) continue;
     const [listingId, reservationId] = key.split('::');
@@ -345,11 +400,14 @@ export async function fetchTaskNewPlanning(params: {
     let reservationNumber = reservationId;
     let checkInTime: string | null = null;
     let checkOutTime: string | null = null;
+    let channelName: string | undefined;
+    let numberOfGuests = 0;
     const firstTask = timeline[0]?.data as Record<string, unknown> | undefined;
     if (firstTask?.guestName) guestName = String(firstTask.guestName);
 
-    // Utiliser les données du batch si disponibles
-    const res = reservationsById.get(reservationId);
+    const res =
+      reservationsById.get(reservationId) ||
+      reservationsByAnyKey.get(reservationId);
     if (res) {
       arrivalDate = toIsoDate(res.arrivalDate) || arrivalDate;
       departureDate = toIsoDate(res.departureDate) || departureDate;
@@ -357,10 +415,58 @@ export async function fetchTaskNewPlanning(params: {
       reservationNumber = res.reservationNumber || reservationNumber;
       checkInTime = res.checkInTime ?? null;
       checkOutTime = res.checkOutTime ?? null;
-      if (!listingMeta.has(listingId)) {
+      channelName = res.channelName || res.otaCode || 'direct';
+      numberOfGuests = res.numberOfGuests ?? res.adults ?? 0;
+      const realListingId = resolveListingId(res) || listingId;
+      if (!listingMeta.has(realListingId)) {
         const label = reservationListingLabel(res);
-        listingMeta.set(listingId, { listingName: label.name, city: label.city });
+        listingMeta.set(realListingId, { listingName: label.name, city: label.city });
       }
+      // Fusionner sur la vraie listing si différente
+      const targetListing = realListingId;
+      const canonicalId = resolveReservationId(res);
+      const existingList = reservationsByListing.get(targetListing) || [];
+      const existing = existingList.find(
+        (r) =>
+          r.reservationId === canonicalId ||
+          r.reservationNumber === reservationNumber ||
+          r.reservationId === reservationId,
+      );
+      if (existing) {
+        const seen = new Set(
+          existing.timeline.map((t) =>
+            String((t.data as { taskId?: unknown } | undefined)?.taskId || `${t.type}-${t.scheduledFor}`),
+          ),
+        );
+        for (const item of timeline) {
+          const tid = String(
+            (item.data as { taskId?: unknown } | undefined)?.taskId ||
+              `${item.type}-${item.scheduledFor}`,
+          );
+          if (!seen.has(tid)) existing.timeline.push(item);
+        }
+        reservationKeysSeen.add(key);
+        continue;
+      }
+      const row: PlanningReservationRow = {
+        reservationId: canonicalId,
+        guestName,
+        arrivalDate,
+        departureDate,
+        checkInTime,
+        checkOutTime,
+        status: mapReservationStatus(res.status),
+        channelName,
+        numberOfGuests,
+        reservationNumber,
+        timeline,
+      };
+      existingList.push(row);
+      reservationsByListing.set(targetListing, existingList);
+      reservationKeysSeen.add(key);
+      reservationKeysSeen.add(`${targetListing}::${canonicalId}`);
+      if (reservationNumber) reservationKeysSeen.add(`${targetListing}::${reservationNumber}`);
+      continue;
     }
 
     const row: PlanningReservationRow = {
