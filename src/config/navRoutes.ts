@@ -158,6 +158,5 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'temp/settings-currency': '/admin/setting/currency',
   'temp/settings-admin-config': '/admin/settings?tab=admin-config',
   'temp/equipe-groups': '/admin/equipe?tab=groups',
-  'temp/tasks-team-legacy': '/tasks/team-legacy',
   'temp/booking-clients': '/temp/booking-clients',
 };

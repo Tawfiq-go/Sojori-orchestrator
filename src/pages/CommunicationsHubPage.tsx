@@ -11,6 +11,7 @@ import ResasTabV2 from '../components/communications/ResasTabV2';
 import LeadsTabV2 from '../components/communications/LeadsTabV2';
 import ReviewsTabV2 from '../components/communications/ReviewsTabV2';
 import InboxHubTabs from '../components/unified-inbox/InboxHubTabs';
+import { CommsHubChromeProvider } from '../components/communications/CommsHubChromeContext';
 import {
   normalizeCommsTab,
   resolveCommsSection,
@@ -227,29 +228,32 @@ export default function CommunicationsHubPage() {
       hidePageHeader
       breadcrumb={['Communications', section === 'staff' ? 'Staff' : 'Guest']}
     >
-      <Box
-        sx={{
-          ...DASHBOARD_PAGE_FILL_SX,
-          minHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
-          maxHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
-        <InboxHubTabs section={section} counts={counts} unreadCount={unreadCount} compact />
+      <CommsHubChromeProvider>
+        <Box
+          sx={{
+            ...DASHBOARD_PAGE_FILL_SX,
+            minHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
+            maxHeight: { xs: 'calc(100dvh - 80px)', md: 'calc(100dvh - 88px)' },
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          <InboxHubTabs section={section} counts={counts} unreadCount={unreadCount} compact />
 
-        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {activeTab === 'whatsapp' && <WhatsAppTabV2 />}
-          {activeTab === 'booking' && isPlatformAdmin && <BookingWhatsAppTabV2 />}
-          {activeTab === 'staff' && <StaffWhatsAppTabV2 inboxParty="staff" />}
-          {activeTab === 'admin' && <StaffWhatsAppTabV2 inboxParty="admin" />}
-          {activeTab === 'ota' && <MessagesOTATabV2 />}
-          {activeTab === 'resas' && <ResasTabV2 />}
-          {activeTab === 'leads' && <LeadsTabV2 />}
-          {activeTab === 'reviews' && <ReviewsTabV2 />}
+          {/* Hauteur restante → liste + conversation (filtres WA déjà dans la barre hub). */}
+          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {activeTab === 'whatsapp' && <WhatsAppTabV2 />}
+            {activeTab === 'booking' && isPlatformAdmin && <BookingWhatsAppTabV2 />}
+            {activeTab === 'staff' && <StaffWhatsAppTabV2 inboxParty="staff" />}
+            {activeTab === 'admin' && <StaffWhatsAppTabV2 inboxParty="admin" />}
+            {activeTab === 'ota' && <MessagesOTATabV2 />}
+            {activeTab === 'resas' && <ResasTabV2 />}
+            {activeTab === 'leads' && <LeadsTabV2 />}
+            {activeTab === 'reviews' && <ReviewsTabV2 />}
+          </Box>
         </Box>
-      </Box>
+      </CommsHubChromeProvider>
     </DashboardWrapper>
   );
 }
