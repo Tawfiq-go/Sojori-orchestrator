@@ -816,3 +816,83 @@
   border-color: var(--pd);
   color: #1a1408;
 }
+
+/* ── V0 simple : métier, récap, réglages avancés ─────────────── */
+.so-staff-root .job-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 9px;
+}
+@media (max-width: 820px) {
+  .so-staff-root .job-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.so-staff-root .job-card {
+  border: 1.5px solid var(--bs);
+  border-radius: 12px;
+  padding: 13px 12px;
+  background: var(--bg2);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.so-staff-root .job-card.on {
+  border-color: var(--pd);
+  background: var(--pt);
+  box-shadow: 0 0 0 3px var(--pt);
+}
+.so-staff-root .job-card:focus-visible { outline: 2px solid var(--pd); outline-offset: 2px; }
+.so-staff-root .job-emo { font-size: 21px; display: block; margin-bottom: 5px; }
+.so-staff-root .job-card b { font-size: 13px; display: block; }
+.so-staff-root .job-desc {
+  font-size: 10.5px;
+  color: var(--t3);
+  display: block;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+.so-staff-root .job-custom-note { margin: 8px 0 0; font-size: 11px; color: var(--t3); }
+
+.so-staff-root .staff-recap {
+  border: 1.5px solid var(--pd);
+  background: linear-gradient(135deg, var(--pt), var(--bg1) 60%);
+  border-radius: 12px;
+  padding: 13px 15px;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.so-staff-root .staff-recap-warn {
+  margin: 9px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--er);
+  background: var(--ert);
+  border-radius: 8px;
+  padding: 7px 11px;
+}
+
+.so-staff-root .adv-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--b);
+  background: transparent;
+  padding: 12px 0 4px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.so-staff-root .adv-toggle b { font-size: 12.5px; }
+.so-staff-root .adv-toggle > span:first-of-type { font-size: 11px; color: var(--t3); flex: 1; }
+.so-staff-root .adv-chev { color: var(--t4); font-size: 11px; transition: transform 0.15s; }
+.so-staff-root .adv-chev.open { transform: rotate(90deg); }
+
+/* Sections techniques masquées tant que « Réglages avancés » est replié.
+   Masquage CSS (pas de démontage JSX) : l'état du formulaire est préservé. */
+.so-staff-root .form-grid [data-adv='1'] { display: none; }
+.so-staff-root .form-grid.adv-open [data-adv='1'] { display: block; }
+.so-staff-root .adv-bar { order: 90; }
+.so-staff-root .form-grid [data-adv='1'] { order: 95; }

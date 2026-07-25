@@ -77,3 +77,63 @@ export function pillLabelForType(type: string): { label: string; emoji: string }
   if (found) return found;
   return { label: labelForTaskTypeId(canonical), emoji: '📋' };
 }
+
+/**
+ * Métiers = préréglages du formulaire simplifié. Choisir un métier remplit
+ * d'un coup les types de tâches (le client n'a pas à trier 15 clés techniques
+ * dont les libellés décrivent un modèle de facturation, pas un travail).
+ * « Personnalisé » = l'utilisateur a modifié la sélection à la main.
+ */
+export const STAFF_JOB_PRESETS = [
+  {
+    id: 'menage',
+    emoji: '🧹',
+    label: 'Ménage',
+    desc: 'Ménages entre séjours et à la demande',
+    taskTypes: ['cleaning_free', 'cleaning_paid', 'checkout_cleaning'],
+  },
+  {
+    id: 'accueil',
+    emoji: '🙋',
+    label: 'Accueil',
+    desc: 'Arrivées, départs, remise des clés',
+    taskTypes: [
+      'receive_arrival',
+      'receive_departure',
+      'arrival_declare',
+      'departure_declare',
+      'registration',
+    ],
+  },
+  {
+    id: 'conciergerie',
+    emoji: '🛎',
+    label: 'Conciergerie',
+    desc: 'Transport, courses, demandes voyageurs',
+    taskTypes: ['transport', 'groceries', 'concierge', 'support', 'service_client'],
+  },
+  {
+    id: 'polyvalent',
+    emoji: '✳️',
+    label: 'Polyvalent',
+    desc: 'Toutes les tâches',
+    taskTypes: [...FULLTASK_TASK_TYPES],
+  },
+] as const;
+
+export type StaffJobPresetId = (typeof STAFF_JOB_PRESETS)[number]['id'];
+
+/** Retrouve le métier correspondant à une sélection, sinon null (= personnalisé). */
+export function jobPresetForTaskTypes(taskTypes: string[] | undefined): StaffJobPresetId | null {
+  const set = new Set(taskTypes ?? []);
+  if (set.size === 0) return null;
+  for (const preset of STAFF_JOB_PRESETS) {
+    if (
+      preset.taskTypes.length === set.size &&
+      preset.taskTypes.every((t) => set.has(t))
+    ) {
+      return preset.id;
+    }
+  }
+  return null;
+}
