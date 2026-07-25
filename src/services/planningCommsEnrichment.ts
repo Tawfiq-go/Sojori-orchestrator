@@ -164,7 +164,11 @@ function fromOtaRow(row: OtaThreadRow): PlanningLastMessage {
   const programmedAuto = autoLine
     ? {
         catalogKey: autoLine.catalogKey,
-        label: ownerLabelForPlanCatalog(autoLine.catalogKey),
+        // catalogKey 'auto' = fallback messages préchargés (pas de denorm) → libellé depuis le preview
+        label:
+          autoLine.catalogKey !== 'auto'
+            ? ownerLabelForPlanCatalog(autoLine.catalogKey)
+            : humanizeOwnerPreview(autoLine.preview || '') || 'Message programmé',
         time: formatThreadWhenExact(autoLine.sentAt),
         sentAt: autoLine.sentAt,
       }

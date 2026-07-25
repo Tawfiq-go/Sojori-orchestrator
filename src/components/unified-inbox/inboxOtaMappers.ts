@@ -11,6 +11,8 @@ import {
   formatInboxDaySeparator,
   formatReservationCreatedDisplay,
   formatStayDateShort,
+  formatThreadWhen,
+  formatThreadWhenExact,
   nightsBetween,
   normalizeBookingSource,
   stayStatusLabel,
@@ -18,6 +20,15 @@ import {
 import { otaChannelColor, otaChannelFromName } from './inboxMappers';
 import { formatInboxMessageText, inboxMessagePreview } from './formatInboxMessageText';
 import { resolveListingName } from './inboxListingName';
+import {
+  humanizeOwnerPreview,
+  isEmptyThreadPreview,
+  ownerLabelForPlanCatalog,
+} from './waThreadPreview';
+import {
+  resolveOtaListLastMessage,
+  resolveOtaProgrammedAutoLine,
+} from './otaExchangePresence';
 
 export interface OtaThreadRow {
   id: string;
@@ -37,6 +48,22 @@ export interface OtaThreadRow {
   threadCreatedAt?: string;
   messageStatus?: string;
   lastMessageIsIncoming?: boolean;
+  /** Dernière question voyageur (backend) — preview liste Q. */
+  lastGuestMessage?: string;
+  lastGuestMessageAt?: string;
+  /** Dernier message réel hors automation — Q ou R. */
+  lastRealMessage?: string;
+  lastRealMessageAt?: string;
+  lastRealMessageIsIncoming?: boolean;
+  /** Miroir Thread — dernier envoi programmé plan. */
+  lastProgrammedOutbound?: {
+    ruMessageId?: string;
+    catalogKey?: string;
+    channel?: string;
+    preview?: string;
+    sentAt?: string;
+    status?: 'sent' | 'failed';
+  };
   unreadCount: number;
   checkInDate?: string;
   checkOutDate?: string;
@@ -110,13 +137,15 @@ export function isOtaDirectChannel(
 }
 
 export function isCancelledReservationStatus(status?: string): boolean {
-  const s = (status || '').toLowerCase();
+  const s = (status || '').toLowerCase().trim();
   if (!s) return false;
   return (
     s.includes('cancel') ||
+    s.includes('annul') || // Annulée / Annulee (libellé FR UI)
     s === 'rejected' ||
     s === 'declined' ||
-    s === 'refused'
+    s === 'refused' ||
+    s === 'othercancellation'
   );
 }
 
@@ -130,8 +159,6 @@ export function isCompletedReservationStatus(status?: string): boolean {
 export function isInactiveOtaReservation(status?: string): boolean {
   return isCancelledReservationStatus(status) || isCompletedReservationStatus(status);
 }
-
-const RECENT_INACTIVE_THREAD_MS = 30 * 24 * 60 * 60 * 1000;
 
 function isWhatsappOnlyThread(
   row: Pick<OtaThreadRow, 'channelNameRaw' | 'channel' | 'source'>,
@@ -149,17 +176,31 @@ function threadActivityMs(row: Pick<OtaThreadRow, 'lastMessageTime' | 'threadUpd
   return 0;
 }
 
+/** Completed : garder seulement si dernier message après check-out (fin de séjour). */
+function completedHasMessageAfterCheckout(row: OtaThreadRow): boolean {
+  if (!isCompletedReservationStatus(row.status)) return true;
+  const checkout = row.checkOutDate ? new Date(row.checkOutDate) : null;
+  if (!checkout || Number.isNaN(checkout.getTime())) return false;
+  checkout.setHours(23, 59, 59, 999);
+  // Aligné backend : uniquement lastMessageAt (pas threadUpdatedAt / createdAt)
+  if (!row.lastMessageTime) return false;
+  const last = new Date(row.lastMessageTime).getTime();
+  if (Number.isNaN(last)) return false;
+  return last > checkout.getTime();
+}
+
 /**
  * Inbox OTA par défaut (Tout) :
  * - réservations actives (en cours / à venir)
- * - + séjours terminés/annulés **avec activité message récente** (30 j) pour le suivi post-départ
+ * - + Completed seulement s’il y a un message après la fin de séjour
+ * - annulées : toujours exclues
  */
 export function filterOtaInboxDefault(rows: OtaThreadRow[]): OtaThreadRow[] {
-  const cutoff = Date.now() - RECENT_INACTIVE_THREAD_MS;
   return rows.filter((thread) => {
     if (isWhatsappOnlyThread(thread)) return false;
-    if (!isInactiveOtaReservation(thread.status)) return true;
-    return threadActivityMs(thread) >= cutoff;
+    if (isCancelledReservationStatus(thread.status)) return false;
+    if (!isCompletedReservationStatus(thread.status)) return true;
+    return completedHasMessageAfterCheckout(thread);
   });
 }
 
@@ -277,6 +318,12 @@ export function mapApiItemToOtaThread(item: any): OtaThreadRow {
     threadCreatedAt: threadData.createdAt,
     messageStatus: threadData.messageStatus,
     lastMessageIsIncoming: threadData.lastMessageIsIncoming,
+    lastGuestMessage: threadData.lastGuestMessage || undefined,
+    lastGuestMessageAt: threadData.lastGuestMessageAt || undefined,
+    lastRealMessage: threadData.lastRealMessage || undefined,
+    lastRealMessageAt: threadData.lastRealMessageAt || undefined,
+    lastRealMessageIsIncoming: threadData.lastRealMessageIsIncoming,
+    lastProgrammedOutbound: threadData.lastProgrammedOutbound || undefined,
     unreadCount: threadData.unreadCount || 0,
     checkInDate: reservation.arrivalDate || reservation.checkInDate,
     checkOutDate: reservation.departureDate || reservation.checkOutDate,
@@ -298,18 +345,54 @@ function otaRowNeedsReply(row: OtaThreadRow): boolean {
   return row.lastMessageIsIncoming === true;
 }
 
+/** Q / R réels uniquement (hors plan auto). */
+function resolveOtaLastMessageKind(
+  effective: { text: string; isIncoming: boolean | undefined; empty: boolean },
+): 'Q' | 'R' | undefined {
+  if (effective.empty || !effective.text.trim()) return undefined;
+  if (effective.isIncoming === false) return 'R';
+  return 'Q';
+}
+
 export function mapOtaRowToThread(row: OtaThreadRow, taskCount?: number): Thread {
   const ch = resolveOtaPlatformChannel(row) ?? otaChannelFromName(row.channel);
   const checkInBadge = checkInDaysLabel(row.checkInDate);
   const phone = String(row.guestPhone || '').trim() || undefined;
+  const effective = resolveOtaListLastMessage(row);
+  const rawPreview = inboxMessagePreview(effective.text) || '';
+  /** Intent owner en tête — jamais le jargon technique / template ID. */
+  const preview = humanizeOwnerPreview(rawPreview) || rawPreview || 'Aucun message';
+  const empty = effective.empty || isEmptyThreadPreview(preview) || !rawPreview;
+  const lastMessageKind = empty ? undefined : resolveOtaLastMessageKind(effective);
+  const autoLine = resolveOtaProgrammedAutoLine(row);
+  // Pas de badge A seul : si pas de Q/R → « Aucun message » (comme le panneau fil).
+  const programmedAuto =
+    !empty && lastMessageKind && autoLine
+      ? {
+          catalogKey: autoLine.catalogKey,
+          // catalogKey 'auto' = fallback messages préchargés (pas de denorm) → libellé depuis le preview
+          label:
+            autoLine.catalogKey !== 'auto'
+              ? ownerLabelForPlanCatalog(autoLine.catalogKey)
+              : humanizeOwnerPreview(autoLine.preview || '') || 'Message programmé',
+          time: formatThreadWhenExact(autoLine.sentAt),
+          sentAt: autoLine.sentAt,
+        }
+      : undefined;
+  const bookingPlatform: 'ab' | 'bk' | 'direct' | null =
+    ch === 'ab' || ch === 'bk' ? ch : isOtaDirectChannel(row) ? 'direct' : null;
   return {
     id: row.threadId,
     name: row.guestName,
     phone,
     channel: ch,
     channelColor: otaChannelColor(ch),
-    preview: inboxMessagePreview(row.lastMessage) || 'Aucun message',
-    time: '',
+    preview: empty ? 'Aucun message' : preview,
+    time: empty
+      ? ''
+      : formatThreadWhenExact(effective.at || row.lastMessageTime || row.threadUpdatedAt),
+    lastMessageKind,
+    programmedAuto,
     unread: row.unreadCount,
     avatarColor: '',
     listingName: row.listingName,
@@ -325,6 +408,9 @@ export function mapOtaRowToThread(row: OtaThreadRow, taskCount?: number): Thread
     taskCount,
     messageMatchCount: row.messageMatchCount,
     guestFlag: flagFromPhone(phone),
+    bookingPlatform,
+    bookingSourceKind:
+      ch === 'ab' ? 'airbnb' : ch === 'bk' ? 'booking' : ch === 'vrbo' ? 'vrbo' : undefined,
   };
 }
 
@@ -382,8 +468,25 @@ export function extractOtaMessagesFromApiResponse(payload: unknown): any[] {
   return [];
 }
 
+/** Fil API vide : efface lastRealMessage / guest fantômes (preview liste ≠ panneau). */
+export function clearOtaGhostPreview(row: OtaThreadRow): OtaThreadRow {
+  return {
+    ...row,
+    lastMessage: '',
+    lastRealMessage: undefined,
+    lastRealMessageAt: undefined,
+    lastRealMessageIsIncoming: undefined,
+    lastGuestMessage: undefined,
+    lastGuestMessageAt: undefined,
+    lastProgrammedOutbound: undefined,
+    preloadedMessages: [],
+    messageMatchCount: 0,
+  };
+}
+
 /**
  * Thread en tête de liste (preview / lastMessageAt RU) mais 0 message en base → afficher au moins l’aperçu.
+ * Uniquement en cas d’erreur réseau — pas si l’API a répondu 0 message.
  */
 export function buildOtaPreviewFallbackMessages(row: OtaThreadRow): Message[] {
   const preview = formatInboxMessageText(row.lastMessage);
@@ -411,15 +514,25 @@ export function buildOtaPreviewFallbackMessages(row: OtaThreadRow): Message[] {
   return out;
 }
 
+function otaMessageTimestampMs(msg: Record<string, unknown>): number {
+  const raw = msg.createdAt ?? msg.date ?? msg.CreateDate ?? msg.sentAt;
+  const t = new Date(raw as string | number | Date).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
 export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Message[] {
-  const sorted = [...messages].sort(
-    (a, b) => new Date(a.createdAt || a.date).getTime() - new Date(b.createdAt || b.date).getTime(),
-  );
+  // Chrono croissant : ancien en haut, récent en bas (comme WhatsApp).
+  const sorted = [...messages].sort((a, b) => {
+    const d = otaMessageTimestampMs(a) - otaMessageTimestampMs(b);
+    if (d !== 0) return d;
+    return Number(a.messageId || a.ID || 0) - Number(b.messageId || b.ID || 0);
+  });
 
   return sorted.flatMap((msg, index) => {
     const out: Message[] = [];
     const ts = msg.createdAt || msg.date;
-    if (index === 0 || new Date(ts).toDateString() !== new Date(sorted[index - 1].createdAt || sorted[index - 1].date).toDateString()) {
+    const prevTs = sorted[index - 1]?.createdAt || sorted[index - 1]?.date;
+    if (index === 0 || new Date(ts).toDateString() !== new Date(prevTs).toDateString()) {
       out.push({
         id: `day-${index}`,
         from: 'guest',
