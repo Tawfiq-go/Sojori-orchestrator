@@ -6,12 +6,12 @@ import {
   STAFF_TASK_PILLS,
   DAY_LABELS,
   DAY_DISPLAY_ORDER,
-  FULLTASK_TASK_TYPES,
   LANG_OPTIONS,
   initials,
   pillLabelForType,
   type WorkLang,
 } from './staffDesignConstants';
+import { FULLTASK_TASK_TYPES } from './fulltaskTaskTypes';
 import { MOCK_STAFF_DESIGN, MOCK_LISTINGS_DESIGN } from './mockStaffDesign';
 import StaffAccessMultiSelect from './StaffAccessMultiSelect';
 
