@@ -1614,6 +1614,11 @@
   box-shadow: 0 4px 12px rgba(184, 133, 26, 0.30);
 }
 
+.ck-slot-chip.now:not(.on) {
+  border-style: dashed;
+  border-color: var(--ck-gold);
+}
+
 .ck-slot-note {
   font-size: 10.5px;
   font-weight: 600;

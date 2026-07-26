@@ -25,14 +25,16 @@ import { ONBOARDING_LEGACY_TAB } from '../utils/teamUrlUtils';
 import { PM_ONBOARDING_WIZARD_PATH } from '../features/onboarding/wizardNavigation';
 import TeamWeekView from '../features/taskHub/staff-design/TeamWeekView';
 import StaffScheduleListView from '../features/taskHub/staff-design/StaffScheduleListView';
+import StaffRoleView from '../features/taskHub/staff-design/StaffRoleView';
 import './tasksTeamPage.css';
 
-type HubTab = 'planning' | 'horaires' | 'equipe' | 'admin';
+type HubTab = 'planning' | 'vue-staff' | 'horaires' | 'equipe' | 'admin';
 
 function hubTabFromParam(tab: string | null): HubTab {
   if (tab === 'admin') return 'admin';
   if (tab === 'annuaire' || tab === 'config') return 'equipe';
   if (tab === 'horaires') return 'horaires';
+  if (tab === 'vue-staff' || tab === 'role' || tab === 'staff-role') return 'vue-staff';
   return 'planning';
 }
 
@@ -274,6 +276,7 @@ function TasksStaffFulltaskPageInner() {
     if (tab === 'admin') next.set('tab', 'admin');
     else if (tab === 'equipe') next.set('tab', 'config');
     else if (tab === 'horaires') next.set('tab', 'horaires');
+    else if (tab === 'vue-staff') next.set('tab', 'vue-staff');
     else next.delete('tab');
     const qs = next.toString();
     navigate(qs ? `/tasks/team?${qs}` : '/tasks/team', { replace: true });
@@ -295,6 +298,13 @@ function TasksStaffFulltaskPageInner() {
             onClick={() => selectTab('planning')}
           >
             Planning équipe
+          </button>
+          <button
+            type="button"
+            className={`tasks-team-tab${hubTab === 'vue-staff' ? ' on' : ''}`}
+            onClick={() => selectTab('vue-staff')}
+          >
+            Vue staff
           </button>
           <button
             type="button"
@@ -327,6 +337,14 @@ function TasksStaffFulltaskPageInner() {
             filterOwnerId={filterOwnerId}
             ownerOptions={ownerOptions}
             onOpenStaff={() => selectTab('equipe')}
+          />
+        )}
+
+        {hubTab === 'vue-staff' && (
+          <StaffRoleView
+            staff={staff}
+            listings={listingsForPlanning}
+            loading={loadingStaff}
           />
         )}
 
