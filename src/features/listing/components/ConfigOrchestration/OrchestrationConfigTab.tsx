@@ -11,7 +11,7 @@ const ORCH_FLAGS = [
   { key: 'orchestration_choose_departure', label: 'Choisir heure départ' },
   { key: 'orchestration_declare_arrival', label: 'Déclarer arrivée' },
   { key: 'orchestration_declare_departure', label: 'Déclarer départ' },
-  { key: 'orchestration_receive_arrival', label: 'Accueil arrivée' },
+  { key: 'orchestration_receive_arrival', label: 'Accueil client (check-in)' },
   { key: 'orchestration_receive_departure', label: 'Accueil départ' },
   { key: 'orchestration_inform_syndic', label: 'Informer syndic' },
   { key: 'orchestration_registration', label: 'Enregistrement voyageurs' },

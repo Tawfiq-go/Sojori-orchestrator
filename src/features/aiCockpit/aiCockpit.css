@@ -574,6 +574,32 @@
 
 .ck-audit-lbl { flex: 1; min-width: 0; line-height: 1.35; }
 
+/* ── Nature d'une ligne checklist : info client vs tâche staff ── */
+.ck-check-nature {
+  flex-shrink: 0;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.ck-check-nature.client {
+  color: #6d5ba8;
+  background: rgba(124, 58, 237, 0.10);
+  border: 1px dashed rgba(124, 58, 237, 0.35);
+}
+
+.ck-check-nature.staff {
+  color: #7a5c1f;
+  background: rgba(212, 165, 116, 0.18);
+  border: 1px solid rgba(184, 133, 26, 0.4);
+}
+
+/* Info client : ligne plus discrète — les tâches staff ressortent. */
+.ck-check.guest-info .ck-check-label { font-weight: 600; font-style: italic; opacity: 0.9; }
+
 /* ── File de décisions : deadline + conséquence ── */
 .ck-audit-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ck-audit-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -687,6 +713,47 @@
   white-space: nowrap;
   padding-top: 1px;
 }
+
+/* ── Vert théorique : risques résiduels à surveiller ── */
+.ck-brief-risks {
+  border-top: 1px dashed var(--ck-line);
+  padding-top: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ck-brief-risks-hdr {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #8a4500;
+}
+
+.ck-brief-risk {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(196, 101, 6, 0.06);
+  border: 1px dashed rgba(196, 101, 6, 0.3);
+}
+
+.ck-brief-risk-watch {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+  color: #8a4500;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(196, 101, 6, 0.12);
+}
+
+.ck-brief-risk-title { font-size: 11.5px; font-weight: 700; color: var(--ck-text); line-height: 1.35; }
+.ck-brief-risk-signal { font-size: 10.5px; font-weight: 600; color: var(--ck-text2); line-height: 1.4; margin-top: 2px; }
 
 .ck-brief-dtitle { font-size: 12px; font-weight: 800; color: var(--ck-text); line-height: 1.35; }
 .ck-brief-dconsequence { font-size: 11px; font-weight: 600; color: var(--ck-text2); line-height: 1.4; margin-top: 2px; }

@@ -32,8 +32,8 @@ export const STAFF_ASSIGNABLE_TASK_TYPES = FULLTASK_TASK_TYPES.filter(
 const STAFF_PILL_LABEL_OVERRIDES: Partial<Record<FulltaskTaskTypeId, string>> = {
   cleaning_free: 'Ménage gratuit',
   cleaning_paid: 'Ménage payant',
-  receive_arrival: 'Accueil arrivée',
-  receive_departure: 'Accueil départ',
+  receive_arrival: 'Accueil client (check-in)',
+  receive_departure: 'Départ client (check-out)',
   checkout_cleaning: 'Ménage Sojori',
 };
 
