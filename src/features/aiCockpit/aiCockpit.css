@@ -65,6 +65,18 @@
 
 @keyframes ck-blink { 50% { opacity: 0.25; } }
 
+/* Pulsation lisible pour les blocs porteurs de texte — halo qui respire,
+   le texte reste 100% opaque (jamais ck-blink sur un bloc de texte). */
+@keyframes ck-pulse-red {
+  0%, 100% { box-shadow: inset 3px 0 0 var(--ck-bad), 0 0 0 0 rgba(200, 30, 30, 0.35); }
+  50% { box-shadow: inset 3px 0 0 var(--ck-bad), 0 0 0 5px rgba(200, 30, 30, 0); }
+}
+
+@keyframes ck-pulse-red-chip {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 30, 30, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(200, 30, 30, 0); }
+}
+
 .ck-clock {
   font-family: "Geist Mono", monospace;
   font-size: 20px;
@@ -72,6 +84,27 @@
   letter-spacing: 0.04em;
   color: var(--ck-gold-deep);
   font-variant-numeric: tabular-nums;
+}
+
+/* ── Accueil personnalisé ── */
+.ck-greeting {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ck-greeting-hello {
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: var(--ck-text);
+}
+
+.ck-greeting-sub {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ck-text2);
 }
 
 .ck-quickdays {
@@ -105,6 +138,66 @@
   background: linear-gradient(135deg, #e6b64c, var(--ck-gold));
   color: #fff;
 }
+
+/* ── Radar J+7 : badge de risque par jour ── */
+.ck-quickdays button { position: relative; }
+
+.ck-quickdays button.risk-high { color: var(--ck-bad); }
+.ck-quickdays button.risk-warn { color: #8a4500; }
+.ck-quickdays button.on.risk-high,
+.ck-quickdays button.on.risk-warn { color: #fff; }
+
+.ck-day-badge {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 14px;
+  text-align: center;
+  color: #fff;
+  pointer-events: none;
+}
+
+.ck-day-badge.high { background: var(--ck-bad); }
+.ck-day-badge.warn { background: var(--ck-warn); }
+
+/* ── Jour calme : prochaine tension du radar ── */
+.ck-next-tension {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--ck-line);
+  background: var(--ck-panel);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ck-text2);
+}
+
+.ck-next-tension-ico { font-size: 16px; }
+.ck-next-tension-txt { flex: 1; min-width: 0; line-height: 1.45; }
+.ck-next-tension-txt b { color: var(--ck-text); font-weight: 800; }
+
+.ck-next-tension button {
+  flex-shrink: 0;
+  border: 1px solid var(--ck-line-strong);
+  background: var(--ck-panel2);
+  color: var(--ck-text2);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.ck-next-tension button:hover { background: var(--ck-panel3); color: var(--ck-gold-deep); }
 
 .ck-datenav {
   display: inline-flex;
@@ -455,7 +548,8 @@
   color: var(--ck-bad);
   font-weight: 800;
   box-shadow: inset 3px 0 0 var(--ck-bad);
-  animation: ck-blink 2s ease-in-out infinite;
+  /* Halo pulsé — jamais ck-blink ici : le texte doit rester lisible. */
+  animation: ck-pulse-red 2s ease-in-out infinite;
 }
 
 .ck-audit-ico {
@@ -479,6 +573,124 @@
 }
 
 .ck-audit-lbl { flex: 1; min-width: 0; line-height: 1.35; }
+
+/* ── File de décisions : deadline + conséquence ── */
+.ck-audit-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ck-audit-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.ck-audit-count {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--ck-line-strong);
+  color: var(--ck-text2);
+  white-space: nowrap;
+}
+
+.ck-audit-count.soon {
+  background: rgba(196, 101, 6, 0.16);
+  border-color: rgba(196, 101, 6, 0.45);
+  color: #8a4500;
+}
+
+.ck-audit-count.overdue {
+  background: rgba(200, 30, 30, 0.16);
+  border-color: rgba(200, 30, 30, 0.5);
+  color: var(--ck-bad);
+  animation: ck-pulse-red-chip 1.4s ease-in-out infinite;
+}
+
+.ck-audit-consequence {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ck-text2);
+  opacity: 0.9;
+}
+
+/* ── Brief de l'orchestrateur (analyse IA du plan) ── */
+.ck-brief {
+  border-radius: 14px;
+  border: 1px solid var(--ck-line);
+  background: var(--ck-panel);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.ck-brief-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--ck-text);
+}
+
+.ck-brief-model {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--ck-text2);
+  opacity: 0.7;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--ck-line);
+}
+
+.ck-brief-refresh {
+  margin-left: auto;
+  border: 1px solid var(--ck-line-strong);
+  background: var(--ck-panel2);
+  color: var(--ck-text2);
+  font-size: 13px;
+  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+}
+
+.ck-brief-refresh:disabled { opacity: 0.5; cursor: default; }
+
+.ck-brief-loading { font-size: 12px; color: var(--ck-text2); font-style: italic; }
+
+.ck-brief-text {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ck-text);
+}
+
+.ck-brief-decision {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ck-panel2);
+  border: 1px solid var(--ck-line);
+}
+
+.ck-brief-decision.critical { box-shadow: inset 3px 0 0 var(--ck-bad); }
+.ck-brief-decision.important { box-shadow: inset 3px 0 0 var(--ck-warn); }
+
+.ck-brief-sev {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.ck-brief-dtitle { font-size: 12px; font-weight: 800; color: var(--ck-text); line-height: 1.35; }
+.ck-brief-dconsequence { font-size: 11px; font-weight: 600; color: var(--ck-text2); line-height: 1.4; margin-top: 2px; }
+.ck-brief-dreco { font-size: 11px; font-weight: 800; color: var(--ck-text); line-height: 1.4; margin-top: 3px; }
 
 .ck-audit-item button {
   flex-shrink: 0;

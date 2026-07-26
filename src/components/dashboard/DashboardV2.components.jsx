@@ -191,8 +191,8 @@ export function DashboardLayout({
           radial-gradient(50% 42% at 100% 0%, rgba(230,176,34,0.07), transparent 58%),
           radial-gradient(38% 28% at 0% 100%, rgba(139,92,246,0.05), transparent 72%)
         `,
-          pt: compactMain ? LISTING_LAYOUT.mainPadTop : { xs: 2, md: '24px' },
-          pb: compactMain ? LISTING_LAYOUT.mainPadBottom : { xs: 2, md: '48px' },
+          pt: compactMain ? LISTING_LAYOUT.mainPadTop : { xs: 1, md: '10px' },
+          pb: compactMain ? LISTING_LAYOUT.mainPadBottom : { xs: 2, md: '32px' },
           px: compactMain ? LISTING_LAYOUT.mainPadX : DASHBOARD_PAGE.padX,
         }}
       >
@@ -648,7 +648,7 @@ function SideLink({ item, active, sub, disabled, notificationCount = 0, onClick 
       borderRadius: '10px',
       fontSize: sub ? 12.5 : 13,
       color: active ? t.text : (sub ? t.text3 : t.text2),
-      fontWeight: active ? 600 : (sub ? 500 : 550),
+      fontWeight: active ? 700 : (sub ? 500 : 550),
       bgcolor: active ? 'linear-gradient(135deg, rgba(230,176,34,0.12), rgba(230,176,34,0.08))' : 'transparent',
       border: active ? `1px solid rgba(230,176,34,0.25)` : '1px solid transparent',
       boxShadow: active ? '0 2px 8px rgba(230,176,34,0.15), inset 0 1px 0 rgba(255,255,255,0.4)' : 'none',
@@ -676,7 +676,16 @@ function SideLink({ item, active, sub, disabled, notificationCount = 0, onClick 
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: sub ? 20 : 22, flexShrink: 0 }}>
         <NavItemIcon item={item} active={active} sub={sub} />
       </Box>
-      <Box sx={{ flex: 1, minWidth: 0, letterSpacing: '-0.1px' }}>{item.label}</Box>
+      <Box
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          letterSpacing: active ? '-0.02em' : '-0.1px',
+          fontWeight: 'inherit',
+        }}
+      >
+        {item.label}
+      </Box>
       {notificationCount > 0 ? <SidebarNotificationBadge count={notificationCount} /> : null}
       {item.badge && (
         <Box sx={{
@@ -827,17 +836,50 @@ export function TopBar({
           <MenuIcon sx={{ fontSize: 22 }} />
         </IconButton>
       ) : null}
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0, fontSize: 12.5, color: t.text2, flexShrink: 0 }}>
-        {breadcrumb.map((b, i) => (
-          <React.Fragment key={`breadcrumb-${i}-${b}`}>
-            <Typography sx={{
-              fontSize: 12.5,
-              color: i === breadcrumb.length - 1 ? t.text : t.text2,
-              fontWeight: i === breadcrumb.length - 1 ? 600 : 400,
-            }}>{b}</Typography>
-            {i < breadcrumb.length - 1 && <Box sx={{ color: t.text4 }}>›</Box>}
-          </React.Fragment>
-        ))}
+      <Stack
+        direction="row"
+        spacing={0.75}
+        sx={{ alignItems: 'center', minWidth: 0, flexShrink: 1, overflow: 'hidden' }}
+      >
+        {breadcrumb.length === 0 ? (
+          <Typography
+            component="span"
+            sx={{ fontSize: 13, fontWeight: 600, color: t.text2, whiteSpace: 'nowrap' }}
+          >
+            …
+          </Typography>
+        ) : (
+          breadcrumb.map((b, i) => {
+            const isCurrent = i === breadcrumb.length - 1;
+            return (
+              <React.Fragment key={`breadcrumb-${i}-${b}`}>
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: isCurrent ? 14 : 12.5,
+                    lineHeight: 1.25,
+                    color: isCurrent ? t.text : t.text2,
+                    fontWeight: isCurrent ? 700 : 500,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: isCurrent ? { xs: 180, sm: 360 } : { xs: 120, sm: 220 },
+                  }}
+                >
+                  {b}
+                </Typography>
+                {i < breadcrumb.length - 1 && (
+                  <Box
+                    component="span"
+                    sx={{ color: t.text4, fontSize: 13, fontWeight: 500, flexShrink: 0 }}
+                  >
+                    ›
+                  </Box>
+                )}
+              </React.Fragment>
+            );
+          })
+        )}
       </Stack>
 
       {adminScopeInTopBar ? <AdminBusinessScopeTopFilter /> : null}
@@ -901,43 +943,38 @@ export function PageMetaRow({ children, sx }) {
   );
 }
 
-export function PageHeader({ title, count, children }) {
+/**
+ * Barre d’actions optionnelle — le titre de page vit dans le fil d’Ariane topbar
+ * (ex. Tâches & Opérations › Kanban), pas en H1 redondant ici.
+ */
+export function PageHeader({ title, count, children, subtitle }) {
+  void title;
+  void subtitle;
+  const hasMeta = Boolean(count);
+  const hasActions = Boolean(children);
+  if (!hasMeta && !hasActions) return null;
+
   return (
     <Stack
       direction={{ xs: 'column', sm: 'row' }}
-      spacing={2}
+      spacing={1}
       sx={{
-        alignItems: { xs: 'stretch', sm: 'flex-start' },
+        alignItems: { xs: 'stretch', sm: 'center' },
         justifyContent: 'space-between',
-        mb: 3,
-        pb: 2,
+        mb: 1.25,
+        pb: 1,
         borderBottom: `1px solid ${t.border}`,
-        gap: 2,
+        gap: 1,
       }}
     >
-      <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Box
-          component="h1"
-          sx={{
-            fontSize: { xs: '1.2rem', sm: '1.45rem' },
-            fontWeight: 800,
-            letterSpacing: '-0.045em',
-            color: t.text,
-            lineHeight: 1.2,
-            m: 0,
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: 1.5,
-          }}
-        >
-          {title}
-          {count && (
-            <Box component="span" sx={pageMetaChipSx}>{count}</Box>
-          )}
+      {hasMeta ? (
+        <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box component="span" sx={pageMetaChipSx}>{count}</Box>
         </Box>
-      </Box>
-      {children ? (
+      ) : (
+        <Box sx={{ flex: 1, minWidth: 0 }} />
+      )}
+      {hasActions ? (
         <Stack
           direction="row"
           spacing={1}
@@ -947,6 +984,7 @@ export function PageHeader({ title, count, children }) {
             flexWrap: 'wrap',
             rowGap: 1,
             justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+            ml: hasMeta ? 0 : 'auto',
           }}
         >
           {children}

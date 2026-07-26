@@ -9,6 +9,13 @@ export type ContractType = 'employee' | 'freelance';
 export type StaffStatus = 'active' | 'off' | 'leave';
 export type TaskType = FulltaskTaskTypeId;
 
+export type StaffAbsence = {
+  _id: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+};
+
 export type ChannelKind = 'whatsapp' | 'email' | 'sms';
 export type WorkflowKind = 'choose_arrival' | 'choose_departure' | 'cleaning_after_checkout' | 'support_ticket' | 'service_client';
 export type ReferencePoint = 'reservation_date' | 'check_in' | 'check_out' | 'task_created' | 'previous_step_done';
@@ -38,6 +45,13 @@ export interface Staff {
   /** Sentinel « All » ou ids ville — inclut les nouvelles annonces de la ville. */
   allowedCityIds: string[];
   maxTasksPerDay?: number;
+  /**
+   * true = disponible 7j/7 24h/24 — l’assignation ignore les créneaux.
+   * Les absences restent bloquantes.
+   */
+  alwaysAvailable?: boolean;
+  /** Absences calendaires (jour1 → jour2 + motif). */
+  absences?: StaffAbsence[];
   schedule: {
     /** Jours actifs (0=dim … 6=sam). */
     daysOfWeek: number[];

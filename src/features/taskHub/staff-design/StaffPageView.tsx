@@ -76,6 +76,7 @@ function emptyStaff(): Staff {
     rates: {},
     allowedListingIds: [],
     allowedCityIds: [],
+    alwaysAvailable: false,
     lang: 'fr',
     schedule: {
       daysOfWeek: [1, 2, 3, 4, 5],
@@ -92,6 +93,7 @@ function emptyStaff(): Staff {
 }
 
 function scheduleHours(s: Staff): string {
+  if (s.alwaysAvailable) return 'Toujours · 24/7';
   const dw = s.schedule?.dayWindows;
   if (dw && Object.keys(dw).length) {
     const all = Object.values(dw).flat();
@@ -271,6 +273,7 @@ export default function StaffPageView({
     setForm({
       ...s,
       rates: { ...s.rates },
+      alwaysAvailable: s.alwaysAvailable === true,
       allowedTaskTypes: sanitizeStaffAllowedTaskTypes(s.allowedTaskTypes as string[]),
       schedule: {
         daysOfWeek,
@@ -417,7 +420,10 @@ export default function StaffPageView({
           .map((w) => [`${w.start}:${w.end}`, w] as const),
       ).values(),
     ];
-    patchForm({ schedule: { daysOfWeek, timeWindows, dayWindows: cleaned } });
+    patchForm({
+      alwaysAvailable: false,
+      schedule: { daysOfWeek, timeWindows, dayWindows: cleaned },
+    });
   };
 
   const selectPlanningDay = (day: number) => {
@@ -1088,17 +1094,62 @@ export default function StaffPageView({
 
             <div className="form-section full">
               <div className="form-section-h">Planning de travail</div>
-              <div className="day-pills">
+              <div className="admin-row" style={{ marginBottom: 12 }}>
+                <span style={{ fontSize: 18 }}>🕒</span>
+                <div style={{ flex: 1 }}>
+                  <div className="nm">Toujours disponible</div>
+                  <div className="ds">
+                    7j/7 · 24h/24 — l’assignation ignore les créneaux (congés exclus)
+                  </div>
+                </div>
+                <div
+                  className={`toggle${form.alwaysAvailable ? ' on' : ''}`}
+                  onClick={() => {
+                    const next = !form.alwaysAvailable;
+                    if (next) {
+                      const dayWindows: Partial<Record<number, { start: string; end: string }[]>> =
+                        {};
+                      for (let d = 0; d <= 6; d += 1) {
+                        dayWindows[d] = [{ start: '00:00', end: '23:59' }];
+                      }
+                      patchForm({
+                        alwaysAvailable: true,
+                        schedule: {
+                          daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+                          timeWindows: [{ start: '00:00', end: '23:59' }],
+                          dayWindows,
+                        },
+                      });
+                    } else {
+                      patchForm({ alwaysAvailable: false });
+                    }
+                  }}
+                  onKeyDown={() => {}}
+                  role="switch"
+                  aria-checked={Boolean(form.alwaysAvailable)}
+                />
+              </div>
+              {form.alwaysAvailable ? (
+                <p className="access-panel-hint">
+                  Mode actif — ce membre est éligible à toute heure. Désactivez pour éditer les
+                  jours.
+                </p>
+              ) : null}
+              <div className={`day-pills${form.alwaysAvailable ? ' disabled-soft' : ''}`}>
                 {DAY_DISPLAY_ORDER.map((i) => {
-                  const active = isDayOn(i);
+                  const active = form.alwaysAvailable || isDayOn(i);
                   const selected = planningDay === i;
                   return (
                     <button
                       key={`d-${i}`}
                       type="button"
                       className={`day-pill${active ? ' on' : ''}${selected ? ' selected' : ''}`}
-                      onClick={() => selectPlanningDay(i)}
+                      onClick={() => {
+                        if (form.alwaysAvailable) return;
+                        selectPlanningDay(i);
+                      }}
                       title={DAY_FULL_LABELS[i]}
+                      disabled={form.alwaysAvailable}
                     >
                       {DAY_LABELS[i]}
                     </button>
@@ -1106,9 +1157,10 @@ export default function StaffPageView({
                 })}
               </div>
 
-              {planningDay == null ? (
+              {form.alwaysAvailable ? null : planningDay == null ? (
                 <p className="access-panel-hint" style={{ marginTop: 10 }}>
-                  Cliquez un jour · activez-le · définissez ses créneaux.
+                  Cliquez un jour · activez-le · définissez ses créneaux — ou activez « Toujours
+                  disponible ».
                 </p>
               ) : (
                 <div className="planning-day-panel">
@@ -1182,6 +1234,29 @@ export default function StaffPageView({
                           }
                         >
                           24/24
+                        </button>
+                        <button
+                          type="button"
+                          className="planning-preset-btn"
+                          onClick={() => {
+                            const dayWindows: Partial<
+                              Record<number, { start: string; end: string }[]>
+                            > = {};
+                            for (let d = 0; d <= 6; d += 1) {
+                              dayWindows[d] = [{ start: '00:00', end: '23:59' }];
+                            }
+                            patchForm({
+                              alwaysAvailable: true,
+                              schedule: {
+                                daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+                                timeWindows: [{ start: '00:00', end: '23:59' }],
+                                dayWindows,
+                              },
+                            });
+                            setPlanningDay(null);
+                          }}
+                        >
+                          Toujours
                         </button>
                       </div>
                       <div className="planning-slots">

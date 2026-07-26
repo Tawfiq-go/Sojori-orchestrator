@@ -9,12 +9,15 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import * as fulltaskApi from '../../services/fulltaskApi';
 import type {
+  DayBriefResult,
   DayPlanAction,
   DayPlanChain,
   DayPlanResponse,
   DayPlanStep,
+  DayPlanWeekDay,
 } from '../../services/fulltaskApi';
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
+import { useAuth } from '../../hooks/useAuth';
 import PlanManualAssignModal from '../planReservation/PlanManualAssignModal';
 import { ReservationRegistrationActions } from '../../components/reservations/ReservationRegistrationActions';
 import './aiCockpit.css';
@@ -118,10 +121,42 @@ type AuditItem = {
   sev: 'high' | 'warn';
   icon: string;
   label: string;
+  /** Listing / lieu — ligne secondaire (évite un pavé illisible). */
+  where?: string;
   step?: DayPlanStep;
   action?: DayPlanAction;
   openPanel?: boolean;
+  /** Dernier moment pour agir, en minutes depuis minuit — null si inconnu. Tri de la file. */
+  deadlineMin?: number | null;
+  /** 'HH:mm' affiché à côté du compte à rebours. */
+  deadlineLabel?: string;
+  /** Ce qui se passe si personne n'agit — factuel, pas générique. */
+  consequence?: string;
 };
+
+/** ISO ou 'HH:mm' → minutes depuis minuit (heure locale). */
+function deadlineToMin(raw?: string | null): number | null {
+  if (!raw) return null;
+  const hm = /^(\d{1,2}):(\d{2})/.exec(raw);
+  if (hm) return Number(hm[1]) * 60 + Number(hm[2]);
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+function minToHm(min: number): string {
+  const h = Math.floor(min / 60) % 24;
+  return `${String(h).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+}
+
+/** Compte à rebours lisible vs l'heure actuelle — « dans 3 h 40 » / « dépassé de 20 min ». */
+function countdownLabel(deadlineMin: number, clock: Date): { txt: string; overdue: boolean; soon: boolean } {
+  const nowMin = clock.getHours() * 60 + clock.getMinutes();
+  const delta = deadlineMin - nowMin;
+  if (delta < 0) return { txt: `dépassé de ${fmtDuration(-delta)}`, overdue: true, soon: false };
+  if (delta === 0) return { txt: 'maintenant', overdue: false, soon: true };
+  return { txt: `dans ${fmtDuration(delta)}`, overdue: false, soon: delta <= 90 };
+}
 
 /** Chip d'état de propreté du bien (source srv-listing). */
 const CLEAN_CHIP: Record<string, { cls: string; txt: string }> = {
@@ -233,10 +268,19 @@ const PROMPTS = [
   'Qui fait les ménages ?',
 ];
 
+/** Salutation selon l'heure — l'icône suit le moment de la journée. */
+function greetingParts(hour: number): { icon: string; hello: string } {
+  if (hour < 5) return { icon: '🌙', hello: 'Bonsoir' };
+  if (hour < 12) return { icon: '☀️', hello: 'Bonjour' };
+  if (hour < 18) return { icon: '🌤', hello: 'Bon après-midi' };
+  return { icon: '🌙', hello: 'Bonsoir' };
+}
+
 export default function AiCockpit() {
   const navigate = useNavigate();
   /** ⚠️ Multi-tenant : toute donnée affichée/envoyée à l'IA est scopée owner. */
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
+  const { user } = useAuth();
   const [date, setDate] = useState(() => toIso(new Date()));
   const [plan, setPlan] = useState<DayPlanResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -254,6 +298,10 @@ export default function AiCockpit() {
   } | null>(null);
   /** Étape dont on inspecte les relances (panneau détail + actions). */
   const [relanceStep, setRelanceStep] = useState<DayPlanStep | null>(null);
+  const [brief, setBrief] = useState<DayBriefResult | null>(null);
+  const [briefLoading, setBriefLoading] = useState(false);
+  /** Radar J+7 — résumé par date (décisions, turnovers serrés) pour badger les boutons de jours. */
+  const [week, setWeek] = useState<DayPlanWeekDay[] | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
 
   const isToday = date === toIso(new Date());
@@ -281,6 +329,78 @@ export default function AiCockpit() {
     const t = setInterval(() => void load(), 60_000);
     return () => clearInterval(t);
   }, [load]);
+
+  /* Brief IA — 1 fetch par date (le backend cache 10 min par owner/date et
+     invalide sur changement du plan) ; bouton ↻ dans le bloc pour forcer. */
+  const loadBrief = useCallback(async () => {
+    if (!scopeFetchReady) return;
+    setBriefLoading(true);
+    try {
+      setBrief(await fulltaskApi.getDayPlanBrief(date, requestOwnerId));
+    } catch {
+      setBrief(null);
+    } finally {
+      setBriefLoading(false);
+    }
+  }, [date, scopeFetchReady, requestOwnerId]);
+
+  useEffect(() => {
+    setBrief(null);
+    void loadBrief();
+  }, [loadBrief]);
+
+  /* Radar J+7 — un fetch au montage (et par changement de scope), refresh toutes les 5 min. */
+  useEffect(() => {
+    if (!scopeFetchReady) return undefined;
+    let alive = true;
+    const fetchWeek = async () => {
+      try {
+        const res = await fulltaskApi.getDayPlanWeek(toIso(new Date()), 8, requestOwnerId);
+        if (alive && res.success) setWeek(res.days);
+      } catch {
+        /* radar silencieux — le cockpit reste utilisable sans */
+      }
+    };
+    void fetchWeek();
+    const t = setInterval(() => void fetchWeek(), 5 * 60_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [scopeFetchReady, requestOwnerId]);
+
+  const weekByDate = useMemo(() => {
+    const m = new Map<string, DayPlanWeekDay>();
+    for (const d of week ?? []) m.set(d.date, d);
+    return m;
+  }, [week]);
+
+  /** Niveau de risque d'un jour pour le radar — pilote badge + couleur. */
+  const dayRisk = useCallback(
+    (iso: string): { count: number; level: 'high' | 'warn' | null } => {
+      const d = weekByDate.get(iso);
+      if (!d) return { count: 0, level: null };
+      if (d.stats.attention > 0) return { count: d.stats.attention, level: 'high' };
+      if (d.fragility.tightChains > 0 || d.fragility.label === 'tendue') {
+        return { count: d.fragility.tightChains || d.stats.turnovers, level: 'warn' };
+      }
+      return { count: 0, level: null };
+    },
+    [weekByDate],
+  );
+
+  /* Prochaine tension — première journée à risque après aujourd'hui (bloc jour calme). */
+  const nextTension = useMemo(() => {
+    if (!week) return null;
+    const today = toIso(new Date());
+    for (const d of week) {
+      if (d.date <= today) continue;
+      const risk =
+        d.stats.attention > 0 || d.fragility.tightChains > 0 || d.fragility.label === 'tendue';
+      if (risk) return d;
+    }
+    return null;
+  }, [week]);
 
   const flights = useMemo<Flight[]>(() => {
     if (!plan) return [];
@@ -381,32 +501,56 @@ export default function AiCockpit() {
 
   const targets = useMemo(() => new Set(reply?.targets ?? []), [reply]);
 
-  /* ══ Audit du jour : les problèmes à traiter, pas juste de l'affichage ══ */
+  /* ══ File de décisions : SOURCE UNIQUE de vérité pour le bandeau d'audit ET les
+     chips « décision requise » des lignes. Chaque item porte deadline + conséquence ;
+     tri par temps restant. Un step en state='attention' non couvert par une règle
+     dédiée entre par la règle générique — le bandeau ne peut jamais être vert
+     pendant qu'une ligne réclame une décision. ══ */
   const auditItems = useMemo<AuditItem[]>(() => {
     if (!plan) return [];
     const items: AuditItem[] = [];
+    const covered = new Set<string>();
     const arrivalsToday = new Set(
       plan.steps.filter((s) => s.kind === 'arrival').map((s) => s.reservationId),
     );
+    /** Arrivée non terminée sur un listing — pour dater les deadlines de ménage. */
+    const arrivalByListing = new Map<string, DayPlanStep>();
+    for (const s of plan.steps) {
+      if (s.kind === 'arrival' && s.state !== 'done' && !arrivalByListing.has(s.listingId)) {
+        arrivalByListing.set(s.listingId, s);
+      }
+    }
+    const stepHm = (s?: DayPlanStep): string | undefined => s?.time ?? s?.estimatedTime ?? undefined;
+
     for (const s of plan.steps) {
       if (s.kind === 'arrival' && s.state !== 'done' && s.listingCleanliness === 'dirty') {
+        covered.add(s.id);
+        const hm = stepHm(s);
+        const noCleaning = !plan.steps.some((x) => x.kind === 'cleaning' && x.listingId === s.listingId);
         items.push({
           id: `dirty:${s.id}`,
           sev: 'high',
           icon: '🧽',
-          label: `Bien SALE — arrivée ${s.guestName ?? ''} · ${s.listingName}${plan.steps.some((x) => x.kind === 'cleaning' && x.listingId === s.listingId) ? '' : ' — aucun ménage planifié'}`,
+          label: `Bien SALE — arrivée ${s.guestName ?? ''} · ${s.listingName}${noCleaning ? ' — aucun ménage planifié' : ''}`,
+          consequence: `${s.guestName ?? 'Le client'} arrive ${s.hourUnknown ? `vers ${hm ?? '15:00'} (heure non confirmée)` : `à ${hm ?? '—'}`} sur un bien sale${noCleaning ? " et aucun ménage n'est planifié pour le rattraper" : ''}.`,
+          deadlineMin: deadlineToMin(hm),
+          deadlineLabel: hm,
           step: s,
           openPanel: Boolean(s.relances?.length),
           action: s.attention?.actions?.[0],
         });
       }
       if ((s.kind === 'departure' || s.kind === 'arrival') && s.state !== 'done' && s.hourUnknown) {
+        covered.add(s.id);
         const hm = s.estimatedTime ?? '—';
         items.push({
           id: `hour:${s.id}`,
           sev: 'warn',
           icon: '⏱',
           label: `≈ ${hm} · heure ${s.kind === 'departure' ? 'de départ' : "d'arrivée"} non confirmée — ${s.guestName ?? ''} · ${s.listingName}`,
+          consequence: `Le planning (ménage, turnover) est calé sur une heure par défaut — si le client ${s.kind === 'departure' ? 'part plus tard' : 'arrive plus tôt'}, la journée casse sans prévenir.`,
+          deadlineMin: deadlineToMin(s.attention?.deadline ?? s.estimatedTime),
+          deadlineLabel: s.estimatedTime,
           step: s,
           action: s.chooseTaskId
             ? { type: 'force_slot', label: 'Fixer une heure', taskId: s.chooseTaskId }
@@ -415,11 +559,19 @@ export default function AiCockpit() {
         });
       }
       if (s.kind === 'cleaning' && s.state !== 'done' && !s.staffName) {
+        covered.add(s.id);
+        const arr = arrivalByListing.get(s.listingId);
+        const arrHm = stepHm(arr);
         items.push({
           id: `staff:${s.id}`,
-          sev: 'warn',
+          sev: arr ? 'high' : 'warn',
           icon: '🧹',
           label: `Ménage non assigné · ${s.listingName}`,
+          consequence: arr
+            ? `Sans staff assigné, le ménage ne sera pas fait avant l'arrivée de ${arr.guestName ?? 'du prochain client'}${arrHm ? ` à ${arrHm}` : ''}.`
+            : `Sans staff assigné, le ménage de ${s.listingName} ne sera pas fait aujourd'hui.`,
+          deadlineMin: deadlineToMin(s.attention?.deadline ?? arrHm ?? s.time),
+          deadlineLabel: arrHm ?? s.time ?? undefined,
           step: s,
           action: s.taskId ? { type: 'assign', label: 'Assigner un staff', taskId: s.taskId } : undefined,
         });
@@ -429,11 +581,16 @@ export default function AiCockpit() {
           /* Info seule — pas un point bloquant à traiter. */
           continue;
         }
+        covered.add(s.id);
+        const arrHm = stepHm(plan.steps.find((x) => x.kind === 'arrival' && x.reservationId === s.reservationId));
         items.push({
           id: `reg:${s.id}`,
           sev: 'warn',
           icon: '📋',
           label: `Enregistrement en attente — ${s.guestName ?? ''} · ${s.listingName}`,
+          consequence: `Sans enregistrement voyageurs, les codes d'accès restent bloqués pour l'arrivée${arrHm ? ` de ${arrHm}` : ''}.`,
+          deadlineMin: deadlineToMin(arrHm),
+          deadlineLabel: arrHm,
           step: s,
           openPanel: true,
         });
@@ -441,15 +598,49 @@ export default function AiCockpit() {
     }
     for (const c of plan.chains ?? []) {
       if (c.status === 'broken' && !c.hoursUnknown) {
+        /* Arrivée = fin de ménage prévue + marge (négative sur une chaîne cassée). */
+        const endMin = deadlineToMin(c.expectedCleaningEnd);
+        const arrMin = endMin != null ? endMin + c.slackMinutes : null;
         items.push({
           id: `chain:${c.id}`,
           sev: 'high',
           icon: '⚠',
           label: `Chaîne de turnover cassée (${fmtDuration(c.slackMinutes)} de dépassement) · ${c.listingName}`,
+          consequence: `Le ménage finira vers ${c.expectedCleaningEnd || '—'} — après l'arrivée de ${c.arrivingGuestName ?? 'du client'}${arrMin != null ? ` prévue à ${minToHm(arrMin)}` : ''}.`,
+          deadlineMin: arrMin,
+          deadlineLabel: arrMin != null ? minToHm(arrMin) : undefined,
         });
       }
     }
-    return items.sort((a, b) => (a.sev === b.sev ? 0 : a.sev === 'high' ? -1 : 1));
+    /* Règle générique : toute décision requise (state='attention') non couverte ci-dessus.
+       C'est elle qui garantit bandeau ⇔ chips cohérents (ex. « assignation bloquée »). */
+    for (const s of plan.steps) {
+      if (s.state !== 'attention' || covered.has(s.id)) continue;
+      const attnMin = deadlineToMin(s.attention?.deadline ?? stepHm(s));
+      items.push({
+        id: `attn:${s.id}`,
+        sev: 'high',
+        icon: '✋',
+        label: s.attention?.reason ?? s.title,
+        where: s.listingName,
+        consequence: s.attention?.attempted
+          ? `Auto épuisée · ${s.attention.attempted} — action humaine requise.`
+          : `Action humaine requise.`,
+        deadlineMin: attnMin,
+        deadlineLabel: attnMin != null ? minToHm(attnMin) : undefined,
+        step: s,
+        action: s.attention?.actions?.[0],
+        openPanel: Boolean(s.relances?.length),
+      });
+    }
+    /* Tri par temps restant : dépassé/imminent d'abord, deadline inconnue en dernier ;
+       sévérité en départage. */
+    return items.sort((a, b) => {
+      const da = a.deadlineMin ?? Number.POSITIVE_INFINITY;
+      const db = b.deadlineMin ?? Number.POSITIVE_INFINITY;
+      if (da !== db) return da - db;
+      return a.sev === b.sev ? 0 : a.sev === 'high' ? -1 : 1;
+    });
   }, [plan]);
 
   useEffect(() => {
@@ -533,14 +724,35 @@ export default function AiCockpit() {
   const kArr = useCountUp(stats?.arrivals ?? 0);
   const kDep = useCountUp(stats?.departures ?? 0);
   const kAuto = useCountUp(stats && stats.steps > 0 ? Math.round((stats.done / stats.steps) * 100) : 0);
-  const kAttn = useCountUp(stats?.attention ?? 0);
+  /* Même source que le bandeau d'audit et les chips — jamais de KPI contradictoire. */
+  const kAttn = useCountUp(auditItems.length);
 
   const dayPct = isToday
     ? Math.min(100, ((clock.getHours() * 60 + clock.getMinutes()) / 1440) * 100)
     : date < toIso(new Date()) ? 100 : 0;
 
+  const greet = greetingParts(clock.getHours());
+  const firstName = (user?.firstName ?? '').trim();
+  const greetName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : '';
+  const greetSub = !plan
+    ? 'On compile ta journée…'
+    : auditItems.length > 0
+      ? `${auditItems.length} décision${auditItems.length > 1 ? 's' : ''} t'attend${auditItems.length > 1 ? 'ent' : ''} — la plus urgente d'abord.`
+      : (stats?.turnovers ?? 0) > 0
+        ? `${stats?.turnovers} turnover${(stats?.turnovers ?? 0) > 1 ? 's' : ''} au programme — tout roule pour l'instant.`
+        : 'Journée calme devant toi — rien ne réclame ta décision.';
+
   return (
     <div className="ck-root">
+      {/* ══ Accueil personnalisé — salutation selon l'heure + état de la journée ══ */}
+      <div className="ck-greeting">
+        <span className="ck-greeting-hello">
+          {greet.icon} {greet.hello}
+          {greetName ? ` ${greetName}` : ''}
+        </span>
+        <span className="ck-greeting-sub">{greetSub}</span>
+      </div>
+
       {/* ══ Toolbar : LIVE + horloge + navigation date (le titre de page est déjà au-dessus) ══ */}
       <div className="ck-topbar">
         {isToday && (
@@ -554,15 +766,23 @@ export default function AiCockpit() {
           {[0, 1, 2, 3, 4, 5, 6, 7].map((d) => {
             const iso = addDaysIso(toIso(new Date()), d);
             const label = d === 0 ? "Aujourd'hui" : `J+${d}`;
+            const risk = dayRisk(iso);
+            const wd = weekByDate.get(iso);
+            const title = wd
+              ? `${frDate(iso)} — ${wd.stats.attention} décision(s), ${wd.stats.turnovers} turnover(s)${wd.fragility.tightChains ? `, ${wd.fragility.tightChains} serré(s)` : ''}`
+              : frDate(iso);
             return (
               <button
                 key={d}
                 type="button"
-                className={date === iso ? 'on' : ''}
-                title={frDate(iso)}
+                className={`${date === iso ? 'on' : ''}${risk.level ? ` risk-${risk.level}` : ''}`}
+                title={title}
                 onClick={() => setDate(iso)}
               >
                 {label}
+                {risk.level && risk.count > 0 && (
+                  <span className={`ck-day-badge ${risk.level}`}>{risk.count}</span>
+                )}
               </button>
             );
           })}
@@ -648,28 +868,102 @@ export default function AiCockpit() {
         <Kpi value={String(kAttn)} label={kAttn > 0 ? 'décisions requises' : 'décision requise ✓'} tone={kAttn > 0 ? 'warn' : 'ok'} delay={240} />
       </div>
 
-      {/* ══ Audit du jour : problèmes à traiter, avec action directe ══ */}
+      {/* ══ File de décisions : source unique bandeau + chips, triée par temps restant ══ */}
       {plan && (
         <div className={`ck-audit ${auditItems.some((i) => i.sev === 'high') ? 'high' : auditItems.length ? 'warn' : 'ok'}`}>
           <div className="ck-audit-hdr">
             {auditItems.length
-              ? `🚨 Audit du jour · ${auditItems.length} point${auditItems.length > 1 ? 's' : ''} à traiter`
-              : '✓ Audit du jour — rien à signaler'}
+              ? `🚨 ${auditItems.length} décision${auditItems.length > 1 ? 's' : ''} — urgence`
+              : '✓ Aucune décision en attente'}
           </div>
-          {auditItems.map((it) => (
-            <div key={it.id} className={`ck-audit-item ${it.sev}`}>
-              <span className="ck-audit-ico" aria-hidden>{it.icon}</span>
-              <span className="ck-audit-lbl">{it.label}</span>
-              {it.step && it.openPanel && (
-                <button type="button" onClick={() => setRelanceStep(it.step!)}>Détails</button>
-              )}
-              {it.step && it.action && (
-                <button type="button" className="primary" onClick={() => runAction(it.step!, it.action!)}>
-                  {it.action.label}
-                </button>
-              )}
-            </div>
-          ))}
+          {auditItems.map((it) => {
+            const cd = isToday && it.deadlineMin != null ? countdownLabel(it.deadlineMin, clock) : null;
+            return (
+              <div key={it.id} className={`ck-audit-item ${it.sev}`}>
+                <span className="ck-audit-ico" aria-hidden>{it.icon}</span>
+                <div className="ck-audit-main">
+                  <div className="ck-audit-top">
+                    {cd ? (
+                      <span className={`ck-audit-count ${cd.overdue ? 'overdue' : cd.soon ? 'soon' : ''}`}>
+                        ⏳ {cd.txt}
+                        {it.deadlineLabel ? ` · ${it.deadlineLabel}` : ''}
+                      </span>
+                    ) : it.deadlineLabel ? (
+                      <span className="ck-audit-count">🕐 {it.deadlineLabel}</span>
+                    ) : null}
+                  </div>
+                  <span className="ck-audit-lbl">{it.label}</span>
+                  {it.where ? <span className="ck-audit-where" title={it.where}>{it.where}</span> : null}
+                  {it.consequence && <div className="ck-audit-consequence">{it.consequence}</div>}
+                </div>
+                {it.step && it.openPanel && (
+                  <button type="button" onClick={() => setRelanceStep(it.step!)}>Détails</button>
+                )}
+                {it.step && it.action && (
+                  <button type="button" className="primary" onClick={() => runAction(it.step!, it.action!)}>
+                    {it.action.label}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ══ Jour calme → météo devant : la prochaine journée à risque du radar J+7 ══ */}
+      {plan && auditItems.length === 0 && (stats?.turnovers ?? 0) === 0 && nextTension && (
+        <div className="ck-next-tension">
+          <span className="ck-next-tension-ico" aria-hidden>🌤</span>
+          <span className="ck-next-tension-txt">
+            Journée calme. <b>Prochaine tension : {frDate(nextTension.date)}</b> —{' '}
+            {nextTension.stats.attention > 0 && `${nextTension.stats.attention} décision${nextTension.stats.attention > 1 ? 's' : ''} à préparer`}
+            {nextTension.stats.attention > 0 && (nextTension.stats.turnovers > 0 || nextTension.fragility.tightChains > 0) && ', '}
+            {nextTension.stats.turnovers > 0 && `${nextTension.stats.turnovers} turnover${nextTension.stats.turnovers > 1 ? 's' : ''}`}
+            {nextTension.fragility.tightChains > 0 && ` dont ${nextTension.fragility.tightChains} serré${nextTension.fragility.tightChains > 1 ? 's' : ''}`}
+            .
+          </span>
+          <button type="button" onClick={() => setDate(nextTension.date)}>
+            Voir ce jour →
+          </button>
+        </div>
+      )}
+
+      {/* ══ Brief de l'orchestrateur — l'IA lit le plan et priorise les décisions ══ */}
+      {plan && (briefLoading || brief?.success) && (
+        <div className="ck-brief">
+          <div className="ck-brief-hdr">
+            <span>🧠 Lecture de l'orchestrateur</span>
+            {brief?.model && <span className="ck-brief-model">{brief.model}{brief.cached ? ' · cache' : ''}</span>}
+            <button
+              type="button"
+              className="ck-brief-refresh"
+              onClick={() => void loadBrief()}
+              disabled={briefLoading}
+              aria-label="Rafraîchir le brief"
+            >
+              ↻
+            </button>
+          </div>
+          {briefLoading && !brief ? (
+            <div className="ck-brief-loading">Analyse du plan…</div>
+          ) : (
+            <>
+              {brief?.brief && <p className="ck-brief-text">{brief.brief}</p>}
+              {(brief?.decisions ?? []).map((d, i) => (
+                <div key={`${d.stepId ?? i}`} className={`ck-brief-decision ${d.severity}`}>
+                  <span className="ck-brief-sev">
+                    {d.severity === 'critical' ? '🔴' : d.severity === 'important' ? '🟠' : '🔵'}
+                    {d.deadline ? ` avant ${d.deadline}` : ''}
+                  </span>
+                  <div>
+                    <div className="ck-brief-dtitle">{d.title}</div>
+                    {d.consequence && <div className="ck-brief-dconsequence">{d.consequence}</div>}
+                    {d.recommendation && <div className="ck-brief-dreco">→ {d.recommendation}</div>}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
 

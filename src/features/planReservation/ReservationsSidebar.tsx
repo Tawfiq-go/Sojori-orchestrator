@@ -16,6 +16,8 @@ interface Props {
   pageSize?: number;
   hasMore?: boolean;
   hasActiveQuery?: boolean;
+  /** Recherche déjà dans la toolbar Plans (style inbox). */
+  hideSearch?: boolean;
   onSearchInputChange: (value: string) => void;
   onSearchSubmit: () => void;
   onClearFilters: () => void;
@@ -35,6 +37,7 @@ export default function ReservationsSidebar({
   pageSize = 100,
   hasMore = false,
   hasActiveQuery = false,
+  hideSearch = false,
   onSearchInputChange,
   onSearchSubmit,
   onClearFilters,
@@ -58,29 +61,33 @@ export default function ReservationsSidebar({
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
 
   return (
-    <aside className="sidebar">
-      <div className="sb-h">
-        <h2>📋 {listTitle}</h2>
-        <span className="ct">{totalCount}</span>
-      </div>
+    <aside className={`sidebar${hideSearch ? ' sidebar--compact' : ''}`}>
+      {!hideSearch ? (
+        <>
+          <div className="sb-h">
+            <h2>📋 {listTitle}</h2>
+            <span className="ct">{totalCount}</span>
+          </div>
 
-      <div className="sb-search">
-        <span className="ic">🔍</span>
-        <input
-          value={searchInput}
-          onChange={(e) => onSearchInputChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              onSearchSubmit();
-            }
-          }}
-          placeholder="Nom, listing, réf. résa, id…"
-        />
-        <button type="button" className="sb-search-ok" onClick={onSearchSubmit}>
-          OK
-        </button>
-      </div>
+          <div className="sb-search">
+            <span className="ic">🔍</span>
+            <input
+              value={searchInput}
+              onChange={(e) => onSearchInputChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  onSearchSubmit();
+                }
+              }}
+              placeholder="Nom, listing, réf. résa, id…"
+            />
+            <button type="button" className="sb-search-ok" onClick={onSearchSubmit}>
+              OK
+            </button>
+          </div>
+        </>
+      ) : null}
 
       <div className={`sb-list${listRefreshing ? ' sb-list--refreshing' : ''}`}>
         {totalShown === 0 && queryActive ? (

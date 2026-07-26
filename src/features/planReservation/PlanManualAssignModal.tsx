@@ -112,8 +112,8 @@ export default function PlanManualAssignModal({
           </div>
         ) : null}
         <p className="plan-assign-modal-hint">
-          Filtre : accès listing → types de tâche. Disponibles en premier ; assignation forcée
-          possible (hors planning, quota ou conflit).
+          Filtre : owner → type → accès listing/ville → actif → planning → absences. Hors planning =
+          forçage possible. Absence = non assignable.
         </p>
         {loading ? (
           <p className="plan-assign-modal-empty">Chargement…</p>
@@ -123,33 +123,34 @@ export default function PlanManualAssignModal({
           <ul className="plan-assign-candidate-list">
             {candidates.map((c) => {
               const busy = assigningId === c.staffId;
-              const available =
-                c.availableForTask ??
-                (c.planningOk && !c.atMaxCapacity && !c.timeConflict);
+              const onAbsence = c.onAbsence === true;
+              const available = c.availableForTask ?? (c.planningOk && !onAbsence);
               const warn = !available;
-              const badges: string[] = [];
-              if (available) badges.push('disponible');
-              if (!c.planningOk) badges.push('hors planning');
-              if (c.timeConflict) badges.push('conflit horaire');
-              if (c.atMaxCapacity) badges.push('quota jour');
+              const statusLabel = onAbsence
+                ? ' · absence'
+                : available
+                  ? ' · disponible'
+                  : ' · hors planning';
               return (
-                <li key={c.staffId} className={`plan-assign-candidate${warn ? ' warn' : ''}`}>
+                <li
+                  key={c.staffId}
+                  className={`plan-assign-candidate${warn ? ' warn' : ''}${onAbsence ? ' absence' : ''}`}
+                >
                   <div className="plan-assign-candidate-main">
                     <span className="plan-assign-candidate-name">{c.name}</span>
                     <span className="plan-assign-candidate-meta">
                       {c.contractType === 'salaried' ? 'Salarié' : 'Freelance'}
-                      {' · '}
-                      {c.load}/{c.maxTasksPerDay} tâches
-                      {badges.length ? ` · ${badges.join(' · ')}` : ''}
+                      {statusLabel}
                     </span>
                   </div>
                   <button
                     type="button"
                     className="plan-assign-pick-btn"
-                    disabled={Boolean(assigningId)}
+                    disabled={Boolean(assigningId) || onAbsence}
+                    title={onAbsence ? 'Staff absent ce jour' : undefined}
                     onClick={() => void handleAssign(c.staffId)}
                   >
-                    {busy ? '…' : 'Choisir'}
+                    {busy ? '…' : onAbsence ? 'Absent' : 'Choisir'}
                   </button>
                 </li>
               );

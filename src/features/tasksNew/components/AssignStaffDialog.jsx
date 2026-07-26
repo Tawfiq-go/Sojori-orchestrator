@@ -135,83 +135,66 @@ const AssignStaffDialog = ({
         return;
       }
 
-      if (useFulltaskApi) {
-        const { listStaff } = await import('../../../services/fulltaskApi');
-        const listingId = resolveListingIdForStaffApi(task);
-        const res = await listStaff(listingId ? { listingId } : {});
-        const taskTypeId = task?.subType || task?.type;
-        const rows = (res?.data || [])
-          .filter((s) => {
-            if (!taskTypeId || !Array.isArray(s.taskTypes) || s.taskTypes.length === 0) return true;
-            return s.taskTypes.includes(String(taskTypeId));
-          })
-          .map((s) => ({
-            _id: s._id,
-            staffCode: String(s._id),
-            staffName: s.name,
-            staffPhone: s.phone,
-          }));
-        setAvailableStaff(rows);
-        setUnavailableStaff([]);
-        const typeLabel = taskTypeId ? labelForTaskTypeId(String(taskTypeId)) : '';
-        setListingTaskLine(
-          [task?.listingName, typeLabel || taskTypeId].filter(Boolean).join(' · ') || '',
-        );
-        setStaffSummary(`${rows.length} membre(s) éligible(s)`);
-        return;
-      }
-
+      // Fulltask + legacy : même endpoint (planning / absences / type / listing).
+      // Avant, useFulltaskApi listait tout le staff du listing sans filtre horaire.
       const params = new URLSearchParams({
         checkListing: checkListing.toString(),
         checkTaskType: checkTaskType.toString(),
-        checkPlanning: checkPlanning.toString()
+        checkPlanning: checkPlanning.toString(),
       });
       const fallbackListingId = resolveListingIdForStaffApi(task);
-      const fallbackTaskType = task.type || task.taskType || task.subType || task.category || task.name;
+      const fallbackTaskType =
+        task.type || task.taskType || task.subType || task.category || task.name;
       if (fallbackListingId) params.set('listingId', fallbackListingId);
-      // ✅ FIX: Convertir en minuscules pour matcher avec la DB (arrival, departure, cleaning, registration)
       if (fallbackTaskType) params.set('taskType', String(fallbackTaskType).toLowerCase());
       if (task.category) params.set('taskCategory', String(task.category));
 
-      // ✅ AJOUTER LES DATES COMME DANS SmartStaffSelector
       if (task.date) {
-        const taskDate = new Date(task.date);
-        params.set('startDate', taskDate.toISOString());
+        params.set('startDate', new Date(task.date).toISOString());
       }
       if (task.startTime) params.set('startTime', task.startTime);
       if (task.endTime) params.set('endTime', task.endTime);
 
-      // 🛡️ ROBUSTESSE - Utiliser fonction avec fallbacks multiples
       const resolvedOwnerId = resolveOwnerIdRobust(ownerIdProp, task, authUser);
-      if (resolvedOwnerId) {
-        params.set('ownerId', resolvedOwnerId);
-      } else {}
+      if (resolvedOwnerId) params.set('ownerId', resolvedOwnerId);
 
-      // ⚠️ NE PAS passer taskId si c'est un code SM- car l'API essaie de le convertir en ObjectId
-      // Depuis orchestrator, on n'a pas de vraie tâche, juste un timeslot
       const taskIdForApi = resolveTaskIdForStaffApi(task);
-      // Seulement passer taskId si c'est un vrai ObjectId MongoDB (24 caractères hex)
       if (taskIdForApi && /^[0-9a-fA-F]{24}$/.test(taskIdForApi)) {
         params.set('taskId', taskIdForApi);
-      } else if (taskIdForApi) {}
+      }
+
       const fullUrl = `${MICROSERVICE_BASE_URL.SRV_FULLTASK}/staff-simplified/available-for-task?${params}`;
       const response = await axios.get(fullUrl, {
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
       if (response.data.success) {
         const payload = response.data.data || {};
-        const {
-          staffs
-        } = payload;
+        const { staffs } = payload;
         const availableList = Array.isArray(staffs?.available) ? staffs.available : [];
         const unavailableList = Array.isArray(staffs?.unavailable) ? staffs.unavailable : [];
         setAvailableStaff(availableList);
         setUnavailableStaff(unavailableList);
-        setListingTaskLine(payload.context?.listingTaskLine || payload.listing_task_line || '');
-        setStaffSummary(payload.staff_summary || '');
-      } else {}
+        const typeLabel = fallbackTaskType
+          ? labelForTaskTypeId(String(fallbackTaskType))
+          : '';
+        const ctxLine =
+          payload.context?.listingTaskLine ||
+          payload.listing_task_line ||
+          [task?.listingName, typeLabel || fallbackTaskType].filter(Boolean).join(' · ');
+        setListingTaskLine(ctxLine || '');
+        const taskTime =
+          payload.task?.startTime && payload.task.startTime !== '—'
+            ? ` · créneau ${payload.task.startTime}`
+            : '';
+        setStaffSummary(
+          payload.staff_summary ||
+            `${availableList.length} membre(s) éligible(s)${taskTime}`,
+        );
+      } else {
+        setPanelError(response.data?.message || response.data?.error || 'Chargement staff impossible');
+      }
     } catch (error) {
       setAvailableStaff([]);
       setUnavailableStaff([]);
@@ -386,74 +369,68 @@ const AssignStaffDialog = ({
               {panelError}
             </Box>
           ) : null}
-          {!useFulltaskApi ? (
-            <Box sx={{ mb: 1.5, p: 1.25, bgcolor: SOJORI_COLORS.primaryPale, borderRadius: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                <FilterListIcon sx={{ color: SOJORI_COLORS.primary, fontSize: 18, mr: 0.5 }} />
-                <Typography variant="caption" sx={{ fontWeight: 600, color: SOJORI_COLORS.primary }}>
-                  Filtres intelligents
-                </Typography>
-              </Box>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={checkListing}
-                      onChange={(e) => setCheckListing(e.target.checked)}
-                      sx={{
-                        color: SOJORI_COLORS.primary,
-                        '&.Mui-checked': { color: SOJORI_COLORS.primary },
-                        padding: '4px',
-                      }}
-                    />
-                  }
-                  label={<Typography variant="caption" sx={{ fontSize: '11px' }}>Listing</Typography>}
-                  sx={{ mr: 0.5 }}
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={checkTaskType}
-                      onChange={(e) => setCheckTaskType(e.target.checked)}
-                      sx={{
-                        color: SOJORI_COLORS.primary,
-                        '&.Mui-checked': { color: SOJORI_COLORS.primary },
-                        padding: '4px',
-                      }}
-                    />
-                  }
-                  label={<Typography variant="caption" sx={{ fontSize: '11px' }}>Type tâche</Typography>}
-                  sx={{ mr: 0.5 }}
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={checkPlanning}
-                      onChange={(e) => setCheckPlanning(e.target.checked)}
-                      sx={{
-                        color: SOJORI_COLORS.primary,
-                        '&.Mui-checked': { color: SOJORI_COLORS.primary },
-                        padding: '4px',
-                      }}
-                    />
-                  }
-                  label={<Typography variant="caption" sx={{ fontSize: '11px' }}>Planning</Typography>}
-                />
-              </Box>
-              {staffSummary ? (
-                <Typography variant="caption" sx={{ color: '#0f766e', fontSize: '10px', display: 'block', mt: 0.75 }}>
-                  {staffSummary}
-                </Typography>
-              ) : null}
+          <Box sx={{ mb: 1.5, p: 1.25, bgcolor: SOJORI_COLORS.primaryPale, borderRadius: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+              <FilterListIcon sx={{ color: SOJORI_COLORS.primary, fontSize: 18, mr: 0.5 }} />
+              <Typography variant="caption" sx={{ fontWeight: 600, color: SOJORI_COLORS.primary }}>
+                Filtres intelligents
+              </Typography>
             </Box>
-          ) : staffSummary ? (
-            <Typography variant="caption" sx={{ color: '#0f766e', fontSize: '11px', display: 'block', mb: 1 }}>
-              {staffSummary}
-            </Typography>
-          ) : null}
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={checkListing}
+                    onChange={(e) => setCheckListing(e.target.checked)}
+                    sx={{
+                      color: SOJORI_COLORS.primary,
+                      '&.Mui-checked': { color: SOJORI_COLORS.primary },
+                      padding: '4px',
+                    }}
+                  />
+                }
+                label={<Typography variant="caption" sx={{ fontSize: '11px' }}>Listing</Typography>}
+                sx={{ mr: 0.5 }}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={checkTaskType}
+                    onChange={(e) => setCheckTaskType(e.target.checked)}
+                    sx={{
+                      color: SOJORI_COLORS.primary,
+                      '&.Mui-checked': { color: SOJORI_COLORS.primary },
+                      padding: '4px',
+                    }}
+                  />
+                }
+                label={<Typography variant="caption" sx={{ fontSize: '11px' }}>Type tâche</Typography>}
+                sx={{ mr: 0.5 }}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={checkPlanning}
+                    onChange={(e) => setCheckPlanning(e.target.checked)}
+                    sx={{
+                      color: SOJORI_COLORS.primary,
+                      '&.Mui-checked': { color: SOJORI_COLORS.primary },
+                      padding: '4px',
+                    }}
+                  />
+                }
+                label={<Typography variant="caption" sx={{ fontSize: '11px' }}>Planning</Typography>}
+              />
+            </Box>
+            {staffSummary ? (
+              <Typography variant="caption" sx={{ color: '#0f766e', fontSize: '10px', display: 'block', mt: 0.75 }}>
+                {staffSummary}
+              </Typography>
+            ) : null}
+          </Box>
 
           <TextField fullWidth size="small" placeholder="Rechercher un staff..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} slotProps={{
           input: {
@@ -535,12 +512,6 @@ const AssignStaffDialog = ({
                       fontWeight: 600,
                       fontSize: '13px'
                     }}>{s.staffName}</span>
-                                <Chip label={s.staffCode} size="small" sx={{
-                      fontSize: '9px',
-                      height: 18,
-                      bgcolor: SOJORI_COLORS.primary,
-                      color: 'white'
-                    }} />
                                 <Chip label={s.memberRole || 'Staff'} size="small" sx={{
                       fontSize: '9px',
                       height: 18,
