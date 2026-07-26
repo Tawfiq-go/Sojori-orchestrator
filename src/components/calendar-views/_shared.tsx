@@ -921,6 +921,7 @@ export function ReservationHoverContent({
   arrivalDate,
   departureDate,
   numberOfGuests,
+  nights,
   lastWa,
   lastOta,
   otaLabel = 'OTA',
@@ -932,6 +933,7 @@ export function ReservationHoverContent({
   arrivalDate?: string;
   departureDate?: string;
   numberOfGuests?: number;
+  nights?: number | null;
   lastWa?: CommsChannelMeta & { exists?: boolean };
   lastOta?: CommsChannelMeta & { exists?: boolean };
   otaLabel?: string;
@@ -949,6 +951,11 @@ export function ReservationHoverContent({
     <HoverPanel maxWidth={300}>
       <Typography sx={{ fontSize: 13.5, fontWeight: 800, mb: 0.35, letterSpacing: '-0.02em' }}>
         {guestName}
+        {nights != null && nights > 0 ? (
+          <Box component="span" sx={{ fontFamily: '"Geist Mono", monospace', fontWeight: 700, color: '#BEB7AA', ml: 0.75, fontSize: 12 }}>
+            {nights}n
+          </Box>
+        ) : null}
       </Typography>
       <Typography
         sx={{
@@ -2010,6 +2017,14 @@ export function GanttBar({
       : channel === 'booking' ? 'Booking'
         : channel === 'vrbo' ? 'Vrbo'
           : 'OTA';
+  const nights = (() => {
+    if (!arrivalDate || !departureDate) return null;
+    const a = new Date(`${String(arrivalDate).slice(0, 10)}T12:00:00`).getTime();
+    const d = new Date(`${String(departureDate).slice(0, 10)}T12:00:00`).getTime();
+    if (!Number.isFinite(a) || !Number.isFinite(d)) return null;
+    const n = Math.round((d - a) / 86400000);
+    return n > 0 ? n : null;
+  })();
 
   return (
     <Tooltip
@@ -2022,6 +2037,7 @@ export function GanttBar({
           arrivalDate={arrivalDate}
           departureDate={departureDate}
           numberOfGuests={numberOfGuests}
+          nights={nights}
           lastWa={lastWa}
           lastOta={lastOta}
           otaLabel={otaLabel}
@@ -2077,6 +2093,21 @@ export function GanttBar({
           )}
           <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
             {guestName}
+            {nights != null && nights > 0 ? (
+              <Box
+                component="span"
+                sx={{
+                  fontFamily: '"Geist Mono", monospace',
+                  fontSize: compact ? 8.5 : 10.5,
+                  fontWeight: 700,
+                  color: T.text3,
+                  ml: 0.5,
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {nights}n
+              </Box>
+            ) : null}
           </Box>
           {numberOfGuests != null && numberOfGuests > 0 && !compact && (
             <Box component="span" sx={{

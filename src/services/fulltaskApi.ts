@@ -587,6 +587,9 @@ export type DayPlanStepRelance = {
   scheduledAt: string;
   sentAt?: string | null;
   status: 'en_attente' | 'en_cours' | 'fait' | 'saute' | 'echec';
+  reason?: string;
+  /** Saut / report plateforme — afficher « sautée exprès », pas un bug. */
+  intentionalSkip?: boolean;
 };
 
 export type DayPlanAction = {
@@ -610,6 +613,8 @@ export type DayPlanStep = {
   reservationCode?: string;
   taskId?: string;
   taskType?: string;
+  /** Statut brut de la tâche (new/confirmed/doing/done…) — distingue « accepté » de « commencé ». */
+  taskStatus?: string;
   staffName?: string | null;
   registrationPending?: boolean;
   /** Mode à l'arrivée — affiché, non bloquant, accès WhatsApp OK. */

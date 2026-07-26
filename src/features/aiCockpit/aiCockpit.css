@@ -600,6 +600,58 @@
 /* Info client : ligne plus discrète — les tâches staff ressortent. */
 .ck-check.guest-info .ck-check-label { font-weight: 600; font-style: italic; opacity: 0.9; }
 
+/* ── Tâche staff dans la pipeline : un vrai rectangle, comme le ménage ── */
+.ck-seg.task {
+  background: rgba(212, 165, 116, 0.16);
+  border: 1px solid rgba(184, 133, 26, 0.4);
+  border-radius: 8px;
+  /* Largeur plancher : « 🛎️ 12:00 accueil · 30m » doit rester lisible en entier. */
+  min-width: 128px;
+  flex-shrink: 0;
+}
+
+.ck-seg.task.done {
+  background: rgba(56, 142, 60, 0.10);
+  border-color: rgba(56, 142, 60, 0.35);
+}
+
+.ck-seg.task.staff-miss {
+  background: rgba(200, 30, 30, 0.08);
+  border-color: rgba(200, 30, 30, 0.35);
+}
+
+.ck-seg.task .ck-seg-label { font-size: 9.5px; }
+
+/* ── Heure confirmée dépassée sans déclaration : le vert théorique a expiré ── */
+.ck-check.late {
+  background: rgba(196, 101, 6, 0.10);
+  border-color: rgba(196, 101, 6, 0.4);
+  box-shadow: inset 3px 0 0 var(--ck-warn);
+}
+
+/* ── Boutons de constat : ✓ Parti / ✓ Arrivé / ▶ Début / ✓ Fin ── */
+.ck-check-mini {
+  flex-shrink: 0;
+  border: 1px solid var(--ck-line-strong);
+  background: var(--ck-panel);
+  color: var(--ck-text2);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ck-check-mini:hover { background: var(--ck-panel3); color: var(--ck-gold-deep); }
+
+.ck-check-mini.urgent {
+  border-color: rgba(196, 101, 6, 0.55);
+  background: rgba(196, 101, 6, 0.14);
+  color: #8a4500;
+}
+
 /* ── File de décisions : deadline + conséquence ── */
 .ck-audit-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ck-audit-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1112,15 +1164,31 @@
 
 /* ── Checklist statuts + actions par réservation ── */
 
+/* Pile verticale — chaque bloc prend toute la largeur de sa colonne :
+   plus de textes tronqués par des colonnes de 300px. */
 .ck-checks {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 5px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
   margin: 2px 0 8px;
   padding: 8px 12px;
   border-radius: 11px;
   background: var(--ck-panel2);
   border: 1px solid var(--ck-line);
+}
+
+/* Turnover : côté départ | côté arrivée — l'accueil sous son événement client. */
+.ck-checks-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+  align-items: start;
+}
+
+.ck-checks-sides .ck-checks { height: 100%; }
+
+@media (max-width: 980px) {
+  .ck-checks-sides { grid-template-columns: 1fr; }
 }
 
 .ck-check {
@@ -1410,6 +1478,10 @@
 .ck-relpop-item.done .ck-relpop-ico { color: var(--ck-ok); }
 .ck-relpop-item.todo .ck-relpop-ico { color: var(--ck-gold-deep); }
 .ck-relpop-item.skip .ck-relpop-ico { color: var(--ck-text3); }
+.ck-relpop-item.skip.intentional .ck-relpop-when {
+  color: var(--ck-text3);
+  font-style: italic;
+}
 .ck-relpop-item.fail .ck-relpop-ico { color: var(--ck-bad); }
 
 .ck-relpop-lbl { flex: 1; min-width: 0; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

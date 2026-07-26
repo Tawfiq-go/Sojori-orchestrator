@@ -520,6 +520,45 @@ function otaMessageTimestampMs(msg: Record<string, unknown>): number {
   return Number.isFinite(t) ? t : 0;
 }
 
+/** Tag court sur les réponses host OTA : WA / AI / AD / OT */
+export function otaReplyOriginTag(msg: {
+  replyOrigin?: string | null;
+  replyMode?: string | null;
+  isIncoming?: boolean;
+  isAutomation?: boolean;
+  body?: string | null;
+}): string | null {
+  if (msg.isIncoming) return null;
+  if (msg.replyMode === 'ai_assisted') return 'AI';
+  if (
+    msg.replyOrigin === 'automation' ||
+    msg.replyMode === 'automation' ||
+    msg.isAutomation === true
+  ) {
+    return null; // rendu en system-note Auto
+  }
+  switch (msg.replyOrigin) {
+    case 'whatsapp_staff':
+      return 'WA';
+    case 'dashboard':
+      return 'AD';
+    case 'ota_external':
+      return 'OT';
+    default:
+      break;
+  }
+  // Anciens messages RU hors Sojori : footer OTA dans le corps
+  if (/sent via (booking\.com|airbnb|vrbo)/i.test(String(msg.body || ''))) return 'OT';
+  return null;
+}
+
+/** Retire le footer OTA redondant (« Sent via Booking.com ») — remplacé par le tag OT. */
+export function stripOtaSentViaFooter(text: string): string {
+  return String(text || '')
+    .replace(/\n*\s*sent via (booking\.com|airbnb|vrbo)\s*\.?$/i, '')
+    .trim();
+}
+
 export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Message[] {
   // Chrono croissant : ancien en haut, récent en bas (comme WhatsApp).
   const sorted = [...messages].sort((a, b) => {
@@ -544,21 +583,39 @@ export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Me
     const rawBody = (msg.body || msg.message || '').trim();
     if (!rawBody) return out;
 
-    const body = formatInboxMessageText(rawBody);
+    const body = stripOtaSentViaFooter(formatInboxMessageText(rawBody));
     if (!body) return out;
 
+    const isAutomationMsg =
+      body.startsWith('[Auto]') ||
+      msg.replyOrigin === 'automation' ||
+      msg.replyMode === 'automation' ||
+      msg.isAutomation === true;
+
+    // Courts marqueurs [Auto] → note système ; longs (bienvenue OTA…) → bulle + tag AU
     if (body.startsWith('[Auto]')) {
       out.push({
         id: msg._id || msg.messageId || `sys-${index}`,
         from: 'sojori',
         text: body.replace(/^\[Auto\]\s*/, '⚙ Auto · '),
-        time: '',
+        time: ts
+          ? new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+          : '',
         type: 'system-note',
       });
       return out;
     }
 
     const isIncoming = Boolean(msg.isIncoming);
+    const originTag = isAutomationMsg
+      ? 'AU'
+      : otaReplyOriginTag({
+          replyOrigin: msg.replyOrigin,
+          replyMode: msg.replyMode,
+          isIncoming,
+          isAutomation: msg.isAutomation,
+          body: rawBody,
+        });
     out.push({
       id: msg._id || msg.messageId || `m-${index}`,
       from: isIncoming ? 'guest' : 'you',
@@ -567,6 +624,7 @@ export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Me
         ? new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
         : '',
       status: !isIncoming ? msg.status : undefined,
+      ...(originTag && !isIncoming ? { tags: [originTag] } : {}),
     });
     return out;
   });
