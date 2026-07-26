@@ -712,10 +712,20 @@ export type DayBriefDecision = {
   recommendation: string;
 };
 
+/** Risque résiduel : planifié mais pas encore constaté — le « vert théorique ». */
+export type DayBriefRisk = {
+  title: string;
+  /** 'HH:mm' — heure à partir de laquelle s'inquiéter si le signal n'est pas arrivé. */
+  watchAt?: string;
+  /** L'événement observable qui mettra ce point au vert réel. */
+  signal: string;
+};
+
 export type DayBriefResult = {
   success: boolean;
   brief?: string;
   decisions?: DayBriefDecision[];
+  risks?: DayBriefRisk[];
   model?: string;
   cached?: boolean;
   error?: string;

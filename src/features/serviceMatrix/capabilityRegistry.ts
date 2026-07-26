@@ -134,7 +134,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
   },
   {
     key: 'receive_arrival',
-    label: 'Accueil arrivée',
+    label: 'Accueil client (check-in)',
     emoji: '🙋',
     group: 'journey',
     groupLabel: 'Arrivée & départ',
@@ -214,7 +214,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
   },
   {
     key: 'receive_departure',
-    label: 'Accueil départ',
+    label: 'Départ client (check-out)',
     emoji: '👋',
     group: 'journey',
     groupLabel: 'Arrivée & départ',

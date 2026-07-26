@@ -620,12 +620,15 @@ export default function AiCockpit() {
       items.push({
         id: `attn:${s.id}`,
         sev: 'high',
-        icon: '✋',
+        icon: s.kind === 'message' ? '💬' : '✋',
         label: s.attention?.reason ?? s.title,
         where: s.listingName,
-        consequence: s.attention?.attempted
-          ? `Auto épuisée · ${s.attention.attempted} — action humaine requise.`
-          : `Action humaine requise.`,
+        consequence:
+          s.kind === 'message'
+            ? `Message client non parti${s.time ? ` (prévu ${s.time})` : ''} — ${s.guestName ?? 'le client'} ne l'a pas reçu.`
+            : s.attention?.attempted
+              ? `Auto épuisée · ${s.attention.attempted} — action humaine requise.`
+              : `Action humaine requise.`,
         deadlineMin: attnMin,
         deadlineLabel: attnMin != null ? minToHm(attnMin) : undefined,
         step: s,
@@ -962,6 +965,24 @@ export default function AiCockpit() {
                   </div>
                 </div>
               ))}
+              {(brief?.risks?.length ?? 0) > 0 && (
+                <div className="ck-brief-risks">
+                  <div className="ck-brief-risks-hdr">
+                    👁 Vert théorique — à surveiller (planifié, pas encore constaté)
+                  </div>
+                  {(brief?.risks ?? []).map((r, i) => (
+                    <div key={i} className="ck-brief-risk">
+                      <span className="ck-brief-risk-watch">
+                        {r.watchAt ? `dès ${r.watchAt}` : 'en continu'}
+                      </span>
+                      <div>
+                        <div className="ck-brief-risk-title">{r.title}</div>
+                        <div className="ck-brief-risk-signal">✓ au vert quand : {r.signal}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1453,11 +1474,20 @@ function ChecksList({
   onOpenRelances: (step: DayPlanStep) => void;
 }) {
   if (!steps.length) return null;
+  /* Tri par heure (réelle sinon estimée) — un ménage « ≈ 11:00 » ne doit pas
+     s'afficher après l'accueil de 12:00. Heure inconnue → en dernier. */
+  const ordered = [...steps].sort(
+    (a, b) =>
+      (toMin(a.time ?? a.estimatedTime) ?? 9999) - (toMin(b.time ?? b.estimatedTime) ?? 9999),
+  );
   return (
     <div className="ck-checks">
-      {steps.map((s) => {
+      {ordered.map((s) => {
         const action = s.attention?.actions?.[0];
         const state = s.state === 'done' ? 'done' : s.state === 'attention' ? 'attn' : 'todo';
+        /* Info client (départ/arrivée/message = tâche invisible, aucun staff) vs
+           tâche staff (accueil, ménage…) — deux natures, deux styles. */
+        const isGuestInfo = s.kind === 'departure' || s.kind === 'arrival' || s.kind === 'message' || s.kind === 'relance';
         const isRegistration = s.taskType === 'registration';
         const isCleaningTask = s.kind === 'cleaning' && Boolean(s.taskId);
         const clickable = Boolean(s.relances?.length) || isRegistration || isCleaningTask;
@@ -1474,12 +1504,18 @@ function ChecksList({
         return (
           <div
             key={s.id}
-            className={`ck-check ${state} ${clickable ? 'has-rel' : ''} ${hourWarn ? 'hour-warn' : ''} ${isProblem ? 'problem' : ''} ${cleaningUnassigned ? 'staff-miss' : ''} ${regBlocking ? 'reg-block' : ''} ${regAtArrival ? 'reg-arrival' : ''}`}
+            className={`ck-check ${state} ${clickable ? 'has-rel' : ''} ${hourWarn ? 'hour-warn' : ''} ${isProblem ? 'problem' : ''} ${cleaningUnassigned ? 'staff-miss' : ''} ${regBlocking ? 'reg-block' : ''} ${regAtArrival ? 'reg-arrival' : ''} ${isGuestInfo ? 'guest-info' : 'staff-task'}`}
             title={s.attention?.reason || (clickable ? 'Voir relances & actions' : s.title)}
             onClick={clickable ? () => onOpenRelances(s) : undefined}
           >
             <span className="ck-check-state" aria-hidden>
               {state === 'done' ? '✓' : isProblem ? '!' : '·'}
+            </span>
+            <span
+              className={`ck-check-nature ${isGuestInfo ? 'client' : 'staff'}`}
+              title={isGuestInfo ? 'Info client — tâche invisible, aucun staff à mobiliser' : 'Tâche staff — quelqu’un doit la faire'}
+            >
+              {isGuestInfo ? 'client' : 'staff'}
             </span>
             {timeChip && (
               <span

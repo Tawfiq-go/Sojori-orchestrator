@@ -41,7 +41,7 @@ export default function V3ReceiveChecklistPanel({ kind, gestion, onSave }: Props
     setChecklist(initial.checklist);
   }, [initial]);
 
-  const title = kind === 'arrival' ? 'Accueil arrivée' : 'Accueil départ';
+  const title = kind === 'arrival' ? 'Accueil client (check-in)' : 'Départ client (check-out)';
 
   const patchItem = (id: string, patch: Partial<ReceiveChecklistItem>) => {
     setChecklist((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
