@@ -800,7 +800,10 @@ export default function ConversationThread({
                       : undefined,
                 }}
               >
-                {message.isAdmin && (
+                {message.isAdmin &&
+                  !message.tags?.some(
+                    (t) => t === 'AD' || t === 'WA' || t === 'AI' || t === 'OT' || t === 'AU',
+                  ) && (
                   <Typography
                     sx={{
                       fontSize: 9.5,
@@ -813,7 +816,10 @@ export default function ConversationThread({
                     👤 Admin · envoi manuel
                   </Typography>
                 )}
-                {message.isAI && (
+                {message.isAI &&
+                  !message.tags?.some(
+                    (t) => t === 'AD' || t === 'WA' || t === 'AI' || t === 'OT' || t === 'AU',
+                  ) && (
                   <Typography
                     sx={{
                       fontSize: 9.5,
@@ -871,27 +877,45 @@ export default function ConversationThread({
                     {contentBadge}
                   </Typography>
                 )}
-                {!!message.tags?.length && (
+                {!!message.tags?.length &&
+                  !(
+                    isOta &&
+                    message.tags.every(
+                      (t) => t === 'WA' || t === 'AI' || t === 'AD' || t === 'OT' || t === 'AU',
+                    )
+                  ) && (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.75 }}>
-                    {message.tags.map((tag) => (
-                      <Typography
-                        key={tag}
-                        component="span"
-                        sx={{
-                          fontSize: 9,
-                          fontWeight: 700,
-                          px: 0.75,
-                          py: 0.2,
-                          borderRadius: 999,
-                          bgcolor: 'rgba(13,148,136,0.12)',
-                          color: '#0f766e',
-                          fontFamily: '"Geist Mono", monospace',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {tag}
-                      </Typography>
-                    ))}
+                    {message.tags
+                      .filter(
+                        (t) =>
+                          !(
+                            isOta &&
+                            (t === 'WA' || t === 'AI' || t === 'AD' || t === 'OT' || t === 'AU')
+                          ),
+                      )
+                      .map((tag) => {
+                      const otaTag = { bg: 'rgba(13,148,136,0.12)', color: '#0f766e' };
+                      return (
+                        <Typography
+                          key={tag}
+                          component="span"
+                          sx={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            px: 0.75,
+                            py: 0.2,
+                            borderRadius: 999,
+                            bgcolor: otaTag.bg,
+                            color: otaTag.color,
+                            fontFamily: '"Geist Mono", monospace',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                          }}
+                        >
+                          {tag}
+                        </Typography>
+                      );
+                    })}
                   </Box>
                 )}
                 {message.audioUrl && (
@@ -948,6 +972,58 @@ export default function ConversationThread({
                 }}
               >
                 <span>{message.time}</span>
+                {isOta &&
+                  isOut &&
+                  message.tags?.some((t) =>
+                    t === 'WA' || t === 'AI' || t === 'AD' || t === 'OT' || t === 'AU',
+                  ) && (
+                  <Box
+                    component="span"
+                    title={
+                      message.tags.includes('WA')
+                        ? 'WhatsApp staff'
+                        : message.tags.includes('AI')
+                          ? 'Assisté IA'
+                          : message.tags.includes('AD')
+                            ? 'Dashboard'
+                            : message.tags.includes('AU')
+                              ? 'Automatisation Sojori'
+                              : 'Booking / Airbnb (hors Sojori)'
+                    }
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: 9,
+                      letterSpacing: '0.04em',
+                      px: 0.55,
+                      py: '1px',
+                      borderRadius: 999,
+                      bgcolor:
+                        message.tags.includes('WA')
+                          ? 'rgba(37,211,102,0.15)'
+                          : message.tags.includes('AI')
+                            ? 'rgba(139,92,246,0.12)'
+                            : message.tags.includes('AD')
+                              ? 'rgba(29,78,216,0.12)'
+                              : message.tags.includes('AU')
+                                ? 'rgba(124,58,237,0.12)'
+                                : 'rgba(234,88,12,0.12)',
+                      color:
+                        message.tags.includes('WA')
+                          ? '#128C7E'
+                          : message.tags.includes('AI')
+                            ? '#6d28d9'
+                            : message.tags.includes('AD')
+                              ? '#1d4ed8'
+                              : message.tags.includes('AU')
+                                ? '#5b21b6'
+                                : '#c2410c',
+                    }}
+                  >
+                    {message.tags.find(
+                      (t) => t === 'WA' || t === 'AI' || t === 'AD' || t === 'OT' || t === 'AU',
+                    )}
+                  </Box>
+                )}
                 {isOut && message.whatsappDelivery === 'failed' && (
                   <Tooltip
                     title={formatWhatsAppDeliveryError(message.whatsappDeliveryError)}
@@ -1009,34 +1085,6 @@ export default function ConversationThread({
                   {waFailed
                     ? formatWhatsAppDeliveryError(message.whatsappDeliveryError).split('\n')[0]
                     : 'Action automatique échouée · cliquez pour voir le trace'}
-                </Typography>
-              )}
-              {isOta && isGuest && (
-                <Typography
-                  sx={{
-                    fontSize: 9.5,
-                    color: T.text4,
-                    fontFamily: '"Geist Mono", monospace',
-                    px: 0.5,
-                    letterSpacing: '0.02em',
-                    '& b': { color: otaTheme.textAccent, fontWeight: 700 },
-                  }}
-                >
-                  via <b>{platformLabel}</b> · auto-translate available
-                </Typography>
-              )}
-              {isOta && isOut && (
-                <Typography
-                  sx={{
-                    fontSize: 9.5,
-                    color: T.text4,
-                    fontFamily: '"Geist Mono", monospace',
-                    px: 0.5,
-                    textAlign: 'right',
-                    '& b': { color: otaTheme.textAccent, fontWeight: 700 },
-                  }}
-                >
-                  sent via <b>{platformLabel}</b>
                 </Typography>
               )}
             </Box>

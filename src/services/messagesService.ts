@@ -840,7 +840,11 @@ class MessagesService {
    * Envoyer un message OTA
    * POST /api/v1/reservations/rentals/send-message
    */
-  async sendOTAMessage(threadId: string, message: string): Promise<any> {
+  async sendOTAMessage(
+    threadId: string,
+    message: string,
+    opts?: { aiAssisted?: boolean; replyMode?: 'manual' | 'ai_assisted' },
+  ): Promise<any> {
     try {
       const numericThreadId = Number(String(threadId).replace(/\D/g, '')) || threadId;
       const response = await apiClient.post(
@@ -848,6 +852,9 @@ class MessagesService {
         {
           threadId: numericThreadId,
           messageBody: message,
+          ...(opts?.aiAssisted || opts?.replyMode === 'ai_assisted'
+            ? { aiAssisted: true, replyMode: 'ai_assisted' }
+            : { replyMode: 'manual' }),
         },
       );
 

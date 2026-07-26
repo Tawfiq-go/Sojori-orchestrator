@@ -1073,14 +1073,16 @@ export default function MessagesOTATabV2() {
   );
 
   const handleOtaSend = useCallback(
-    async (text: string) => {
+    async (text: string, opts?: { aiAssisted?: boolean }) => {
       if (!inbox.activeRow) return;
       const trimmed = text.trim();
       if (!trimmed) return;
       const row = inbox.activeRow;
       inbox.appendOutboundMessage(trimmed);
       try {
-        await messagesService.sendOTAMessage(row.threadId, trimmed);
+        await messagesService.sendOTAMessage(row.threadId, trimmed, {
+          aiAssisted: opts?.aiAssisted === true,
+        });
         setInboxRows((prev) => {
           const bumped = bumpOtaThreadAfterSend(prev, row.threadId, trimmed, row);
           setCachedOtaInbox(bumped);
@@ -1291,7 +1293,7 @@ export default function MessagesOTATabV2() {
           setShowAIModal(false);
         }}
         onSendSuggestion={async (text) => {
-          await handleOtaSend(text);
+          await handleOtaSend(text, { aiAssisted: true });
           setComposerDraft('');
           setShowAIModal(false);
         }}

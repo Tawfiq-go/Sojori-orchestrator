@@ -699,6 +699,40 @@ export default function AiCockpit() {
     })();
   };
 
+  /* Déclarations constatées par le PM/staff — le client ne joue pas toujours le jeu :
+     quelqu'un doit pouvoir poser le fait (parti / arrivé / ménage commencé / fini). */
+  const declareGuest = useCallback(
+    async (step: DayPlanStep, kind: 'arrival' | 'departure') => {
+      try {
+        const fn = kind === 'departure' ? fulltaskApi.declareGuestDeparture : fulltaskApi.declareGuestArrival;
+        const res = await fn(step.reservationId);
+        if (res?.success === false) throw new Error(res?.error || 'Échec de la déclaration');
+        toast.success(kind === 'departure' ? `Départ constaté — ${step.guestName ?? 'client'} parti` : `Arrivée constatée — ${step.guestName ?? 'client'} sur place`);
+        void load();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Échec de la déclaration');
+      }
+    },
+    [load],
+  );
+
+  const setCleanStatus = useCallback(
+    async (step: DayPlanStep, status: 'doing' | 'done') => {
+      if (!step.taskId) return;
+      try {
+        await fulltaskApi.patchTaskStatus(step.taskId, status);
+        toast.success(status === 'done' ? 'Ménage terminé ✓' : 'Ménage démarré');
+        void load();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Échec de la mise à jour du ménage');
+      }
+    },
+    [load],
+  );
+
+  /** Minutes actuelles (mur local) — retards calculés uniquement sur le jour courant. */
+  const nowMin = isToday ? clock.getHours() * 60 + clock.getMinutes() : null;
+
   const runAction = (step: DayPlanStep, action: DayPlanAction) => {
     if (action.type === 'plan' || action.type === 'relance_guest') {
       navigate(`/orchestration/plans?reservationId=${encodeURIComponent(step.reservationId)}`);
@@ -1011,6 +1045,9 @@ export default function AiCockpit() {
             onAction={runAction}
             planDate={date}
             onOpenRelances={setRelanceStep}
+            nowMin={nowMin}
+            onDeclare={declareGuest}
+            onCleanStatus={setCleanStatus}
           />
         ))}
 
@@ -1029,6 +1066,9 @@ export default function AiCockpit() {
                 onAction={runAction}
                 planDate={date}
                 onOpenRelances={setRelanceStep}
+                nowMin={nowMin}
+                onDeclare={declareGuest}
+                onCleanStatus={setCleanStatus}
               />
             ))}
           </>
@@ -1184,6 +1224,34 @@ const RELANCE_STATUS: Record<string, { ico: string; label: string; cls: string }
   echec: { ico: '✗', label: 'échec', cls: 'fail' },
 };
 
+const INTENTIONAL_SKIP_REASONS = new Set([
+  'regroupe_veille_depart',
+  'reporte_avant_arrivee',
+  'decale_collision_arrivee',
+  'date_passee_creation',
+  'no_body',
+  'remplace_par_lm',
+]);
+
+function intentionalSkipLabel(reason?: string): string {
+  switch (reason) {
+    case 'regroupe_veille_depart':
+      return 'sautée exprès · regroupée veille départ';
+    case 'reporte_avant_arrivee':
+      return 'reportée exprès · avant arrivée';
+    case 'decale_collision_arrivee':
+      return 'décalée exprès · collision arrivée';
+    case 'date_passee_creation':
+      return 'sautée exprès · date passée à la création';
+    case 'remplace_par_lm':
+      return 'sautée exprès · remplacée last-minute';
+    case 'no_body':
+      return 'sautée exprès · contenu manquant';
+    default:
+      return reason ? `sautée exprès · ${reason}` : 'sautée exprès';
+  }
+}
+
 function RelancesPanel({
   step,
   planDate,
@@ -1263,13 +1331,20 @@ function RelancesPanel({
             <div className="ck-relpop-empty">Aucune relance planifiée pour cette étape.</div>
           )}
           {relances.map((r) => {
-            const st = RELANCE_STATUS[r.status] ?? RELANCE_STATUS.en_attente;
+            const intentional =
+              r.intentionalSkip === true ||
+              (r.reason != null && INTENTIONAL_SKIP_REASONS.has(r.reason));
+            const st =
+              r.status === 'saute' && intentional
+                ? { ico: '⏭', label: intentionalSkipLabel(r.reason), cls: 'skip intentional' }
+                : (RELANCE_STATUS[r.status] ?? RELANCE_STATUS.en_attente);
             return (
               <div key={r.index} className={`ck-relpop-item ${st.cls}`}>
                 <span className="ck-relpop-ico" aria-hidden>{st.ico}</span>
                 <span className="ck-relpop-lbl">{r.label}</span>
                 <span className="ck-relpop-when">
-                  {st.label} {fmtWhen(r.status === 'fait' && r.sentAt ? r.sentAt : r.scheduledAt, planDate)}
+                  {st.label}{' '}
+                  {fmtWhen(r.status === 'fait' && r.sentAt ? r.sentAt : r.scheduledAt, planDate)}
                 </span>
               </div>
             );
@@ -1467,22 +1542,25 @@ function ChecksList({
   planDate,
   onAction,
   onOpenRelances,
+  nowMin,
+  onDeclare,
+  onCleanStatus,
 }: {
   steps: DayPlanStep[];
   planDate: string;
   onAction: (step: DayPlanStep, action: DayPlanAction) => void;
   onOpenRelances: (step: DayPlanStep) => void;
+  /** Minutes depuis minuit si on regarde AUJOURD'HUI — null sinon (pas de retard sur le futur/passé). */
+  nowMin?: number | null;
+  onDeclare?: (step: DayPlanStep, kind: 'arrival' | 'departure') => void;
+  onCleanStatus?: (step: DayPlanStep, status: 'doing' | 'done') => void;
 }) {
   if (!steps.length) return null;
-  /* Tri par heure (réelle sinon estimée) — un ménage « ≈ 11:00 » ne doit pas
-     s'afficher après l'accueil de 12:00. Heure inconnue → en dernier. */
-  const ordered = [...steps].sort(
-    (a, b) =>
-      (toMin(a.time ?? a.estimatedTime) ?? 9999) - (toMin(b.time ?? b.estimatedTime) ?? 9999),
-  );
+  /* L'ordre est décidé par l'appelant (FlightRow) : événement client → son accueil →
+     ménage → le reste. Ne pas re-trier ici. */
   return (
     <div className="ck-checks">
-      {ordered.map((s) => {
+      {steps.map((s) => {
         const action = s.attention?.actions?.[0];
         const state = s.state === 'done' ? 'done' : s.state === 'attention' ? 'attn' : 'todo';
         /* Info client (départ/arrivée/message = tâche invisible, aucun staff) vs
@@ -1495,16 +1573,30 @@ function ChecksList({
         const cleaningUnassigned =
           s.kind === 'cleaning' && s.state !== 'done' && !s.staffName;
         const regBlocking = Boolean(s.registrationPending) && s.state !== 'done';
+        /* Heure confirmée dépassée (+20 min de grâce) sans déclaration/constat → orange :
+           c'est le « vert théorique » qui vient d'expirer. */
+        const stepMin = toMin(s.time ?? undefined);
+        const lateNotDone =
+          nowMin != null &&
+          s.state !== 'done' &&
+          !s.hourUnknown &&
+          stepMin != null &&
+          nowMin > stepMin + 20 &&
+          (s.kind === 'departure' || s.kind === 'arrival' || s.kind === 'cleaning');
         /* À l'arrivée = vigilance orange (non bloquant, mais à surveiller le jour J). */
         const regAtArrival =
           isRegistration && Boolean(s.registrationAtArrival) && s.state !== 'done';
         const isProblem =
-          state === 'attn' || hourWarn || cleaningUnassigned || regBlocking || regAtArrival;
+          state === 'attn' || hourWarn || cleaningUnassigned || regBlocking || regAtArrival || lateNotDone;
         const timeChip = checkTimeChip(s);
+        /* Boutons de déclaration — le staff/PM constate quand le client ou le terrain ne le fait pas. */
+        const canDeclare =
+          s.state !== 'done' && (s.kind === 'departure' || s.kind === 'arrival') && onDeclare;
+        const canCleanAct = s.state !== 'done' && s.kind === 'cleaning' && Boolean(s.taskId) && onCleanStatus;
         return (
           <div
             key={s.id}
-            className={`ck-check ${state} ${clickable ? 'has-rel' : ''} ${hourWarn ? 'hour-warn' : ''} ${isProblem ? 'problem' : ''} ${cleaningUnassigned ? 'staff-miss' : ''} ${regBlocking ? 'reg-block' : ''} ${regAtArrival ? 'reg-arrival' : ''} ${isGuestInfo ? 'guest-info' : 'staff-task'}`}
+            className={`ck-check ${state} ${clickable ? 'has-rel' : ''} ${hourWarn ? 'hour-warn' : ''} ${isProblem ? 'problem' : ''} ${cleaningUnassigned ? 'staff-miss' : ''} ${regBlocking ? 'reg-block' : ''} ${regAtArrival ? 'reg-arrival' : ''} ${isGuestInfo ? 'guest-info' : 'staff-task'} ${lateNotDone ? 'late' : ''}`}
             title={s.attention?.reason || (clickable ? 'Voir relances & actions' : s.title)}
             onClick={clickable ? () => onOpenRelances(s) : undefined}
           >
@@ -1543,6 +1635,49 @@ function ChecksList({
                 {action.label}
               </button>
             )}
+            {canDeclare && (
+              <button
+                type="button"
+                className={`ck-check-mini ${lateNotDone ? 'urgent' : ''}`}
+                title={
+                  s.kind === 'departure'
+                    ? 'Déclarer le départ constaté — si le client ne le fait pas, le PM le fait'
+                    : 'Déclarer l’arrivée constatée — si le client ne le fait pas, le PM le fait'
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeclare!(s, s.kind as 'arrival' | 'departure');
+                }}
+              >
+                {s.kind === 'departure' ? '✓ Déclarer départ' : '✓ Déclarer arrivée'}
+              </button>
+            )}
+            {canCleanAct && s.taskStatus !== 'doing' && (
+              <button
+                type="button"
+                className="ck-check-mini"
+                title="Marquer le ménage commencé"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCleanStatus!(s, 'doing');
+                }}
+              >
+                ▶ Début
+              </button>
+            )}
+            {canCleanAct && (
+              <button
+                type="button"
+                className={`ck-check-mini ${lateNotDone ? 'urgent' : ''}`}
+                title="Marquer le ménage terminé — utilisable directement même sans « Début »"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCleanStatus!(s, 'done');
+                }}
+              >
+                ✓ Fin
+              </button>
+            )}
           </div>
         );
       })}
@@ -1551,17 +1686,23 @@ function ChecksList({
 }
 
 function checkDetail(s: DayPlanStep, planDate?: string): string {
-  /* L'heure est déjà en tête (ck-check-time) — ici uniquement le statut / suite. */
-  if (s.state === 'done') return 'fait';
+  /* L'heure est déjà en tête (ck-check-time) — ici uniquement le statut / suite.
+     Deux étages : heure CONFIRMÉE (intention client) ≠ départ/arrivée DÉCLARÉ (fait).
+     Idem ménage : accepté ≠ commencé ≠ fini. On éduque à déclarer. */
+  if (s.state === 'done') {
+    if (s.kind === 'departure') return 'parti ✓';
+    if (s.kind === 'arrival') return 'arrivé ✓';
+    return 'fait';
+  }
   if (s.kind === 'cleaning') {
-    const when =
-      s.hourUnknown || !s.time ? 'au départ client' : 'confirmé';
-    return s.staffName ? when : `non assigné · ${when}`;
+    if (!s.staffName) return 'non assigné';
+    if (s.taskStatus === 'doing') return 'en cours 🧹';
+    return s.hourUnknown || !s.time ? 'au départ client' : 'pas encore commencé';
   }
   if (s.kind === 'departure' || s.kind === 'arrival') {
     const parts: string[] = [];
     if (s.hourUnknown) parts.push('non confirmée');
-    else parts.push('confirmée');
+    else parts.push(s.kind === 'departure' ? 'pas encore parti' : 'pas encore arrivé');
     if (s.registrationAtArrival) parts.push('à l’arrivée');
     else if (s.registrationPending) parts.push('enregistrement en attente');
     if (s.nextRelanceAt && s.hourUnknown) {
@@ -1649,6 +1790,9 @@ function FlightRow({
   onAction,
   planDate,
   onOpenRelances,
+  nowMin,
+  onDeclare,
+  onCleanStatus,
 }: {
   flight: Flight;
   index: number;
@@ -1656,28 +1800,76 @@ function FlightRow({
   onAction: (step: DayPlanStep, action: DayPlanAction) => void;
   planDate: string;
   onOpenRelances: (step: DayPlanStep) => void;
+  nowMin?: number | null;
+  onDeclare?: (step: DayPlanStep, kind: 'arrival' | 'departure') => void;
+  onCleanStatus?: (step: DayPlanStep, status: 'doing' | 'done') => void;
 }) {
   const { chain, departure, cleaning, arrival, attentionStep, checkSteps, solo } = flight;
 
-  /* Checklist ordonnée : côté départ → ménage → côté arrivée. */
-  const orderedChecks = [...checkSteps].sort((a, b) => {
-    if (solo) {
-      const rank = (s: DayPlanStep) =>
-        s.kind === 'departure' ? 0 : s.kind === 'arrival' ? 1 : s.kind === 'cleaning' ? 2 : s.kind === 'task' ? 3 : 4;
-      return rank(a) - rank(b) || String(a.time || '').localeCompare(String(b.time || ''));
-    }
-    const side = (s: DayPlanStep) =>
-      s.kind === 'cleaning' ? 1 : s.reservationId === chain.departingReservationId ? 0 : 2;
-    const rank = (s: DayPlanStep) =>
-      s.kind === 'departure' || s.kind === 'arrival' ? 0 : s.kind === 'task' ? 1 : 2;
-    return side(a) - side(b) || rank(a) - rank(b) || String(a.time || '').localeCompare(String(b.time || ''));
-  });
+  /* Ordre STRICTEMENT chronologique dans chaque colonne (11:00 avant 12:00 avant 18:00).
+     À heure égale : événement client d'abord, puis accueil, puis ménage, puis le reste. */
+  const sideRank = (s: DayPlanStep) =>
+    s.kind === 'departure' || s.kind === 'arrival'
+      ? 0
+      : s.taskType === 'receive_departure' || s.taskType === 'receive_arrival'
+        ? 1
+        : s.kind === 'cleaning'
+          ? 2
+          : 3;
+  const bySideOrder = (list: DayPlanStep[]) =>
+    [...list].sort(
+      (a, b) =>
+        (toMin(a.time ?? a.estimatedTime) ?? 9999) - (toMin(b.time ?? b.estimatedTime) ?? 9999) ||
+        sideRank(a) - sideRank(b),
+    );
+  /* Turnover : deux colonnes côte à côte — côté départ (11:00) | côté arrivée (17:00). */
+  const departureSide = bySideOrder(
+    checkSteps.filter((s) => s.kind === 'cleaning' || s.reservationId === chain.departingReservationId),
+  );
+  const arrivalSide = bySideOrder(
+    checkSteps.filter((s) => s.kind !== 'cleaning' && s.reservationId !== chain.departingReservationId),
+  );
+  const orderedChecks = solo ? bySideOrder(checkSteps) : [];
 
   const now = new Date();
   const nowM = now.getHours() * 60 + now.getMinutes();
   const depM = toMin(departure?.time ?? (departure?.hourUnknown ? departure.estimatedTime : null));
   const endHm = cleaningEndDisplay(chain, departure?.time ?? departure?.estimatedTime);
   const endM = toMin(endHm);
+  const arrM = toMin(arrival?.time ?? arrival?.estimatedTime);
+
+  /* Tâches staff horodatées = de VRAIS rectangles dans la pipeline, durée 30 min
+     par défaut. Accueil départ (check-out) juste après le ménage ; accueil arrivée
+     (check-in) après le nœud d'arrivée. Icône 🛎️ = accueil, vraie tâche visible. */
+  const TASK_DUR_MIN = 30;
+  const timedTasks = checkSteps
+    .map((s) => ({ s, m: toMin(s.time) }))
+    .filter((x): x is { s: DayPlanStep; m: number } => x.s.kind === 'task' && x.m != null);
+  const tasksBetween =
+    arrM != null ? timedTasks.filter((x) => x.m < arrM).sort((a, b) => a.m - b.m) : [];
+  const tasksAfterArrival = arrM != null ? timedTasks.filter((x) => x.m >= arrM) : [];
+  const betweenTasksMin = tasksBetween.length * TASK_DUR_MIN;
+  const isReceive = (s: DayPlanStep) =>
+    s.taskType === 'receive_departure' || s.taskType === 'receive_arrival';
+  const taskIcon = (s: DayPlanStep): string => (isReceive(s) ? '🛎️' : '📋');
+  const shortTaskName = (s: DayPlanStep): string =>
+    s.taskType === 'receive_departure'
+      ? 'accueil départ'
+      : s.taskType === 'receive_arrival'
+        ? 'accueil arrivée'
+        : (s.title || '').split('·')[0].trim().toLowerCase();
+  const taskSeg = (x: { s: DayPlanStep; m: number }) => (
+    <div
+      key={x.s.id}
+      className={`ck-seg task ${x.s.state === 'done' ? 'done' : x.s.staffName ? 'staff-ok' : 'staff-miss'}`}
+      style={{ flexGrow: TASK_DUR_MIN }}
+      title={`${x.s.title} · ${x.s.time} · ${TASK_DUR_MIN} min · ${x.s.staffName ?? 'non assigné'}`}
+    >
+      <span className={`ck-seg-label ${x.s.staffName ? 'ok' : 'bad'}`}>
+        {taskIcon(x.s)} {x.s.time} {isReceive(x.s) ? 'accueil' : shortTaskName(x.s)} · {TASK_DUR_MIN}m
+      </span>
+    </div>
+  );
 
   const seg = (a: number | null, b: number | null): number => {
     if (a == null || b == null || b <= a) return 0;
@@ -1833,9 +2025,12 @@ function FlightRow({
             <span className="ck-joint-label">fin ménage</span>
           </div>
 
+          {/* Accueil départ & autres tâches staff — rectangles à leur place, juste après le ménage. */}
+          {tasksBetween.map(taskSeg)}
+
           <div
             className={`ck-seg margin ${chain.slackMinutes < 0 ? 'broken' : status === 'tight' || chain.hoursUnknown ? 'tight' : 'ok'}`}
-            style={{ flexGrow: Math.max(Math.abs(chain.slackMinutes), 35) }}
+            style={{ flexGrow: Math.max(Math.abs(chain.slackMinutes) - betweenTasksMin, 35) }}
             title={chain.slackMinutes >= 0 ? `Marge ${fmtDuration(chain.slackMinutes)}` : `Dépassement ${fmtDuration(chain.slackMinutes)}`}
           >
             <span className="ck-seg-label">
@@ -1864,10 +2059,44 @@ function FlightRow({
             <span className="ck-node-label">🛬 {chain.arrivingGuestName || 'Arrivée'}</span>
             {registrationSub(checkSteps, arrival)}
           </div>
+
+          {/* Accueil arrivée (check-in) & tâches après l'arrivée — rectangles avec durée. */}
+          {tasksAfterArrival.map(taskSeg)}
         </div>
       )}
 
-      <ChecksList steps={orderedChecks} planDate={planDate} onAction={onAction} onOpenRelances={onOpenRelances} />
+      {solo ? (
+        <ChecksList
+          steps={orderedChecks}
+          planDate={planDate}
+          onAction={onAction}
+          onOpenRelances={onOpenRelances}
+          nowMin={nowMin}
+          onDeclare={onDeclare}
+          onCleanStatus={onCleanStatus}
+        />
+      ) : (
+        <div className="ck-checks-sides">
+          <ChecksList
+            steps={departureSide}
+            planDate={planDate}
+            onAction={onAction}
+            onOpenRelances={onOpenRelances}
+            nowMin={nowMin}
+            onDeclare={onDeclare}
+            onCleanStatus={onCleanStatus}
+          />
+          <ChecksList
+            steps={arrivalSide}
+            planDate={planDate}
+            onAction={onAction}
+            onOpenRelances={onOpenRelances}
+            nowMin={nowMin}
+            onDeclare={onDeclare}
+            onCleanStatus={onCleanStatus}
+          />
+        </div>
+      )}
 
       <div className="ck-flight-foot">
         {cta && attentionStep ? (

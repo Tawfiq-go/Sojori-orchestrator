@@ -179,19 +179,19 @@ export function formatSkipReason(reason?: string): string {
       return 'Client a répondu'
 
     case 'date_passee_creation':
-      return 'Date dépassée à la création'
+      return 'Sautée exprès · date passée à la création'
 
     case 'remplace_par_lm':
-      return 'Remplacé par Last-Minute'
+      return 'Sautée exprès · remplacée last-minute'
 
     case 'regroupe_veille_depart':
-      return 'Regroupée veille départ'
+      return 'Sautée exprès · regroupée veille départ'
 
     case 'reporte_avant_arrivee':
-      return 'Reportée avant arrivée'
+      return 'Reportée exprès · avant arrivée'
 
     case 'decale_collision_arrivee':
-      return 'Décalée (collision arrivée)'
+      return 'Décalée exprès · collision arrivée'
 
     case 'assignation_exhausted':
       return 'Assignation épuisée'
