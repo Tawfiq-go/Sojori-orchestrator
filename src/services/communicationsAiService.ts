@@ -156,6 +156,8 @@ export interface InboxTriageResult {
   aiAnalyzed?: number;
   model?: string;
   cached?: boolean;
+  /** Provenance : 'fresh' (généré), 'memory' (cache 30 min), 'snapshot' (persisté Mongo). */
+  source?: 'fresh' | 'memory' | 'snapshot';
   /** Présent si l'étape IA a échoué — les statuts factuels restent servis. */
   aiError?: string;
   message?: string;

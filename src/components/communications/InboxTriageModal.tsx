@@ -81,6 +81,15 @@ function relativeDelay(hours?: number): string | null {
   return `il y a ${Math.round(hours / 24)} j`;
 }
 
+/** « généré il y a 2 h » depuis generatedAt (snapshot persisté côté serveur). */
+function formatRelativeTime(iso: string): string {
+  const at = new Date(iso).getTime();
+  if (!Number.isFinite(at)) return '';
+  const hours = (Date.now() - at) / 3_600_000;
+  if (hours < 1) return "à l'instant";
+  return relativeDelay(hours) ?? '';
+}
+
 function truncate(text: string, max = 110): string {
   const trimmed = text.trim();
   if (trimmed.length <= max) return trimmed;
@@ -365,11 +374,18 @@ export default function InboxTriageModal({
         onClose={handleClose}
         maxWidth="lg"
         fullWidth
+        scroll="paper"
         slotProps={{
           paper: {
             sx: {
               borderRadius: '12px',
               bgcolor: T.bg1,
+              /* Scroll : hauteur bornée + colonne flex — seul le DialogContent
+               * défile, le titre et le footer restent fixes. */
+              height: 'min(85dvh, 860px)',
+              maxHeight: '85dvh',
+              display: 'flex',
+              flexDirection: 'column',
             },
           },
         }}
@@ -411,7 +427,7 @@ export default function InboxTriageModal({
           )}
         </DialogTitle>
 
-        <DialogContent sx={{ pt: '15px !important', pb: 2 }}>
+        <DialogContent sx={{ pt: '15px !important', pb: 2, flex: 1, overflowY: 'auto' }}>
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
@@ -514,6 +530,7 @@ export default function InboxTriageModal({
             <Typography sx={{ fontSize: 11, fontWeight: 600, color: T.text3, mr: 'auto' }}>
               {result.aiAnalyzed ?? 0} analysée{(result.aiAnalyzed ?? 0) > 1 ? 's' : ''} par IA
               {counts ? ` / ${counts.total} conversation${counts.total > 1 ? 's' : ''}` : ''}
+              {result.generatedAt ? ` · généré ${formatRelativeTime(result.generatedAt)}` : ''}
             </Typography>
           )}
           <Button
