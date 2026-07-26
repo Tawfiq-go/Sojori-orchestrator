@@ -8,6 +8,7 @@ import ThreadsList from '../unified-inbox/ThreadsList';
 import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
+import ConversationAnalysisModal from './ConversationAnalysisModal';
 import { useCommsHubChrome } from './CommsHubChromeContext';
 import { T } from '../unified-inbox/_tokens';
 import messagesService from '../../services/messagesService';
@@ -100,6 +101,7 @@ export default function WhatsAppTabV2() {
   const [waChannelFilter, setWaChannelFilter] = useState<WaChannelFilter>('all');
   const [waView, setWaView] = useState<WaInboxView>('exchanges');
   const [showAIModal, setShowAIModal] = useState(false);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [composerDraft, setComposerDraft] = useState('');
   const [sendingGuestMenuCode, setSendingGuestMenuCode] = useState<string | null>(null);
   const [aiSourceDraft, setAiSourceDraft] = useState('');
@@ -834,6 +836,7 @@ export default function WhatsAppTabV2() {
               setAiSourceDraft(draft);
               setShowAIModal(true);
             }}
+            onAIAnalysis={() => setShowAnalysisModal(true)}
           />
           <ConversationDetails
             thread={activeThread}
@@ -956,6 +959,22 @@ export default function WhatsAppTabV2() {
           type: 'whatsapp',
         }}
       />
+
+      {inbox.activeConversation && (
+        <ConversationAnalysisModal
+          open={showAnalysisModal}
+          onClose={() => setShowAnalysisModal(false)}
+          phone={inbox.activeConversation.phone}
+          reservationId={inbox.activeConversation.reservation_mongo_id || undefined}
+          reservationNumber={
+            inbox.reservation?.reservationNumber ||
+            inbox.activeConversation.reservation_number ||
+            undefined
+          }
+          guestName={inbox.activeConversation.name}
+          onUseReply={(text) => setComposerDraft(text)}
+        />
+      )}
     </Box>
   );
 }

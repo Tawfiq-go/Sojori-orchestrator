@@ -44,6 +44,8 @@ interface ConversationThreadProps {
   onSendMessage: (text: string) => void | Promise<void>;
   onSelectTemplate: (template: QuickTemplate) => void;
   onAISuggestion?: (draft: string) => void;
+  /** Analyse IA de la conversation (diagnostic + plan d'action) — bouton affiché seulement si fourni */
+  onAIAnalysis?: () => void;
   /** Inbox Resa — enregistrer une note vocale */
   onRecordVoice?: () => void;
   recordingVoice?: boolean;
@@ -88,6 +90,7 @@ export default function ConversationThread({
   onSendMessage,
   onSelectTemplate,
   onAISuggestion,
+  onAIAnalysis,
   onRecordVoice,
   recordingVoice = false,
   sendingVoice = false,
@@ -1476,6 +1479,34 @@ export default function ConversationThread({
         >
           ✨
         </Box>
+        {onAIAnalysis && (
+          <Box
+            component="button"
+            type="button"
+            onClick={onAIAnalysis}
+            sx={{
+              ...iconBtnSx,
+              width: 'auto',
+              height: 34,
+              px: '10px',
+              gap: 0.5,
+              borderRadius: '9px',
+              border: '1px solid rgba(124,58,237,0.35)',
+              bgcolor: T.aiTint,
+              color: T.ai,
+              fontSize: 12,
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+              '&:hover': { bgcolor: 'rgba(124,58,237,0.18)', color: T.ai },
+            }}
+            title="Analyse IA de la conversation"
+          >
+            <Box component="span" sx={{ fontSize: 13, lineHeight: 1 }}>
+              🔍
+            </Box>
+            Analyse
+          </Box>
+        )}
         <Box
           component="button"
           onClick={() => void handleSend()}
