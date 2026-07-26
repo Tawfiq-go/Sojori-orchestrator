@@ -199,7 +199,10 @@ export function fullTaskToListItem(
       ? registrationCountsFromPayload(payload, reservationMeta?.adults)
       : null;
   const isCleaningType =
-    taskType === 'cleaning_free' || taskType === 'cleaning_paid';
+    taskType === 'cleaning_free' ||
+    taskType === 'cleaning_paid' ||
+    taskType === 'cleaning_sojori' ||
+    taskType === 'checkout_cleaning';
   const showsGuestHour =
     taskType === 'arrival_choose' ||
     taskType === 'departure_choose' ||
@@ -406,6 +409,15 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     allowedListingIds: ((row.listingIds as unknown[]) || []).map(String),
     allowedCityIds: ((row.cityIds as unknown[]) || []).map(String),
     maxTasksPerDay: row.maxTasksPerDay as number | undefined,
+    alwaysAvailable: row.alwaysAvailable === true,
+    absences: ((row.absences as Array<Record<string, unknown>>) || [])
+      .map((a) => ({
+        _id: String(a._id || ''),
+        startDate: a.startDate ? new Date(a.startDate as string).toISOString() : '',
+        endDate: a.endDate ? new Date(a.endDate as string).toISOString() : '',
+        reason: String(a.reason || ''),
+      }))
+      .filter((a) => a._id && a.startDate && a.endDate),
     schedule: { daysOfWeek, timeWindows, dayWindows },
     lang: (['fr', 'en', 'ar'].includes(String(row.lang)) ? row.lang : 'fr') as 'fr' | 'en' | 'ar',
     notes: '',
@@ -423,37 +435,45 @@ export function designStaffToApi(
   staff: Record<string, unknown>,
   opts?: { isCreate?: boolean; ownerId?: string },
 ) {
+  const alwaysAvailable = staff.alwaysAvailable === true;
   const sched = staff.schedule as {
     daysOfWeek?: number[];
     timeWindows?: { start: string; end: string }[];
     dayWindows?: Partial<Record<number, { start: string; end: string }[]>>;
   };
   const schedule: { dayOfWeek: number; start: string; end: string }[] = [];
-  const dayWindows = sched?.dayWindows;
-  if (dayWindows && Object.keys(dayWindows).length > 0) {
-    for (const [dayKey, windows] of Object.entries(dayWindows)) {
-      const dayOfWeek = Number(dayKey);
-      if (!Number.isFinite(dayOfWeek)) continue;
-      for (const w of uniqueScheduleTimeWindows(windows || [])) {
-        schedule.push({ dayOfWeek, start: w.start, end: w.end });
-      }
+  if (alwaysAvailable) {
+    // Miroir 7×24 pour tout code qui lit uniquement schedule[] (flag = source de vérité assignation).
+    for (let dayOfWeek = 0; dayOfWeek <= 6; dayOfWeek += 1) {
+      schedule.push({ dayOfWeek, start: '00:00', end: '23:59' });
     }
   } else {
-    const days = Array.isArray(sched?.daysOfWeek)
-      ? sched.daysOfWeek
-      : opts?.isCreate
-        ? [1, 2, 3, 4, 5]
-        : [];
-    const windows = uniqueScheduleTimeWindows(
-      sched?.timeWindows?.length
-        ? sched.timeWindows
+    const dayWindows = sched?.dayWindows;
+    if (dayWindows && Object.keys(dayWindows).length > 0) {
+      for (const [dayKey, windows] of Object.entries(dayWindows)) {
+        const dayOfWeek = Number(dayKey);
+        if (!Number.isFinite(dayOfWeek)) continue;
+        for (const w of uniqueScheduleTimeWindows(windows || [])) {
+          schedule.push({ dayOfWeek, start: w.start, end: w.end });
+        }
+      }
+    } else {
+      const days = Array.isArray(sched?.daysOfWeek)
+        ? sched.daysOfWeek
         : opts?.isCreate
-          ? [{ start: '08:00', end: '17:00' }]
-          : [],
-    );
-    days.forEach((dayOfWeek) => {
-      windows.forEach((w) => schedule.push({ dayOfWeek, start: w.start, end: w.end }));
-    });
+          ? [1, 2, 3, 4, 5]
+          : [];
+      const windows = uniqueScheduleTimeWindows(
+        sched?.timeWindows?.length
+          ? sched.timeWindows
+          : opts?.isCreate
+            ? [{ start: '08:00', end: '17:00' }]
+            : [],
+      );
+      days.forEach((dayOfWeek) => {
+        windows.forEach((w) => schedule.push({ dayOfWeek, start: w.start, end: w.end }));
+      });
+    }
   }
 
   const pricing: { taskType: string; amount: number }[] = [];
@@ -476,6 +496,7 @@ export function designStaffToApi(
     listingIds: staff.allowedListingIds || [],
     cityIds: staff.allowedCityIds || [],
     schedule,
+    alwaysAvailable,
     // Capacité : défaut moteur (plus exposé dans l’UI équipe).
     maxTasksPerDay: 8,
     isAdmin: Boolean(staff.isAdmin),

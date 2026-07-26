@@ -53,21 +53,18 @@ export default function KanbanView({ tasks, onTaskMove, onTaskClick, onNewTask }
     <Box sx={{ ...DASHBOARD_PAGE_FILL_SX, py: DASHBOARD_PAGE.padY, px: 0 }}>
       <style>{SOJORI_KEYFRAMES}</style>
 
-      <Stack direction="row" gap={1.75} sx={{ alignItems: 'baseline',  mb: 1.75 }}>
-        <Typography sx={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.025em' }}>Kanban Tâches</Typography>
+      <Stack
+        direction="row"
+        gap={1.5}
+        sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 1.25 }}
+      >
         <Typography sx={{ fontSize: 12, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
-          {tasks.length} tâches · drag pour changer de statut
+          {tasks.length} tâches · glisser-déposer pour changer de statut
         </Typography>
         <Stack direction="row" gap={1} sx={{ ml: 'auto' }}>
           <Button sx={{ ...btnGhost }}>⚙ Filtres</Button>
           <Button onClick={onNewTask} sx={{ ...btnPrim }}>+ Nouvelle tâche</Button>
         </Stack>
-      </Stack>
-
-      <Stack direction="row" gap={1.5} sx={{ flexWrap: 'wrap',  mb: 1.75, alignItems: 'center' }}>
-        <Typography sx={{ ml: 'auto', fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
-          Glisser-déposer entre colonnes pour changer le statut
-        </Typography>
       </Stack>
 
       {/* 4 columns */}

@@ -333,18 +333,35 @@ function TasksStaffFulltaskPageInner() {
         {hubTab === 'horaires' && (
           <StaffScheduleListView
             staff={staff}
+            listings={listingsForPlanning}
+            cities={cities}
             loading={loadingStaff}
             onOpenConfig={() => selectTab('equipe')}
-            onSaveSchedule={async (staffId, schedule) => {
+            onSaveSchedule={async (staffId, schedule, alwaysAvailable) => {
               const current = staff.find((s) => s._id === staffId);
               if (!current) throw new Error('Staff introuvable');
               const body = designStaffToApi(
-                { ...current, schedule } as Record<string, unknown>,
+                { ...current, schedule, alwaysAvailable } as Record<string, unknown>,
                 { ownerId: current.ownerId },
               );
               await fulltaskApi.updateStaff(staffId, {
                 schedule: body.schedule,
+                alwaysAvailable: body.alwaysAvailable,
               });
+              await loadStaff();
+            }}
+            onAddAbsence={async (staffId, body) => {
+              const res = await fulltaskApi.addStaffAbsence(staffId, body);
+              if (!res?.success) {
+                throw new Error(res?.error || 'Impossible d’ajouter l’absence');
+              }
+              await loadStaff();
+            }}
+            onRemoveAbsence={async (staffId, absenceId) => {
+              const res = await fulltaskApi.removeStaffAbsence(staffId, absenceId);
+              if (!res?.success) {
+                throw new Error(res?.error || 'Impossible de supprimer l’absence');
+              }
               await loadStaff();
             }}
           />

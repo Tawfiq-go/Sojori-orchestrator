@@ -82,6 +82,10 @@ export default function PlanReservationPage({
           sort={listQuery.sort}
           listingId={listQuery.listingId || ''}
           listingOptions={listingOptions}
+          totalCount={totalCount}
+          searchInput={searchInput}
+          onSearchInputChange={onSearchInputChange}
+          onSearchSubmit={onSearchSubmit}
           onFiltersChange={onFiltersChange}
           onSortChange={onSortChange}
           onListingIdChange={onListingIdChange}
@@ -105,6 +109,7 @@ export default function PlanReservationPage({
               Boolean(listQuery.search.trim()) ||
               Boolean(listQuery.listingId?.trim())
             }
+            hideSearch
             onSearchInputChange={onSearchInputChange}
             onSearchSubmit={onSearchSubmit}
             onClearFilters={onClearFilters}

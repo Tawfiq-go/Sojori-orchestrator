@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { DashboardLayout } from './dashboard/DashboardV2.components';
 import { isListingCataloguePath } from '../constants/listingLayout';
 import { isPmBusinessPath } from '../config/routeAccessPolicy';
+import { resolvePageChrome } from '../config/pageChromeRegistry';
 import { useDashboardChrome } from './useDashboardChrome';
 import { PmSimulationProvider } from '../context/PmSimulationContext';
 import { AdminOwnerFilterProvider, useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
@@ -52,11 +53,16 @@ function DashboardShellInner({
   children: ReactNode;
   adminScopeInTopBar: boolean;
 }) {
-  const [breadcrumb, setBreadcrumb] = useState<string[]>([]);
-  const [compactMain, setCompactMain] = useState(false);
   const chrome = useDashboardChrome();
   const mainRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  // Fil d’Ariane dès la route — jamais topbar vide en attendant le mount page.
+  const routeBreadcrumb = useMemo(
+    () => resolvePageChrome(location.pathname)?.breadcrumb ?? [],
+    [location.pathname],
+  );
+  const [breadcrumb, setBreadcrumb] = useState<string[]>(routeBreadcrumb);
+  const [compactMain, setCompactMain] = useState(false);
   const listingCompact = compactMain || isListingCataloguePath(location.pathname);
   const setBreadcrumbIfChanged = useCallback((items: string[]) => {
     setBreadcrumb((prev) => {
@@ -77,6 +83,10 @@ function DashboardShellInner({
     [setBreadcrumbIfChanged, setCompactMainIfChanged],
   );
 
+  useLayoutEffect(() => {
+    if (routeBreadcrumb.length > 0) setBreadcrumbIfChanged(routeBreadcrumb);
+  }, [routeBreadcrumb, setBreadcrumbIfChanged]);
+
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, left: 0 });
   }, [location.pathname, location.search]);
@@ -88,7 +98,7 @@ function DashboardShellInner({
         activePath={chrome.activePath}
         onNavigate={chrome.onNavigate}
         onLogout={chrome.onLogout}
-        breadcrumb={breadcrumb}
+        breadcrumb={breadcrumb.length > 0 ? breadcrumb : routeBreadcrumb}
         compactMain={listingCompact}
         adminScopeInTopBar={adminScopeInTopBar}
         user={chrome.user}

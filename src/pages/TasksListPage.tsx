@@ -708,6 +708,8 @@ function formatPlannedParts(task: TaskListItem): { date: string; time?: string }
     'departure_declare',
     'cleaning_free',
     'cleaning_paid',
+    'checkout_cleaning',
+    'cleaning_sojori',
   ]);
   const taskType = String(task.type || task.subType || '');
 
@@ -715,7 +717,9 @@ function formatPlannedParts(task: TaskListItem): { date: string; time?: string }
   if (!startIso && dayOnlyTypes.has(taskType)) {
     if (
       taskType === 'departure_choose' ||
-      taskType === 'departure_declare'
+      taskType === 'departure_declare' ||
+      taskType === 'checkout_cleaning' ||
+      taskType === 'cleaning_sojori'
     ) {
       startIso = task.reservationCheckOut
         ? `${String(task.reservationCheckOut).slice(0, 10)}T00:00:00.000Z`
@@ -730,15 +734,12 @@ function formatPlannedParts(task: TaskListItem): { date: string; time?: string }
   if (Number.isNaN(start.getTime())) return null;
   const date = start.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' });
 
+  // Jour seul : ne pas afficher 01:00 (artefact minuit UTC → fuseau +1).
+  // Heure réelle uniquement via plannedTime / scheduledAt métier.
   if (dayOnlyTypes.has(taskType)) {
-    if (
-      (taskType === 'arrival_choose' ||
-        taskType === 'departure_choose' ||
-        taskType === 'arrival_declare' ||
-        taskType === 'departure_declare') &&
-      task.plannedTime
-    ) {
-      return { date };
+    const explicitHm = String(task.plannedTime || task.scheduledAt || '').trim();
+    if (/^\d{1,2}:\d{2}/.test(explicitHm) && !explicitHm.includes('T')) {
+      return { date, time: explicitHm.slice(0, 5) };
     }
     return { date };
   }
@@ -750,6 +751,10 @@ function formatPlannedParts(task: TaskListItem): { date: string; time?: string }
       const tEnd = end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
       return { date, time: `${tStart} → ${tEnd}` };
     }
+  }
+  // Minuit UTC stocké comme date seule → pas d’heure fictive
+  if (start.getUTCHours() === 0 && start.getUTCMinutes() === 0) {
+    return { date };
   }
   return { date, time: tStart };
 }

@@ -329,12 +329,6 @@ export function SmartStaffSelector({
                   }}>
                                 {s.staffName}
                               </span>
-                              <Chip label={s.staffCode} size="small" style={{
-                    fontSize: '9px',
-                    height: '16px',
-                    backgroundColor: SOJORI_COLORS.primary,
-                    color: 'white'
-                  }} />
                               <Chip label={s.memberRole || 'Staff'} size="small" style={{
                     fontSize: '8px',
                     height: '16px',
@@ -430,10 +424,6 @@ export function SmartStaffSelector({
                     }}>
                                   {s.staffName}
                                 </span>
-                                <Chip label={s.staffCode} size="small" style={{
-                      fontSize: '9px',
-                      height: '16px'
-                    }} />
                                 <Chip label={`${s.score} pts`} size="small" style={{
                       fontSize: '8px',
                       height: '16px',

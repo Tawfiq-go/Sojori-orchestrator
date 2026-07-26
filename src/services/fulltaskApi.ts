@@ -83,6 +83,21 @@ export async function createStaff(body: Record<string, unknown>) {
   return data;
 }
 
+export async function addStaffAbsence(
+  id: string,
+  body: { startDate: string; endDate: string; reason?: string },
+) {
+  const { data } = await apiClient.post(`${BASE}/staff/${id}/absences`, body);
+  return data;
+}
+
+export async function removeStaffAbsence(id: string, absenceId: string) {
+  const { data } = await apiClient.delete(
+    `${BASE}/staff/${id}/absences/${encodeURIComponent(absenceId)}`,
+  );
+  return data;
+}
+
 export async function updateStaff(id: string, body: Record<string, unknown>) {
   const { data } = await apiClient.patch(`${BASE}/staff/${id}`, body);
   return data;
@@ -399,12 +414,14 @@ export type AssignationCandidate = {
   name: string;
   phone: string;
   contractType: string;
-  load: number;
-  maxTasksPerDay: number;
   planningOk: boolean;
-  atMaxCapacity: boolean;
-  timeConflict?: boolean;
+  onAbsence?: boolean;
   availableForTask?: boolean;
+  /** @deprecated retirés assignation v1 — ignorés si présents. */
+  load?: number;
+  maxTasksPerDay?: number;
+  atMaxCapacity?: boolean;
+  timeConflict?: boolean;
 };
 
 export type AssignationCandidatesResponse = {
@@ -685,15 +702,50 @@ export async function askDayPlanCopilot(
   return data as { success: boolean; answer?: string; error?: string };
 }
 
+export type DayBriefDecision = {
+  stepId?: string;
+  title: string;
+  severity: 'critical' | 'important' | 'info';
+  /** 'HH:mm' — dernier moment pour agir. */
+  deadline?: string;
+  consequence: string;
+  recommendation: string;
+};
+
+export type DayBriefResult = {
+  success: boolean;
+  brief?: string;
+  decisions?: DayBriefDecision[];
+  model?: string;
+  cached?: boolean;
+  error?: string;
+};
+
+/** Brief de décision IA — priorisation des décisions du jour (scopé owner côté backend, cache 10 min). */
+export async function getDayPlanBrief(
+  date?: string,
+  ownerId?: string | null,
+): Promise<DayBriefResult> {
+  const { data } = await apiClient.post(`${BASE}/plans/day-brief`, {
+    ...(date ? { date } : {}),
+    ...(ownerId ? { ownerId } : {}),
+  });
+  return data as DayBriefResult;
+}
+
 export type DayPlanWeekDay = {
   date: string;
   fragility: DayPlanResponse['fragility'];
   stats: DayPlanResponse['stats'];
 };
 
-export async function getDayPlanWeek(start?: string, days = 7): Promise<{ success: boolean; start: string; days: DayPlanWeekDay[] }> {
+export async function getDayPlanWeek(
+  start?: string,
+  days = 7,
+  ownerId?: string | null,
+): Promise<{ success: boolean; start: string; days: DayPlanWeekDay[] }> {
   const { data } = await apiClient.get(`${BASE}/plans/day-plan-week`, {
-    params: { ...(start ? { start } : {}), days },
+    params: { ...(start ? { start } : {}), days, ...(ownerId ? { ownerId } : {}) },
   });
   return data as { success: boolean; start: string; days: DayPlanWeekDay[] };
 }

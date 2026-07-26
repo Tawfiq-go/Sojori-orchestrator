@@ -31,7 +31,12 @@ function normalizeHm(raw: unknown): string | undefined {
 
 const ARRIVAL_TYPES = new Set(['registration', 'arrival_choose', 'arrival_declare']);
 const DEPARTURE_TYPES = new Set(['departure_choose', 'departure_declare']);
-const CLEANING_TYPES = new Set(['cleaning_free', 'cleaning_paid', 'cleaning_sojori']);
+const CLEANING_TYPES = new Set([
+  'cleaning_free',
+  'cleaning_paid',
+  'cleaning_sojori',
+  'checkout_cleaning',
+]);
 
 /**
  * Heure métier de la tâche (HH:mm) — même cascade que srv-fulltask
@@ -93,10 +98,19 @@ export function inferTaskPlannedDay(
   if (type === 'departure_choose' || type === 'departure_declare') {
     return checkOut;
   }
-  if (type === 'cleaning_free' || type === 'cleaning_paid') {
+  if (
+    type === 'cleaning_free' ||
+    type === 'cleaning_paid' ||
+    type === 'cleaning_sojori' ||
+    type === 'checkout_cleaning'
+  ) {
     const payloadDate = payload.date ? toDayIso(String(payload.date)) : undefined;
     const slots = payload.slots as { date?: string }[] | undefined;
     const slotDay = slots?.[0]?.date ? toDayIso(slots[0].date) : undefined;
+    // Ménage Sojori = jour de checkout
+    if (type === 'checkout_cleaning' || type === 'cleaning_sojori') {
+      return payloadDate || slotDay || checkOut || checkIn;
+    }
     return payloadDate || slotDay || checkIn;
   }
 

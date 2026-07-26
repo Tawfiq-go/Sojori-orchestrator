@@ -140,8 +140,8 @@ export default function TasksKanbanPage() {
   };
 
   return (
-    <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Kanban']}>
-      <Box sx={{ bgcolor: '#f6f5f1', minHeight: '100vh' }}>
+    <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Kanban']} hidePageHeader>
+      <Box sx={{ bgcolor: '#f6f5f1', minHeight: 0 }}>
         {isLoading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
             <CircularProgress />

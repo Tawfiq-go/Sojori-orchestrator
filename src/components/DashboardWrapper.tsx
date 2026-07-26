@@ -18,13 +18,13 @@ import {
 interface DashboardWrapperProps {
   children: React.ReactNode;
   breadcrumb?: string[];
-  /** Titre H1 — défaut : registre sidebar ou dernier segment du fil d’Ariane */
+  /** @deprecated Titre porté par le fil d’Ariane topbar — ignoré */
   title?: string;
-  /** Chip à droite du titre (ex. période, mois courant) */
+  /** Chip compact (ex. période) — sans H1 */
   titleMeta?: ReactNode;
-  /** Actions alignées à droite du titre (boutons, toggles…) */
+  /** Actions compactes à droite — sans H1 */
   headerActions?: ReactNode;
-  /** Ne pas afficher l’en-tête standard (page avec PageHeader custom) */
+  /** Masque aussi la barre meta/actions (défaut : false) */
   hidePageHeader?: boolean;
   /** Formulaire listing plein écran : marges main réduites, hauteur utile maximale */
   compactMain?: boolean;
@@ -71,8 +71,12 @@ export function DashboardWrapper({
       ? effectiveBreadcrumb[effectiveBreadcrumb.length - 1]
       : undefined);
 
+  // Titre H1 retiré : contexte = fil d’Ariane topbar. Barre compacte seulement
+  // si meta / actions (PageHeader ignore le titre).
   const showPageHeader =
-    !hidePageHeader && !!effectiveTitle && !isListingCataloguePath(location.pathname);
+    !hidePageHeader &&
+    !isListingCataloguePath(location.pathname) &&
+    Boolean(titleMeta || headerActions);
 
   usePageChromeUpdater(effectiveBreadcrumb, listingCompact);
 
