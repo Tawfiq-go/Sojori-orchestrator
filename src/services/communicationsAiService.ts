@@ -112,6 +112,10 @@ export type InboxTriageSentiment = 'frustrated' | 'unhappy' | 'neutral' | 'posit
 
 export interface InboxTriageRowAi {
   sentiment?: InboxTriageSentiment;
+  /** Vrai résumé de la résa : intention du client + notre réactivité/qualité de réponse. */
+  summary?: string;
+  /** Questions/demandes du guest restées sans réponse — résa par résa. */
+  unansweredPoints?: string[];
   problem?: string;
   action?: string;
   suggestedReply?: string;
@@ -120,6 +124,8 @@ export interface InboxTriageRowAi {
 export interface InboxTriageRow {
   id: string;
   channel: 'whatsapp' | 'ota';
+  /** Canaux couverts (fusion par résa) — ex. ['whatsapp','ota']. */
+  channels?: Array<'whatsapp' | 'ota'>;
   phone?: string;
   threadId?: number;
   reservationNumber?: string;
