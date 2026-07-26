@@ -203,3 +203,26 @@ export function formatSkipReason(reason?: string): string {
       return reason
   }
 }
+
+/** Motif court pour badge / ligne Motif (sans préfixe Sautée/Reportée). */
+export function formatSkipReasonShort(reason?: string): string {
+  if (!reason) return ''
+  switch (reason) {
+    case 'regroupe_veille_depart':
+      return 'regroupée veille départ'
+    case 'reporte_avant_arrivee':
+      return 'avant arrivée → veille départ'
+    case 'decale_collision_arrivee':
+      return 'collision arrivée (+2h)'
+    case 'date_passee_creation':
+      return 'date passée à la création'
+    case 'remplace_par_lm':
+      return 'remplacée last-minute'
+    case 'no_body':
+      return 'contenu manquant'
+    case 'client_a_repondu':
+      return 'client a répondu'
+    default:
+      return formatSkipReason(reason)
+  }
+}

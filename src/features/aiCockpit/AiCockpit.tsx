@@ -296,6 +296,11 @@ export default function AiCockpit() {
     taskType: string;
     step?: DayPlanStep;
   } | null>(null);
+  /** Déclaration départ/arrivée — choix heure now ou passée. */
+  const [declareCtx, setDeclareCtx] = useState<{
+    step: DayPlanStep;
+    kind: 'arrival' | 'departure';
+  } | null>(null);
   /** Étape dont on inspecte les relances (panneau détail + actions). */
   const [relanceStep, setRelanceStep] = useState<DayPlanStep | null>(null);
   const [brief, setBrief] = useState<DayBriefResult | null>(null);
@@ -699,22 +704,10 @@ export default function AiCockpit() {
     })();
   };
 
-  /* Déclarations constatées par le PM/staff — le client ne joue pas toujours le jeu :
-     quelqu'un doit pouvoir poser le fait (parti / arrivé / ménage commencé / fini). */
-  const declareGuest = useCallback(
-    async (step: DayPlanStep, kind: 'arrival' | 'departure') => {
-      try {
-        const fn = kind === 'departure' ? fulltaskApi.declareGuestDeparture : fulltaskApi.declareGuestArrival;
-        const res = await fn(step.reservationId);
-        if (res?.success === false) throw new Error(res?.error || 'Échec de la déclaration');
-        toast.success(kind === 'departure' ? `Départ constaté — ${step.guestName ?? 'client'} parti` : `Arrivée constatée — ${step.guestName ?? 'client'} sur place`);
-        void load();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Échec de la déclaration');
-      }
-    },
-    [load],
-  );
+  /* Déclarations constatées : popup heure (maintenant ou passée), jamais sans HH. */
+  const declareGuest = useCallback((step: DayPlanStep, kind: 'arrival' | 'departure') => {
+    setDeclareCtx({ step, kind });
+  }, []);
 
   const setCleanStatus = useCallback(
     async (step: DayPlanStep, status: 'doing' | 'done') => {
@@ -1107,11 +1100,113 @@ export default function AiCockpit() {
           onDone={() => { setSlotCtx(null); void load(); }}
         />
       )}
+      {declareCtx && (
+        <DeclareTimePanel
+          ctx={declareCtx}
+          onClose={() => setDeclareCtx(null)}
+          onDone={() => { setDeclareCtx(null); void load(); }}
+        />
+      )}
     </div>
   );
 }
 
 /* ─── Fixer une heure (choix admin) — même API que l'escalade, UI Cockpit ─── */
+
+/** Heures : maintenant + heures passées du jour (si 13h → 13, 12, 11…). */
+function declareHourOptions(now = new Date()): { hour: number; label: string; isNow: boolean }[] {
+  const h = now.getHours();
+  const out: { hour: number; label: string; isNow: boolean }[] = [
+    { hour: h, label: `Maintenant · ${String(h).padStart(2, '0')}:00`, isNow: true },
+  ];
+  for (let i = 1; i <= Math.min(8, h); i++) {
+    const hh = h - i;
+    out.push({
+      hour: hh,
+      label: `${String(hh).padStart(2, '0')}:00`,
+      isNow: false,
+    });
+  }
+  return out;
+}
+
+function DeclareTimePanel({
+  ctx,
+  onClose,
+  onDone,
+}: {
+  ctx: { step: DayPlanStep; kind: 'arrival' | 'departure' };
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const options = useMemo(() => declareHourOptions(new Date()), []);
+  const [hour, setHour] = useState(options[0]?.hour ?? new Date().getHours());
+  const [saving, setSaving] = useState(false);
+  const isDeparture = ctx.kind === 'departure';
+
+  const submit = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const fn = isDeparture ? fulltaskApi.declareGuestDeparture : fulltaskApi.declareGuestArrival;
+      const res = await fn(ctx.step.reservationId, hour);
+      if (res?.success === false) throw new Error(res?.error || 'Échec de la déclaration');
+      const hm = `${String(hour).padStart(2, '0')}:00`;
+      toast.success(
+        isDeparture
+          ? `Départ constaté · ${hm} — ${ctx.step.guestName ?? 'client'} parti`
+          : `Arrivée constatée · ${hm} — ${ctx.step.guestName ?? 'client'} sur place`,
+      );
+      onDone();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Échec de la déclaration');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="ck-relpop-backdrop" onClick={onClose} role="presentation">
+      <div
+        className="ck-relpop"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label={isDeparture ? 'Déclarer le départ' : "Déclarer l'arrivée"}
+      >
+        <div className="ck-relpop-hdr">
+          <span>
+            {isDeparture ? '✓ Déclarer départ' : '✓ Déclarer arrivée'}
+            {ctx.step.guestName ? ` · ${ctx.step.guestName}` : ''}
+          </span>
+          <button type="button" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+        <div className="ck-slot-body">
+          {ctx.step.listingName && <div className="ck-slot-listing">{ctx.step.listingName}</div>}
+          <div className="ck-slot-context">
+            <span className="ck-slot-tag">Heure constatée — maintenant ou passée (pas d’heure future)</span>
+          </div>
+          <div className="ck-slots">
+            {options.map((o) => (
+              <button
+                key={o.hour}
+                type="button"
+                className={`ck-slot-chip ${hour === o.hour ? 'on' : ''}${o.isNow ? ' now' : ''}`}
+                onClick={() => setHour(o.hour)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="ck-relpop-actions">
+          <button type="button" className="ck-relpop-send" disabled={saving} onClick={() => void submit()}>
+            {saving ? '…' : `Confirmer · ${String(hour).padStart(2, '0')}:00`}
+          </button>
+          <button type="button" onClick={onClose}>Annuler</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ForceSlotPanel({
   ctx,

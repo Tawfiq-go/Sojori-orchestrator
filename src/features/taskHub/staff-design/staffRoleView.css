@@ -1,0 +1,343 @@
+/* Vue staff — kanban accept / start / finish */
+.srv-root {
+  background: #fff;
+  border: 1px solid rgba(26, 22, 17, 0.1);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.srv-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.srv-toolbar-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+}
+
+.srv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #7a756c;
+}
+
+.srv-field select,
+.srv-field input {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 10px;
+  border: 1px solid rgba(20, 17, 10, 0.12);
+  border-radius: 8px;
+  background: #fafaf7;
+  min-width: 160px;
+  color: #14110a;
+}
+
+.srv-banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(184, 133, 26, 0.1);
+  border: 1px solid rgba(184, 133, 26, 0.28);
+}
+
+.srv-banner-av {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #cb9b2c, #b8851a);
+  color: #1a1408;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.srv-banner strong {
+  display: block;
+  font-size: 13px;
+  color: #14110a;
+}
+
+.srv-banner p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #55504a;
+  line-height: 1.4;
+}
+
+.srv-empty {
+  margin: 28px 0;
+  text-align: center;
+  font-size: 13px;
+  color: #7a756c;
+  font-weight: 600;
+}
+
+.srv-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .srv-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .srv-board {
+    grid-template-columns: 1fr;
+  }
+}
+
+.srv-col {
+  background: #fafaf7;
+  border: 1px solid rgba(20, 17, 10, 0.07);
+  border-radius: 10px;
+  padding: 10px;
+  min-height: 180px;
+}
+
+.srv-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.srv-col-head h3 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #14110a;
+}
+
+.srv-col-count {
+  font-size: 11px;
+  font-weight: 800;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 17, 10, 0.08);
+  color: #55504a;
+}
+
+.srv-col-hint {
+  margin: 0 0 10px;
+  font-size: 10.5px;
+  color: #7a756c;
+  line-height: 1.35;
+}
+
+.srv-col-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.srv-col-empty {
+  margin: 8px 0;
+  font-size: 12px;
+  color: #b0aaa0;
+  text-align: center;
+}
+
+.srv-card {
+  background: #fff;
+  border: 1px solid rgba(20, 17, 10, 0.1);
+  border-radius: 9px;
+  padding: 10px;
+}
+
+.srv-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.srv-card-type {
+  font-size: 12px;
+  font-weight: 750;
+  color: #14110a;
+}
+
+.srv-status {
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.srv-status--waiting_accept {
+  background: rgba(234, 179, 8, 0.16);
+  color: #92400e;
+}
+.srv-status--waiting_start {
+  background: rgba(59, 130, 246, 0.14);
+  color: #1d4ed8;
+}
+.srv-status--waiting_finish {
+  background: rgba(249, 115, 22, 0.14);
+  color: #c2410c;
+}
+.srv-status--finished {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+.srv-status--other {
+  background: rgba(20, 17, 10, 0.06);
+  color: #7a756c;
+}
+
+.srv-card-code {
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #7a756c;
+  margin-bottom: 2px;
+}
+
+.srv-card-listing {
+  font-size: 12px;
+  font-weight: 650;
+  color: #55504a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.srv-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #7a756c;
+  font-weight: 600;
+}
+
+.srv-checklist-block {
+  margin-top: 8px;
+}
+
+.srv-checklist-toggle {
+  all: unset;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 750;
+  color: #876119;
+}
+
+.srv-checklist {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.srv-checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11px;
+  color: #55504a;
+  line-height: 1.35;
+}
+
+.srv-checklist li.done {
+  color: #047857;
+  text-decoration: line-through;
+}
+
+.srv-ck-mark {
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.srv-checklist em {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 800;
+  color: #b45309;
+  margin-left: 4px;
+  text-transform: uppercase;
+}
+
+.srv-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.srv-btn {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+.srv-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.srv-btn.primary {
+  background: linear-gradient(180deg, #cb9b2c, #b8851a);
+  color: #1a1408;
+}
+
+.srv-btn.ghost {
+  background: #eeebe3;
+  color: #55504a;
+}
+
+.srv-other {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(20, 17, 10, 0.08);
+}
+
+.srv-other h4 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #7a756c;
+}
+
+.srv-other-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}

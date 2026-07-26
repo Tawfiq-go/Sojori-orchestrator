@@ -17,8 +17,9 @@ Sur les plans orchestration (surtout **Choisir départ** + **Instructions dépar
 3. **G1b — Instructions départ**  
    Le message planifié `departure_instructions` suit **la même logique** (recaler / regrouper). Ce n’est **pas** un blocage d’envoi : on décale pour envoyer au bon moment, ou on saute un doublon.
 
-4. **G2 — anti-collision**  
-   Relance départ sur le même créneau qu’une relance arrivée/enregistrement → décalage +2h (`decale_collision_arrivee`).
+4. **Doublons `plan.messages` (`msg_relance_*`)**  
+   Les relances guest vivent aussi en copie dans `plan.messages`. Si la séquence est déjà `saute` / `fait` mais le message reste `en_attente`, le Cockpit affichait à tort **« Message planifié en retard »**.  
+   → Ces `msg_relance_*` sont **exclus** du Day Plan (la vérité = séquence 🔔). Les fantômes sont synchronisés (`intentionalSkip`) avec la séquence.
 
 Champs à lire sur chaque relance / message :
 - `status: saute`

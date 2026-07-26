@@ -27,7 +27,7 @@ import {
   sequenceStatusLabel,
   showRelanceConfigHint,
 } from './planGroupStatus';
-import { formatSkipReason } from '../../utils/planStatusMappers';
+import { formatSkipReason, formatSkipReasonShort } from '../../utils/planStatusMappers';
 
 function DeferRegistrationButton({
   reservationId,
@@ -118,9 +118,24 @@ function CollapseBlock({
   );
 }
 
-function RelanceStatusBadge({ status }: { status: PlanGuestRelanceItem['executionStatus'] }) {
+function RelanceStatusBadge({
+  status,
+  skipReason,
+}: {
+  status: PlanGuestRelanceItem['executionStatus'];
+  skipReason?: string;
+}) {
   const ev = relanceExecutionEventStatus(status);
-  return <span className={`st-badge sm rel-exec ${ev}`}>{relanceExecutionLabel(status)}</span>;
+  const short = skipReason ? formatSkipReasonShort(skipReason) : '';
+  const label =
+    status === 'sautee' && short
+      ? `Sautée · ${short}`
+      : relanceExecutionLabel(status);
+  return (
+    <span className={`st-badge sm rel-exec ${ev}${status === 'sautee' && short ? ' intentional' : ''}`} title={formatSkipReason(skipReason) || undefined}>
+      {label}
+    </span>
+  );
 }
 
 function RelanceRows({
@@ -195,7 +210,7 @@ function RelanceDispatchRow({
               <span className="nm">
                 #{r.step} · {r.label}
               </span>
-              <RelanceStatusBadge status={r.executionStatus} />
+              <RelanceStatusBadge status={r.executionStatus} skipReason={r.skipReason} />
               {r.dispatchPreview ? (
                 <DispatchPreviewChips preview={r.dispatchPreview} />
               ) : showWa !== false && r.channel ? (
@@ -215,8 +230,13 @@ function RelanceDispatchRow({
               </div>
             ) : null}
             <DispatchLastSendLine last={r.lastDispatch} attempt={r.lastDispatchAttempt} />
-            {r.executionStatus === 'sautee' && r.skipReason ? (
-              <div className="rel-row-config">Motif · {formatSkipReason(r.skipReason)}</div>
+            {r.skipReason &&
+            (r.executionStatus === 'sautee' ||
+              r.skipReason === 'reporte_avant_arrivee' ||
+              r.skipReason === 'decale_collision_arrivee') ? (
+              <div className={`rel-row-config rel-row-motif${r.executionStatus === 'sautee' ? ' sautee' : ''}`}>
+                Motif · {formatSkipReasonShort(r.skipReason)}
+              </div>
             ) : null}
             <MessageBodyPreview
               reservationId={reservationId}
@@ -241,7 +261,12 @@ function assignExecutionLine(assign: StaffAssignmentPlan): string {
       ? `Exécution · LM échoué · ${assign.lmFailureLabel} · plus de relance`
       : 'Exécution · échec assignation · plus de relance';
   }
-  if (assign.status === 'failed') return 'Exécution · échec assignation';
+  if (assign.status === 'failed') {
+    if (assign.staffName) {
+      return `Exécution · ${assign.staffName} proposé — non accepté (échu)`;
+    }
+    return 'Exécution · échec assignation';
+  }
   if (assign.hasPendingLmAssign) {
     return assign.nextAssignmentLabel.startsWith('Prochaine assignation LM ·')
       ? `Exécution · ${assign.nextAssignmentLabel}`
@@ -377,7 +402,7 @@ function AssignBlockBody({
                   <span className="nm">
                     #{r.step} · {r.label}
                   </span>
-                  <RelanceStatusBadge status={r.executionStatus} />
+                  <RelanceStatusBadge status={r.executionStatus} skipReason={r.skipReason} />
                 </div>
               </div>
             </div>
@@ -494,7 +519,7 @@ function StaffReminderDispatchRow({
               ) : null}
               <span className="when">{r.dueAt}</span>
               <span className="nm">{r.label}</span>
-              <RelanceStatusBadge status={r.executionStatus} />
+              <RelanceStatusBadge status={r.executionStatus} skipReason={r.skipReason} />
             </div>
             {showRelanceConfigHint(r.executionStatus) && r.whatsappTemplateId ? (
               <div className="rel-row-config">Config WA · {r.whatsappTemplateId}</div>
@@ -502,6 +527,11 @@ function StaffReminderDispatchRow({
               <div className="rel-row-config muted">Template · {r.whatsappTemplateId}</div>
             ) : null}
             <DispatchLastSendLine last={r.lastDispatch} attempt={r.lastDispatchAttempt} />
+            {r.executionStatus === 'sautee' && r.skipReason ? (
+              <div className="rel-row-config rel-row-motif sautee">
+                Motif · {formatSkipReasonShort(r.skipReason)}
+              </div>
+            ) : null}
           </div>
         </div>
   );
@@ -510,8 +540,8 @@ function StaffReminderDispatchRow({
 function resultLabel(r: AssignAttempt['result']): string {
   if (r === 'accepted') return 'SUCCÈS';
   if (r === 'declined') return 'ÉCHEC';
-  if (r === 'timeout') return 'TIMEOUT';
-  return 'PRÉVU';
+  if (r === 'timeout') return 'NON ACCEPTÉ';
+  return 'TROUVÉ';
 }
 
 /** Résumé ligne (comme cartes orchestration-config). */

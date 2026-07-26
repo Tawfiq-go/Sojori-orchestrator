@@ -527,8 +527,12 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .plan-audit-body{margin-top:10px}
 .rel-row-config{font-size:10px;color:var(--t3);font-family:var(--mono);letter-spacing:0.02em;padding-left:98px}
 .rel-row-config.muted{opacity:0.85}
+.rel-row-motif{color:var(--t2);font-weight:600}
+.rel-row-motif.sautee{color:var(--t3)}
 .rel-row .ch-chip{flex-shrink:0}
-.rel-row--sautee .dot.skipped,.rel-row--echec .dot.skipped{background:var(--er)}
+.rel-row--sautee .dot.skipped{background:var(--t4)}
+.rel-row--echec .dot.skipped{background:var(--er)}
+.st-badge.rel-exec.intentional{opacity:0.9;font-weight:600}
 .assign-exec-line{font-size:11px;font-weight:700;color:var(--t2);padding:6px 0 8px;border-bottom:1px dashed var(--b);margin-bottom:8px}
 .assign-exec-line.past{color:var(--wa)}
 

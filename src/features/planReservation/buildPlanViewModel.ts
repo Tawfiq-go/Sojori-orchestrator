@@ -1232,11 +1232,18 @@ function mapAttempts(
   if (!seq.assignation?.attempts?.length) return undefined;
   const staffId = seq.assignation?.staffId ? String(seq.assignation.staffId) : '';
   const assignedName = staffNames[staffId] || (staffId ? `Staff ${staffId.slice(-4)}` : undefined);
+  const accepted =
+    isAssignationAcceptedStatus(String(seq.assignation.status || '')) ||
+    Boolean(seq.assignation.staffAcceptedAt);
+  const assignFailed = String(seq.assignation.status || '') === 'echec';
 
   return seq.assignation.attempts.map((a, i) => {
     const isLm = a.window.startsWith('LM:');
     let result: AttemptResult = 'pending';
-    if (a.found) result = 'accepted';
+    // found = staff proposé, PAS encore accepté — ne pas afficher SUCCÈS
+    if (a.found && accepted) result = 'accepted';
+    else if (a.found && assignFailed) result = 'timeout';
+    else if (a.found) result = 'pending';
     else if (a.tried && !a.found) result = 'declined';
 
     let staffName = '—';
@@ -1257,7 +1264,9 @@ function mapAttempts(
       staffName,
       staffRole,
       result,
-      failureLabel: a.failureLabel,
+      failureLabel:
+        a.failureLabel ||
+        (a.found && assignFailed ? 'Trouvé — non accepté (fenêtre / tolérance)' : undefined),
       isLm,
     };
   });

@@ -63,8 +63,43 @@ export async function acceptTask(id: string, staffId?: string) {
   return data;
 }
 
+/** Refus staff / admin. */
+export async function rejectTask(id: string, staffId?: string) {
+  const body = staffId ? { staffId } : {};
+  const { data } = await apiClient.patch(`${BASE}/tasks/${id}/reject`, body);
+  return data;
+}
+
+/** Clôture staff (doing → done) — staffId obligatoire côté API. */
+export async function completeTask(
+  id: string,
+  staffId: string,
+  executionNote?: string,
+) {
+  const body: Record<string, unknown> = { staffId };
+  if (executionNote?.trim()) body.executionNote = executionNote.trim();
+  const { data } = await apiClient.patch(`${BASE}/tasks/${id}/complete`, body);
+  return data;
+}
+
 export async function assignTask(id: string, staffId: string) {
   const { data } = await apiClient.patch(`${BASE}/tasks/${id}/assign`, { staffId });
+  return data;
+}
+
+/** Tâches assignées à un staff pour un jour (YYYY-MM-DD optionnel). */
+export async function listStaffTasksToday(staffId: string, date?: string) {
+  const { data } = await apiClient.get(`${BASE}/staff/${staffId}/tasks/today`, {
+    params: date ? { date } : undefined,
+  });
+  return data;
+}
+
+/** Tâches assignées à un staff pour la semaine (lundi–dimanche). */
+export async function listStaffTasksWeek(staffId: string, date?: string) {
+  const { data } = await apiClient.get(`${BASE}/staff/${staffId}/tasks/week`, {
+    params: date ? { date } : undefined,
+  });
   return data;
 }
 
