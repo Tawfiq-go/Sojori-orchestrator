@@ -9,6 +9,7 @@ import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
 import ConversationAnalysisModal from './ConversationAnalysisModal';
+import InboxTriageModal from './InboxTriageModal';
 import { useCommsHubChrome } from './CommsHubChromeContext';
 import { T } from '../unified-inbox/_tokens';
 import messagesService from '../../services/messagesService';
@@ -102,6 +103,7 @@ export default function WhatsAppTabV2() {
   const [waView, setWaView] = useState<WaInboxView>('exchanges');
   const [showAIModal, setShowAIModal] = useState(false);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [showTriageModal, setShowTriageModal] = useState(false);
   const [composerDraft, setComposerDraft] = useState('');
   const [sendingGuestMenuCode, setSendingGuestMenuCode] = useState<string | null>(null);
   const [aiSourceDraft, setAiSourceDraft] = useState('');
@@ -317,7 +319,7 @@ export default function WhatsAppTabV2() {
           alignItems: 'center',
           gap: 0.75,
           width: '100%',
-          maxWidth: 560,
+          maxWidth: 640,
           minWidth: 0,
         }}
       >
@@ -431,6 +433,33 @@ export default function WhatsAppTabV2() {
           }}
         >
           Avancé {advancedExpanded ? '▲' : '▼'}
+        </Box>
+        <Box
+          component="button"
+          type="button"
+          title="Triage IA de l'inbox (WhatsApp + OTA)"
+          onClick={() => setShowTriageModal(true)}
+          sx={{
+            flexShrink: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 0.35,
+            px: '8px',
+            py: '5px',
+            border: `1px solid ${T.border}`,
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            fontSize: 10.5,
+            fontWeight: 700,
+            color: T.ai,
+            bgcolor: T.aiTint,
+            whiteSpace: 'nowrap',
+            lineHeight: 1.2,
+            '&:hover': { bgcolor: 'rgba(124,58,237,0.18)' },
+          }}
+        >
+          🌅 Triage IA
         </Box>
       </Box>,
     );
@@ -924,12 +953,15 @@ export default function WhatsAppTabV2() {
 
   if (inboxConversations.length === 0 && searchMode === 'none' && !searchTerm.trim()) {
     return (
-      <InboxLayout fillViewport>
-        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: 2, gridColumn: '1 / -1' }}>
-          <Typography sx={{ fontSize: 48 }}>💬</Typography>
-          <Typography sx={{ fontSize: 15, fontWeight: 600 }}>Aucune conversation</Typography>
-        </Box>
-      </InboxLayout>
+      <>
+        <InboxLayout fillViewport>
+          <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', gap: 2, gridColumn: '1 / -1' }}>
+            <Typography sx={{ fontSize: 48 }}>💬</Typography>
+            <Typography sx={{ fontSize: 15, fontWeight: 600 }}>Aucune conversation</Typography>
+          </Box>
+        </InboxLayout>
+        <InboxTriageModal open={showTriageModal} onClose={() => setShowTriageModal(false)} />
+      </>
     );
   }
 
@@ -975,6 +1007,8 @@ export default function WhatsAppTabV2() {
           onUseReply={(text) => setComposerDraft(text)}
         />
       )}
+
+      <InboxTriageModal open={showTriageModal} onClose={() => setShowTriageModal(false)} />
     </Box>
   );
 }
