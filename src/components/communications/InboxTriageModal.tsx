@@ -17,7 +17,6 @@ import { T } from '../unified-inbox/_tokens';
 import { otaInboxUrl, waInboxUrl } from '../../utils/commsDeepLinks';
 import {
   triageInbox,
-  type InboxTriageCounts,
   type InboxTriageResult,
   type InboxTriageRow,
 } from '../../services/communicationsAiService';
@@ -96,21 +95,6 @@ function truncate(text: string, max = 110): string {
   return `${trimmed.slice(0, max - 1).trimEnd()}…`;
 }
 
-const COUNT_CHIPS: Array<{
-  key: keyof InboxTriageCounts;
-  emoji: string;
-  label: string;
-  color: string;
-  tint: string;
-}> = [
-  { key: 'unanswered', emoji: '🔴', label: 'Pas répondu', color: T.error, tint: T.errorTint },
-  { key: 'frustrated', emoji: '😡', label: 'Frustrés', color: T.error, tint: T.errorTint },
-  { key: 'problems', emoji: '⚠️', label: 'Problèmes', color: T.warning, tint: T.warningTint },
-  { key: 'awaiting', emoji: '🟠', label: 'En attente', color: T.warning, tint: T.warningTint },
-  { key: 'awaitingGuest', emoji: '⏳', label: 'Attente guest', color: T.info, tint: T.infoTint },
-  { key: 'ok', emoji: '🙂', label: 'RAS', color: T.success, tint: T.successTint },
-];
-
 export default function InboxTriageModal({
   open,
   onClose,
@@ -122,6 +106,7 @@ export default function InboxTriageModal({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<InboxTriageResult | null>(null);
   const [copiedToastOpen, setCopiedToastOpen] = useState(false);
+  const [showOkSection, setShowOkSection] = useState(false);
   const stepTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const requestIdRef = useRef(0);
 
@@ -277,8 +262,13 @@ export default function InboxTriageModal({
           '&:hover': { bgcolor: T.bg2 },
         }}
       >
-        <Box sx={{ fontSize: 15, lineHeight: '20px', flexShrink: 0 }} title={row.channel === 'ota' ? 'OTA' : 'WhatsApp'}>
-          {row.channel === 'ota' ? '🏨' : '💬'}
+        <Box
+          sx={{ fontSize: 15, lineHeight: '20px', flexShrink: 0 }}
+          title={(row.channels ?? [row.channel])
+            .map((c) => (c === 'ota' ? 'OTA' : 'WhatsApp'))
+            .join(' + ')}
+        >
+          {(row.channels ?? [row.channel]).map((c) => (c === 'ota' ? '🏨' : '💬')).join('')}
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75, flexWrap: 'wrap' }}>
@@ -318,19 +308,38 @@ export default function InboxTriageModal({
               </Typography>
             )}
           </Box>
-          {row.lastMessagePreview && (
-            <Typography
-              sx={{
-                fontSize: 12,
-                color: T.text2,
-                mt: 0.25,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {truncate(row.lastMessagePreview)}
+          {row.ai?.summary ? (
+            /* Vrai résumé IA (intention client + notre réactivité) — remplace le preview brut. */
+            <Typography sx={{ fontSize: 12, color: T.text2, mt: 0.25, lineHeight: 1.45 }}>
+              {row.ai.summary}
             </Typography>
+          ) : (
+            row.lastMessagePreview && (
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  color: T.text2,
+                  mt: 0.25,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {truncate(row.lastMessagePreview)}
+              </Typography>
+            )
+          )}
+          {(row.ai?.unansweredPoints?.length ?? 0) > 0 && (
+            <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+              {row.ai?.unansweredPoints?.map((point) => (
+                <Typography
+                  key={point}
+                  sx={{ fontSize: 11.5, fontWeight: 600, color: T.error, lineHeight: 1.4 }}
+                >
+                  ❓ {point}
+                </Typography>
+              ))}
+            </Box>
           )}
           {row.ai?.action && (
             <Typography sx={{ fontSize: 12, fontWeight: 600, color: T.ai, mt: 0.25 }}>
@@ -407,19 +416,20 @@ export default function InboxTriageModal({
             🌅
           </Box>
           Triage IA de l'inbox
-          {counts && (
+          {sections.length > 0 && (
+            /* Chips dérivées des MÊMES groupes que les sections affichées — jamais d'écart. */
             <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', ml: 'auto' }}>
-              {COUNT_CHIPS.filter((c) => (counts[c.key] || 0) > 0).map((c) => (
+              {sections.map((s) => (
                 <Chip
-                  key={c.key}
+                  key={s.id}
                   size="small"
-                  label={`${c.emoji} ${c.label} · ${counts[c.key]}`}
+                  label={`${s.meta.emoji} ${s.meta.label} · ${s.rows.length}`}
                   sx={{
                     height: 22,
                     fontSize: 10,
                     fontWeight: 700,
-                    bgcolor: c.tint,
-                    color: c.color,
+                    bgcolor: s.meta.tint,
+                    color: s.meta.color,
                   }}
                 />
               ))}
@@ -485,10 +495,29 @@ export default function InboxTriageModal({
                       >
                         {section.rows.length}
                       </Box>
+                      {section.id === 'ok' && (
+                        <Button
+                          size="small"
+                          onClick={() => setShowOkSection((v) => !v)}
+                          sx={{
+                            textTransform: 'none',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: T.text3,
+                            minWidth: 0,
+                            py: 0,
+                          }}
+                        >
+                          {showOkSection ? 'Masquer' : 'Afficher'}
+                        </Button>
+                      )}
                     </Box>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                      {section.rows.map((row) => renderRow(row, section.meta.color))}
-                    </Box>
+                    {/* RAS replié par défaut — réduit le bruit visuel du triage matinal. */}
+                    {(section.id !== 'ok' || showOkSection) && (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                        {section.rows.map((row) => renderRow(row, section.meta.color))}
+                      </Box>
+                    )}
                   </Box>
                 ))}
               </Box>
