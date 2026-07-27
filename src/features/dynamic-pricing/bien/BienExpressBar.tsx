@@ -311,6 +311,25 @@ function OwnerExpressBar({
         </Typography>
       ) : null}
 
+      <Button
+        fullWidth
+        size="medium"
+        variant="contained"
+        disabled={!view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
+        onClick={() => setCalendarOpen(true)}
+        sx={{
+          mb: 1,
+          textTransform: 'none',
+          fontWeight: 800,
+          fontSize: 13,
+          py: 1,
+          bgcolor: T.goldDeep,
+          '&:hover': { bgcolor: T.gold },
+        }}
+      >
+        {view.pilotApplyLoading ? '…' : 'Forcer la mise à jour du calendrier'}
+      </Button>
+
       <Box
         sx={{
           display: 'flex',
@@ -346,30 +365,13 @@ function OwnerExpressBar({
         <Typography sx={{ fontSize: 11, color: T.text3 }}>
           Plancher, plafond, périodes spéciales et options : dans les réglages ci-dessous.
         </Typography>
-        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
-          <Button
-            size="small"
-            variant="outlined"
-            disabled={!hasMarketData || !view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
-            onClick={() => setCalendarOpen(true)}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 700,
-              fontSize: 12,
-              borderColor: T.borderStrong,
-              color: T.text2,
-            }}
-          >
-            {view.pilotApplyLoading ? '…' : 'Forcer la mise à jour du calendrier'}
-          </Button>
-          <Button
-            size="small"
-            onClick={onToggleAdvanced}
-            sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12, color: T.text3, minWidth: 0 }}
-          >
-            {advancedOpen ? 'Masquer ▲' : 'Réglages ▼'}
-          </Button>
-        </Stack>
+        <Button
+          size="small"
+          onClick={onToggleAdvanced}
+          sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12, color: T.text3, minWidth: 0 }}
+        >
+          {advancedOpen ? 'Masquer ▲' : 'Réglages ▼'}
+        </Button>
       </Stack>
 
       {(toggleError || view.pilotApplyError) && (
@@ -638,6 +640,30 @@ function AdminExpressBar({
         </Box>
       </Stack>
 
+      <Button
+        fullWidth
+        size="large"
+        variant="contained"
+        disabled={!view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
+        onClick={() => setCalendarOpen(true)}
+        sx={{
+          mb: 2,
+          textTransform: 'none',
+          fontWeight: 800,
+          fontSize: 14,
+          py: 1.25,
+          bgcolor: T.goldDeep,
+          '&:hover': { bgcolor: T.gold },
+        }}
+      >
+        {view.pilotApplyLoading ? 'Propagation…' : 'Forcer la mise à jour du calendrier'}
+      </Button>
+      {!hasMarketData ? (
+        <Typography sx={{ mt: -1.5, mb: 1.5, fontSize: 11.5, color: T.text3 }}>
+          Astuce : lancez d’abord une estimation si la prévisualisation est vide.
+        </Typography>
+      ) : null}
+
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
         <Box sx={{ ...panelSx, borderColor: autoSnapshot || autoComps || autoPropagation ? T.gold : T.border }}>
           <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: T.goldDeep, mb: 1.25 }}>
@@ -758,7 +784,7 @@ function AdminExpressBar({
             fullWidth
             size="medium"
             variant="contained"
-            disabled={!hasMarketData || !view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
+            disabled={!view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
             onClick={() => setCalendarOpen(true)}
             sx={{ textTransform: 'none', fontWeight: 800, fontSize: 13, py: 1, bgcolor: T.goldDeep }}
           >
