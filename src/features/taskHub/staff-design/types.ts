@@ -50,6 +50,12 @@ export interface Staff {
    * Les absences restent bloquantes.
    */
   alwaysAvailable?: boolean;
+  /**
+   * true = à l’assignation (manuelle ou auto), la tâche est acceptée tout de suite.
+   */
+  autoAccept?: boolean;
+  /** Assignation → déjà en cours ; staff confirme seulement la fin. */
+  readyToFinish?: boolean;
   /** Absences calendaires (jour1 → jour2 + motif). */
   absences?: StaffAbsence[];
   schedule: {

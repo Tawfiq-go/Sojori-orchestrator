@@ -243,6 +243,8 @@ type Props = {
     schedule: Staff['schedule'],
     alwaysAvailable: boolean,
   ) => Promise<void>;
+  onToggleAutoAccept: (staffId: string, autoAccept: boolean) => Promise<void>;
+  onToggleReadyToFinish: (staffId: string, readyToFinish: boolean) => Promise<void>;
   onAddAbsence: (
     staffId: string,
     body: { startDate: string; endDate: string; reason?: string },
@@ -270,6 +272,8 @@ export default function StaffScheduleListView({
   cities = [],
   loading,
   onSaveSchedule,
+  onToggleAutoAccept,
+  onToggleReadyToFinish,
   onAddAbsence,
   onRemoveAbsence,
   onOpenConfig,
@@ -281,6 +285,8 @@ export default function StaffScheduleListView({
   const [filterTaskType, setFilterTaskType] = useState('');
   const [drafts, setDrafts] = useState<Record<string, Partial<Record<number, DayWindow[]>>>>({});
   const [alwaysDrafts, setAlwaysDrafts] = useState<Record<string, boolean>>({});
+  const [autoAcceptBusyId, setAutoAcceptBusyId] = useState<string | null>(null);
+  const [readyToFinishBusyId, setReadyToFinishBusyId] = useState<string | null>(null);
   const [openCell, setOpenCell] = useState<OpenEditor | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [absenceModal, setAbsenceModal] = useState<AbsenceModal | null>(null);
@@ -485,6 +491,44 @@ export default function StaffScheduleListView({
       toast.error(err.message || 'Erreur enregistrement');
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleToggleAutoAccept = async (s: Staff) => {
+    if (autoAcceptBusyId) return;
+    const next = !(s.autoAccept === true);
+    setAutoAcceptBusyId(s._id);
+    try {
+      await onToggleAutoAccept(s._id, next);
+      toast.success(
+        next
+          ? `Auto-accepte · ${s.fullName}`
+          : `Acceptation manuelle · ${s.fullName}`,
+      );
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      toast.error(err.message || 'Impossible de mettre à jour auto-accepte');
+    } finally {
+      setAutoAcceptBusyId(null);
+    }
+  };
+
+  const handleToggleReadyToFinish = async (s: Staff) => {
+    if (readyToFinishBusyId) return;
+    const next = !(s.readyToFinish === true);
+    setReadyToFinishBusyId(s._id);
+    try {
+      await onToggleReadyToFinish(s._id, next);
+      toast.success(
+        next
+          ? `Fin seule · ${s.fullName} (assignation → à terminer)`
+          : `Fin seule off · ${s.fullName}`,
+      );
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      toast.error(err.message || 'Impossible de mettre à jour Fin seule');
+    } finally {
+      setReadyToFinishBusyId(null);
     }
   };
 
@@ -756,7 +800,8 @@ export default function StaffScheduleListView({
             Horaires <span className="badge">{rows.length} membres</span>
           </h1>
           <p className="sub">
-            Cliquez une case jour · Off/On + créneaux · Enregistrer. Colonnes = tâches & accès.
+            Cliquez une case jour · Off/On + créneaux · Auto-accepte = tâche acceptée dès
+            l’assignation. Colonnes = tâches & accès.
           </p>
         </div>
         {onOpenConfig ? (
@@ -838,6 +883,18 @@ export default function StaffScheduleListView({
                 <th className="staff-sched-col-meta">Tâches</th>
                 <th className="staff-sched-col-meta">Accès listing</th>
                 <th className="staff-sched-col-meta">Ville</th>
+                <th
+                  className="staff-sched-col-auto"
+                  title="Assignation → acceptée tout de suite (le staff démarre puis termine)"
+                >
+                  Auto-accepte
+                </th>
+                <th
+                  className="staff-sched-col-auto"
+                  title="Assignation → déjà en cours. Le staff confirme seulement la fin (sans accepter ni démarrer)"
+                >
+                  Fin seule
+                </th>
                 <th className="staff-sched-col-absence">Absence</th>
                 {DAY_DISPLAY_ORDER.map((d) => (
                   <th key={d} title={DAY_FULL_LABELS[d]}>
@@ -851,8 +908,12 @@ export default function StaffScheduleListView({
               {rows.map((s) => {
                 const dw = dayWindowsFor(s);
                 const always = alwaysFor(s);
+                const autoOn = s.autoAccept === true;
+                const finishOn = s.readyToFinish === true;
                 const dirty = dirtyIds.has(s._id);
                 const saving = savingId === s._id;
+                const autoBusy = autoAcceptBusyId === s._id;
+                const finishBusy = readyToFinishBusyId === s._id;
                 const chipTypes = sanitizeStaffAllowedTaskTypes(s.allowedTaskTypes as string[]).slice(
                   0,
                   4,
@@ -869,6 +930,19 @@ export default function StaffScheduleListView({
                           <div className="nm">
                             {s.fullName}
                             {always ? <span className="staff-sched-always-badge">24/7</span> : null}
+                            {autoOn ? (
+                              <span className="staff-sched-auto-badge" title="Auto-accepte">
+                                Auto ✓
+                              </span>
+                            ) : null}
+                            {finishOn ? (
+                              <span
+                                className="staff-sched-auto-badge"
+                                title="Fin seule — assignation → à terminer"
+                              >
+                                Fin ✓
+                              </span>
+                            ) : null}
                           </div>
                           <div className="ph">{s.whatsappE164 || s.phoneE164}</div>
                         </div>
@@ -906,6 +980,52 @@ export default function StaffScheduleListView({
                       >
                         {cityAccessLabel(s, cityOptions, listings)}
                       </span>
+                    </td>
+                    <td className="staff-sched-col-auto">
+                      <button
+                        type="button"
+                        className={`staff-sched-auto-switch${autoOn ? ' is-on' : ''}`}
+                        disabled={autoBusy}
+                        onClick={() => {
+                          if (!autoBusy) void handleToggleAutoAccept(s);
+                        }}
+                        aria-pressed={autoOn}
+                        title={
+                          autoOn
+                            ? 'Auto-accepte ON — assignation → acceptée (à démarrer)'
+                            : 'Auto-accepte OFF — le staff doit accepter sur WhatsApp'
+                        }
+                      >
+                        <span className="lbl off-lbl">No</span>
+                        <span
+                          className={`toggle${autoOn ? ' on' : ''}${autoBusy ? ' busy' : ''}`}
+                          aria-hidden
+                        />
+                        <span className="lbl on-lbl">Yes</span>
+                      </button>
+                    </td>
+                    <td className="staff-sched-col-auto">
+                      <button
+                        type="button"
+                        className={`staff-sched-auto-switch${finishOn ? ' is-on' : ''}`}
+                        disabled={finishBusy}
+                        onClick={() => {
+                          if (!finishBusy) void handleToggleReadyToFinish(s);
+                        }}
+                        aria-pressed={finishOn}
+                        title={
+                          finishOn
+                            ? 'Fin seule ON — assignation → à terminer (pas d’accepter ni démarrer)'
+                            : 'Fin seule OFF — parcours normal accepter → démarrer → terminer'
+                        }
+                      >
+                        <span className="lbl off-lbl">No</span>
+                        <span
+                          className={`toggle${finishOn ? ' on' : ''}${finishBusy ? ' busy' : ''}`}
+                          aria-hidden
+                        />
+                        <span className="lbl on-lbl">Yes</span>
+                      </button>
                     </td>
                     <td className="staff-sched-col-absence">
                       <div className="staff-sched-abs-cell">
