@@ -77,6 +77,8 @@ function emptyStaff(): Staff {
     allowedListingIds: [],
     allowedCityIds: [],
     alwaysAvailable: false,
+    autoAccept: false,
+    readyToFinish: false,
     lang: 'fr',
     schedule: {
       daysOfWeek: [1, 2, 3, 4, 5],
@@ -274,6 +276,8 @@ export default function StaffPageView({
       ...s,
       rates: { ...s.rates },
       alwaysAvailable: s.alwaysAvailable === true,
+      autoAccept: s.autoAccept === true,
+      readyToFinish: s.readyToFinish === true,
       allowedTaskTypes: sanitizeStaffAllowedTaskTypes(s.allowedTaskTypes as string[]),
       schedule: {
         daysOfWeek,
@@ -1077,9 +1081,42 @@ export default function StaffPageView({
                 />
               </div>
               <div className="admin-row" style={{ marginTop: 10 }}>
+                <span style={{ fontSize: 18 }}>✓</span>
+                <div style={{ flex: 1 }}>
+                  <div className="nm">Auto-accepte</div>
+                  <div className="ds">
+                    Assignation → acceptée. Le staff démarre puis termine (pas d’attente WhatsApp).
+                  </div>
+                </div>
+                <div
+                  className={`toggle${form.autoAccept ? ' on' : ''}`}
+                  onClick={() => patchForm({ autoAccept: !form.autoAccept })}
+                  onKeyDown={() => {}}
+                  role="switch"
+                  aria-checked={Boolean(form.autoAccept)}
+                />
+              </div>
+              <div className="admin-row" style={{ marginTop: 10 }}>
+                <span style={{ fontSize: 18 }}>✔️</span>
+                <div style={{ flex: 1 }}>
+                  <div className="nm">Fin seule</div>
+                  <div className="ds">
+                    Assignation → déjà en cours. Le staff confirme seulement la fin (sans
+                    accepter ni démarrer).
+                  </div>
+                </div>
+                <div
+                  className={`toggle${form.readyToFinish ? ' on' : ''}`}
+                  onClick={() => patchForm({ readyToFinish: !form.readyToFinish })}
+                  onKeyDown={() => {}}
+                  role="switch"
+                  aria-checked={Boolean(form.readyToFinish)}
+                />
+              </div>
+              <div className="admin-row" style={{ marginTop: 10 }}>
                 <span style={{ fontSize: 18 }}>👑</span>
                 <div style={{ flex: 1 }}>
-                  <div className="nm">Admin · escalades + auto-accept</div>
+                  <div className="nm">Admin · escalades</div>
                   <div className="ds">Reçoit les tâches escaladées si personne ne les prend</div>
                 </div>
                 <div

@@ -178,35 +178,39 @@ function TasksStaffFulltaskPageInner() {
     }
   }, []);
 
-  const loadStaff = useCallback(async () => {
-    if (showOwnerFilter && !scopeFetchReady) {
-      setStaff([]);
-      setLoadingStaff(false);
-      return;
-    }
-    setLoadingStaff(true);
-    try {
-      const params: Record<string, unknown> = {};
-      if (filterOwnerId) {
-        params.owner_id = filterOwnerId;
-        params.ownerId = filterOwnerId;
+  const loadStaff = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (showOwnerFilter && !scopeFetchReady) {
+        setStaff([]);
+        setLoadingStaff(false);
+        return;
       }
-      const staffRes = await fulltaskApi.listStaff(params);
-      let rows = (staffRes?.data || []) as Record<string, unknown>[];
-      if (filterOwnerId) {
-        rows = rows.filter((r) => {
-          const oid = normalizeOwnerId(r.ownerId);
-          return !oid || oid === filterOwnerId;
-        });
+      const silent = Boolean(opts?.silent);
+      if (!silent) setLoadingStaff(true);
+      try {
+        const params: Record<string, unknown> = {};
+        if (filterOwnerId) {
+          params.owner_id = filterOwnerId;
+          params.ownerId = filterOwnerId;
+        }
+        const staffRes = await fulltaskApi.listStaff(params);
+        let rows = (staffRes?.data || []) as Record<string, unknown>[];
+        if (filterOwnerId) {
+          rows = rows.filter((r) => {
+            const oid = normalizeOwnerId(r.ownerId);
+            return !oid || oid === filterOwnerId;
+          });
+        }
+        setStaff(rows.map((r) => apiStaffToDesign(r) as Staff));
+      } catch (e: unknown) {
+        const err = e as { message?: string };
+        toast.error(err.message || 'Erreur chargement équipe');
+      } finally {
+        if (!silent) setLoadingStaff(false);
       }
-      setStaff(rows.map((r) => apiStaffToDesign(r) as Staff));
-    } catch (e: unknown) {
-      const err = e as { message?: string };
-      toast.error(err.message || 'Erreur chargement équipe');
-    } finally {
-      setLoadingStaff(false);
-    }
-  }, [filterOwnerId, showOwnerFilter, scopeFetchReady]);
+    },
+    [filterOwnerId, showOwnerFilter, scopeFetchReady],
+  );
 
   const loadAdmins = useCallback(async () => {
     setLoadingAdmins(true);
@@ -366,21 +370,35 @@ function TasksStaffFulltaskPageInner() {
                 schedule: body.schedule,
                 alwaysAvailable: body.alwaysAvailable,
               });
-              await loadStaff();
+              await loadStaff({ silent: true });
+            }}
+            onToggleAutoAccept={async (staffId, autoAccept) => {
+              const res = await fulltaskApi.updateStaff(staffId, { autoAccept });
+              if (res && res.success === false) {
+                throw new Error(res.error || 'Impossible de mettre à jour auto-accepte');
+              }
+              await loadStaff({ silent: true });
+            }}
+            onToggleReadyToFinish={async (staffId, readyToFinish) => {
+              const res = await fulltaskApi.updateStaff(staffId, { readyToFinish });
+              if (res && res.success === false) {
+                throw new Error(res.error || 'Impossible de mettre à jour Fin seule');
+              }
+              await loadStaff({ silent: true });
             }}
             onAddAbsence={async (staffId, body) => {
               const res = await fulltaskApi.addStaffAbsence(staffId, body);
               if (!res?.success) {
                 throw new Error(res?.error || 'Impossible d’ajouter l’absence');
               }
-              await loadStaff();
+              await loadStaff({ silent: true });
             }}
             onRemoveAbsence={async (staffId, absenceId) => {
               const res = await fulltaskApi.removeStaffAbsence(staffId, absenceId);
               if (!res?.success) {
                 throw new Error(res?.error || 'Impossible de supprimer l’absence');
               }
-              await loadStaff();
+              await loadStaff({ silent: true });
             }}
           />
         )}
@@ -428,7 +446,7 @@ function TasksStaffFulltaskPageInner() {
                 if (editingId) {
                   await fulltaskApi.updateStaff(editingId, body);
                   toast.success('Enregistré');
-                  await loadStaff();
+                  await loadStaff({ silent: true });
                   return editingId;
                 }
                 const created = (await fulltaskApi.createStaff(body)) as {
@@ -437,7 +455,7 @@ function TasksStaffFulltaskPageInner() {
                 };
                 const newId = String(created?.data?._id || created?._id || '');
                 toast.success('Enregistré');
-                await loadStaff();
+                await loadStaff({ silent: true });
                 return newId || undefined;
               } catch (e: unknown) {
                 const err = e as { response?: { data?: { error?: string } }; message?: string };
@@ -449,7 +467,7 @@ function TasksStaffFulltaskPageInner() {
               try {
                 await fulltaskApi.deleteStaff(id);
                 toast.success('Staff supprimé');
-                await loadStaff();
+                await loadStaff({ silent: true });
               } catch (e: unknown) {
                 const err = e as { response?: { data?: { error?: string } }; message?: string };
                 toast.error(err.response?.data?.error || err.message || 'Erreur suppression');

@@ -410,6 +410,8 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     allowedCityIds: ((row.cityIds as unknown[]) || []).map(String),
     maxTasksPerDay: row.maxTasksPerDay as number | undefined,
     alwaysAvailable: row.alwaysAvailable === true,
+    autoAccept: row.autoAccept === true,
+    readyToFinish: row.readyToFinish === true,
     absences: ((row.absences as Array<Record<string, unknown>>) || [])
       .map((a) => ({
         _id: String(a._id || ''),
@@ -436,6 +438,8 @@ export function designStaffToApi(
   opts?: { isCreate?: boolean; ownerId?: string },
 ) {
   const alwaysAvailable = staff.alwaysAvailable === true;
+  const autoAccept = staff.autoAccept === true;
+  const readyToFinish = staff.readyToFinish === true;
   const sched = staff.schedule as {
     daysOfWeek?: number[];
     timeWindows?: { start: string; end: string }[];
@@ -497,6 +501,8 @@ export function designStaffToApi(
     cityIds: staff.allowedCityIds || [],
     schedule,
     alwaysAvailable,
+    autoAccept,
+    readyToFinish,
     // Capacité : défaut moteur (plus exposé dans l’UI équipe).
     maxTasksPerDay: 8,
     isAdmin: Boolean(staff.isAdmin),
