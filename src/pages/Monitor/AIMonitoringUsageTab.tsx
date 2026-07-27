@@ -6,10 +6,10 @@ import { Box, Collapse, Stack, Typography } from '@mui/material';
 import { formatCasablancaDate } from '../../utils/dateFormatting.js';
 import {
   fetchAiUsageBreakdown,
+  type AiModality,
   type MergedModelRow,
   type MergedUseCase,
   type RecentAiCall,
-  type WindowStats,
 } from '../../services/aiUsageMonitoringApi';
 import {
   Badge,
@@ -24,6 +24,7 @@ import {
 } from '../../features/monitoring/shared/MonitorDesign';
 
 type WindowKey = 'h24' | 'd7' | 'd30' | 'month';
+type ModalityFilter = 'all' | AiModality;
 
 const WINDOW_LABELS: Record<WindowKey, string> = {
   h24: '24 h',
@@ -31,6 +32,22 @@ const WINDOW_LABELS: Record<WindowKey, string> = {
   d30: '30 j',
   month: 'Mois en cours',
 };
+
+const MODALITY_FILTERS: { value: ModalityFilter; label: string }[] = [
+  { value: 'all', label: 'Tous types' },
+  { value: 'text', label: 'Texte' },
+  { value: 'voice_stt', label: 'Voice STT' },
+  { value: 'voice_tts', label: 'Voice TTS' },
+  { value: 'image', label: 'Image' },
+];
+
+function modalityBadgeVariant(m?: AiModality): 'success' | 'ai' | 'info' | 'warning' | 'neutral' {
+  if (m === 'text') return 'info';
+  if (m === 'voice_stt') return 'ai';
+  if (m === 'voice_tts') return 'warning';
+  if (m === 'image') return 'success';
+  return 'neutral';
+}
 
 function fmtUsd(n: number): string {
   if (!n || n <= 0) return '—';
@@ -48,7 +65,26 @@ function providerBadge(p: string): 'success' | 'ai' | 'info' | 'warning' | 'neut
   if (p === 'claude') return 'ai';
   if (p === 'gemini') return 'info';
   if (p === 'deepseek') return 'warning';
+  if (p === 'gcloud') return 'neutral';
   return 'neutral';
+}
+
+function metricLabelsForModality(modality?: AiModality): {
+  in: string;
+  out: string;
+  total: string;
+  avg: string;
+} {
+  if (modality === 'voice_tts') {
+    return { in: 'Caractères', out: '—', total: 'Chars', avg: 'Moy chars' };
+  }
+  if (modality === 'voice_stt') {
+    return { in: 'Tokens in', out: 'Tokens out', total: 'Total', avg: 'Moy / appel' };
+  }
+  if (modality === 'image') {
+    return { in: 'Tokens in', out: 'Tokens out', total: 'Total', avg: 'Moy / appel' };
+  }
+  return { in: 'Tokens in', out: 'Tokens out', total: 'Total tok', avg: 'Moy / appel' };
 }
 
 function StatCell({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
@@ -74,6 +110,7 @@ function StatCell({ label, value, mono }: { label: string; value: string; mono?:
 function ModelStatsRow({ row, windowKey }: { row: MergedModelRow; windowKey: WindowKey }) {
   const w = row.windows[windowKey];
   const dimmed = row.catalogOnly || w.calls === 0;
+  const labels = metricLabelsForModality(row.modality);
 
   return (
     <Box
@@ -98,10 +135,14 @@ function ModelStatsRow({ row, windowKey }: { row: MergedModelRow; windowKey: Win
         {row.catalogOnly ? <Badge variant="neutral">0 appel</Badge> : null}
       </Stack>
       <StatCell label="Appels" value={String(w.calls)} mono />
-      <StatCell label="Tokens in" value={fmtTokens(w.promptTokens)} mono />
-      <StatCell label="Tokens out" value={fmtTokens(w.completionTokens)} mono />
-      <StatCell label="Total tok" value={fmtTokens(w.totalTokens)} mono />
-      <StatCell label="Moy / appel" value={w.avgTotalTokens ? String(Math.round(w.avgTotalTokens)) : '—'} mono />
+      <StatCell label={labels.in} value={fmtTokens(w.promptTokens)} mono />
+      <StatCell label={labels.out} value={row.modality === 'voice_tts' ? '—' : fmtTokens(w.completionTokens)} mono />
+      <StatCell label={labels.total} value={fmtTokens(w.totalTokens || w.promptTokens)} mono />
+      <StatCell
+        label={labels.avg}
+        value={w.avgTotalTokens || w.avgPromptTokens ? String(Math.round(w.avgTotalTokens || w.avgPromptTokens)) : '—'}
+        mono
+      />
       <StatCell label="Coût" value={fmtUsd(w.costUsd)} mono />
     </Box>
   );
@@ -135,6 +176,9 @@ function UseCaseCard({
           <Typography sx={{ fontSize: 13, fontWeight: 700, color: t.text, flex: 1 }}>
             {useCase.label}
           </Typography>
+          <Badge variant={modalityBadgeVariant(useCase.modality)}>
+            {useCase.modalityLabel || useCase.modality}
+          </Badge>
           <Badge variant="neutral">{useCase.service.replace('srv-', '')}</Badge>
           {useCase.topModelD30 ? (
             <Typography sx={{ fontSize: 10, color: t.text3 }}>
@@ -165,7 +209,7 @@ function UseCaseCard({
               pb: 0.5,
             }}
           >
-            {['Modèle', 'Appels', 'In', 'Out', 'Total', 'Moy/appel', 'Coût'].map((h) => (
+            {['Modèle', 'Appels', 'In', 'Out', 'Total', 'Moy', 'Coût'].map((h) => (
               <Typography key={h} sx={{ fontSize: 9, fontWeight: 700, color: t.text3, textTransform: 'uppercase' }}>
                 {h}
               </Typography>
@@ -187,6 +231,7 @@ export default function AIMonitoringUsageTab() {
   const [data, setData] = useState<import('../../services/aiUsageMonitoringApi').AiUsageBreakdownResponse | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [showOnlyActive, setShowOnlyActive] = useState(false);
+  const [modalityFilter, setModalityFilter] = useState<ModalityFilter>('all');
 
   const load = useCallback(async () => {
     try {
@@ -208,13 +253,29 @@ export default function AIMonitoringUsageTab() {
   }, [load]);
 
   const global = data?.data?.globalTotals?.[windowKey];
+  const byModality = data?.data?.byModality ?? [];
   const useCases = useMemo(() => {
-    const list = data?.data?.useCases ?? [];
-    if (!showOnlyActive) return list;
-    return list.filter((uc) => uc.totals[windowKey].calls > 0);
-  }, [data, showOnlyActive, windowKey]);
+    let list = data?.data?.useCases ?? [];
+    if (modalityFilter !== 'all') {
+      list = list.filter((uc) => uc.modality === modalityFilter);
+    }
+    if (showOnlyActive) {
+      list = list.filter((uc) => uc.totals[windowKey].calls > 0);
+    }
+    return list;
+  }, [data, showOnlyActive, windowKey, modalityFilter]);
 
-  const recentCalls = data?.data?.recentCalls ?? [];
+  const recentCalls = useMemo(() => {
+    const list = data?.data?.recentCalls ?? [];
+    if (modalityFilter === 'all') return list;
+    const triggers = new Set(
+      (data?.data?.useCases ?? [])
+        .filter((uc) => uc.modality === modalityFilter)
+        .flatMap((uc) => uc.models.map((m) => m.triggeredBy)),
+    );
+    return list.filter((c) => triggers.has(c.triggeredBy));
+  }, [data, modalityFilter]);
+
   const serviceErrors = data?.data?.serviceErrors ?? {};
 
   if (loading && !data) return <MonitorLoading label="Chargement usage IA…" />;
@@ -239,7 +300,44 @@ export default function AIMonitoringUsageTab() {
         />
       </Stack>
 
-      {global ? (
+      <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+        <Typography sx={{ fontSize: 10, fontWeight: 700, color: t.text3, textTransform: 'uppercase', mr: 0.5 }}>
+          Type
+        </Typography>
+        {MODALITY_FILTERS.map((f) => (
+          <FilterChip
+            key={f.value}
+            label={f.label}
+            active={modalityFilter === f.value}
+            onClick={() => setModalityFilter(f.value)}
+          />
+        ))}
+      </Stack>
+
+      {byModality.length > 0 ? (
+        <MonitorKpiStrip
+          items={byModality.map((m) => {
+            const w = m.windows[windowKey];
+            return {
+              label: m.label,
+              value: `${w.calls} · ${fmtUsd(w.costUsd)}`,
+              tone:
+                m.modality === 'voice_stt'
+                  ? 'ai'
+                  : m.modality === 'voice_tts'
+                    ? 'warning'
+                    : m.modality === 'image'
+                      ? 'success'
+                      : 'info',
+              active: modalityFilter === m.modality,
+              onClick: () =>
+                setModalityFilter((prev) => (prev === m.modality ? 'all' : m.modality)),
+            };
+          })}
+        />
+      ) : null}
+
+      {global && modalityFilter === 'all' ? (
         <MonitorKpiStrip
           items={[
             { label: 'Appels', value: global.calls, tone: 'info' },
