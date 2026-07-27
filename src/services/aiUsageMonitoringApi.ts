@@ -1,10 +1,12 @@
 /**
- * Monitor → AI → Usage — stats par cas d'usage et par modèle.
+ * Monitor → AI → Usage — stats par cas d'usage IA et par modèle.
  */
 import apiClient from './apiClient';
 import { channelsDashboardAxiosConfig } from '../utils/channelsAxiosConfig';
 
 const PRICING_DASHBOARD = '/api/v1/admin/pricing-dashboard';
+
+export type AiModality = 'text' | 'voice_stt' | 'voice_tts' | 'image';
 
 export interface WindowStats {
   calls: number;
@@ -28,6 +30,7 @@ export interface MergedModelRow {
   useCaseId: string;
   useCaseLabel: string;
   service: string;
+  modality: AiModality;
   triggeredBy: string;
   provider: string;
   llmModel: string;
@@ -45,6 +48,8 @@ export interface MergedUseCase {
   label: string;
   service: string;
   description?: string;
+  modality: AiModality;
+  modalityLabel: string;
   models: MergedModelRow[];
   totals: {
     h24: WindowStats;
@@ -53,6 +58,18 @@ export interface MergedUseCase {
     month: WindowStats;
   };
   topModelD30?: { llmModel: string; provider: string; calls: number };
+}
+
+export interface ModalityTotals {
+  modality: AiModality;
+  label: string;
+  windows: {
+    h24: WindowStats;
+    d7: WindowStats;
+    d30: WindowStats;
+    month: WindowStats;
+  };
+  useCaseCount: number;
 }
 
 export interface RecentAiCall {
@@ -74,6 +91,7 @@ export interface AiUsageBreakdownResponse {
   success: boolean;
   data: {
     useCases: MergedUseCase[];
+    byModality: ModalityTotals[];
     globalTotals: {
       h24: WindowStats;
       d7: WindowStats;
