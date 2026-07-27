@@ -26,8 +26,9 @@ import {
   monitorTokens as t,
   severityBadgeVariant,
 } from '../../features/monitoring/shared/MonitorDesign';
+import AIMonitoringUsageTab from './AIMonitoringUsageTab';
 
-type SubTab = 'summary' | 'calls' | 'errors';
+type SubTab = 'summary' | 'usage' | 'calls' | 'errors';
 type StatusFilter = 'all' | 'failed' | 'timeout' | 'fallback' | 'success';
 
 interface AiCall {
@@ -84,6 +85,7 @@ const TIME_RANGES = [
 
 const SUB_TABS: { value: SubTab; label: string }[] = [
   { value: 'summary', label: 'Synthèse' },
+  { value: 'usage', label: 'Usage & modèles' },
   { value: 'calls', label: 'Appels' },
   { value: 'errors', label: 'Erreurs' },
 ];
@@ -336,6 +338,8 @@ export default function AIMonitoringPage() {
       ) : null}
 
       {fetchError ? <MonitorError message={fetchError} onRetry={refresh} /> : null}
+
+      {activeTab === 'usage' && <AIMonitoringUsageTab />}
 
       {activeTab === 'summary' && (
         <>
