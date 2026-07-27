@@ -349,6 +349,21 @@ function OwnerExpressBar({
         <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
           <Button
             size="small"
+            variant="outlined"
+            disabled={!hasMarketData || !view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
+            onClick={() => setCalendarOpen(true)}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: 12,
+              borderColor: T.borderStrong,
+              color: T.text2,
+            }}
+          >
+            {view.pilotApplyLoading ? '…' : 'Forcer la mise à jour du calendrier'}
+          </Button>
+          <Button
+            size="small"
             onClick={onToggleAdvanced}
             sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12, color: T.text3, minWidth: 0 }}
           >
@@ -747,7 +762,7 @@ function AdminExpressBar({
             onClick={() => setCalendarOpen(true)}
             sx={{ textTransform: 'none', fontWeight: 800, fontSize: 13, py: 1, bgcolor: T.goldDeep }}
           >
-            {view.pilotApplyLoading ? 'Propagation…' : 'Propager au calendrier'}
+            {view.pilotApplyLoading ? 'Propagation…' : 'Forcer la mise à jour du calendrier'}
           </Button>
           <LastRunLine when={fmtDate(lastManualAudit?.appliedAt)} chips={calendarChips(manualImpact)} />
         </Box>

@@ -30,7 +30,7 @@ export const DP = {
   autoPropagationSubtitle: 'Calendrier + canaux · chaque nuit (04h30 UTC)',
   autoPropagationTitleOwner: 'Sync calendrier',
   autoPropagationSubtitleOwner: 'Automatique · chaque nuit',
-  updateCalendar: 'Mettre à jour le calendrier',
+  updateCalendar: 'Forcer la mise à jour du calendrier',
   fetchSnapshotNow: 'Actualiser l’estimation',
   fetchEstimationHint:
     '⟳ Récupérer l’estimation prix de marché puis prévisualiser ici (12 mois)',
