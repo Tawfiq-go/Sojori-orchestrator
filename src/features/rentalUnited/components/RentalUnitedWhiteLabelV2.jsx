@@ -30,6 +30,9 @@ const RentalUnitedWhiteLabelV2 = () => {
   const [tokenData, setTokenData] = useState(null);
   const intervalRef = useRef(null);
   const previousLanguageRef = useRef(null);
+  const tokenRequestRef = useRef(0);
+  const inFlightTokenRef = useRef(null);
+  const loadedOwnerRef = useRef(null);
   const [owners, setOwners] = useState([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState('');
   const [loadingOwners, setLoadingOwners] = useState(false);
@@ -69,61 +72,156 @@ const RentalUnitedWhiteLabelV2 = () => {
         search_text: '',
       });
       const rows = Array.isArray(response?.data) ? response.data : [];
-      const ruOwners = rows.filter((owner) => owner.channelManager === 'RU');
+      const ruOwners = rows
+        .filter((owner) => owner.channelManager === 'RU')
+        .slice()
+        .sort((a, b) => {
+          // Owners avec compte RU réel d’abord (évite admin@sojori sans ruOwnerId → 403 widget)
+          const aOk = a.ruOwnerId ? 0 : 1;
+          const bOk = b.ruOwnerId ? 0 : 1;
+          if (aOk !== bOk) return aOk - bOk;
+          const an = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+          const bn = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+          return an.localeCompare(bn, 'fr');
+        });
       setOwners(ruOwners);
+      console.info('[RU-widget] owners loaded', {
+        total: ruOwners.length,
+        withRuId: ruOwners.filter((o) => o.ruOwnerId).length,
+        list: ruOwners.map((o) => ({
+          id: String(o._id ?? o.id),
+          name: `${o.firstName || ''} ${o.lastName || ''}`.trim(),
+          ruOwnerId: o.ruOwnerId || null,
+          ruEmail: o.ruEmail || null,
+        })),
+      });
       if (ruOwners.length > 0) {
-        setSelectedOwnerId((prev) => prev || String(ruOwners[0]._id ?? ruOwners[0].id ?? ''));
+        const preferred =
+          ruOwners.find((o) => o.ruOwnerId) || ruOwners[0];
+        setSelectedOwnerId((prev) => {
+          const next = prev || String(preferred._id ?? preferred.id ?? '');
+          console.info('[RU-widget] selectedOwnerId', { prev: prev || null, next, preferredName: `${preferred.firstName || ''} ${preferred.lastName || ''}`.trim() });
+          return next;
+        });
       }
     } catch (err) {
       setOwners([]);
       setOwnersError(
         err?.response?.data?.message || err?.message || 'Impossible de charger la liste des owners',
       );
+      console.error('[RU-widget] fetchOwners FAIL', err);
     } finally {
       setLoadingOwners(false);
       setOwnersLoaded(true);
     }
   };
-  const refreshToken = async () => {
-    if (!user) return;
-    const adminStatus = hasAdminAccess(user.role);
-    if (adminStatus && !selectedOwnerId) {
+  const refreshToken = async (forceRotate = false) => {
+    if (!user) {
+      console.warn('[RU-widget] refreshToken skip — no user');
       return;
     }
-    const currentOwnerId = adminStatus ? selectedOwnerId : user.role == 'Owner' ? user._id : user?.ownerId;
+    const adminStatus = hasAdminAccess(user.role);
+    if (adminStatus && !selectedOwnerId) {
+      console.warn('[RU-widget] refreshToken skip — admin sans selectedOwnerId');
+      return;
+    }
+    const currentOwnerId = adminStatus
+      ? selectedOwnerId
+      : user.role == 'Owner'
+        ? user._id || user.id
+        : user?.ownerId;
     if (!currentOwnerId) {
+      console.warn('[RU-widget] refreshToken skip — currentOwnerId vide', {
+        role: user.role,
+        _id: user._id,
+        id: user.id,
+        ownerId: user.ownerId,
+      });
       return;
     }
     try {
       const currentLanguage = getCurrentLanguage();
       const languageId = getLanguageId(currentLanguage);
-      const response = await RentalUnitedApi.getUserToken(currentOwnerId, languageId);
-      if (response.success && response.scriptUrl) {
-        setTokenData(response);
-        setScriptUrl(response.scriptUrl);
-        const existingScript = document.getElementById('rental-united-script');
-        if (existingScript) {
-          if (existingScript.src !== response.scriptUrl) {
-            existingScript.src = response.scriptUrl;
-          }
-        }
-        setError(null);
-      } else {
-        setError('Token Rental United indisponible (scriptUrl absent). Vérifiez la config RU du owner.');
+      // force dans la clé : un refresh forcé (widget en erreur) ne doit pas être
+      // avalé par un appel non-forcé déjà en vol
+      const flightKey = `${currentOwnerId}:${languageId}:${forceRotate ? 'f' : 'c'}`;
+      if (inFlightTokenRef.current?.key === flightKey && inFlightTokenRef.current.promise) {
+        return inFlightTokenRef.current.promise;
       }
+      // Claim the slot synchronously to collapse Strict Mode / multi-effect races
+      const slot = { key: flightKey, promise: null };
+      inFlightTokenRef.current = slot;
+      const reqId = ++tokenRequestRef.current;
+      // ⚠️ force=1 fait TOURNER le token côté RU → tue toute autre instance ouverte
+      // (autre onglet, reload). Jamais au montage : cache backend d'abord ; le
+      // refresh forcé n'arrive que via onWidgetError (iframe en « OOOPS »).
+      const force = Boolean(forceRotate);
+      console.info('[RU-widget] getUserToken →', { currentOwnerId, languageId, lang: currentLanguage, force });
+      slot.promise = RentalUnitedApi.getUserToken(currentOwnerId, languageId, force)
+        .then((response) => {
+          if (reqId !== tokenRequestRef.current) return;
+          console.info('[RU-widget] getUserToken ←', {
+            success: response?.success,
+            hasScriptUrl: !!response?.scriptUrl,
+            scriptUrlHead: response?.scriptUrl ? String(response.scriptUrl).slice(0, 120) : null,
+            ruLoginEmail: response?.ruLoginEmail || null,
+            dashboardEmail: response?.dashboardEmail || null,
+            message: response?.message || response?.error || null,
+          });
+          if (response.success && response.scriptUrl) {
+            setTokenData(response);
+            setScriptUrl((prev) => (prev === response.scriptUrl ? prev : response.scriptUrl));
+            loadedOwnerRef.current = String(currentOwnerId);
+            setError(null);
+          } else {
+            const msg = 'Token Rental United indisponible (scriptUrl absent). Vérifiez la config RU du owner.';
+            setError(msg);
+            console.error('[RU-widget] getUserToken OK HTTP mais pas de scriptUrl', response);
+          }
+        })
+        .finally(() => {
+          if (inFlightTokenRef.current === slot) {
+            inFlightTokenRef.current = null;
+          }
+        });
+      await slot.promise;
     } catch (err) {
-      setError(formatRuError(err, 'Failed to refresh Rental United token'));
+      const msg = formatRuError(err, 'Failed to refresh Rental United token');
+      setError(msg);
+      console.error('[RU-widget] getUserToken FAIL', {
+        message: msg,
+        status: err?.response?.status,
+        data: err?.response?.data,
+        err,
+      });
     }
   };
+  // Auto-guérison : l'iframe signale « OOOPS » (token mort — rotation par une
+  // autre instance ou refresh interne RU) → un refresh forcé, max 1 / 90s.
+  const refreshTokenRef = useRef(null);
+  refreshTokenRef.current = refreshToken;
+  const lastAutoHealRef = useRef(0);
+  const handleWidgetError = useMemo(
+    () => () => {
+      const now = Date.now();
+      if (now - lastAutoHealRef.current < 90 * 1000) {
+        console.warn('[RU-widget] auto-heal ignoré (cooldown 90s)');
+        return;
+      }
+      lastAutoHealRef.current = now;
+      console.info('[RU-widget] auto-heal → refresh forcé du token');
+      refreshTokenRef.current?.(true);
+    },
+    [],
+  );
   const handleOwnerChange = event => {
     const newOwnerId = event.target.value;
+    console.info('[RU-widget] owner change', { from: selectedOwnerId, to: newOwnerId });
     setSelectedOwnerId(newOwnerId);
     setScriptUrl(null);
+    setTokenData(null);
     setError(null);
-    const existingScript = document.getElementById('rental-united-script');
-    if (existingScript) {
-      existingScript.remove();
-    }
+    loadedOwnerRef.current = null;
   };
   useEffect(() => {
     if (isAdmin) {
@@ -135,6 +233,7 @@ const RentalUnitedWhiteLabelV2 = () => {
     }
   }, [isAdmin, user?._id]);
   useEffect(() => {
+    let cancelled = false;
     const loadRentalUnitedScript = async () => {
       if (!user) {
         return;
@@ -156,6 +255,7 @@ const RentalUnitedWhiteLabelV2 = () => {
         setLoading(true);
         setError(null);
         await refreshToken();
+        if (cancelled) return;
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
         }
@@ -163,20 +263,23 @@ const RentalUnitedWhiteLabelV2 = () => {
           refreshToken();
         }, 55 * 60 * 1000);
       } catch (err) {
-        setError(formatRuError(err, 'Failed to load Rental United White Label'));
+        if (!cancelled) {
+          setError(formatRuError(err, 'Failed to load Rental United White Label'));
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     if (user && (!hasAdminAccess(user.role) || hasAdminAccess(user.role) && selectedOwnerId)) {
       loadRentalUnitedScript();
     }
     return () => {
+      cancelled = true;
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [user, selectedOwnerId]);
+  }, [user?._id || user?.id, user?.role, selectedOwnerId]);
   useEffect(() => {
     const currentLanguage = getCurrentLanguage();
     if (previousLanguageRef.current && previousLanguageRef.current !== currentLanguage) {
@@ -267,7 +370,7 @@ const RentalUnitedWhiteLabelV2 = () => {
       </>
     );
   }
-  if (loading) {
+  if (loading && !scriptUrl) {
     return <>
         <RentalUnitedDependenciesV2 useIframe={true} />
         <div className="flex justify-center items-center">
@@ -280,7 +383,7 @@ const RentalUnitedWhiteLabelV2 = () => {
         </div>
       </>;
   }
-  if (error) {
+  if (error && !scriptUrl) {
     return <>
         <RentalUnitedDependenciesV2 useIframe={true} />
         <div className="w-full">
@@ -307,6 +410,7 @@ const RentalUnitedWhiteLabelV2 = () => {
         onOwnerChange={handleOwnerChange}
         scriptUrl={scriptUrl}
         tokenData={tokenData}
+        onWidgetError={handleWidgetError}
       />
     </RentalUnitedErrorBoundary>
   );
