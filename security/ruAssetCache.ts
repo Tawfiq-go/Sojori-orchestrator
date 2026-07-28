@@ -68,8 +68,9 @@ export function ruAssetCachePlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use('/ru-assets', (req, res, next) => {
         const rawPath = (req.url || '').split('?')[0]
-        // Verrou dur : uniquement les bundles pms-dist, rien d'autre.
-        if (!/^\/[a-zA-Z0-9._-]+\.js$/.test(rawPath)) return next()
+        // Verrou dur : uniquement les assets pms-dist (js/css/polices), rien
+        // d'autre. styles.css était mesuré à 5 142 ms sans cache.
+        if (!/^\/[a-zA-Z0-9._-]+\.(js|css|woff2?|ttf|eot|svg)$/.test(rawPath)) return next()
 
         const key = req.url || rawPath
         const upstream = `${RU_ORIGIN}/app/pms-dist${key}`
