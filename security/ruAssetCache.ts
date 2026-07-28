@@ -41,6 +41,38 @@ const memory = new Map<string, CacheEntry>()
 const missing = new Map<string, number>()
 const MISSING_TTL_MS = 60 * 60 * 1000
 
+/** PNG 1×1 transparent — placeholder pour les assets absents chez RU. */
+const PIXEL_TRANSPARENT = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+)
+
+/**
+ * Sert un pixel transparent (200) au lieu d'un 404.
+ *
+ * Trois logos de canaux n'existent pas chez RU (731170, 739402, 739604 —
+ * vérifié en direct sur leur CDN). Un 404 est correct sémantiquement, mais le
+ * navigateur le journalise en rouge : la console reste polluée à chaque
+ * chargement pour des images que personne ne peut restaurer. Un pixel vide
+ * donne exactement le même rendu (case sans logo) sans le bruit.
+ */
+function servePlaceholder(res: any, cacheState: string, path: string): void {
+  // ⚠️ Images uniquement. Un bundle js/css manquant DOIT rester un 404 :
+  // le masquer derrière un 200 vide transformerait une panne réelle en
+  // widget silencieusement cassé, impossible à diagnostiquer.
+  if (!/\.(png|jpe?g|gif|webp|svg|ico)$/i.test(path)) {
+    res.statusCode = 404
+    res.setHeader('x-ru-cache', cacheState)
+    res.end()
+    return
+  }
+  res.statusCode = 200
+  res.setHeader('content-type', 'image/png')
+  res.setHeader('cache-control', 'public, max-age=604800, immutable')
+  res.setHeader('x-ru-cache', cacheState)
+  res.end(PIXEL_TRANSPARENT)
+}
+
 function cacheFile(key: string): string {
   return join(CACHE_DIR, `${createHash('sha1').update(key).digest('hex')}.bin`)
 }
@@ -112,9 +144,7 @@ export function ruAssetCachePlugin(): Plugin {
           // sans aller-retour réseau (sinon timeout → 502 sur liaison lente).
           const missedAt = missing.get(key)
           if (missedAt && Date.now() - missedAt < MISSING_TTL_MS) {
-            res.statusCode = 404
-            res.setHeader('x-ru-cache', 'MISSING')
-            res.end()
+            servePlaceholder(res, 'MISSING', rawPath)
             return
           }
 
@@ -127,9 +157,7 @@ export function ruAssetCachePlugin(): Plugin {
               // erreur réseau bruyante pour une image simplement absente.
               if (r.status === 404 || r.status === 403) {
                 missing.set(key, Date.now())
-                res.statusCode = r.status
-                res.setHeader('x-ru-cache', 'BYPASS')
-                res.end()
+                servePlaceholder(res, 'BYPASS', rawPath)
                 return
               }
               if (!r.ok) throw new Error(`upstream ${r.status}`)
@@ -170,12 +198,10 @@ export function ruAssetCachePlugin(): Plugin {
             })
             .catch((err) => {
               server.config.logger.warn(`[ru-cache] échec ${key}: ${err?.message || err}`)
-              // 404 et non 502 : un timeout réseau sur une icône est un échec
-              // transitoire, pas une panne serveur. Le 502 s'affichait en rouge
-              // dans la console du widget pour une simple image absente.
-              res.statusCode = 404
-              res.setHeader('x-ru-cache', 'ERROR')
-              res.end()
+              // Placeholder et non 502/404 : un timeout réseau sur une icône est
+              // un échec transitoire, pas une panne serveur, et ne doit pas
+              // remplir la console du widget d'erreurs rouges.
+              servePlaceholder(res, 'ERROR', rawPath)
             })
         }
 
