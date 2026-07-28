@@ -1,8 +1,6 @@
+import React from 'react';
 import OwnerSelectorV2 from './OwnerSelectorV2';
 import RentalUnitedIframe from './RentalUnitedIframe';
-import { CmSpinner, CmHint } from './ChannelManagerUi';
-import { tokens as T } from '../../../components/dashboard/DashboardV2.components';
-import { resolveRuEmailDisplay } from '../../staff/utils/ruEmailUtils';
 
 const RentalUnitedContainerV2 = ({
   isAdmin,
@@ -12,56 +10,48 @@ const RentalUnitedContainerV2 = ({
   showOwnerSelector = true,
   scriptUrl,
   tokenData,
+  openSection,
+  onWidgetError,
 }) => {
-  const selectedOwner = owners.find(
-    (owner) => String(owner._id ?? owner.id) === String(selectedOwnerId),
-  );
-  const ruLoginEmail =
-    tokenData?.ruLoginEmail ||
-    (selectedOwner ? resolveRuEmailDisplay(selectedOwner) : '');
-
   return (
-    <div style={{ width: '100%' }}>
+    <div className="w-full">
       {isAdmin && owners.length > 0 && showOwnerSelector && (
-        <div style={{ marginBottom: 16 }}>
+        <div className="">
           <OwnerSelectorV2
             owners={owners}
             selectedOwnerId={selectedOwnerId}
             onOwnerChange={onOwnerChange}
-            title="Compte property manager"
-            subtitle="Changez de compte sans quitter la page"
+            title="Owner Selection"
+            subtitle=""
           />
         </div>
       )}
 
-      {isAdmin && ruLoginEmail && (
-        <CmHint>
-          Connexion widget R.U. : <strong>{ruLoginEmail}</strong>
-          {(tokenData?.dashboardEmail || selectedOwner?.email) &&
-          (tokenData?.dashboardEmail || selectedOwner?.email) !== ruLoginEmail ? (
-            <>
-              {' '}
-              · Dashboard Sojori :{' '}
-              <strong>{tokenData?.dashboardEmail || selectedOwner?.email}</strong>
-            </>
-          ) : null}
-        </CmHint>
-      )}
-
-      <div
-        style={{
-          background: T.bg0,
-          border: `1px solid ${T.border}`,
-          borderRadius: 14,
-          overflow: 'hidden',
-          minHeight: 520,
-        }}
-      >
-        {scriptUrl ? (
-          <RentalUnitedIframe scriptUrl={scriptUrl} isAdmin={isAdmin} />
-        ) : (
-          <CmSpinner label="Initialisation du Channel Manager Rental United…" />
-        )}
+      <div className="bg-white !h-full border border-gray-200" style={{ minHeight: '100%' }}>
+        <div className="!h-full" style={{ minHeight: '100%' }}>
+          {scriptUrl ? (
+            <RentalUnitedIframe
+              scriptUrl={scriptUrl}
+              tokenData={tokenData}
+              isAdmin={isAdmin}
+              openSection={openSection}
+              onWidgetError={onWidgetError}
+            />
+          ) : (
+            <div
+              className="flex items-center justify-center"
+              style={{
+                minHeight: '500px',
+                width: '100%',
+              }}
+            >
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medium-aquamarine mx-auto" />
+                <p className="mt-2 text-gray-500">Initializing Rental United...</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
