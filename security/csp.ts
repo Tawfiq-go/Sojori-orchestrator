@@ -79,7 +79,7 @@ const SOJORI_API_CONNECT = `https://dev.sojori.com wss://dev.sojori.com ${buildL
 /** Headers applied by `vite dev` only — never sent with production static assets. */
 export const devSecurityHeaders: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
+  'X-Frame-Options': 'SAMEORIGIN',
   'X-XSS-Protection': '1; mode=block',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Content-Security-Policy': join([
@@ -95,16 +95,17 @@ export const devSecurityHeaders: Record<string, string> = {
     `frame-src 'self' ${RU_FRAME_SRC} ${LEGACY_DASHBOARD_FRAME_SRC} https://sojori.com`,
     "media-src 'self' blob:",
     "object-src 'none'",
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
+    "frame-ancestors 'self'",
+    // RU white-label iframe sets <base href="https://new.rentalsunited.com/"> (required; '/' breaks pms-dist)
+    "base-uri 'self' https://new.rentalsunited.com https://*.rentalsunited.com",
+    "form-action 'self' https://new.rentalsunited.com https://*.rentalsunited.com https://dev.sojori.com",
   ]),
 }
 
 /** Headers for `vite preview` — mirrors production bundle constraints (no Vite dev client). */
 export const previewSecurityHeaders: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
+  'X-Frame-Options': 'SAMEORIGIN',
   'X-XSS-Protection': '1; mode=block',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
@@ -118,9 +119,9 @@ export const previewSecurityHeaders: Record<string, string> = {
     `frame-src 'self' ${RU_FRAME_SRC} ${LEGACY_DASHBOARD_FRAME_SRC} https://sojori.com`,
     "media-src 'self' blob:",
     "object-src 'none'",
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
+    "frame-ancestors 'self'",
+    "base-uri 'self' https://new.rentalsunited.com https://*.rentalsunited.com",
+    "form-action 'self' https://new.rentalsunited.com https://*.rentalsunited.com https://dev.sojori.com",
     "upgrade-insecure-requests",
   ]),
 }
