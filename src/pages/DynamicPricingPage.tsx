@@ -162,6 +162,7 @@ export function DynamicPricingPage() {
                 )}
                 listingHasAirbnb={bienDetail.listingHasAirbnb}
                 snapshotAt={bienDetail.row?.airroiSnapshotAt ?? null}
+                calendarAppliedAt={bienDetail.row?.calendarAppliedAt ?? null}
                 onFetchMarket={() => bienDetail.refreshAirroiPart('estimate')}
                 onFetchComps={() => bienDetail.refreshAirroiPart('comparables')}
                 onFetchPerformance={

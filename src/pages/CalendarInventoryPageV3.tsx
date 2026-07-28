@@ -13,11 +13,14 @@ import calendarService from '../services/calendarService';
 import type { Listing as ListingType } from '../types/listings.types';
 import CalendarInventoryPage from '../components/calendar-v3/CalendarInventoryPage.jsx';
 import {
-  computeInventoryFetchRange,
   computeSimpleMonthsFetchRange,
+  computeMultiViewFetchRange,
+  computeMultiViewPrefetchRange,
+  eachIsoDayInclusive,
   clampPivotDate,
 } from '../components/calendar-v3/inventoryCalendarConstants';
 import { processInventoryResponse, type ProcessedInventoryData } from '../components/calendar-v3/processInventoryResponse';
+import { mergeProcessedInventory } from '../components/calendar-v3/mergeProcessedInventory';
 import {
   fetchApplySyncSummary,
   type PortfolioApplySyncSummaryDto,
@@ -31,8 +34,12 @@ function inventoryCacheKey(from: string, to: string, listingIds: string[]): stri
   return `${from}|${to}|${[...listingIds].sort().join(',')}`;
 }
 
-/** Nb de mois chargés initialement en vue simple (scroll vertical façon Airbnb). */
-const SIMPLE_INITIAL_MONTHS = 3;
+function listingIdsKey(listingIds: string[]): string {
+  return [...listingIds].sort().join(',');
+}
+
+/** Nb de mois chargés initialement en vue simple (scroll → load more). 1 = 1er paint rapide (Multi 33 types). */
+const SIMPLE_INITIAL_MONTHS = 1;
 /** Mois ajoutés à chaque « load more » (sentinel de scroll). */
 const SIMPLE_MONTHS_INCREMENT = 2;
 /** Horizon max en mois (aligné INVENTORY_FUTURE_HORIZON_DAYS ≈ 36 mois). */
@@ -55,16 +62,28 @@ export function CalendarInventoryPageV3() {
   const [currentDate, setCurrentDate] = useState(() => moment(clampPivotDate(new Date())));
   const [roomTypeByListing, setRoomTypeByListing] = useState<Record<string, string>>({});
   const inventorySeqRef = useRef(0);
+  /** Cache chunks bruts (simple + multi) — clé from|to|ids */
   const inventoryCacheRef = useRef<Map<string, ProcessedInventoryData>>(new Map());
+  /** Multi only : jours déjà fusionnés en mémoire (évite refetch fenêtre déjà vue). */
+  const multiLoadedDaysRef = useRef<Map<string, Set<string>>>(new Map());
   const [dpSyncSummary, setDpSyncSummary] = useState<PortfolioApplySyncSummaryDto | null>(null);
   const [dpSyncLoading, setDpSyncLoading] = useState(false);
 
+  /**
+   * Simple : inchangé (mois / load-more).
+   * Multi : uniquement la fenêtre visible (31j) — le reste à la demande.
+   */
   const fetchRange = useMemo(
     () =>
       simpleMode
         ? computeSimpleMonthsFetchRange(currentDate, simpleMonths)
-        : computeInventoryFetchRange(currentDate),
-    [currentDate.format('YYYY-MM'), simpleMode, simpleMonths],
+        : computeMultiViewFetchRange(currentDate),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- simple ancré mois ; multi ancré jour
+    [
+      simpleMode ? currentDate.format('YYYY-MM') : currentDate.format('YYYY-MM-DD'),
+      simpleMode,
+      simpleMonths,
+    ],
   );
 
   const visibleListingIds = useMemo(
@@ -83,14 +102,34 @@ export function CalendarInventoryPageV3() {
     setSimpleMonths((m) => Math.min(m + SIMPLE_MONTHS_INCREMENT, SIMPLE_MAX_MONTHS));
   }, []);
 
+  const clearInventoryState = useCallback(() => {
+    setInventoryData({});
+    inventoryCacheRef.current.clear();
+    multiLoadedDaysRef.current.clear();
+  }, []);
+
+  const markMultiDaysLoaded = useCallback((idsKey: string, from: string, to: string) => {
+    let set = multiLoadedDaysRef.current.get(idsKey);
+    if (!set) {
+      set = new Set();
+      multiLoadedDaysRef.current.set(idsKey, set);
+    }
+    for (const day of eachIsoDayInclusive(from, to)) set.add(day);
+  }, []);
+
+  const isMultiRangeLoaded = useCallback((idsKey: string, from: string, to: string) => {
+    const set = multiLoadedDaysRef.current.get(idsKey);
+    if (!set || set.size === 0) return false;
+    return eachIsoDayInclusive(from, to).every((d) => set.has(d));
+  }, []);
+
   /** Listings paginés — refetch quand scope / page change */
   useEffect(() => {
     let cancelled = false;
     if (!scopeFetchReady) {
       setListings([]);
       setListingsTotal(0);
-      setInventoryData({});
-      inventoryCacheRef.current.clear();
+      clearInventoryState();
       setListingsLoading(false);
       return () => {
         cancelled = true;
@@ -99,8 +138,7 @@ export function CalendarInventoryPageV3() {
 
     (async () => {
       setListingsLoading(true);
-      setInventoryData({});
-      inventoryCacheRef.current.clear();
+      clearInventoryState();
       try {
         const listingsResponse = await listingsService.getListingsForCalendar(
           listingsPage,
@@ -137,7 +175,7 @@ export function CalendarInventoryPageV3() {
     return () => {
       cancelled = true;
     };
-  }, [staging, scopeFetchReady, requestOwnerId, listingsPage]);
+  }, [staging, scopeFetchReady, requestOwnerId, listingsPage, clearInventoryState]);
 
   /** DP sync — basse priorité, après le premier paint inventaire */
   useEffect(() => {
@@ -171,25 +209,68 @@ export function CalendarInventoryPageV3() {
     return m;
   }, [listings]);
 
+  const applyRoomTypeDefaults = useCallback((listingIds: string[], processed: ProcessedInventoryData) => {
+    setRoomTypeByListing((prev) => {
+      const next = { ...prev };
+      listingIds.forEach((id) => {
+        if (next[id]) return;
+        const keys = processed[id] ? Object.keys(processed[id]) : [];
+        if (keys[0]) next[id] = keys[0];
+      });
+      return next;
+    });
+  }, []);
+
+  /**
+   * Charge un chunk inventaire.
+   * - simple : replace (comportement historique)
+   * - multi : merge + skip si fenêtre déjà en mémoire
+   * - silent : prefetch (pas de spinner)
+   */
   const loadInventory = useCallback(
-    async (listingIds: string[], from: string, to: string, seq: number) => {
+    async (
+      listingIds: string[],
+      from: string,
+      to: string,
+      seq: number,
+      options?: { merge?: boolean; silent?: boolean },
+    ) => {
+      const merge = options?.merge === true;
+      const silent = options?.silent === true;
+
       if (listingIds.length === 0) {
-        setInventoryData({});
-        setInventoryLoading(false);
+        if (!silent) {
+          setInventoryData({});
+          setInventoryLoading(false);
+        }
+        return;
+      }
+
+      const idsKey = listingIdsKey(listingIds);
+
+      if (merge && isMultiRangeLoaded(idsKey, from, to)) {
+        if (seq === inventorySeqRef.current && !silent) {
+          setInventoryLoading(false);
+        }
         return;
       }
 
       const cacheKey = inventoryCacheKey(from, to, listingIds);
       const cached = inventoryCacheRef.current.get(cacheKey);
       if (cached) {
-        if (seq === inventorySeqRef.current) {
+        if (seq !== inventorySeqRef.current) return;
+        if (merge) {
+          setInventoryData((prev) => mergeProcessedInventory(prev, cached));
+          markMultiDaysLoaded(idsKey, from, to);
+        } else {
           setInventoryData(cached);
-          setInventoryLoading(false);
         }
+        applyRoomTypeDefaults(listingIds, cached);
+        if (!silent) setInventoryLoading(false);
         return;
       }
 
-      setInventoryLoading(true);
+      if (!silent) setInventoryLoading(true);
       try {
         const inventory = await calendarService.getInventoryForListings(
           listingIds,
@@ -203,48 +284,110 @@ export function CalendarInventoryPageV3() {
 
         const processed = processInventoryResponse(inventory);
         inventoryCacheRef.current.set(cacheKey, processed);
-        setInventoryData(processed);
 
-        setRoomTypeByListing((prev) => {
-          const next = { ...prev };
-          listingIds.forEach((id) => {
-            if (next[id]) return;
-            const keys = processed[id] ? Object.keys(processed[id]) : [];
-            if (keys[0]) next[id] = keys[0];
-          });
-          return next;
-        });
+        if (merge) {
+          setInventoryData((prev) => mergeProcessedInventory(prev, processed));
+          markMultiDaysLoaded(idsKey, from, to);
+        } else {
+          setInventoryData(processed);
+        }
+        applyRoomTypeDefaults(listingIds, processed);
       } catch (error) {
         console.error('[CalendarV3] Erreur chargement inventaire:', error);
       } finally {
-        if (seq === inventorySeqRef.current) {
+        if (seq === inventorySeqRef.current && !silent) {
           setInventoryLoading(false);
         }
       }
     },
-    [],
+    [applyRoomTypeDefaults, isMultiRangeLoaded, markMultiDaysLoaded],
   );
 
   useEffect(() => {
     setListingsPage(0);
   }, [requestOwnerId]);
 
-  /** Inventaire : plage stable par mois + page listings (pas à chaque jour) */
+  /**
+   * Inventaire simple : 1er mois bloquant, puis mois suivants en silent merge
+   * (évite 3 mois × 33 roomTypes au premier chargement Multi).
+   */
   useEffect(() => {
+    if (!simpleMode) return;
     if (listings.length === 0) return;
+    if (inventoryListingIds.length === 0) return;
 
     const seq = ++inventorySeqRef.current;
+    const ids = inventoryListingIds;
     let cancelled = false;
 
-    void loadInventory(inventoryListingIds, fetchRange.from, fetchRange.to, seq);
+    void (async () => {
+      // Paint rapide : uniquement le 1er mois visible
+      const primary = computeSimpleMonthsFetchRange(currentDate, 1);
+      await loadInventory(ids, primary.from, primary.to, seq, {
+        merge: true,
+        silent: false,
+      });
+      if (cancelled || seq !== inventorySeqRef.current) return;
+
+      // Mois 2..N déjà demandés (scroll / state) → compléter en fond
+      if (simpleMonths > 1) {
+        const full = computeSimpleMonthsFetchRange(currentDate, simpleMonths);
+        window.setTimeout(() => {
+          if (cancelled || seq !== inventorySeqRef.current) return;
+          void loadInventory(ids, full.from, full.to, seq, { merge: true, silent: true });
+        }, 200);
+      }
+    })();
 
     return () => {
       cancelled = true;
-      if (cancelled) {
-        // noop — seq guard inside loadInventory
-      }
     };
-  }, [fetchRange.from, fetchRange.to, inventoryListingIds.join(','), listings.length, loadInventory]);
+  }, [
+    simpleMode,
+    currentDate.format('YYYY-MM'),
+    simpleMonths,
+    inventoryListingIds.join(','),
+    listings.length,
+    loadInventory,
+  ]);
+
+  /**
+   * Inventaire multi : 1) fenêtre visible (bloquant), 2) prefetch fenêtre suivante (silent).
+   * Ne touche pas à la vue simple.
+   */
+  useEffect(() => {
+    if (simpleMode) return;
+    if (listings.length === 0) return;
+
+    const seq = ++inventorySeqRef.current;
+    const ids = inventoryListingIds;
+    const primary = fetchRange;
+    let cancelled = false;
+
+    void (async () => {
+      await loadInventory(ids, primary.from, primary.to, seq, { merge: true, silent: false });
+      if (cancelled || seq !== inventorySeqRef.current) return;
+
+      // Prefetch fenêtre suivante (idle) — pas de spinner
+      const prefetch = computeMultiViewPrefetchRange(currentDate);
+      window.setTimeout(() => {
+        if (cancelled || seq !== inventorySeqRef.current) return;
+        void loadInventory(ids, prefetch.from, prefetch.to, seq, { merge: true, silent: true });
+      }, 250);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    simpleMode,
+    fetchRange.from,
+    fetchRange.to,
+    inventoryListingIds.join(','),
+    listings.length,
+    loadInventory,
+    currentDate.format('YYYY-MM-DD'),
+  ]);
 
   const listingCatalog = useMemo(
     () =>
@@ -265,9 +408,41 @@ export function CalendarInventoryPageV3() {
   const inventoriesByListing = useMemo(() => {
     const result: Record<string, Record<string, unknown>> = {};
     listings.forEach((listing) => {
-      const listingInv = inventoryData[listing._id];
-      const rtId = roomTypeByListing[listing._id];
-      const roomInv = rtId && listingInv?.[rtId];
+      const listingInv = inventoryData[listing._id] || {};
+      const keys = Object.keys(listingInv);
+      const isMulti = String(listing.propertyUnit || '') === 'Multi' && keys.length > 1;
+      if (isMulti) {
+        // Ligne hôtel = somme des availableRoom de tous les roomTypes
+        const agg: Record<string, Record<string, unknown>> = {};
+        keys.forEach((rtId) => {
+          const avail = listingInv[rtId]?.availability || {};
+          Object.entries(avail).forEach(([dateStr, inv]) => {
+            const day = inv as Record<string, unknown>;
+            if (!agg[dateStr]) {
+              // Hôtel Multi : somme dispo seulement — min/max stay sont par roomType
+              agg[dateStr] = {
+                ...day,
+                availableRoom: 0,
+                minStay: undefined,
+                maxStay: undefined,
+                min_stay_arrival: undefined,
+                max_stay: undefined,
+              };
+            }
+            const prev = Number(agg[dateStr].availableRoom) || 0;
+            const add = Number(day.availableRoom) || 0;
+            agg[dateStr].availableRoom = prev + add;
+            if (agg[dateStr].basePrice == null && day.basePrice != null) {
+              agg[dateStr].basePrice = day.basePrice;
+              agg[dateStr].calculatedPrice = day.calculatedPrice ?? day.basePrice;
+            }
+          });
+        });
+        result[listing._id] = agg;
+        return;
+      }
+      const rtId = roomTypeByListing[listing._id] || keys[0];
+      const roomInv = rtId ? listingInv[rtId] : undefined;
       result[listing._id] = roomInv?.availability || {};
     });
     return result;
@@ -278,8 +453,12 @@ export function CalendarInventoryPageV3() {
     await calendarService.updateCalendar(payloads as never);
 
     inventoryCacheRef.current.clear();
+    multiLoadedDaysRef.current.clear();
     const seq = ++inventorySeqRef.current;
-    await loadInventory(inventoryListingIds, fetchRange.from, fetchRange.to, seq);
+    await loadInventory(inventoryListingIds, fetchRange.from, fetchRange.to, seq, {
+      merge: !simpleMode,
+      silent: false,
+    });
   };
 
   const handleDateChange = (newDate: Date) => {

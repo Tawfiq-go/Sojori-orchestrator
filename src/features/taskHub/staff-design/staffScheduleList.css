@@ -155,6 +155,109 @@
   vertical-align: middle;
 }
 
+.staff-sched-auto-badge {
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  vertical-align: middle;
+}
+
+.staff-sched-table th.staff-sched-col-auto,
+.staff-sched-table td.staff-sched-col-auto {
+  width: 110px;
+  min-width: 110px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.staff-sched-auto-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 auto;
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.staff-sched-auto-switch:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.staff-sched-auto-switch:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.staff-sched-auto-switch .lbl {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t3);
+  min-width: 22px;
+  text-align: center;
+}
+
+.staff-sched-auto-switch .lbl.on-lbl {
+  color: #166534;
+}
+
+.staff-sched-auto-switch.is-on .lbl.on-lbl {
+  color: #166534;
+}
+
+.staff-sched-auto-switch.is-on .lbl.off-lbl {
+  color: var(--t3);
+}
+
+.staff-sched-auto-switch:not(.is-on) .lbl.off-lbl {
+  color: #991b1b;
+}
+
+/* Toggle visible dans la colonne (hors float panel) */
+.staff-sched-root .staff-sched-col-auto .toggle {
+  width: 34px;
+  height: 20px;
+  border-radius: 99px;
+  background: #e5e7eb;
+  position: relative;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.staff-sched-root .staff-sched-col-auto .toggle.on {
+  background: linear-gradient(135deg, #86efac, #22c55e);
+}
+
+.staff-sched-root .staff-sched-col-auto .toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
+}
+
+.staff-sched-root .staff-sched-col-auto .toggle.on::after {
+  transform: translateX(14px);
+}
+
+.staff-sched-col-auto .toggle.busy {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .staff-sched-day-cell.always {
   background: var(--pt) !important;
   border-color: var(--p) !important;
@@ -179,7 +282,7 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 1180px;
+  min-width: 1260px;
 }
 
 .staff-sched-table th {

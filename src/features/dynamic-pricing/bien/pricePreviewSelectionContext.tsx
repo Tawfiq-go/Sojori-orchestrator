@@ -12,6 +12,9 @@ export type PricePreviewSelectionContextValue = {
   setListingId: (id: string | null) => void;
   onPreviewReload: (() => void) | null;
   setOnPreviewReload: (fn: (() => void) | null) => void;
+  /** Horodatage dernière modif prix/mode calendrier (inline, modal, apply). */
+  lastCalendarUpdatedAt: string | null;
+  touchCalendarUpdatedAt: (iso?: string | null) => void;
 };
 
 const PricePreviewSelectionContext = createContext<PricePreviewSelectionContextValue | null>(null);
@@ -21,6 +24,7 @@ export function PricePreviewSelectionProvider({ children }: { children: React.Re
   const [previewRows, setPreviewRows] = useState<ApplyPreviewDiffRowDto[]>([]);
   const [listingId, setListingId] = useState<string | null>(null);
   const [onPreviewReload, setOnPreviewReloadState] = useState<(() => void) | null>(null);
+  const [lastCalendarUpdatedAt, setLastCalendarUpdatedAt] = useState<string | null>(null);
 
   const toggleDate = useCallback((date: string, isFree: boolean) => {
     if (!isFree) return;
@@ -45,8 +49,17 @@ export function PricePreviewSelectionProvider({ children }: { children: React.Re
     setOnPreviewReloadState(() => fn);
   }, []);
 
+  const touchCalendarUpdatedAt = useCallback((iso?: string | null) => {
+    const next = iso ?? new Date().toISOString();
+    setLastCalendarUpdatedAt((prev) => {
+      if (!prev) return next;
+      return new Date(next).getTime() >= new Date(prev).getTime() ? next : prev;
+    });
+  }, []);
+
   React.useEffect(() => {
     setSelectedDates(new Set());
+    setLastCalendarUpdatedAt(null);
   }, [listingId]);
 
   const value = useMemo(
@@ -61,6 +74,8 @@ export function PricePreviewSelectionProvider({ children }: { children: React.Re
       setListingId,
       onPreviewReload,
       setOnPreviewReload,
+      lastCalendarUpdatedAt,
+      touchCalendarUpdatedAt,
     }),
     [
       selectedDates,
@@ -71,6 +86,8 @@ export function PricePreviewSelectionProvider({ children }: { children: React.Re
       listingId,
       onPreviewReload,
       setOnPreviewReload,
+      lastCalendarUpdatedAt,
+      touchCalendarUpdatedAt,
     ],
   );
 

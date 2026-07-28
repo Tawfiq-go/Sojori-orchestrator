@@ -4,12 +4,17 @@ export type ConciergeServicesSlice = {
   transportServices?: unknown[];
   groceryServices?: unknown[];
   customServices?: unknown[];
+  conciergeSource?: 'own' | 'partner';
+  /** Toujours null côté owner — Sojori résout par ville. */
+  conciergePartnerId?: string | null;
 };
 
 export type ConciergeServicesArrays = {
   transportServices: unknown[];
   groceryServices: unknown[];
   customServices: unknown[];
+  conciergeSource?: 'own' | 'partner';
+  conciergePartnerId?: string | null;
 };
 
 /** Read current listing_concierge_services (source of truth for WhatsApp snapshot). */
@@ -22,6 +27,8 @@ export async function fetchListingConciergeArrays(
     transportServices: Array.isArray(doc.transportServices) ? doc.transportServices : [],
     groceryServices: Array.isArray(doc.groceryServices) ? doc.groceryServices : [],
     customServices: Array.isArray(doc.customServices) ? doc.customServices : [],
+    conciergeSource: doc.conciergeSource === 'partner' ? 'partner' : 'own',
+    conciergePartnerId: doc.conciergePartnerId ?? null,
   };
 }
 
@@ -34,7 +41,7 @@ export async function persistListingConciergeSlice(
   slice: ConciergeServicesSlice,
 ): Promise<ConciergeServicesArrays> {
   const existing = await fetchListingConciergeArrays(listingId);
-  const body: ConciergeServicesArrays = {
+  const body: ConciergeServicesSlice = {
     transportServices:
       slice.transportServices !== undefined ? slice.transportServices : existing.transportServices,
     groceryServices:
@@ -42,7 +49,20 @@ export async function persistListingConciergeSlice(
     customServices:
       slice.customServices !== undefined ? slice.customServices : existing.customServices,
   };
+  if (slice.conciergeSource !== undefined) {
+    body.conciergeSource = slice.conciergeSource;
+    body.conciergePartnerId =
+      slice.conciergeSource === 'partner' ? (slice.conciergePartnerId ?? null) : null;
+  } else if (slice.conciergePartnerId !== undefined) {
+    body.conciergePartnerId = slice.conciergePartnerId;
+  }
   const res = await listingsService.updateListingConciergeServices(listingId, body);
   if (res.error) throw new Error(res.error);
-  return body;
+  return {
+    transportServices: body.transportServices as unknown[],
+    groceryServices: body.groceryServices as unknown[],
+    customServices: body.customServices as unknown[],
+    conciergeSource: body.conciergeSource ?? existing.conciergeSource,
+    conciergePartnerId: body.conciergePartnerId ?? null,
+  };
 }

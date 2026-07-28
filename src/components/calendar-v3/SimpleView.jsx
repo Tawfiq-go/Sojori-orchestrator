@@ -37,6 +37,10 @@ export default function SimpleView({
   listings = [],
   selectedListingId = null,
   onSelectListing,
+  /** 'listings' (Single / défaut) | 'roomTypes' (Multi Airbnb : 1 type = 1 calendrier) */
+  railMode = 'listings',
+  /** Multi : carte hôtel (image + capacité) au-dessus de la liste des types */
+  multiHotel = null,
   year,
   month,
   monthsCount = 3,
@@ -72,7 +76,7 @@ export default function SimpleView({
   const [selected, setSelected] = useState([]);
   /** Dernier jour cliqué : ses détails s'affichent dans le panneau. */
   const [focusIso, setFocusIso] = useState(null);
-  useEffect(() => { setSelected([]); setFocusIso(null); }, [selectedListingId]);
+  useEffect(() => { setSelected([]); setFocusIso(null); }, [selectedListingId, listing?.roomTypeId]);
 
   const clearSelection = () => { setSelected([]); setFocusIso(null); };
 
@@ -109,8 +113,10 @@ export default function SimpleView({
   };
   const commitSelection = () => {
     if (selected.length === 0) return;
+    const roomTypeId =
+      listing.roomTypeId || listing.roomTypes?.[0]?._id || undefined;
     onCellsSelected?.(selected.map(iso => ({
-      listingId: listing._id, roomTypeId: listing.roomTypes?.[0]?._id, dateStr: iso, column: 'rate',
+      listingId: listing._id, roomTypeId, dateStr: iso, column: 'rate',
     })));
     clearSelection();
   };
@@ -153,15 +159,31 @@ export default function SimpleView({
   }, [onLoadMoreMonths, monthsCount, inventoryLoading]);
 
   const currency = listing.currencyCode || listing.currency || 'MAD';
+  const isRoomTypeRail = railMode === 'roomTypes';
+  const headerTitle = isRoomTypeRail && listing.roomTypeName
+    ? listing.roomTypeName
+    : listing.name;
+  const headerSubtitle = isRoomTypeRail
+    ? (listing.name || '')
+    : (listing.city || '');
 
   return (
     <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start', justifyContent: 'center' }}>
-      {/* ─── Rail vignettes listings (façon Airbnb) ─── */}
-      <ListingRail
-        listings={listings}
-        selectedId={selectedListingId}
-        onSelect={onSelectListing}
-      />
+      {/* ─── Rail : Multi = hôtel + types empilés ; Single = vignettes ─── */}
+      {isRoomTypeRail ? (
+        <MultiHotelRail
+          hotel={multiHotel}
+          roomTypes={listings}
+          selectedId={selectedListingId}
+          onSelect={onSelectListing}
+        />
+      ) : (
+        <ListingRail
+          listings={listings}
+          selectedId={selectedListingId}
+          onSelect={onSelectListing}
+        />
+      )}
 
       {/* ─── Calendrier vertical — plafonné et centré (façon Airbnb) ─── */}
       <div style={{ flex: 1, minWidth: 0, maxWidth: 1150 }}>
@@ -169,17 +191,31 @@ export default function SimpleView({
           background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 16, overflow: 'hidden',
           boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
         }}>
-          {/* En-tête listing */}
+          {/* En-tête listing / room type */}
           <div style={{
             padding: '7px 14px', borderBottom: `1px solid ${T.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
           }}>
             <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {listing.name}
+                {headerTitle}
               </span>
-              {listing.city ? (
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: T.text3, flexShrink: 0 }}>· {listing.city}</span>
+              {headerSubtitle ? (
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: T.text3, flexShrink: 0 }}>
+                  · {headerSubtitle}
+                </span>
+              ) : null}
+              {isRoomTypeRail ? (
+                <a
+                  href={`/calendar?view=multi`}
+                  title="Retour vue multi"
+                  style={{
+                    fontSize: 10, fontWeight: 700, color: T.primary, textDecoration: 'none',
+                    flexShrink: 0, opacity: 0.85,
+                  }}
+                >
+                  ← multi
+                </a>
               ) : null}
               <button
                 type="button"
@@ -283,14 +319,159 @@ export default function SimpleView({
   );
 }
 
-/* ════════════════ Rail vignettes ════════════════ */
+/* ════════════════ Rail Multi : hôtel + room types empilés ════════════════ */
+
+function formatRtCapacity(rt) {
+  const units = Number(rt?.roomNumber) || 0;
+  const guests = Number(rt?.personCapacityMax) || 0;
+  const parts = [];
+  if (units > 0) parts.push(`${units} u.`);
+  if (guests > 0) parts.push(`max ${guests}`);
+  return parts.length > 0 ? parts.join(' · ') : '—';
+}
+
+function MultiHotelRail({ hotel, roomTypes = [], selectedId, onSelect }) {
+  if (!hotel && (!roomTypes || roomTypes.length === 0)) return null;
+
+  return (
+    <div
+      style={{
+        position: 'sticky',
+        top: 12,
+        flexShrink: 0,
+        zIndex: 30,
+        width: 292,
+        maxHeight: 'calc(100vh - 40px)',
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+        padding: '2px 2px 8px',
+      }}
+    >
+      {/* Image hôtel à gauche (place dispo) */}
+      {hotel ? (
+        <div style={{ width: 76, flexShrink: 0 }}>
+          <div
+            style={{
+              width: 76,
+              height: 76,
+              borderRadius: 12,
+              overflow: 'hidden',
+              border: `1px solid ${T.border}`,
+              background: `linear-gradient(135deg, ${hotel.photoColor || '#fde68a'}, ${hotel.photoColorDeep || '#d97706'})`,
+              boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+            }}
+            title={hotel.name}
+          >
+            {hotel.coverImageUrl ? (
+              <img
+                src={hotel.coverImageUrl}
+                alt={hotel.name}
+                loading="lazy"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            ) : (
+              <span
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 22,
+                  fontWeight: 800,
+                  color: hotel.photoColorDeep || T.text2,
+                }}
+              >
+                {(hotel.name || '?').charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 9.5,
+              fontWeight: 700,
+              color: T.text3,
+              lineHeight: 1.25,
+              textAlign: 'center',
+            }}
+          >
+            <div>{hotel.roomTypeCount || roomTypes.length} types</div>
+            {hotel.units > 0 ? <div>{hotel.units} u.</div> : null}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Room types — empilés à droite de l’image */}
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          maxHeight: 'calc(100vh - 40px)',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          scrollbarWidth: 'thin',
+        }}
+      >
+        {roomTypes.map((rt) => {
+          const id = String(rt._id);
+          const active = String(selectedId) === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onSelect?.(id)}
+              aria-label={rt.name}
+              style={{
+                textAlign: 'left',
+                width: '100%',
+                padding: '7px 9px',
+                borderRadius: 10,
+                cursor: 'pointer',
+                border: active ? `2px solid ${T.text}` : `1px solid ${T.border}`,
+                background: active ? T.bg2 : T.bg1,
+                boxShadow: active ? '0 0 0 2px rgba(20,17,10,0.08)' : 'none',
+                fontFamily: 'inherit',
+                transition: 'border 0.12s, background 0.12s',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11.5,
+                  fontWeight: active ? 800 : 700,
+                  color: T.text,
+                  lineHeight: 1.2,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {rt.name}
+              </div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: T.text3, marginTop: 2 }}>
+                {formatRtCapacity(rt)}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════ Rail vignettes (Single) ════════════════ */
 
 const RAIL_THUMB = 48;
 const RAIL_GAP = 8;
 /** Blocs de 5 vignettes en horizontal, puis ligne suivante (même zone gauche). */
 const RAIL_COLS = 5;
 
-function ListingRail({ listings, selectedId, onSelect }) {
+function ListingRail({ listings, selectedId, onSelect, tooltipSecondaryLabel }) {
   /** Tooltip en position fixed : le rail est scrollable (overflow-y auto),
       un tooltip absolu serait clippé horizontalement. */
   const [hovered, setHovered] = useState(null); // { id, top, left }
@@ -356,6 +537,9 @@ function ListingRail({ listings, selectedId, onSelect }) {
       {hovered && (() => {
         const l = listings.find((x) => String(x._id) === hovered.id);
         if (!l) return null;
+        const secondary = tooltipSecondaryLabel === 'type'
+          ? (l.city ? `hôtel · ${l.city}` : null)
+          : (l.city ? l.city : null);
         return (
           <div style={{
             position: 'fixed', left: hovered.left, top: hovered.top, transform: 'translateY(-50%)',
@@ -364,7 +548,7 @@ function ListingRail({ listings, selectedId, onSelect }) {
             boxShadow: '0 6px 20px rgba(20,17,10,0.25)', pointerEvents: 'none',
           }}>
             {l.name}
-            {l.city ? <span style={{ fontWeight: 500, opacity: 0.7 }}> · {l.city}</span> : null}
+            {secondary ? <span style={{ fontWeight: 500, opacity: 0.7 }}> · {secondary}</span> : null}
           </div>
         );
       })()}

@@ -670,6 +670,8 @@ export type ApplyPreviewDiffRowDto = {
   calendarCurrentMad: number | null;
   /** Prix Sojori figé à la réservation (priceBreakdown) — jours réservés. */
   bookedPriceMad?: number | null;
+  /** Date (YYYY-MM-DD) à laquelle la réservation a été prise. */
+  bookedAt?: string | null;
   baseImportMad: number | null;
   deltaMad: number | null;
   alert: ApplyPreviewDiffAlertDto;

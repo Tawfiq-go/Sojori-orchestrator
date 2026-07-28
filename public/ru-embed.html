@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rental United Channel Manager</title>
+    <!--
+      Served without CSP (see vite.config) so RU white-label can set <base> and load pms-dist.
+      Parent orchestrator CSP is NOT inherited on a navigated iframe document.
+    -->
+    <base href="https://new.rentalsunited.com/" />
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
+      integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css"
+      integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css"
+    />
+    <script
+      src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"
+      integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
+      crossorigin="anonymous"
+    ></script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #fff;
+      }
+      body {
+        padding: 6px;
+      }
+      #ruApp {
+        width: 100%;
+        height: 100%;
+        min-height: 520px;
+        overflow: auto;
+      }
+      #ruApp .connected-channels-container {
+        box-shadow: none !important;
+        -webkit-box-shadow: none !important;
+        -moz-box-shadow: none !important;
+      }
+      #ruApp * {
+        box-sizing: border-box;
+      }
+      #ru-embed-status {
+        font: 12px/1.4 system-ui, sans-serif;
+        color: #666;
+        padding: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ru-embed-status">Chargement Channel Manager…</div>
+    <div id="ruApp"></div>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var scriptUrl = params.get('script');
+        var statusEl = document.getElementById('ru-embed-status');
+        if (!scriptUrl) {
+          if (statusEl) statusEl.textContent = 'Erreur: script URL manquante';
+          return;
+        }
+        // Only allow RU white-pms script hosts
+        if (!/^https:\/\/([a-z0-9-]+\.)*rentalsunited\.com\//i.test(scriptUrl)) {
+          if (statusEl) statusEl.textContent = 'Erreur: script URL non autorisée';
+          return;
+        }
+        var s = document.createElement('script');
+        s.src = scriptUrl;
+        s.async = false;
+        s.onload = function () {
+          if (statusEl) statusEl.textContent = '';
+          setTimeout(function () {
+            var app = document.getElementById('ruApp');
+            var n = app ? app.childElementCount : -1;
+            console.info('[ru-embed] #ruApp children=', n, 'base=', document.querySelector('base') && document.querySelector('base').href);
+            if (statusEl && n <= 0) {
+              statusEl.textContent = 'Widget RU: conteneur vide (token/scripts?)';
+            }
+          }, 4000);
+        };
+        s.onerror = function () {
+          if (statusEl) statusEl.textContent = 'Erreur: échec chargement script RU';
+        };
+        document.body.appendChild(s);
+      })();
+    </script>
+  </body>
+</html>

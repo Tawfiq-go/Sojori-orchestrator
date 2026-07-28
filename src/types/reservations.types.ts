@@ -116,6 +116,12 @@ export interface Reservation {
     importListingId?: string | null;
   } | null;
   roomTypeId?: string;
+  /** Type de chambre (Multi / MEWS) — enrichi getReservations / batch. */
+  roomTypeName?: string | null;
+  roomTypes?: { roomTypeName?: string; name?: string } | null;
+  /** Unité inventaire (Mews) — absente RU/Airbnb. */
+  roomId?: string;
+  roomName?: string | null;
   doorCode?: string;
 
   // Registration

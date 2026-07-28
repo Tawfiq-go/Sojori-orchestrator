@@ -101,22 +101,32 @@ export default function ConversationAnalysisModal({
 
         if (requestId !== requestIdRef.current) return;
         if (!data.success) {
-          throw new Error(data.message || "L'analyse a échoué, réessayez.");
+          // Backend renvoie `error` (code), pas `message` — cf. conversationAnalysis.ts
+          throw new Error(
+            data.message ||
+              (data as { error?: string }).error ||
+              "L'analyse a échoué, réessayez.",
+          );
         }
         setResult(data);
       } catch (err: unknown) {
         if (requestId !== requestIdRef.current) return;
         console.error('Erreur analyse IA conversation:', err);
         const status = (err as { response?: { status?: number } })?.response?.status;
+        const apiError = (
+          err as { response?: { data?: { error?: string; message?: string } }; message?: string }
+        )?.response?.data;
         let msg: string;
-        if (status === 503) {
+        if (status === 503 || apiError?.error === 'analysis_not_configured') {
           msg = 'IA non configurée';
+        } else if (status === 403 || apiError?.error === 'owner_forbidden') {
+          msg = 'Accès refusé pour cette conversation';
         } else if (status === 422) {
           msg = "L'analyse a échoué, réessayez";
         } else {
           msg =
-            (err as { response?: { data?: { message?: string } }; message?: string })?.response
-              ?.data?.message ||
+            apiError?.message ||
+            apiError?.error ||
             (err as Error)?.message ||
             "Erreur lors de l'analyse de la conversation";
         }

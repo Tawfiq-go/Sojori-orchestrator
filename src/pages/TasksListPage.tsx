@@ -72,7 +72,6 @@ import { usePmTasksScope } from '../hooks/usePmTasksScope';
 import { useSocketIO } from '../hooks/useSocketIO';
 import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 import type {
-  TaskEmergency,
   TaskListItem,
   TaskListingOption,
   TaskStatus,
@@ -250,7 +249,7 @@ const TABLE_VIEWPORT_HEIGHT = {
 
 const TASKS_TABLE_MIN_WIDTH = 1280;
 
-type QuickFilterKey = 'none' | 'dueToday' | 'dueTomorrow' | 'due7d' | 'urgent';
+type QuickFilterKey = 'none' | 'dueToday' | 'dueTomorrow' | 'due7d' | 'red' | 'orange' | 'green';
 
 function Pill({
   label,
@@ -1082,7 +1081,6 @@ export function TasksListPage() {
     dateType: '' as '' | 'startDate' | 'createdAt',
     startDate: null as string | null,
     endDate: null as string | null,
-    emergency: 'all' as 'all' | TaskEmergency,
   });
 
   const [filtersModalOpen, setFiltersModalOpen] = useState(false);
@@ -1138,9 +1136,6 @@ export function TasksListPage() {
       let dateType = advancedFilters.dateType || undefined;
       let dateStart = advancedFilters.startDate || undefined;
       let dateEnd = advancedFilters.endDate || undefined;
-      let emergency =
-        advancedFilters.emergency === 'all' ? undefined : advancedFilters.emergency;
-
       if (quickFilterKey === 'dueToday') {
         dateType = 'startDate';
         dateStart = fmt(today);
@@ -1154,8 +1149,6 @@ export function TasksListPage() {
         dateType = 'startDate';
         dateStart = fmt(today);
         dateEnd = fmt(today.clone().add(7, 'days'));
-      } else if (quickFilterKey === 'urgent') {
-        emergency = 'Urgent';
       }
 
       // ⚡ PERFORMANCE: Chargement parallèle tasks + staff + listings
@@ -1179,7 +1172,6 @@ export function TasksListPage() {
             listFilters.paymentStatus === 'all' ? undefined : listFilters.paymentStatus,
           hasAssociation:
             listFilters.hasAssociation === 'all' ? undefined : listFilters.hasAssociation,
-          emergency,
           dateType,
           dateStart,
           dateEnd,
@@ -1230,7 +1222,6 @@ export function TasksListPage() {
     advancedFilters.dateType,
     advancedFilters.startDate,
     advancedFilters.endDate,
-    advancedFilters.emergency,
     quickFilterKey,
   ]);
 
@@ -1325,13 +1316,23 @@ export function TasksListPage() {
     } else if (listFilters.origin === 'client') {
       list = list.filter((task) => task.itemType !== 'Task' || task.isClientRequest === true);
     }
-    if (quickFilterKey === 'urgent') {
-      list = list.filter((task) => {
-        const em = String(task.emergency || '');
-        return em === 'Urgent' || em === 'Critical';
-      });
+    /* Priorité 3 couleurs (dérivée backend) : filtre + tri rouge → heure. */
+    if (quickFilterKey === 'red' || quickFilterKey === 'orange' || quickFilterKey === 'green') {
+      list = list.filter((task) => (task.priority?.urgency ?? 'green') === quickFilterKey);
     }
-    return list;
+    const urgencyRank = (task: TaskListItem) =>
+      task.priority?.urgency === 'red' ? 0 : task.priority?.urgency === 'orange' ? 1 : 2;
+    const timeMs = (task: TaskListItem) => {
+      const due = task.priority?.dueAt || task.startDate;
+      if (!due) return Number.POSITIVE_INFINITY;
+      const t = new Date(due).getTime();
+      return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
+    };
+    return [...list].sort((a, b) => {
+      const byUrgency = urgencyRank(a) - urgencyRank(b);
+      if (byUrgency !== 0) return byUrgency;
+      return timeMs(a) - timeMs(b);
+    });
   }, [tasks, listFilters.origin, quickFilterKey]);
 
   const filterCounts = useMemo(() => {
@@ -1360,11 +1361,12 @@ export function TasksListPage() {
           task.startDate &&
           moment(task.startDate).isBetween(today, next7, 'day', '[]'),
       ).length,
-      urgent: tasks.filter((task) => {
-        if (!isOpen(task)) return false;
-        const em = String(task.emergency || '');
-        return em === 'Urgent' || em === 'Critical';
-      }).length,
+      /* Priorité dérivée — « rouge j'agis, orange je regarde, vert je continue ». */
+      red: tasks.filter((task) => isOpen(task) && task.priority?.urgency === 'red').length,
+      orange: tasks.filter((task) => isOpen(task) && task.priority?.urgency === 'orange').length,
+      green: tasks.filter(
+        (task) => isOpen(task) && (task.priority?.urgency ?? 'green') === 'green',
+      ).length,
     };
   }, [tasks]);
 
@@ -1389,7 +1391,6 @@ export function TasksListPage() {
     if (listFilters.staffCodes.length > 0) n += 1;
     if (listFilters.origin !== 'all') n += 1;
     if (advancedFilters.dateType) n += 1;
-    if (advancedFilters.emergency !== 'all') n += 1;
     if (listFilters.paymentStatus !== 'all') n += 1;
     if (listFilters.hasAssociation !== 'all') n += 1;
     if (listFilters.sources.length > 0) n += 1;
@@ -1449,7 +1450,6 @@ export function TasksListPage() {
       dateType: '',
       startDate: null,
       endDate: null,
-      emergency: 'all',
     });
     setTempPayment('all');
     setTempHasAssociation('all');
@@ -1476,7 +1476,6 @@ export function TasksListPage() {
       dateType: '',
       startDate: null,
       endDate: null,
-      emergency: 'all',
     });
     setPage(0);
   };
@@ -1756,11 +1755,24 @@ export function TasksListPage() {
       label: 'Logement',
       width: COLUMN_WIDTHS.listing,
       align: 'left' as const,
-      render: (row: TaskRow) => (
-        <Typography sx={{ fontSize: 12, fontWeight: 600 }} noWrap title={row.listingName || ''}>
-          {row.listingName || '—'}
-        </Typography>
-      ),
+      render: (row: TaskRow) => {
+        const full = String(row.listingName || '').trim();
+        const sep = full.indexOf(' · ');
+        const hotel = sep > 0 ? full.slice(0, sep) : full;
+        const room = sep > 0 ? full.slice(sep + 3) : '';
+        return (
+          <Stack spacing={0} sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 600 }} noWrap title={full || ''}>
+              {hotel || '—'}
+            </Typography>
+            {room ? (
+              <Typography sx={{ fontSize: 10.5, color: T.text3, fontWeight: 600 }} noWrap title={room}>
+                {room}
+              </Typography>
+            ) : null}
+          </Stack>
+        );
+      },
     },
     {
       key: 'voyageur',
@@ -1826,6 +1838,37 @@ export function TasksListPage() {
       width: COLUMN_WIDTHS.urgence,
       align: 'center' as const,
       render: (row: TaskRow) => {
+        /* Priorité 3 couleurs dérivée (heure vs statut, seuils par type) —
+           « vert je continue, orange je regarde, rouge j'agis ». */
+        const p = row.priority;
+        if (p) {
+          const meta =
+            p.urgency === 'red'
+              ? { dot: '🔴', bg: '#fdecea', color: '#c62828', label: p.reason || 'agir' }
+              : p.urgency === 'orange'
+                ? { dot: '🟠', bg: '#fff4e5', color: '#b45309', label: p.reason || 'à surveiller' }
+                : { dot: '🟢', bg: '#e8f5e9', color: '#2e7d32', label: p.reason || 'ok' };
+          return (
+            <Tooltip
+              title={`${meta.label}${p.dueAt ? ` · prévu ${moment(p.dueAt).format('HH:mm')}` : ''}`}
+              arrow
+            >
+              <Chip
+                label={`${meta.dot} ${p.urgency === 'green' ? 'ok' : meta.label}`}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  bgcolor: meta.bg,
+                  color: meta.color,
+                  border: `1px solid ${meta.color}33`,
+                  '& .MuiChip-label': { px: 0.75 },
+                }}
+              />
+            </Tooltip>
+          );
+        }
         const em = String(row.emergency || 'Normal');
         const meta = emergencyChipMeta(em);
         return (
@@ -2152,10 +2195,13 @@ export function TasksListPage() {
               pb: 0.1,
             }}
           >
+            <Pill dense label="🔴" count={filterCounts.red} active={quickFilterKey === 'red'} onClick={() => toggleQuickFilter('red')} color={T.error} />
+            <Pill dense label="🟠" count={filterCounts.orange} active={quickFilterKey === 'orange'} onClick={() => toggleQuickFilter('orange')} color={T.warning} />
+            <Pill dense label="🟢" count={filterCounts.green} active={quickFilterKey === 'green'} onClick={() => toggleQuickFilter('green')} color={T.success} />
+            <Box sx={{ width: '1px', height: 14, bgcolor: T.border, flexShrink: 0, mx: 0.15 }} />
             <Pill dense label="Auj." count={filterCounts.dueToday} active={quickFilterKey === 'dueToday'} onClick={() => toggleQuickFilter('dueToday')} color={T.info} />
             <Pill dense label="Dem." count={filterCounts.dueTomorrow} active={quickFilterKey === 'dueTomorrow'} onClick={() => toggleQuickFilter('dueTomorrow')} color={T.warning} />
             <Pill dense label="7j" count={filterCounts.due7d} active={quickFilterKey === 'due7d'} onClick={() => toggleQuickFilter('due7d')} color={T.primary} />
-            <Pill dense label="Urg." count={filterCounts.urgent} active={quickFilterKey === 'urgent'} onClick={() => toggleQuickFilter('urgent')} color={T.error} />
             <Box sx={{ width: '1px', height: 14, bgcolor: T.border, flexShrink: 0, mx: 0.15 }} />
             <KpiCompact dense label="À tr." value={kpis.created} accent={T.info} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['CREATED'] })); setQuickFilterKey('none'); setPage(0); }} />
             <KpiCompact dense label="Cours" value={kpis.inProgress} accent={T.warning} onClick={() => { setListFilters((p) => ({ ...p, statuses: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] })); setQuickFilterKey('none'); setPage(0); }} />
@@ -2342,10 +2388,12 @@ export function TasksListPage() {
 
           <Stack direction="row" sx={{ mt: 1.5, gap: 0.75, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
             <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
+              <Pill label="🔴 Agir" count={filterCounts.red} active={quickFilterKey === 'red'} onClick={() => toggleQuickFilter('red')} color={T.error} />
+              <Pill label="🟠 Surveiller" count={filterCounts.orange} active={quickFilterKey === 'orange'} onClick={() => toggleQuickFilter('orange')} color={T.warning} />
+              <Pill label="🟢 OK" count={filterCounts.green} active={quickFilterKey === 'green'} onClick={() => toggleQuickFilter('green')} color={T.success} />
               <Pill label="Échéance auj." count={filterCounts.dueToday} active={quickFilterKey === 'dueToday'} onClick={() => toggleQuickFilter('dueToday')} color={T.info} />
               <Pill label="Échéance demain" count={filterCounts.dueTomorrow} active={quickFilterKey === 'dueTomorrow'} onClick={() => toggleQuickFilter('dueTomorrow')} color={T.warning} />
               <Pill label="Échéance 7 jours" count={filterCounts.due7d} active={quickFilterKey === 'due7d'} onClick={() => toggleQuickFilter('due7d')} color={T.primary} />
-              <Pill label="Urgent" count={filterCounts.urgent} active={quickFilterKey === 'urgent'} onClick={() => toggleQuickFilter('urgent')} color={T.error} />
             </Stack>
             <Stack direction="row" sx={{ gap: 0.75 }}>
               <KpiCompact
@@ -2600,24 +2648,6 @@ export function TasksListPage() {
                         />
                       </Stack>
                     ) : null}
-                    <TextField
-                      select
-                      size="small"
-                      label="Urgence"
-                      value={tempAdvanced.emergency}
-                      onChange={(e) =>
-                        setTempAdvanced((a) => ({
-                          ...a,
-                          emergency: e.target.value as 'all' | TaskEmergency,
-                        }))
-                      }
-                      fullWidth
-                    >
-                      <MenuItem value="all">Toutes</MenuItem>
-                      <MenuItem value="Normal">Normal</MenuItem>
-                      <MenuItem value="Urgent">Urgent</MenuItem>
-                      <MenuItem value="Critical">Critique</MenuItem>
-                    </TextField>
                   </Stack>
                 </Box>
 

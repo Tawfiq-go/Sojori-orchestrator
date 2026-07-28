@@ -1,23 +1,42 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Zap } from 'lucide-react';
+import { Building2, CalendarDays, RefreshCw, Zap } from 'lucide-react';
 import { formatCasablancaDate } from '../../utils/dateFormatting';
 import { dispatchChannelsRefresh } from '../../utils/channelsRefresh';
 import { canonicalSectionTab, type SectionTab } from '../../utils/channelsUrlUtils';
+import { useAuth } from '../../hooks/useAuth';
+import { Roles } from '../../constants/roles';
+import {
+  postMewsPocPullAvailability,
+  postMewsPocPullListings,
+  postMewsPocPullReservations,
+} from '../../services/channelsDashboardApi';
 
 type Props = {
   sectionHint?: string;
   sectionTab?: SectionTab;
 };
 
+function isAdminRole(role: unknown): boolean {
+  const r = String(role || '');
+  return r === Roles.Admin || r === Roles.SuperAdmin;
+}
+
 /**
  * Barre titre Channels : refresh, période, indication de la section active.
+ * Admin only : boutons Mews POC (Récupérer listing / Récupérer resa).
  */
 export function ChannelsHubToolbar({ sectionHint, sectionTab: sectionTabProp }: Props) {
+  const { user } = useAuth();
+  const showMewsPoc = isAdminRole(user?.role);
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionTab = sectionTabProp ?? canonicalSectionTab(searchParams.get('tab'));
   const [lastRefresh, setLastRefresh] = useState(() => new Date());
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [mewsBusy, setMewsBusy] = useState<'listings' | 'reservations' | 'availability' | null>(
+    null,
+  );
+  const [mewsMsg, setMewsMsg] = useState<string | null>(null);
   const hoursParam = Number(searchParams.get('hours'));
   const hours = Number.isFinite(hoursParam) && hoursParam > 0 ? hoursParam : 72;
 
@@ -36,6 +55,43 @@ export function ChannelsHubToolbar({ sectionHint, sectionTab: sectionTabProp }: 
     }, 30_000);
     return () => window.clearInterval(id);
   }, [autoRefresh]);
+
+  const runMewsPull = async (kind: 'listings' | 'reservations' | 'availability') => {
+    setMewsBusy(kind);
+    setMewsMsg(null);
+    try {
+      const res =
+        kind === 'listings'
+          ? await postMewsPocPullListings({ maxResources: 200 })
+          : kind === 'reservations'
+            ? await postMewsPocPullReservations({ daysBack: 7, maxReservations: 100 })
+            : await postMewsPocPullAvailability({ daysAhead: 30 });
+      const data = res.data || {};
+      if (data.success === false) {
+        setMewsMsg(data.error || 'Échec pull Mews');
+        return;
+      }
+      if (kind === 'listings') {
+        setMewsMsg(
+          `Listings OK — owner ${String(data.ownerId || '').slice(-6)} · hôtel ${String(data.hotelListingId || '').slice(-6)} · ${data.resourcesMapped ?? 0} resources`,
+        );
+      } else if (kind === 'reservations') {
+        setMewsMsg(
+          `Résas OK — +${data.created ?? 0} / ~${data.updated ?? 0} · err ${data.errors ?? 0} · pull ${data.pulled ?? 0}`,
+        );
+      } else {
+        setMewsMsg(
+          `Calendrier OK — ${data.categoriesMapped ?? 0} types · ${data.inventoryModified ?? 0} jours maj · ${data.currency || ''} · ${data.daysAhead ?? 30}j`,
+        );
+      }
+      doRefresh();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } }; message?: string };
+      setMewsMsg(e.response?.data?.error || e.message || 'Erreur réseau Mews');
+    } finally {
+      setMewsBusy(null);
+    }
+  };
 
   const sectionLabels: Record<string, string> = {
     Sum: 'Summary',
@@ -62,8 +118,45 @@ export function ChannelsHubToolbar({ sectionHint, sectionTab: sectionTabProp }: 
               {sectionHint ? (
                 <p className="text-[11px] text-slate-500 mt-1 leading-snug max-w-3xl">{sectionHint}</p>
               ) : null}
+              {showMewsPoc && mewsMsg ? (
+                <p className="text-[11px] text-teal-700 mt-1 leading-snug max-w-3xl">{mewsMsg}</p>
+              ) : null}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
+              {showMewsPoc && (
+                <>
+                  <button
+                    type="button"
+                    disabled={mewsBusy !== null}
+                    onClick={() => void runMewsPull('listings')}
+                    className="h-7 px-2 rounded text-xs font-semibold border bg-teal-50 text-teal-800 border-teal-200 disabled:opacity-50"
+                    title="Owner MEWS + hôtel minimal + pull resources"
+                  >
+                    <Building2 size={11} className="inline mr-1" />
+                    {mewsBusy === 'listings' ? '…' : 'Récupérer listing'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={mewsBusy !== null}
+                    onClick={() => void runMewsPull('reservations')}
+                    className="h-7 px-2 rounded text-xs font-semibold border bg-teal-50 text-teal-800 border-teal-200 disabled:opacity-50"
+                    title="Pull résas Mews → Sojori (tag MEWS)"
+                  >
+                    <CalendarDays size={11} className="inline mr-1" />
+                    {mewsBusy === 'reservations' ? '…' : 'Récupérer resa'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={mewsBusy !== null}
+                    onClick={() => void runMewsPull('availability')}
+                    className="h-7 px-2 rounded text-xs font-semibold border bg-teal-50 text-teal-800 border-teal-200 disabled:opacity-50"
+                    title="Pull dispo Mews → calendrier / inventory Sojori"
+                  >
+                    <CalendarDays size={11} className="inline mr-1" />
+                    {mewsBusy === 'availability' ? '…' : 'Récupérer calendrier'}
+                  </button>
+                </>
+              )}
               {showHours && (
                 <select
                   className="channels-select h-7 text-xs"

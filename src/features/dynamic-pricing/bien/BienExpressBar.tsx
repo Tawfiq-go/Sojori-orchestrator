@@ -26,6 +26,7 @@ import {
   nextMarketSnapshotRun,
   nextNightlyPropagationRun,
 } from '../utils/nextCronRun';
+import { usePricePreviewSelectionOptional } from './pricePreviewSelectionContext';
 
 /**
  * Bandeau express fiche bien :
@@ -38,6 +39,8 @@ export interface BienExpressBarProps {
   hasMarketData: boolean;
   listingHasAirbnb?: boolean;
   snapshotAt?: string | null;
+  /** Dernière apply calendrier (portfolio) — seed affichage haut de page. */
+  calendarAppliedAt?: string | null;
   onFetchMarket: () => Promise<{ costUsd?: number } | void>;
   onFetchComps?: () => Promise<{ costUsd?: number } | void>;
   onFetchPerformance?: () => Promise<{ costUsd?: number } | void>;
@@ -53,10 +56,77 @@ const fmtDate = (v?: string | null) =>
 const fmtDateShort = (v?: string | null) =>
   v ? new Date(v).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '—';
 
+function latestIso(...vals: Array<string | null | undefined>): string | null {
+  let best: string | null = null;
+  let bestT = -1;
+  for (const v of vals) {
+    if (!v) continue;
+    const t = new Date(v).getTime();
+    if (!Number.isFinite(t) || t <= bestT) continue;
+    bestT = t;
+    best = v;
+  }
+  return best;
+}
+
 function isAutoAudit(a: PricingAuditRowDto): boolean {
   if (a.appliedBy === 'cron') return true;
   const t = (a.triggerSource || '').toLowerCase();
   return t.includes('recompute') || t.includes('nightly') || t.includes('cron');
+}
+
+/** Ligne haut de page : dernière MAJ calendrier + forcer (discret). */
+function CalendarMajHeader({
+  when,
+  loading,
+  disabled,
+  onForce,
+}: {
+  when: string | null;
+  loading?: boolean;
+  disabled?: boolean;
+  onForce: () => void;
+}) {
+  return (
+    <Stack
+      direction="row"
+      sx={{
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 1,
+        flexWrap: 'wrap',
+        mb: 1,
+      }}
+    >
+      <Typography sx={{ fontSize: 12.5, color: T.text2, fontWeight: 600 }}>
+        Dernière mise à jour calendrier ·{' '}
+        <Box
+          component="span"
+          sx={{ fontWeight: 800, color: T.text, fontFamily: '"Geist Mono", monospace', fontSize: 12 }}
+        >
+          {fmtDate(when) ?? 'jamais'}
+        </Box>
+      </Typography>
+      <Button
+        size="small"
+        variant="text"
+        disabled={disabled || loading}
+        onClick={onForce}
+        sx={{
+          textTransform: 'none',
+          fontWeight: 600,
+          fontSize: 11.5,
+          color: T.text3,
+          minWidth: 0,
+          px: 0.5,
+          py: 0.25,
+          '&:hover': { color: T.goldDeep, bgcolor: 'transparent' },
+        }}
+      >
+        {loading ? '…' : 'Forcer la mise à jour'}
+      </Button>
+    </Stack>
+  );
 }
 
 function ImpactChip({
@@ -248,11 +318,13 @@ function OwnerExpressBar({
   view,
   hasMarketData,
   snapshotAt,
+  calendarAppliedAt = null,
   advancedOpen,
   onToggleAdvanced,
 }: BienExpressBarProps) {
   const listingId = view.listing._id;
   const modeLabel = view.activeModeLabel ?? view.mode;
+  const selection = usePricePreviewSelectionOptional();
   // Client : ni mode « vs marché » ni date d'estimation — juste sa fourchette
   const metaParts = [`${view.floor}–${view.ceiling} MAD`];
 
@@ -261,6 +333,7 @@ function OwnerExpressBar({
   const [autoPropagation, setAutoPropagation] = useState(false);
   const [savingToggle, setSavingToggle] = useState<'snap' | 'prop' | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const [lastAuditAt, setLastAuditAt] = useState<string | null>(null);
 
   const loadState = useCallback(async () => {
     try {
@@ -268,9 +341,25 @@ function OwnerExpressBar({
       setAutoSnapshot(cfg.data?.config?.autoSnapshotEnabled !== false);
       setAutoPropagation(Boolean(cfg.data?.config?.enabled));
     } catch { /* config absente */ }
+    try {
+      const audits = await fetchListingPricingAudits(listingId, 20);
+      const rows = audits.data?.audits ?? [];
+      const latest = rows.reduce<string | null>((acc, a) => {
+        if (!a.appliedAt) return acc;
+        if (!acc) return a.appliedAt;
+        return new Date(a.appliedAt).getTime() > new Date(acc).getTime() ? a.appliedAt : acc;
+      }, null);
+      setLastAuditAt(latest);
+    } catch { /* pas d'audit */ }
   }, [listingId]);
 
   useEffect(() => { void loadState(); }, [loadState]);
+
+  const lastCalendarAt = latestIso(
+    selection?.lastCalendarUpdatedAt,
+    lastAuditAt,
+    calendarAppliedAt,
+  );
 
   const saveToggle = async (kind: 'snap' | 'prop', value: boolean) => {
     setSavingToggle(kind);
@@ -305,30 +394,18 @@ function OwnerExpressBar({
         bgcolor: T.bg1,
       }}
     >
+      <CalendarMajHeader
+        when={lastCalendarAt}
+        loading={Boolean(view.pilotApplyLoading)}
+        disabled={!view.onRunCalendarUpdate}
+        onForce={() => setCalendarOpen(true)}
+      />
+
       {metaParts.length ? (
         <Typography sx={{ fontSize: 11, color: T.text3, mb: 0.75 }} noWrap>
           {metaParts.join(' · ')}
         </Typography>
       ) : null}
-
-      <Button
-        fullWidth
-        size="medium"
-        variant="contained"
-        disabled={!view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
-        onClick={() => setCalendarOpen(true)}
-        sx={{
-          mb: 1,
-          textTransform: 'none',
-          fontWeight: 800,
-          fontSize: 13,
-          py: 1,
-          bgcolor: T.goldDeep,
-          '&:hover': { bgcolor: T.gold },
-        }}
-      >
-        {view.pilotApplyLoading ? '…' : 'Forcer la mise à jour du calendrier'}
-      </Button>
 
       <Box
         sx={{
@@ -408,12 +485,14 @@ function OwnerExpressBar({
           setCalendarOpen(false);
           void loadState();
         }}
-        onRun={
-          view.onRunCalendarUpdate ??
-          (async () => {
+        onRun={async () => {
+          if (!view.onRunCalendarUpdate) {
             throw new Error('Mise à jour calendrier indisponible');
-          })
-        }
+          }
+          const r = await view.onRunCalendarUpdate();
+          selection?.touchCalendarUpdatedAt();
+          return r;
+        }}
       />
     </Box>
   );
@@ -425,6 +504,7 @@ function AdminExpressBar({
   hasMarketData,
   listingHasAirbnb = false,
   snapshotAt,
+  calendarAppliedAt = null,
   onFetchMarket,
   onFetchComps,
   onFetchPerformance,
@@ -432,6 +512,7 @@ function AdminExpressBar({
   onToggleAdvanced,
 }: BienExpressBarProps) {
   const listingId = view.listing._id;
+  const selection = usePricePreviewSelectionOptional();
 
   const [fetching, setFetching] = useState(false);
   const [fetchingComps, setFetchingComps] = useState(false);
@@ -550,6 +631,12 @@ function AdminExpressBar({
   const modeLabel = view.activeModeLabel ?? view.mode;
   const autoImpact = auditImpact(lastAutoAudit);
   const manualImpact = auditImpact(lastManualAudit);
+  const lastCalendarAt = latestIso(
+    selection?.lastCalendarUpdatedAt,
+    lastManualAudit?.appliedAt,
+    lastAutoAudit?.appliedAt,
+    calendarAppliedAt,
+  );
 
   const estimateChips = (
     <>
@@ -640,26 +727,14 @@ function AdminExpressBar({
         </Box>
       </Stack>
 
-      <Button
-        fullWidth
-        size="large"
-        variant="contained"
-        disabled={!view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
-        onClick={() => setCalendarOpen(true)}
-        sx={{
-          mb: 2,
-          textTransform: 'none',
-          fontWeight: 800,
-          fontSize: 14,
-          py: 1.25,
-          bgcolor: T.goldDeep,
-          '&:hover': { bgcolor: T.gold },
-        }}
-      >
-        {view.pilotApplyLoading ? 'Propagation…' : 'Forcer la mise à jour du calendrier'}
-      </Button>
+      <CalendarMajHeader
+        when={lastCalendarAt}
+        loading={Boolean(view.pilotApplyLoading)}
+        disabled={!view.onRunCalendarUpdate}
+        onForce={() => setCalendarOpen(true)}
+      />
       {!hasMarketData ? (
-        <Typography sx={{ mt: -1.5, mb: 1.5, fontSize: 11.5, color: T.text3 }}>
+        <Typography sx={{ mb: 1.5, fontSize: 11.5, color: T.text3 }}>
           Astuce : lancez d’abord une estimation si la prévisualisation est vide.
         </Typography>
       ) : null}
@@ -782,13 +857,21 @@ function AdminExpressBar({
 
           <Button
             fullWidth
-            size="medium"
-            variant="contained"
+            size="small"
+            variant="text"
             disabled={!view.onRunCalendarUpdate || Boolean(view.pilotApplyLoading)}
             onClick={() => setCalendarOpen(true)}
-            sx={{ textTransform: 'none', fontWeight: 800, fontSize: 13, py: 1, bgcolor: T.goldDeep }}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: 12,
+              color: T.text3,
+              justifyContent: 'flex-start',
+              px: 0.5,
+              '&:hover': { color: T.goldDeep, bgcolor: 'transparent' },
+            }}
           >
-            {view.pilotApplyLoading ? 'Propagation…' : 'Forcer la mise à jour du calendrier'}
+            {view.pilotApplyLoading ? 'Propagation…' : 'Forcer la mise à jour'}
           </Button>
           <LastRunLine when={fmtDate(lastManualAudit?.appliedAt)} chips={calendarChips(manualImpact)} />
         </Box>
@@ -852,12 +935,14 @@ function AdminExpressBar({
           setCalendarOpen(false);
           void loadState();
         }}
-        onRun={
-          view.onRunCalendarUpdate ??
-          (async () => {
+        onRun={async () => {
+          if (!view.onRunCalendarUpdate) {
             throw new Error('Mise à jour calendrier indisponible');
-          })
-        }
+          }
+          const r = await view.onRunCalendarUpdate();
+          selection?.touchCalendarUpdatedAt();
+          return r;
+        }}
       />
     </Box>
   );

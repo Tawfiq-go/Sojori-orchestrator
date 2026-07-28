@@ -253,7 +253,9 @@ export function Step1TypeSelection({
   const selectedType = useFulltaskApi
     ? FULLTASK_TYPE_SELECT_OPTIONS.find((t) => t.id === formData.fulltaskTypeId)
     : TASK_TYPES.find((t) => t.value === formData.taskType);
-  const canProceed = typeSelected && formData.listing && formData.reservation;
+  const canProceed = useFulltaskApi
+    ? Boolean(typeSelected && formData.listing)
+    : Boolean(typeSelected && formData.listing && formData.reservation);
   return <Box sx={{
     mt: 2
   }}>
@@ -355,13 +357,34 @@ export function Step1TypeSelection({
       my: 3
     }} />}
 
-      {/* 3️⃣ Réservation */}
+      {/* 3️⃣ Réservation (optionnelle en fulltask) */}
       {formData.listing && <>
           <Typography variant="subtitle2" sx={{
         mb: 2
       }}>
-            3️⃣ Réservation *
+            3️⃣ Réservation {useFulltaskApi ? '(optionnel)' : '*'}
           </Typography>
+
+          {useFulltaskApi && (
+            <Paper
+              elevation={!formData.reservation ? 3 : 1}
+              sx={{
+                p: 2,
+                mb: 2,
+                border: !formData.reservation ? '2px solid #4CAF50' : '1px solid #E0E0E0',
+                cursor: 'pointer',
+                '&:hover': { bgcolor: '#f5f5f5' },
+              }}
+              onClick={() => onChange({ reservation: null })}
+            >
+              <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                Sans réservation
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Tâche liée au logement uniquement — pas de plan guest / orchestration résa
+              </Typography>
+            </Paper>
+          )}
 
           {/* Réservation en cours (auto-selected) */}
           {loadingCurrentReservation ? <Box sx={{
@@ -385,7 +408,7 @@ export function Step1TypeSelection({
           mb: 1,
           display: 'block'
         }}>
-                📌 Réservation en cours (sélectionnée par défaut)
+                📌 Réservation en cours {formData.reservation ? '(sélectionnée)' : '(cliquer pour lier)'}
               </Typography>
               <Box sx={{
           display: 'flex',
@@ -511,13 +534,19 @@ export function Step1TypeSelection({
               Logement: 🏠 {formData.listing?.name || formData.listing?.title}
             </Typography>
             <Typography variant="body2">
-              Réservation: {formData.reservation?.number || formData.reservation?.reservationNumber} -{' '}
-              {formData.reservation?.guestName}
+              Réservation:{' '}
+              {formData.reservation
+                ? `${formData.reservation.number || formData.reservation.reservationNumber} - ${formData.reservation.guestName}`
+                : 'Sans réservation'}
             </Typography>
-            <Typography variant="body2">
-              Check-in:{' '}
-              {formData.reservation && new Date(formData.reservation.checkIn || formData.reservation.arrivalDate || '').toLocaleDateString()}
-            </Typography>
+            {formData.reservation ? (
+              <Typography variant="body2">
+                Check-in:{' '}
+                {new Date(
+                  formData.reservation.checkIn || formData.reservation.arrivalDate || '',
+                ).toLocaleDateString()}
+              </Typography>
+            ) : null}
             {formData.taskType && CLIENT_TASK_TYPES.includes(formData.taskType) && <Typography variant="body2" sx={{
           mt: 0.5
         }}>

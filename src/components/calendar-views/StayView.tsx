@@ -5,17 +5,18 @@
 // • Tâches PAR JOUR dans les colonnes (2–6 lignes selon charge)
 // • Couleur barre par canal (Airbnb/Booking/Vrbo/Direct)
 // ════════════════════════════════════════════════════════════════════
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Stack, Typography, Popover, Dialog, DialogTitle, DialogContent, DialogActions, Button, useMediaQuery, useTheme } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import CalendarDatePicker from '../calendar-v3/CalendarDatePicker';
 import {
   T, STAY, STAY_COMPACT, COCKPIT_META, stayMetrics, type StayMetrics, type ListingRow, type TimelineItem,
+  type TaskUrgency, type PlanningCreateContext,
   channelFromName, genDays, listingCockpitRowHeight, dayTaskLaneTop, taskLaneHeightForLines,
   commsMetaLineCount,
   KpiPill, DayHeader, TaskChip, StayOpsDayLane, CockpitCommsDualRow, GanttBar, SOJORI_KEYFRAMES,
   computeReservationBarLayout, computeReservationMessagesLayout, planningDaySurfaceSx,
-  stayOpsDayPillCount, dayIsTurnover,
+  stayOpsDayPillCount, resolveTaskUrgency,
 } from './_shared';
 import { CleanlinessBadgeInteractive } from './CleanlinessBadgeInteractive';
 import {
@@ -28,6 +29,10 @@ import {
 import { PLANNING_VISIBLE_DAYS, getPlanningGridScrollLeft } from '../../utils/planningViewDates';
 import { DASHBOARD_PAGE, DASHBOARD_PAGE_FILL_SX } from '../../constants/dashboardLayout';
 import ListingGroupMultiFilter from './ListingGroupMultiFilter';
+import {
+  expandPlanningListingRows,
+  isPlanningMultiHotel,
+} from '../../utils/planningMultiExpand';
 
 export type StayViewVariant = 'tasks' | 'reservations';
 
@@ -66,6 +71,8 @@ export interface StayViewProps {
   todayBackDays?: number;
   /** Manual cleanliness change from planning grid */
   onCleanlinessChange?: (listingId: string, status: DisplayCleanliness) => void | Promise<void>;
+  /** Clic droit sur une cellule → créer une tâche : le contexte (logement, jour, résa) est déduit. */
+  onCreateTaskAt?: (ctx: PlanningCreateContext, anchor: { x: number; y: number }) => void;
   /** Toolbar compacte (planning résa / calendrier) */
   compactLayout?: boolean;
   /** Toolbar 1–2 lignes sur desktop (grille taille normale) */
@@ -143,6 +150,7 @@ export default function StayView({
   startDate, daysCount = 30, listings, variant = 'tasks', onTaskClick, onReservationClick,
   onCommsClick,
   onGoToday, onPrevDay, onNextDay, onPrevWeek, onNextWeek, onDateChange, onCleanlinessChange,
+  onCreateTaskAt,
   todayBackDays = 2,
   compactLayout = false,
   denseToolbar = false,
@@ -156,6 +164,8 @@ export default function StayView({
 }: StayViewProps) {
   const isReservations = variant === 'reservations';
   const [internalCockpitLayer, setInternalCockpitLayer] = useState<StayCockpitLayer>('all');
+  /** Multi MEWS : ▶ ouvre les roomTypes (collapsed par défaut). */
+  const [multiExpanded, setMultiExpanded] = useState<Record<string, boolean>>({});
   const cockpitLayer = cockpitLayerProp ?? internalCockpitLayer;
   const setCockpitLayer = onCockpitLayerChange ?? setInternalCockpitLayer;
   /** Planning classique : tâches seulement. Cockpit Résas : tâches + msgs. */
@@ -168,11 +178,11 @@ export default function StayView({
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
   const useDenseChrome = compactLayout || denseToolbar;
-  /** Résas cockpit : +25 % largeur jour pour chips tâches plus lisibles. */
+  /** Planning / cockpit : colonnes plus larges pour chips tâches lisibles. */
   const m = useMemo(() => {
     const base = stayMetrics(compactLayout, isNarrow);
     if (!enableCommsCockpit) return base;
-    return { ...base, CELL_W: Math.round(base.CELL_W * 1.25) };
+    return { ...base, CELL_W: Math.round(base.CELL_W * 1.5) };
   }, [compactLayout, isNarrow, enableCommsCockpit]);
   const minimapDays = useMemo(() => genDays(startDate, daysCount), [startDate, daysCount]);
   const days = useMemo(() => genDays(startDate, VISIBLE_DAYS), [startDate]);
@@ -218,6 +228,8 @@ export default function StayView({
   const [selectedListingIds, setSelectedListingIds] = useState<string[]>([]);
   /** Recherche globale (listing, ville, guest, n° résa, téléphone). */
   const [searchQuery, setSearchQuery] = useState('');
+  /** Filtre priorité 3 couleurs — « rouge j'agis, orange je regarde, vert je continue ». */
+  const [urgencyFilter, setUrgencyFilter] = useState<'all' | TaskUrgency>('all');
   const [filtersModalOpen, setFiltersModalOpen] = useState(false);
   const [tempCleanlinessFilters, setTempCleanlinessFilters] = useState<Set<CleanlinessFilter>>(new Set());
   const [tempStatusFilters, setTempStatusFilters] = useState<Set<'confirmed' | 'pending'>>(
@@ -266,6 +278,20 @@ export default function StayView({
       }));
     }
 
+    if (urgencyFilter !== 'all') {
+      rows = rows.map((l) => ({
+        ...l,
+        reservations: l.reservations.map((r) => ({
+          ...r,
+          timeline: (r.timeline || []).filter((t) => {
+            const st = String(t.status || '');
+            if (st === 'COMPLETED' || st === 'CANCELLED') return urgencyFilter === 'green';
+            return resolveTaskUrgency(t) === urgencyFilter;
+          }),
+        })),
+      }));
+    }
+
     if (cleanlinessFilters.size === 0) return rows;
     return rows.filter((l) =>
       matchesCleanlinessFilter(
@@ -281,6 +307,7 @@ export default function StayView({
     cockpitLayer,
     enableCommsCockpit,
     keepAllReservations,
+    urgencyFilter,
   ]);
 
   const listingGroupOptions = useMemo(() => {
@@ -349,42 +376,95 @@ export default function StayView({
     });
   }, [displayListings, selectedCities, selectedListingIds, searchQuery]);
 
+  // Compteurs priorité — listings bruts (hors filtre couleur) pour ne pas s'auto-cacher.
+  const urgencyCounts = useMemo(() => {
+    const counts = { red: 0, orange: 0, green: 0 };
+    let rows = listings;
+    if (selectedCities.length > 0) {
+      const set = new Set(selectedCities);
+      rows = rows.filter((l) => set.has(l.city || 'Sans ville'));
+    }
+    if (selectedListingIds.length > 0) {
+      const set = new Set(selectedListingIds);
+      rows = rows.filter((l) => set.has(l.listingId));
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      const digits = q.replace(/\D/g, '');
+      rows = rows.filter((l) => {
+        if ((l.listingName || '').toLowerCase().includes(q)) return true;
+        if ((l.city || '').toLowerCase().includes(q)) return true;
+        return (l.reservations || []).some((r) => {
+          if ((r.guestName || '').toLowerCase().includes(q)) return true;
+          if ((r.reservationNumber || '').toLowerCase().includes(q)) return true;
+          const phone = String(r.lastWa?.phone || '').replace(/\D/g, '');
+          return digits.length >= 4 && phone.includes(digits);
+        });
+      });
+    }
+    rows.forEach((l) =>
+      l.reservations?.forEach((r) =>
+        r.timeline?.forEach((t) => {
+          const st = String(t.status || '');
+          if (st === 'COMPLETED' || st === 'CANCELLED') return;
+          counts[resolveTaskUrgency(t)] += 1;
+        }),
+      ),
+    );
+    return counts;
+  }, [listings, selectedCities, selectedListingIds, searchQuery]);
+
   // KPI "aujourd'hui"
   const kpis = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
+    let arr = 0;
+    let dep = 0;
+    let confirmed = 0;
+    let pending = 0;
+    let cln = 0;
+    let na = 0;
     if (isReservations) {
-      let arr = 0, dep = 0, confirmed = 0, pending = 0;
-      filteredByGroup.forEach(l => l.reservations.forEach(r => {
-        const arrIso = (r.arrivalDate || '').slice(0, 10);
-        const depIso = (r.departureDate || '').slice(0, 10);
-        if (arrIso === today) arr++;
-        if (depIso === today) dep++;
-        if (r.status === 'confirmed') confirmed++;
-        else pending++;
-      }));
-      return { arr, dep, confirmed, pending };
+      filteredByGroup.forEach((l) =>
+        l.reservations.forEach((r) => {
+          const arrIso = (r.arrivalDate || '').slice(0, 10);
+          const depIso = (r.departureDate || '').slice(0, 10);
+          if (arrIso === today) arr++;
+          if (depIso === today) dep++;
+          if (r.status === 'confirmed') confirmed++;
+          else pending++;
+        }),
+      );
+    } else {
+      filteredByGroup.forEach((l) =>
+        l.reservations.forEach((r) =>
+          r.timeline?.forEach((t) => {
+            if ((t.scheduledFor || '').slice(0, 10) !== today) return;
+            if (t.type === 'arrival') arr++;
+            if (t.type === 'departure') dep++;
+            if (t.type === 'cleaning') cln++;
+            if (!t.staffId && t.status !== 'COMPLETED') na++;
+          }),
+        ),
+      );
     }
-    let arr = 0, dep = 0, cln = 0, na = 0;
-    filteredByGroup.forEach(l => l.reservations.forEach(r => r.timeline?.forEach(t => {
-      if ((t.scheduledFor || '').slice(0, 10) !== today) return;
-      if (t.type === 'arrival')   arr++;
-      if (t.type === 'departure') dep++;
-      if (t.type === 'cleaning')  cln++;
-      if (!t.staffId && t.status !== 'COMPLETED') na++;
-    })));
-    return { arr, dep, cln, na };
+    return { arr, dep, confirmed, pending, cln, na };
   }, [filteredByGroup, isReservations]);
 
-  // Group by city
+  // Group by city — Multi expand ▶ roomTypes (comme MultiView MEWS)
   const byCity = useMemo(() => {
     const map = new Map<string, ListingRow[]>();
-    filteredByGroup.forEach(l => {
+    filteredByGroup.forEach((l) => {
       const c = l.city || 'Sans ville';
+      const rows = expandPlanningListingRows(l, Boolean(multiExpanded[l.listingId]));
       if (!map.has(c)) map.set(c, []);
-      map.get(c)!.push(l);
+      map.get(c)!.push(...rows);
     });
     return Array.from(map.entries());
-  }, [filteredByGroup]);
+  }, [filteredByGroup, multiExpanded]);
+
+  const toggleMultiHotel = useCallback((listingId: string) => {
+    setMultiExpanded((prev) => ({ ...prev, [listingId]: !prev[listingId] }));
+  }, []);
 
   const showChrome = !gridOnly;
   const showMinimap = showChrome && !compactLayout && !denseToolbar;
@@ -451,8 +531,60 @@ export default function StayView({
     });
   };
 
+  const toggleUrgency = (u: TaskUrgency) => {
+    setUrgencyFilter((prev) => (prev === u ? 'all' : u));
+  };
+
+  const urgencyBanner = !isReservations ? (
+    <Stack direction="row" sx={{ gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
+      {(
+        [
+          { id: 'red' as const, label: '🔴', count: urgencyCounts.red, color: T.error },
+          { id: 'orange' as const, label: '🟠', count: urgencyCounts.orange, color: T.warning },
+          { id: 'green' as const, label: '🟢', count: urgencyCounts.green, color: T.success },
+        ] as const
+      ).map((p) => {
+        const active = urgencyFilter === p.id;
+        return (
+          <Box
+            key={p.id}
+            component="button"
+            type="button"
+            title={
+              p.id === 'red'
+                ? 'Agir maintenant'
+                : p.id === 'orange'
+                  ? 'À surveiller'
+                  : 'OK — à l’heure'
+            }
+            onClick={() => toggleUrgency(p.id)}
+            sx={{
+              all: 'unset',
+              cursor: 'pointer',
+              fontFamily: '"Geist Mono", monospace',
+              fontSize: 11,
+              fontWeight: 750,
+              px: '8px',
+              py: '3px',
+              borderRadius: '7px',
+              border: `1px solid ${active ? p.color : T.border}`,
+              bgcolor: active ? `${p.color}18` : T.bg1,
+              color: active ? p.color : T.text2,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {p.label} {p.count}
+          </Box>
+        );
+      })}
+    </Stack>
+  ) : null;
+
   const kpiRow = (
     <Stack sx={{ flexDirection: 'row', flexWrap: 'wrap', gap: compactLayout ? 0.5 : 1.25, alignItems: 'center' }}>
+      {urgencyBanner}
+      {urgencyBanner ? <Box sx={{ width: '1px', height: 18, bgcolor: T.border, flexShrink: 0 }} /> : null}
       <KpiPill icon="🏠" count={kpis.arr} label={compactLayout ? 'Arr.aj' : 'Arrivées auj.'} tone="success" />
       <KpiPill icon="🚪" count={kpis.dep} label={compactLayout ? 'Dép.aj' : 'Départs auj.'} tone="warning" />
       {isReservations ? (
@@ -582,6 +714,8 @@ export default function StayView({
                   {displayListings.length} prop. · {daysCount}j · {VISIBLE_DAYS}j vis.
                 </Typography>
                 <Box sx={{ width: '1px', height: 16, bgcolor: T.border, flexShrink: 0 }} />
+                {urgencyBanner}
+                {urgencyBanner ? <Box sx={{ width: '1px', height: 16, bgcolor: T.border, flexShrink: 0 }} /> : null}
                 <MiniKpi count={kpis.arr} label="Arr" tone={T.success} />
                 <MiniKpi count={kpis.dep} label="Dép" tone={T.warning} />
                 {isReservations ? (
@@ -1225,18 +1359,32 @@ export default function StayView({
               <Box component="span" sx={{
                 ml: 'auto', bgcolor: T.bg2, color: T.text2,
                 px: 0.625, borderRadius: 999, fontSize: compactLayout ? 8 : 9.5, letterSpacing: '0.04em',
-              }}>{lists.length}</Box>
+              }}>{lists.filter((x) => !x.isRoomTypeRow).length}</Box>
             </Box>
             {lists.map(l => (
-              <ListingRowComp key={l.listingId} listing={l} days={days} metrics={m}
+              <ListingRowComp
+                key={l.listingId}
+                listing={l}
+                days={days}
+                metrics={m}
                 compactListing={compactLayout}
                 showTaskChips={showTaskChips}
                 showMessageSnippets={showMessageSnippets}
-                richTaskChips={enableCommsCockpit}
+                richTaskChips={enableCommsCockpit || showTaskChips}
+                multiExpanded={Boolean(
+                  multiExpanded[l.parentListingId || l.listingId],
+                )}
+                onToggleMulti={
+                  isPlanningMultiHotel(l) && !l.isRoomTypeRow
+                    ? () => toggleMultiHotel(l.listingId)
+                    : undefined
+                }
                 onTaskClick={onTaskClick}
                 onReservationClick={onReservationClick}
                 onCommsClick={onCommsClick}
-                onCleanlinessChange={onCleanlinessChange} />
+                onCleanlinessChange={onCleanlinessChange}
+                onCreateTaskAt={onCreateTaskAt}
+              />
             ))}
           </React.Fragment>
         ))}
@@ -1250,7 +1398,9 @@ export default function StayView({
 function ListingRowComp({
   listing, days, metrics, compactListing = false, showTaskChips = true, showMessageSnippets = false,
   richTaskChips = false,
-  onTaskClick, onReservationClick, onCommsClick, onCleanlinessChange,
+  multiExpanded = false,
+  onToggleMulti,
+  onTaskClick, onReservationClick, onCommsClick, onCleanlinessChange, onCreateTaskAt,
 }: {
   listing: ListingRow; days: ReturnType<typeof genDays>; metrics: StayMetrics;
   compactListing?: boolean;
@@ -1258,6 +1408,8 @@ function ListingRowComp({
   showMessageSnippets?: boolean;
   /** Colonnes élargies Résas : label + heure + staff sur le chip. */
   richTaskChips?: boolean;
+  multiExpanded?: boolean;
+  onToggleMulti?: () => void;
   onTaskClick?: (i: TimelineItem) => void;
   onReservationClick?: (
     reservation: ListingRow['reservations'][0],
@@ -1269,10 +1421,17 @@ function ListingRowComp({
     listing: Pick<ListingRow, 'listingId' | 'listingName' | 'city'>,
   ) => void;
   onCleanlinessChange?: (listingId: string, status: DisplayCleanliness) => void | Promise<void>;
+  /** Clic droit sur une cellule → créer une tâche (contexte déduit : logement + jour + résa). */
+  onCreateTaskAt?: (ctx: PlanningCreateContext, anchor: { x: number; y: number }) => void;
 }) {
+  const isRoomTypeRow = Boolean(listing.isRoomTypeRow);
+  const isMultiHotel = isPlanningMultiHotel(listing) && !isRoomTypeRow;
+  const realListingId = listing.parentListingId || listing.listingId;
   const listingCtx = {
-    listingId: listing.listingId,
-    listingName: listing.listingName,
+    listingId: realListingId,
+    listingName: listing.parentListingName
+      ? `${listing.parentListingName} · ${listing.listingName}`
+      : listing.listingName,
     city: listing.city,
   };
   const numTasks = listing.reservations.reduce((n, r) => n + (r.timeline?.length || 0), 0);
@@ -1325,7 +1484,10 @@ function ListingRowComp({
       if (depIdx < 0 || arrIdx > days.length - 1) continue;
       const startIdx = Math.max(0, arrIdx);
       const endIdx = Math.min(days.length - 1, depIdx);
-      const { widthPct } = computeReservationBarLayout(startIdx, endIdx, days.length, 0);
+      const { widthPct } = computeReservationBarLayout(startIdx, endIdx, days.length, {
+        clippedStart: arrIdx < 0,
+        clippedEnd: depIdx > days.length - 1,
+      });
       if (widthPct < cellPct * 1.25) return true;
     }
     return false;
@@ -1368,31 +1530,56 @@ function ListingRowComp({
       display: 'grid', gridTemplateColumns: `${metrics.STICKY_W}px repeat(${days.length}, ${metrics.CELL_W}px)`,
       borderBottom: `1px solid ${T.border}`, height: rowHeight, position: 'relative',
     }}>
-      {/* Sticky left — bloc nom/badge */}
+      {/* Sticky left — Multi : ▶ + indent roomType (comme MultiView MEWS) */}
       <Stack
+        onClick={onToggleMulti}
         sx={{
-          px: compactListing ? '4px 5px' : '14px',
+          px: isRoomTypeRow
+            ? (compactListing ? '4px 5px 4px 14px' : '10px 14px 10px 28px')
+            : (compactListing ? '4px 5px' : '14px'),
           py: compactListing ? '3px' : '11px',
           borderRight: `1px solid ${T.border}`,
-          bgcolor: T.bg1,
+          bgcolor: isRoomTypeRow ? T.bg2 : T.bg1,
           minWidth: 0,
           height: '100%',
           gap: compactListing ? 0.25 : 0.75,
           justifyContent: 'center',
+          cursor: onToggleMulti ? 'pointer' : 'default',
+          '&:hover': onToggleMulti ? { bgcolor: T.bg2 } : undefined,
         }}
       >
         <Box
           sx={{
             display: 'grid',
             gridTemplateColumns: compactListing
-              ? 'minmax(0, 1fr)'
-              : `${metrics.LISTING_ICON_SIZE}px minmax(0, 1fr)`,
-            columnGap: compactListing ? 0 : `${metrics.LISTING_ICON_GAP}px`,
+              ? (isMultiHotel ? '14px minmax(0, 1fr)' : 'minmax(0, 1fr)')
+              : isRoomTypeRow
+                ? 'minmax(0, 1fr)'
+                : isMultiHotel
+                  ? `14px ${metrics.LISTING_ICON_SIZE}px minmax(0, 1fr)`
+                  : `${metrics.LISTING_ICON_SIZE}px minmax(0, 1fr)`,
+            columnGap: compactListing ? 0.35 : `${metrics.LISTING_ICON_GAP}px`,
             alignItems: 'center',
             width: '100%',
           }}
         >
-          {!compactListing && (
+          {isMultiHotel && (
+            <Box
+              component="span"
+              sx={{
+                fontSize: 10,
+                color: multiExpanded ? T.primary : T.text3,
+                width: 14,
+                textAlign: 'center',
+                transform: multiExpanded ? 'rotate(90deg)' : 'none',
+                transition: 'transform 0.2s',
+                lineHeight: 1,
+              }}
+            >
+              ▶
+            </Box>
+          )}
+          {!compactListing && !isRoomTypeRow && (
           <Box
             sx={{
               width: metrics.LISTING_ICON_SIZE,
@@ -1406,34 +1593,52 @@ function ListingRowComp({
           <Stack sx={{ minWidth: 0, gap: compactListing ? 0 : 0.5, pt: 0 }}>
             <Typography
               sx={{
-                fontSize: compactListing ? 10 : 12.5,
-                fontWeight: 700,
+                fontSize: isRoomTypeRow
+                  ? (compactListing ? 9.5 : 11.5)
+                  : (compactListing ? 10 : 12.5),
+                fontWeight: isRoomTypeRow ? 600 : 700,
                 lineHeight: 1.15,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 display: 'block',
               }}
-              title={listing.listingName}
+              title={
+                listing.parentListingName
+                  ? `${listing.parentListingName} · ${listing.listingName}`
+                  : listing.listingName
+              }
             >
               {listing.listingName}
             </Typography>
-            {!compactListing && (
+            {!compactListing && !isRoomTypeRow && (
             <CleanlinessBadgeInteractive
               status={displayStatus}
               displayStatus={displayStatus}
               emergency={listing.cleanlinessEmergency}
               onChange={
                 onCleanlinessChange
-                  ? (next) => onCleanlinessChange(listing.listingId, next)
+                  ? (next) => onCleanlinessChange(realListingId, next)
                   : undefined
               }
             />
             )}
+            {!compactListing && isMultiHotel && (listing.roomTypeCount || 0) > 1 ? (
+              <Typography
+                sx={{
+                  fontSize: 9.5,
+                  color: T.text3,
+                  fontFamily: '"Geist Mono", monospace',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {listing.roomTypeCount} types
+              </Typography>
+            ) : null}
           </Stack>
         </Box>
 
-        {!compactListing && (
+        {!compactListing && !isRoomTypeRow && (
         <Typography
           sx={{
             fontSize: 10,
@@ -1448,6 +1653,17 @@ function ListingRowComp({
           {showTaskChips && (
             <> · <b style={{ color: T.text2, fontWeight: 700 }}>{numTasks} tâch.</b></>
           )}
+        </Typography>
+        )}
+        {!compactListing && isRoomTypeRow && (
+        <Typography
+          sx={{
+            fontSize: 9.5,
+            color: T.text3,
+            fontFamily: '"Geist Mono", monospace',
+          }}
+        >
+          {listing.reservations.length} séj.
         </Typography>
         )}
       </Stack>
@@ -1488,6 +1704,35 @@ function ListingRowComp({
             tasks={tasks}
             stayOpsList={dayStayOps}
             onTaskClick={onTaskClick}
+            onCellContextMenu={
+              onCreateTaskAt
+                ? (e, dayIso) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    /* La position dit tout : logement + jour, et la résa en cours ce jour-là. */
+                    const stay = (listing.reservations || []).find(
+                      (r) =>
+                        (r.arrivalDate || '').slice(0, 10) <= dayIso &&
+                        dayIso <= (r.departureDate || '').slice(0, 10),
+                    );
+                    onCreateTaskAt(
+                      {
+                        listingId: realListingId,
+                        listingName: listing.parentListingName
+                          ? `${listing.parentListingName} · ${listing.listingName}`
+                          : listing.listingName,
+                        dayIso,
+                        reservationId: stay?.reservationId,
+                        reservationNumber: stay?.reservationNumber,
+                        guestName: stay?.guestName,
+                        isArrivalDay: (stay?.arrivalDate || '').slice(0, 10) === dayIso,
+                        isDepartureDay: (stay?.departureDate || '').slice(0, 10) === dayIso,
+                      },
+                      { x: e.clientX, y: e.clientY },
+                    );
+                  }
+                : undefined
+            }
             reserveTaskLane={showTaskChips || dayStayOps.length > 0}
             taskLaneTop={taskLaneTopPx}
             maxVisible={showMessageSnippets ? Math.max(COCKPIT_META.TASK_LANE_MIN_LINES, taskLines) : 2}
@@ -1502,7 +1747,6 @@ function ListingRowComp({
         width: days.length * metrics.CELL_W, height: rowHeight, pointerEvents: 'none', zIndex: 3,
       }}>
         {(() => {
-          const arrivalSlotCount = new Map<number, number>();
           const visibleReservations = listing.reservations
             .map(r => {
               const arr = new Date(r.arrivalDate);
@@ -1512,33 +1756,42 @@ function ListingRowComp({
               const depIdx = Math.floor((+dep - +firstDay) / 86400000);
               if (depIdx < 0 || arrIdx > days.length - 1) return null;
               const startIdx = Math.max(0, arrIdx);
-              const slot = arrivalSlotCount.get(startIdx) ?? 0;
-              arrivalSlotCount.set(startIdx, slot + 1);
-              return { r, startIdx, endIdx: Math.min(days.length - 1, depIdx), sameDaySlot: slot };
+              const endIdx = Math.min(days.length - 1, depIdx);
+              return {
+                r,
+                startIdx,
+                endIdx,
+                clippedStart: arrIdx < 0,
+                clippedEnd: depIdx > days.length - 1,
+              };
             })
             .filter(Boolean) as Array<{
               r: (typeof listing.reservations)[0];
               startIdx: number;
               endIdx: number;
-              sameDaySlot: number;
+              clippedStart: boolean;
+              clippedEnd: boolean;
             }>;
 
-          return visibleReservations.map(({ r, startIdx, endIdx, sameDaySlot }) => {
+          return visibleReservations.map(({ r, startIdx, endIdx, clippedStart, clippedEnd }) => {
+          const clip = { clippedStart, clippedEnd };
           const { leftPct, widthPct } = computeReservationBarLayout(
             startIdx,
             endIdx,
             days.length,
-            sameDaySlot,
+            clip,
           );
-          // Messages = strictement la barre (jamais sur la résa voisine)
+          // Messages = strictement la barre (matin = départ hier, après-midi = arrivée)
           const msgLayout = computeReservationMessagesLayout(
             startIdx,
             endIdx,
             days.length,
-            sameDaySlot,
+            clip,
           );
           const channel = channelFromName(r.channelName);
           const metaTop = barTop + barH + COCKPIT_META.BAR_GAP;
+          // Stub checkout seul (résa d’hier qui part aujourd’hui) : trop étroit pour WA/OTA
+          const checkoutStubOnly = clippedStart && startIdx >= endIdx;
           const hasWa = Boolean(
             r.lastWa?.exists ||
               r.lastWa?.lastMessageKind ||
@@ -1568,16 +1821,21 @@ function ListingRowComp({
                 confirmed={r.status === 'confirmed'}
                 leftPct={leftPct}
                 widthPct={widthPct}
-                compact={compactListing}
+                compact={compactListing || checkoutStubOnly}
                 hasOtaMsg={hasOta}
                 hasWaMsg={hasWa}
-                numberOfGuests={r.numberOfGuests}
+                numberOfGuests={checkoutStubOnly ? undefined : r.numberOfGuests}
                 arrivalDate={r.arrivalDate}
                 departureDate={r.departureDate}
                 lastWa={r.lastWa}
                 lastOta={r.lastOta}
+                roomTypeName={isRoomTypeRow ? undefined : r.roomTypeName}
+                roomName={r.roomName}
+                listingName={
+                  listing.parentListingName || listing.listingName
+                }
               />
-              {showMessageSnippets && (
+              {showMessageSnippets && !checkoutStubOnly && (
                 <Box
                   sx={{
                     position: 'absolute',
@@ -1625,6 +1883,7 @@ function DayCell({
   taskLaneTop,
   maxVisible,
   richChips = false,
+  onCellContextMenu,
 }: {
   day: ReturnType<typeof genDays>[0];
   tasks: TimelineItem[];
@@ -1635,13 +1894,13 @@ function DayCell({
   /** Nombre de chips empilés visibles (2 lignes min → jusqu’à 6). */
   maxVisible?: number;
   richChips?: boolean;
+  /** Clic droit sur la cellule → création de tâche (contexte déduit de la position). */
+  onCellContextMenu?: (e: React.MouseEvent, dayIso: string) => void;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const cleaningTasks = tasks.filter((t) => String(t.type || '') === 'cleaning');
   const otherTasks = tasks.filter((t) => String(t.type || '') !== 'cleaning');
-  const turnover = dayIsTurnover(stayOpsList, day.iso);
-  // Ménage toujours sur sa ligne (pas à côté Arr/Dép).
-  // Turnover même jour → centré (moitié fin resa / début suivante).
+  // Ménage toujours sur sa ligne (pas à côté Arr/Dép), pleine largeur dès la ligne jour.
   const restTasks = otherTasks;
   const limit = maxVisible ?? STAY.MAX_CHIPS;
   const visible = restTasks.slice(0, limit);
@@ -1650,17 +1909,21 @@ function DayCell({
   const hasLaneContent = tasks.length > 0 || stayOpsList.length > 0;
 
   return (
-    <Box sx={{
-      borderRight: `1px solid ${T.border}`, position: 'relative',
-      ...planningDaySurfaceSx(day),
-    }}>
+    <Box
+      onContextMenu={onCellContextMenu ? (e) => onCellContextMenu(e, day.iso) : undefined}
+      sx={{
+        borderRight: `1px solid ${T.border}`, position: 'relative',
+        ...planningDaySurfaceSx(day),
+      }}
+    >
       {hasLaneContent && (
         <Stack sx={{
           position: 'absolute',
-          left: 2,
-          right: 2,
+          // Coller à la ligne verticale du jour → max largeur pour le texte tâche
+          left: 0,
+          right: 1,
           flexDirection: 'column',
-          gap: 0.25,
+          gap: richChips ? 0.4 : 0.3,
           zIndex: 6,
           overflow: 'visible',
           ...(reserveTaskLane
@@ -1675,20 +1938,14 @@ function DayCell({
               key={`cl-${i}`}
               sx={{
                 display: 'flex',
-                justifyContent: 'center',
+                justifyContent: richChips ? 'stretch' : 'center',
                 width: '100%',
-                // Aligné STAY_RES_BAR : zone entre checkout (~40%) et checkin (~40%)
-                ...(turnover
-                  ? {
-                      px: '8%',
-                    }
-                  : {}),
               }}
             >
               <TaskChip
                 item={t}
                 rich={richChips}
-                fitContent
+                fitContent={!richChips}
                 onClick={() => onTaskClick?.(t)}
               />
             </Box>

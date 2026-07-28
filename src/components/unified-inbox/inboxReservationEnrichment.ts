@@ -31,6 +31,105 @@ function formatGuestsLabel(r: Reservation): string | undefined {
   return parts.length ? parts.join(' · ') : r.numberOfGuests ? `${r.numberOfGuests} voyageurs` : undefined;
 }
 
+/** Compact comme colonne Voyageurs planning : 2A · 1E · 1B */
+function formatGuestsCompact(r: Reservation): string | undefined {
+  const adults = Number(r.adults ?? r.numberOfGuests ?? 0) || 0;
+  const children = Number(r.children ?? 0) || 0;
+  const infants = Number(r.infants ?? 0) || 0;
+  if (!adults && !children && !infants) return undefined;
+  const parts: string[] = [];
+  if (adults) parts.push(`${adults}A`);
+  if (children) parts.push(`${children}E`);
+  if (infants) parts.push(`${infants}B`);
+  return parts.join(' · ');
+}
+
+function startOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Aligné liste réservations (Présence) — Attendu / En cours / Présent / … */
+function presenceLabelFromReservation(r: Reservation): string {
+  const status = String(r.status || '').toLowerCase();
+  if (status.includes('cancel')) return 'Annulé';
+  if (status === 'completed') return 'Complété';
+  const arr = r.arrivalDate ? startOfLocalDay(new Date(r.arrivalDate)) : null;
+  const dep = r.departureDate ? startOfLocalDay(new Date(r.departureDate)) : null;
+  const today = startOfLocalDay(new Date());
+  const cs = String(r.customerStatus || '').toLowerCase();
+  if (arr && today < arr) return 'Attendu';
+  if (arr && today.getTime() === arr.getTime() && !r.actualArrivalTime) return "Aujourd'hui";
+  if (r.actualArrivalTime && !r.actualDepartureTime && dep && today < dep) return 'Présent';
+  if (
+    r.actualArrivalTime &&
+    dep &&
+    today.getTime() === dep.getTime() &&
+    !r.actualDepartureTime
+  ) {
+    return 'Départ auj.';
+  }
+  if (r.actualDepartureTime || (dep && today > dep)) return 'Parti';
+  if (cs === 'arrived' || cs === 'on_site') return 'Présent';
+  if (cs === 'expected') return 'Attendu';
+  if (cs === 'departed') return 'Parti';
+  if (arr && dep && today >= arr && today <= dep) return 'En cours';
+  return 'Attendu';
+}
+
+function formatHourLabel(time?: string | boolean | null): string | undefined {
+  if (time == null || time === false || time === true) return undefined;
+  const t = String(time).trim();
+  if (!t || t === 'null') return undefined;
+  return t.replace(':00', 'h').replace(':', 'h');
+}
+
+function stayOpsFromReservation(r: Reservation): Pick<
+  InboxReservationData,
+  | 'guestsCompact'
+  | 'presenceLabel'
+  | 'registrationRegistered'
+  | 'registrationTotal'
+  | 'arrivalTimeChosen'
+  | 'arrivalTimeLabel'
+  | 'departureTimeChosen'
+  | 'departureTimeLabel'
+  | 'arrivalDeclared'
+  | 'departureDeclared'
+> {
+  const reg = r.guestRegistration || r.police_registration;
+  const toRegisterFromReg = Number(reg?.nbre_guest_to_register || 0);
+  const toRegister =
+    toRegisterFromReg > 0
+      ? toRegisterFromReg
+      : reg
+        ? 0
+        : Number(r.adults || r.numberOfGuests || 0) || 0;
+  const registered = Number(reg?.nbre_guest_complete ?? reg?.nbre_guest_registered ?? 0);
+  const arrivalChosen = Boolean(r.arrival_time_chosen || r.confirmedCheckInTime);
+  const departureChosen = Boolean(r.departure_time_chosen || r.confirmedCheckOutTime);
+  const arrivalTimeLabel =
+    formatHourLabel(r.arrival_time) ||
+    formatHourLabel(r.checkInTime) ||
+    (arrivalChosen ? '15h' : undefined);
+  const departureTimeLabel =
+    formatHourLabel((r as { departure_time?: string | null }).departure_time) ||
+    formatHourLabel(r.checkOutTime) ||
+    (departureChosen ? '11h' : undefined);
+
+  return {
+    guestsCompact: formatGuestsCompact(r),
+    presenceLabel: presenceLabelFromReservation(r),
+    registrationRegistered: toRegister > 0 || registered > 0 ? registered : undefined,
+    registrationTotal: toRegister > 0 ? toRegister : undefined,
+    arrivalTimeChosen: arrivalChosen,
+    arrivalTimeLabel,
+    departureTimeChosen: departureChosen,
+    departureTimeLabel,
+    arrivalDeclared: Boolean(r.actualArrivalTime),
+    departureDeclared: Boolean(r.actualDepartureTime),
+  };
+}
+
 function mapPaymentStatus(status?: string, alreadyPaid?: number, total?: number): string | undefined {
   const s = (status || '').toLowerCase();
   if (s.includes('paid') || s.includes('payé')) return '✅ Payé';
@@ -72,6 +171,7 @@ export function mapReservationToInboxData(
   const netHost = total != null && commission != null ? total - commission : undefined;
   const source = normalizeBookingSource(r.channelName || conv?.channel_name);
   const createdRaw = r.createdAt ?? r.reservationDate;
+  const stayOps = stayOpsFromReservation(r);
 
   return {
     reservationNumber: r.reservationNumber || getConversationReservationNumber(conv!),
@@ -95,6 +195,7 @@ export function mapReservationToInboxData(
     netHost,
     commission,
     otaPlatform: source,
+    ...stayOps,
   };
 }
 
@@ -128,6 +229,7 @@ export function enrichThreadFromReservation(
   const stay = stayStatusLabel(checkIn, checkOut, thread.channel === 'wa' ? 'whatsapp' : 'ota');
   const country = r?.guestCountry || r?.nationality;
   const flag = country ? countryFlag(country) : flagFromPhone(conv.phone);
+  const ops = r ? stayOpsFromReservation(r) : null;
 
   return {
     ...thread,
@@ -139,10 +241,23 @@ export function enrichThreadFromReservation(
     checkInBadge: checkInDaysLabel(checkIn),
     stayBadge: stay,
     guestsLabel: reservation?.guestsLabel || thread.guestsLabel,
+    guestsCompact: ops?.guestsCompact || reservation?.guestsCompact || thread.guestsCompact,
     phone: reservation?.guestPhone || thread.phone || conv.phone,
     guestFlag: flag || thread.guestFlag,
     isVip: (r?.totalPrice ?? 0) >= 1500 || (r?.nights ?? 0) >= 7,
     nightsCount: reservation?.nightsCount ?? nightsBetween(checkIn, checkOut),
+    presenceLabel: ops?.presenceLabel || reservation?.presenceLabel || thread.presenceLabel,
+    registrationRegistered:
+      ops?.registrationRegistered ?? reservation?.registrationRegistered ?? thread.registrationRegistered,
+    registrationTotal: ops?.registrationTotal ?? reservation?.registrationTotal ?? thread.registrationTotal,
+    arrivalTimeChosen: ops?.arrivalTimeChosen ?? reservation?.arrivalTimeChosen ?? thread.arrivalTimeChosen,
+    arrivalTimeLabel: ops?.arrivalTimeLabel || reservation?.arrivalTimeLabel || thread.arrivalTimeLabel,
+    departureTimeChosen:
+      ops?.departureTimeChosen ?? reservation?.departureTimeChosen ?? thread.departureTimeChosen,
+    departureTimeLabel:
+      ops?.departureTimeLabel || reservation?.departureTimeLabel || thread.departureTimeLabel,
+    arrivalDeclared: ops?.arrivalDeclared ?? reservation?.arrivalDeclared ?? thread.arrivalDeclared,
+    departureDeclared: ops?.departureDeclared ?? reservation?.departureDeclared ?? thread.departureDeclared,
   };
 }
 

@@ -184,6 +184,11 @@ export function useDashboardChrome() {
     if (path.startsWith('/admin/pm-lifecycle')) {
       return 'admin/pm-lifecycle';
     }
+    if (path.startsWith('/admin/partners')) {
+      const tab = new URLSearchParams(location.search).get('tab');
+      if (tab === 'concierge') return 'admin/partners/concierge';
+      return 'admin/partners/list';
+    }
     if (path.startsWith('/admin/mapping')) {
       return 'admin/mapping';
     }

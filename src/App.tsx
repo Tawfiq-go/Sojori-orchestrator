@@ -222,6 +222,9 @@ const WorkerEditPage = lazyWithReload(() =>
 const SettingsHubPage = lazyWithReload(() =>
   import('./pages/SettingsHubPage').then((module) => ({ default: module.SettingsHubPage }))
 );
+const PartnersAdminPage = lazyWithReload(() =>
+  import('./pages/PartnersAdminPage').then((module) => ({ default: module.PartnersAdminPage }))
+);
 const SettingsLegacyRedirect = lazyWithReload(() =>
   import('./pages/SettingsHubPage').then((module) => ({ default: module.SettingsLegacyRedirect }))
 );
@@ -458,6 +461,7 @@ function App() {
               <Route element={<AdminRoute />}>
                 <Route path="/admin/pm-lifecycle" element={<LazyRoute><PmLifecycleHubPage /></LazyRoute>} />
                 <Route path="/admin/pm-lifecycle/:ownerId" element={<LazyRoute><PmLifecycleDetailPage /></LazyRoute>} />
+                <Route path="/admin/partners" element={<LazyRoute><PartnersAdminPage /></LazyRoute>} />
               </Route>
               <Route path="/admin/User/create-user" element={<LazyRoute><WorkerCreatePage /></LazyRoute>} />
               <Route path="/admin/User/create-owner-user" element={<LazyRoute><WorkerCreateOwnerPage /></LazyRoute>} />

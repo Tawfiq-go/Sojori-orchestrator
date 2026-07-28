@@ -6,7 +6,7 @@
 // ════════════════════════════════════════════════════════════════════
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, MenuItem, ListItemText } from '@mui/material';
+import { Divider, Menu, MenuItem, ListItemText } from '@mui/material';
 import { addDays, format, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'react-toastify';
@@ -17,11 +17,20 @@ import {
 import * as fulltaskApi from '../../../services/fulltaskApi';
 import { normalizeOwnerId } from '../../../utils/fulltaskMappers';
 import type { Staff } from './types';
+import { labelForTaskTypeId } from './fulltaskTaskTypes';
 import './teamWeekView.css';
 
 const WINDOW_DAYS = 15;
 const CANCELLED_STATUSES = new Set(['CANCELLED_ADMIN', 'CANCELLED_CUSTOMER', 'ARCHIVED']);
 const MAX_CHIPS_COLLAPSED = 3;
+
+/** Parcours staff (comme WhatsApp) — dérivé du statut legacy planning. */
+type Lifecycle =
+  | 'waiting_accept'
+  | 'waiting_start'
+  | 'waiting_finish'
+  | 'finished'
+  | 'none';
 
 type TeamTask = {
   taskId: string | null;
@@ -30,13 +39,77 @@ type TeamTask = {
   day: string;
   time: string;
   label: string;
+  /** Type fulltask granulaire (receive_arrival, checkout_cleaning…). */
+  taskType: string;
   kind: 'cleaning' | 'arrival' | 'departure' | 'service' | 'other';
   listingName: string;
   guestName: string;
   staffId: string | null;
   done: boolean;
+  lifecycle: Lifecycle;
   ownerId: string;
 };
+
+function lifecycleFromStatus(status: string, hasStaff: boolean): Lifecycle {
+  if (!hasStaff) return 'none';
+  const s = String(status || '').toUpperCase();
+  if (s === 'COMPLETED' || s === 'DONE') return 'finished';
+  if (s === 'IN_PROGRESS' || s === 'DOING') return 'waiting_finish';
+  if (s === 'ACCEPTED' || s === 'CONFIRMED') return 'waiting_start';
+  if (
+    s === 'ASSIGNED' ||
+    s === 'CREATED' ||
+    s === 'PENDING_PARTNER' ||
+    s === 'NEW'
+  ) {
+    return 'waiting_accept';
+  }
+  return 'waiting_accept';
+}
+
+function lifecycleCurrentShort(lc: Lifecycle): string {
+  switch (lc) {
+    case 'waiting_accept':
+      return 'En attente accept.';
+    case 'waiting_start':
+      return 'Acceptée';
+    case 'waiting_finish':
+      return 'En cours';
+    case 'finished':
+      return 'Terminée';
+    default:
+      return 'À assigner';
+  }
+}
+
+/** Badge chip : prochaine action claire. */
+function lifecycleNextShort(lc: Lifecycle): string {
+  switch (lc) {
+    case 'waiting_accept':
+      return '→ Accepter';
+    case 'waiting_start':
+      return '→ Commencer';
+    case 'waiting_finish':
+      return '→ Terminer';
+    case 'finished':
+      return 'OK';
+    default:
+      return '→ Assigner';
+  }
+}
+
+function lifecycleNextAction(lc: Lifecycle): string | null {
+  switch (lc) {
+    case 'waiting_accept':
+      return 'Accepter';
+    case 'waiting_start':
+      return 'Commencer';
+    case 'waiting_finish':
+      return 'Terminer';
+    default:
+      return null;
+  }
+}
 
 type RowDef = {
   key: string;
@@ -92,6 +165,11 @@ function pivotTasks(listings: PlanningListingRow[], dayMin: string, dayMax: stri
         // scheduledFor porte l'heure métier (inferTaskPlannedIso) ; minuit UTC
         // subsiste seulement quand aucune heure n'est connue → pas d'affichage.
         const dayLevel = dt.getUTCHours() === 0 && dt.getUTCMinutes() === 0;
+        const staffId = it.staffId ? String(it.staffId) : null;
+        const lifecycle = lifecycleFromStatus(status, Boolean(staffId));
+        const taskType = String(
+          it.category || data.type || it.type || '',
+        ).toLowerCase();
         out.push({
           taskId: data.taskId ? String(data.taskId) : null,
           reservationId: resa.reservationId,
@@ -99,11 +177,13 @@ function pivotTasks(listings: PlanningListingRow[], dayMin: string, dayMax: stri
           day,
           time: dayLevel ? '' : format(dt, 'HH:mm'),
           label: taskLabel(String(it.category || it.type || '')),
+          taskType,
           kind: taskKind(String(it.type || '')),
           listingName: listing.listingName || 'Sans nom',
           guestName: resa.guestName || '',
-          staffId: it.staffId ? String(it.staffId) : null,
-          done: status === 'COMPLETED',
+          staffId,
+          done: lifecycle === 'finished',
+          lifecycle,
           ownerId: normalizeOwnerId(data.ownerId) || '',
         });
       }
@@ -151,6 +231,40 @@ function staffMatchesCityAccess(s: Staff, cityId: string, listingsInCity: Listin
   return listingsInCity.some((l) => listingIds.some((id) => String(id) === String(l.id)));
 }
 
+function staffMatchesTaskType(s: Staff, taskType: string): boolean {
+  const types = (s.allowedTaskTypes || []).map(String).filter(Boolean);
+  if (!taskType) return true;
+  if (!types.length) return false;
+  return types.includes(taskType);
+}
+
+/** null = OK ; sinon message refus assignation. */
+function staffAssignBlockReason(
+  s: Staff,
+  t: TeamTask,
+  listingsById: Map<string, ListingOpt>,
+): string | null {
+  if (t.ownerId && normalizeOwnerId(s.ownerId) && normalizeOwnerId(s.ownerId) !== t.ownerId) {
+    return `${s.fullName} n’appartient pas au même PM que cette tâche`;
+  }
+  const listing = listingsById.get(String(t.listingId));
+  const listingId = listing?.id || String(t.listingId || '');
+  const cityId = listing?.cityId;
+  if (!listingId) return 'Annonce introuvable pour cette tâche';
+  if (!staffMatchesListingAccess(s, listingId, cityId)) {
+    return `${s.fullName} n’a pas accès à « ${t.listingName || 'cette annonce'} »`;
+  }
+  if (!staffMatchesTaskType(s, t.taskType)) {
+    const typeLabel = labelForTaskTypeId(t.taskType) || t.label || t.taskType;
+    const types = (s.allowedTaskTypes || []).map(String).filter(Boolean);
+    if (!types.length) {
+      return `${s.fullName} n’a aucun type de tâche activé — activez « ${typeLabel} » dans Config Équipe`;
+    }
+    return `${s.fullName} n’a pas le type « ${typeLabel} » — activez-le dans Config Équipe`;
+  }
+  return null;
+}
+
 type Props = {
   staff: Staff[];
   listings?: ListingOpt[];
@@ -172,15 +286,26 @@ export default function TeamWeekView({
   const [startDate, setStartDate] = useState<Date>(() => startOfDay(new Date()));
   const [tasks, setTasks] = useState<TeamTask[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Refresh partiel — ne masque pas la grille (assign / accept / nav). */
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [expandedCells, setExpandedCells] = useState<Set<string>>(new Set());
   const [cityFilterId, setCityFilterId] = useState<string>('');
   const [listingFilterId, setListingFilterId] = useState<string>('');
-  const [assignMenu, setAssignMenu] = useState<{
+  const [taskMenu, setTaskMenu] = useState<{
     anchor: HTMLElement;
     task: TeamTask;
   } | null>(null);
   const [assigning, setAssigning] = useState(false);
+  const [acting, setActing] = useState(false);
+  /**
+   * Mettre en avant un statut staff :
+   * waiting_start = acceptée, pas encore commencée ni terminée.
+   */
+  const [focusLifecycle, setFocusLifecycle] = useState<
+    'all' | 'waiting_accept' | 'waiting_start' | 'waiting_finish'
+  >('all');
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dropStaffId, setDropStaffId] = useState<string | null>(null);
   const [dropDeniedStaffId, setDropDeniedStaffId] = useState<string | null>(null);
@@ -195,35 +320,52 @@ export default function TeamWeekView({
   const dayKeys = useMemo(() => days.map((d) => format(d, 'yyyy-MM-dd')), [days]);
   const todayKey = format(new Date(), 'yyyy-MM-dd');
 
-  const load = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const startStr = format(startDate, 'yyyy-MM-dd');
-      const endStr = format(addDays(startDate, WINDOW_DAYS - 1), 'yyyy-MM-dd');
-      const result = await fetchTaskNewPlanning({
-        startDate: startStr,
-        endDate: endStr,
-        ownerId: filterOwnerId,
-      });
-      if (requestId !== requestIdRef.current) return;
-      if (result.success && result.data) {
-        setTasks(pivotTasks(result.data.listings || [], startStr, endStr));
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true || hasLoadedOnce;
+      const requestId = ++requestIdRef.current;
+      if (silent) {
+        setRefreshing(true);
       } else {
-        setError(result.message || 'Erreur chargement planning équipe');
+        setLoading(true);
+        setError(null);
       }
-    } catch (e: unknown) {
-      if (requestId !== requestIdRef.current) return;
-      setError(e instanceof Error ? e.message : 'Erreur réseau');
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [startDate, filterOwnerId]);
+      try {
+        const startStr = format(startDate, 'yyyy-MM-dd');
+        const endStr = format(addDays(startDate, WINDOW_DAYS - 1), 'yyyy-MM-dd');
+        const result = await fetchTaskNewPlanning({
+          startDate: startStr,
+          endDate: endStr,
+          ownerId: filterOwnerId,
+        });
+        if (requestId !== requestIdRef.current) return;
+        if (result.success && result.data) {
+          setTasks(pivotTasks(result.data.listings || [], startStr, endStr));
+          setError(null);
+          setHasLoadedOnce(true);
+        } else {
+          if (!silent) setError(result.message || 'Erreur chargement planning équipe');
+          else toast.error(result.message || 'Erreur refresh planning');
+        }
+      } catch (e: unknown) {
+        if (requestId !== requestIdRef.current) return;
+        const msg = e instanceof Error ? e.message : 'Erreur réseau';
+        if (!silent) setError(msg);
+        else toast.error(msg);
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    },
+    [startDate, filterOwnerId, hasLoadedOnce],
+  );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load({ silent: hasLoadedOnce });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on période / owner only
+  }, [startDate, filterOwnerId]);
 
   const listingsById = useMemo(() => {
     const m = new Map<string, ListingOpt>();
@@ -348,10 +490,11 @@ export default function TeamWeekView({
     for (const [oid, bucket] of byOwner.entries()) {
       const staffRows = [...bucket.staffRows.values()].sort((a, b) => b.total - a.total);
       const rows: RowDef[] = [];
+      // Ligne « À assigner » comme les staff : cells = count/jour, clic = chips
       if (bucket.unassigned.total > 0) rows.push(bucket.unassigned);
       rows.push(...staffRows);
-      const taskCount = rows.reduce((acc, r) => acc + r.total, 0);
       if (rows.length === 0) continue;
+      const taskCount = rows.reduce((acc, r) => acc + r.total, 0);
       result.push({ ownerId: oid, label: ownerLabel(oid), rows, taskCount });
     }
     result.sort((a, b) => b.taskCount - a.taskCount);
@@ -365,6 +508,19 @@ export default function TeamWeekView({
     [filteredTasks],
   );
 
+  const lifecycleCounts = useMemo(() => {
+    let waiting_accept = 0;
+    let waiting_start = 0;
+    let waiting_finish = 0;
+    for (const t of filteredTasks) {
+      if (!t.staffId) continue;
+      if (t.lifecycle === 'waiting_accept') waiting_accept += 1;
+      else if (t.lifecycle === 'waiting_start') waiting_start += 1;
+      else if (t.lifecycle === 'waiting_finish') waiting_finish += 1;
+    }
+    return { waiting_accept, waiting_start, waiting_finish };
+  }, [filteredTasks]);
+
   const toggleCell = (key: string) => {
     setExpandedCells((prev) => {
       const next = new Set(prev);
@@ -375,23 +531,26 @@ export default function TeamWeekView({
   };
 
   const staffCanReceiveTask = useCallback(
-    (s: Staff, t: TeamTask): boolean => {
-      if (t.ownerId && normalizeOwnerId(s.ownerId) && normalizeOwnerId(s.ownerId) !== t.ownerId) {
-        return false;
+    (s: Staff, t: TeamTask): boolean => !staffAssignBlockReason(s, t, listingsById),
+    [listingsById],
+  );
+
+  const refuseAssign = useCallback(
+    (s: Staff | undefined, t: TeamTask) => {
+      if (!s) {
+        toast.error('Staff introuvable');
+        return;
       }
-      const listing = listingsById.get(String(t.listingId));
-      const listingId = listing?.id || String(t.listingId || '');
-      const cityId = listing?.cityId;
-      if (!listingId) return false;
-      return staffMatchesListingAccess(s, listingId, cityId);
+      const reason = staffAssignBlockReason(s, t, listingsById);
+      toast.error(reason || `Impossible d’assigner à ${s.fullName}`);
     },
     [listingsById],
   );
 
   const assignCandidates = useMemo(() => {
-    if (!assignMenu) return [];
-    return eligibleStaff.filter((s) => staffCanReceiveTask(s, assignMenu.task));
-  }, [assignMenu, eligibleStaff, staffCanReceiveTask]);
+    if (!taskMenu) return [];
+    return eligibleStaff.filter((s) => staffCanReceiveTask(s, taskMenu.task));
+  }, [taskMenu, eligibleStaff, staffCanReceiveTask]);
 
   const clearDragState = () => {
     dragTaskRef.current = null;
@@ -401,28 +560,30 @@ export default function TeamWeekView({
   };
 
   const handleAssign = async (staffId: string, task?: TeamTask) => {
-    const target = task || assignMenu?.task;
+    const target = task || taskMenu?.task;
     if (!target?.taskId || assigning) return;
     if (target.staffId && String(target.staffId) === String(staffId)) {
-      setAssignMenu(null);
+      setTaskMenu(null);
       clearDragState();
       return;
     }
     const receiver = staff.find((s) => String(s._id) === String(staffId));
     if (!receiver || !staffCanReceiveTask(receiver, target)) {
-      toast.error(
-        `Pas de permission sur ${target.listingName || 'cette annonce'} pour ce staff`,
-      );
+      refuseAssign(receiver, target);
       clearDragState();
       return;
     }
     const taskId = target.taskId;
     const prevStaffId = target.staffId;
-    // Optimistic : déplacer le chip sans refetch planning (évite reload ~1s+)
+    const prevLc = target.lifecycle;
     setTasks((prev) =>
-      prev.map((t) => (t.taskId === taskId ? { ...t, staffId } : t)),
+      prev.map((t) =>
+        t.taskId === taskId
+          ? { ...t, staffId, lifecycle: 'waiting_accept' as Lifecycle, done: false }
+          : t,
+      ),
     );
-    setAssignMenu(null);
+    setTaskMenu(null);
     clearDragState();
     setAssigning(true);
     try {
@@ -430,12 +591,87 @@ export default function TeamWeekView({
       toast.success(prevStaffId ? 'Tâche réassignée' : 'Tâche assignée');
     } catch (e: unknown) {
       setTasks((prev) =>
-        prev.map((t) => (t.taskId === taskId ? { ...t, staffId: prevStaffId } : t)),
+        prev.map((t) =>
+          t.taskId === taskId
+            ? {
+                ...t,
+                staffId: prevStaffId,
+                lifecycle: prevLc,
+                done: prevLc === 'finished',
+              }
+            : t,
+        ),
       );
       const err = e as { response?: { data?: { error?: string } }; message?: string };
       toast.error(err.response?.data?.error || err.message || 'Erreur assignation');
     } finally {
       setAssigning(false);
+    }
+  };
+
+  const patchLifecycleLocal = (taskId: string, lifecycle: Lifecycle) => {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.taskId === taskId
+          ? { ...t, lifecycle, done: lifecycle === 'finished' }
+          : t,
+      ),
+    );
+  };
+
+  const handleStaffAction = async (
+    action: 'accept' | 'reject' | 'start' | 'complete',
+  ) => {
+    const target = taskMenu?.task;
+    if (!target?.taskId || !target.staffId || acting) return;
+    const taskId = target.taskId;
+    const staffId = target.staffId;
+    const prev = target.lifecycle;
+    const nextLc: Lifecycle | null =
+      action === 'accept'
+        ? 'waiting_start'
+        : action === 'start'
+          ? 'waiting_finish'
+          : action === 'complete'
+            ? 'finished'
+            : null;
+
+    setTaskMenu(null);
+    setActing(true);
+    if (action === 'reject') {
+      setTasks((prevTasks) => prevTasks.filter((t) => t.taskId !== taskId));
+    } else if (nextLc) {
+      patchLifecycleLocal(taskId, nextLc);
+    }
+    try {
+      let res: { success?: boolean; error?: string };
+      if (action === 'accept') {
+        res = await fulltaskApi.acceptTask(taskId, staffId);
+      } else if (action === 'reject') {
+        res = await fulltaskApi.rejectTask(taskId, staffId);
+      } else if (action === 'start') {
+        res = await fulltaskApi.patchTaskStatus(taskId, 'doing');
+      } else {
+        res = await fulltaskApi.completeTask(taskId, staffId);
+      }
+      if (res?.success === false) throw new Error(res?.error || 'Action refusée');
+      const ok = {
+        accept: 'Acceptée',
+        reject: 'Refusée',
+        start: 'Démarrée',
+        complete: 'Terminée',
+      } as const;
+      toast.success(ok[action]);
+    } catch (e: unknown) {
+      if (action === 'reject') {
+        void load({ silent: true });
+      } else {
+        patchLifecycleLocal(taskId, prev);
+      }
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      toast.error(err.response?.data?.error || err.message || 'Erreur action');
+    } finally {
+      setActing(false);
     }
   };
 
@@ -445,7 +681,7 @@ export default function TeamWeekView({
       return;
     }
     if (t.taskId) {
-      setAssignMenu({ anchor: e.currentTarget as HTMLElement, task: t });
+      setTaskMenu({ anchor: e.currentTarget as HTMLElement, task: t });
       return;
     }
     if (t.reservationId && !t.reservationId.startsWith('orphan-')) {
@@ -504,54 +740,110 @@ export default function TeamWeekView({
     }
     const receiver = staff.find((s) => String(s._id) === String(staffId));
     if (!receiver || !staffCanReceiveTask(receiver, task)) {
-      toast.error(`Pas de permission sur ${task.listingName || 'cette annonce'} pour ce staff`);
+      refuseAssign(receiver, task);
       clearDragState();
       return;
     }
     void handleAssign(staffId, task);
   };
 
-  const renderChip = (t: TeamTask, i: number) => (
-    <button
-      key={`${t.taskId || t.reservationId}-${i}`}
-      type="button"
-      draggable={Boolean(t.taskId) && !t.done}
-      className={`twv-chip twv-chip--${t.kind}${t.done ? ' twv-chip--done' : ''}${!t.staffId ? ' twv-chip--unassigned' : ''}${dragTaskId && t.taskId === dragTaskId ? ' twv-chip--dragging' : ''}`}
-      title={`${t.label} · ${t.listingName}${t.guestName ? ` · ${t.guestName}` : ''}${t.done ? ' · terminée' : ''}${t.taskId ? ' — glisser vers un staff pour assigner' : ''}`}
-      onClick={(e) => onChipClick(t, e)}
-      onDragStart={(e) => onChipDragStart(t, e)}
-      onDrag={(e) => {
-        if (e.clientX !== 0 || e.clientY !== 0) dragMovedRef.current = true;
-      }}
-      onDragEnd={() => {
-        clearDragState();
-      }}
-    >
-      {t.time && <span className="twv-chip-time">{t.time} </span>}
-      {t.label}
-      <span className="twv-chip-listing">{t.listingName}</span>
-    </button>
-  );
+  const renderChip = (t: TeamTask, i: number) => {
+    const next = lifecycleNextShort(t.lifecycle);
+    const tip = [
+      t.label,
+      t.listingName,
+      t.guestName || null,
+      `Statut : ${lifecycleCurrentShort(t.lifecycle)}`,
+      lifecycleNextAction(t.lifecycle)
+        ? `Prochaine étape : ${lifecycleNextAction(t.lifecycle)}`
+        : null,
+      t.taskId ? 'Clic = actions · glisser = assigner' : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return (
+      <button
+        key={`${t.taskId || t.reservationId}-${i}`}
+        type="button"
+        draggable={Boolean(t.taskId) && !t.done}
+        className={`twv-chip twv-chip--${t.kind} twv-chip--lc-${t.lifecycle}${t.done ? ' twv-chip--done' : ''}${!t.staffId ? ' twv-chip--unassigned' : ''}${dragTaskId && t.taskId === dragTaskId ? ' twv-chip--dragging' : ''}`}
+        title={tip}
+        onClick={(e) => onChipClick(t, e)}
+        onDragStart={(e) => onChipDragStart(t, e)}
+        onDrag={(e) => {
+          if (e.clientX !== 0 || e.clientY !== 0) dragMovedRef.current = true;
+        }}
+        onDragEnd={() => {
+          clearDragState();
+        }}
+      >
+        <span className="twv-chip-head">
+          {t.time ? <span className="twv-chip-time">{t.time}</span> : null}
+          {next ? (
+            <span className={`twv-chip-lc twv-chip-lc--${t.lifecycle}`}>{next}</span>
+          ) : null}
+        </span>
+        {t.label}
+        <span className="twv-chip-listing">{t.listingName}</span>
+        {t.lifecycle !== 'finished' && t.lifecycle !== 'none' ? (
+          <span className="twv-chip-status">{lifecycleCurrentShort(t.lifecycle)}</span>
+        ) : null}
+      </button>
+    );
+  };
 
   const renderCell = (row: RowDef, dayKey: string) => {
-    const list = row.byDay.get(dayKey) || [];
-    if (!list.length) return null;
+    const raw = row.byDay.get(dayKey) || [];
+    const list =
+      focusLifecycle === 'all' || row.unassigned
+        ? raw
+        : raw.filter((t) => t.lifecycle === focusLifecycle);
+    if (!list.length) {
+      if (focusLifecycle !== 'all' && !row.unassigned && raw.length > 0) {
+        return <span className="twv-cell-dimmed">{raw.length}</span>;
+      }
+      return null;
+    }
     const cellKey = `${row.key}|${dayKey}`;
     const expanded = expandedCells.has(cellKey);
-    const visible = expanded ? list : list.slice(0, MAX_CHIPS_COLLAPSED);
+
+    // À assigner : compact = nombre du jour ; clic = ouvrir chips (glisser / choisir)
+    if (row.unassigned && !expanded) {
+      return (
+        <button
+          type="button"
+          className="twv-day-count"
+          onClick={() => toggleCell(cellKey)}
+          title={`${list.length} tâche${list.length > 1 ? 's' : ''} — clic pour afficher et assigner`}
+        >
+          {list.length}
+        </button>
+      );
+    }
+
+    const visible =
+      row.unassigned || expanded ? list : list.slice(0, MAX_CHIPS_COLLAPSED);
     const hidden = list.length - visible.length;
     return (
       <>
         {visible.map(renderChip)}
-        {hidden > 0 && (
-          <button type="button" className="twv-more" onClick={() => toggleCell(cellKey)}>
-            +{hidden} autres
-          </button>
-        )}
-        {expanded && list.length > MAX_CHIPS_COLLAPSED && (
+        {row.unassigned ? (
           <button type="button" className="twv-more" onClick={() => toggleCell(cellKey)}>
             réduire
           </button>
+        ) : (
+          <>
+            {hidden > 0 && (
+              <button type="button" className="twv-more" onClick={() => toggleCell(cellKey)}>
+                +{hidden} autres
+              </button>
+            )}
+            {expanded && list.length > MAX_CHIPS_COLLAPSED && (
+              <button type="button" className="twv-more" onClick={() => toggleCell(cellKey)}>
+                réduire
+              </button>
+            )}
+          </>
         )}
       </>
     );
@@ -576,7 +868,7 @@ export default function TeamWeekView({
     return (
       <tr
         key={row.key}
-        className={`twv-row${row.unassigned ? ' twv-row--unassigned' : ''}${!row.unassigned && row.total === 0 ? ' twv-row--idle' : ''}${isDropTarget ? ' twv-row--drop' : ''}${isDropDenied ? ' twv-row--drop-denied' : ''}${dimWhileDrag ? ' twv-row--no-access' : ''}`}
+        className={`twv-row${row.unassigned ? ' twv-row--unassigned' : ''}${!row.unassigned && row.total === 0 ? ' twv-row--idle' : ''}${isDropTarget ? ' twv-row--drop' : ''}${isDropDenied ? ' twv-row--drop-denied' : ''}${dimWhileDrag ? ' twv-row--no-access' : ''}${focusLifecycle !== 'all' ? ' twv-row--focused' : ''}`}
         onDragOver={sid ? (e) => onStaffDragOver(sid, e) : undefined}
         onDragLeave={
           sid
@@ -594,7 +886,9 @@ export default function TeamWeekView({
               <span className="twv-avatar twv-avatar--warn">!</span>
               <span>
                 <span className="twv-staff-name twv-staff-name--warn">À assigner</span>
-                <span className="twv-staff-sub">{row.total} tâche{row.total > 1 ? 's' : ''} sans staff</span>
+                <span className="twv-staff-sub">
+                  {row.total} · clic jour = liste · glisser ou choisir
+                </span>
               </span>
             </div>
           ) : (
@@ -678,13 +972,67 @@ export default function TeamWeekView({
           </span>
           <span className="twv-summary">
             {totalTasks} tâche{totalTasks > 1 ? 's' : ''}
-            {unassignedTotal > 0 && (
+            {unassignedTotal > 0 ? (
               <span className="twv-summary-warn"> · {unassignedTotal} à assigner</span>
-            )}
+            ) : null}
             {(listingFilterId || cityFilterId) && (
               <span> · {eligibleStaff.length} staff autorisé{eligibleStaff.length > 1 ? 's' : ''}</span>
             )}
           </span>
+          <div className="twv-focus-bar" role="group" aria-label="Mettre en avant un statut">
+            <button
+              type="button"
+              className={`twv-focus-chip${focusLifecycle === 'all' ? ' on' : ''}`}
+              onClick={() => setFocusLifecycle('all')}
+            >
+              Tous
+            </button>
+            <button
+              type="button"
+              className={`twv-focus-chip twv-focus-chip--accept${focusLifecycle === 'waiting_accept' ? ' on' : ''}`}
+              onClick={() =>
+                setFocusLifecycle((v) =>
+                  v === 'waiting_accept' ? 'all' : 'waiting_accept',
+                )
+              }
+              title="Assignées — pas encore acceptées"
+            >
+              À accepter
+              {lifecycleCounts.waiting_accept > 0 ? (
+                <span>{lifecycleCounts.waiting_accept}</span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              className={`twv-focus-chip twv-focus-chip--start${focusLifecycle === 'waiting_start' ? ' on' : ''}`}
+              onClick={() =>
+                setFocusLifecycle((v) =>
+                  v === 'waiting_start' ? 'all' : 'waiting_start',
+                )
+              }
+              title="Acceptées — prochaine étape : commencer"
+            >
+              À démarrer
+              {lifecycleCounts.waiting_start > 0 ? (
+                <span>{lifecycleCounts.waiting_start}</span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              className={`twv-focus-chip twv-focus-chip--finish${focusLifecycle === 'waiting_finish' ? ' on' : ''}`}
+              onClick={() =>
+                setFocusLifecycle((v) =>
+                  v === 'waiting_finish' ? 'all' : 'waiting_finish',
+                )
+              }
+              title="En cours — prochaine étape : terminer"
+            >
+              À terminer
+              {lifecycleCounts.waiting_finish > 0 ? (
+                <span>{lifecycleCounts.waiting_finish}</span>
+              ) : null}
+            </button>
+          </div>
         </div>
         <div className="twv-toolbar-nav">
           <button type="button" onClick={() => setStartDate((d) => addDays(d, -7))} aria-label="7 jours précédents">‹</button>
@@ -738,15 +1086,22 @@ export default function TeamWeekView({
         </div>
       ) : (
         <div className="twv-staff-strip twv-staff-strip--hint">
-          Filtrez par ville ou annonce (accès ville = toutes les annonces de la ville) · glissez une tâche sur un staff
+          Filtrez ville/annonce · clic tâche = accepter / commencer / terminer · glisser = assigner
         </div>
       )}
 
-      {error && <div className="twv-error">{error}</div>}
-      {loading && <div className="twv-loading">Chargement du planning équipe…</div>}
+      {error && !hasLoadedOnce ? <div className="twv-error">{error}</div> : null}
+      {loading && !hasLoadedOnce ? (
+        <div className="twv-loading">Chargement du planning équipe…</div>
+      ) : null}
+      {refreshing ? (
+        <div className="twv-refreshing" aria-live="polite">
+          Mise à jour…
+        </div>
+      ) : null}
 
-      {!loading && !error && (
-        <div className="twv-scroll">
+      {hasLoadedOnce || (!loading && !error) ? (
+        <div className={`twv-scroll${refreshing ? ' twv-scroll--refreshing' : ''}`}>
           <table className="twv-table">
             <thead>
               <tr>
@@ -781,31 +1136,118 @@ export default function TeamWeekView({
             </tbody>
           </table>
         </div>
-      )}
+      ) : null}
 
       <Menu
-        anchorEl={assignMenu?.anchor || null}
-        open={Boolean(assignMenu)}
-        onClose={() => setAssignMenu(null)}
+        anchorEl={taskMenu?.anchor || null}
+        open={Boolean(taskMenu)}
+        onClose={() => setTaskMenu(null)}
+        MenuListProps={{ dense: true }}
       >
-        <MenuItem disabled dense>
-          <ListItemText
-            primary="Assigner à…"
-            secondary={assignMenu ? `${assignMenu.task.label} · ${assignMenu.task.listingName}` : ''}
-          />
-        </MenuItem>
-        {assignCandidates.map((s) => (
-          <MenuItem key={s._id} dense disabled={assigning} onClick={() => void handleAssign(String(s._id))}>
-            {s.fullName}
+        {taskMenu ? (
+          <MenuItem disabled dense sx={{ opacity: '1 !important', whiteSpace: 'normal' }}>
+            <ListItemText
+              primary={`${taskMenu.task.label}${taskMenu.task.time ? ` · ${taskMenu.task.time}` : ''}`}
+              secondary={
+                <>
+                  <span style={{ display: 'block' }}>
+                    {taskMenu.task.listingName}
+                    {taskMenu.task.guestName ? ` · ${taskMenu.task.guestName}` : ''}
+                  </span>
+                  <span style={{ display: 'block', marginTop: 4, fontWeight: 700, color: '#1a1a1a' }}>
+                    Statut : {lifecycleCurrentShort(taskMenu.task.lifecycle)}
+                  </span>
+                  {lifecycleNextAction(taskMenu.task.lifecycle) ? (
+                    <span style={{ display: 'block', color: '#166534', fontWeight: 700 }}>
+                      Prochaine étape : {lifecycleNextAction(taskMenu.task.lifecycle)}
+                    </span>
+                  ) : taskMenu.task.lifecycle === 'finished' ? (
+                    <span style={{ display: 'block', color: '#64748b' }}>Aucune action restante</span>
+                  ) : !taskMenu.task.staffId ? (
+                    <span style={{ display: 'block', color: '#b45309', fontWeight: 700 }}>
+                      Prochaine étape : Assigner un staff
+                    </span>
+                  ) : null}
+                </>
+              }
+              secondaryTypographyProps={{ component: 'div' }}
+            />
           </MenuItem>
-        ))}
-        {assignCandidates.length === 0 && (
+        ) : null}
+        {taskMenu?.task.staffId && taskMenu.task.lifecycle === 'waiting_accept' ? (
+          <>
+            <MenuItem
+              dense
+              disabled={acting}
+              onClick={() => void handleStaffAction('accept')}
+              sx={{ fontWeight: 700, color: '#166534' }}
+            >
+              → Accepter (prochaine étape)
+            </MenuItem>
+            <MenuItem
+              dense
+              disabled={acting}
+              onClick={() => void handleStaffAction('reject')}
+            >
+              Refuser
+            </MenuItem>
+            <Divider />
+          </>
+        ) : null}
+        {taskMenu?.task.staffId && taskMenu.task.lifecycle === 'waiting_start' ? (
+          <>
+            <MenuItem
+              dense
+              disabled={acting}
+              onClick={() => void handleStaffAction('start')}
+              sx={{ fontWeight: 700, color: '#166534' }}
+            >
+              → Commencer (prochaine étape)
+            </MenuItem>
+            <Divider />
+          </>
+        ) : null}
+        {taskMenu?.task.staffId && taskMenu.task.lifecycle === 'waiting_finish' ? (
+          <>
+            <MenuItem
+              dense
+              disabled={acting}
+              onClick={() => void handleStaffAction('complete')}
+              sx={{ fontWeight: 700, color: '#166534' }}
+            >
+              → Terminer (prochaine étape)
+            </MenuItem>
+            <Divider />
+          </>
+        ) : null}
+        {taskMenu?.task.lifecycle !== 'finished' ? (
           <MenuItem disabled dense>
-            {listingFilterId || cityFilterId || assignMenu?.task.listingId
-              ? 'Aucun staff autorisé pour ce filtre'
-              : 'Aucun staff disponible pour ce PM'}
+            <ListItemText
+              primary={taskMenu?.task.staffId ? 'Réassigner à…' : 'Assigner à…'}
+            />
           </MenuItem>
-        )}
+        ) : null}
+        {taskMenu?.task.lifecycle !== 'finished'
+          ? assignCandidates.map((s) => (
+              <MenuItem
+                key={s._id}
+                dense
+                disabled={assigning || acting}
+                onClick={() => void handleAssign(String(s._id))}
+              >
+                {s.fullName}
+              </MenuItem>
+            ))
+          : null}
+        {taskMenu?.task.lifecycle !== 'finished' && assignCandidates.length === 0 ? (
+          <MenuItem disabled dense>
+            {taskMenu?.task.taskType
+              ? `Aucun staff avec type « ${labelForTaskTypeId(taskMenu.task.taskType) || taskMenu.task.taskType} » + accès annonce`
+              : listingFilterId || cityFilterId || taskMenu?.task.listingId
+                ? 'Aucun staff autorisé pour ce filtre'
+                : 'Aucun staff disponible pour ce PM'}
+          </MenuItem>
+        ) : null}
       </Menu>
     </div>
   );

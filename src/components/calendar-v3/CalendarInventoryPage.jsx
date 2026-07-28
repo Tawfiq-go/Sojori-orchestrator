@@ -81,6 +81,8 @@ export default function CalendarInventoryPage({
   const [view, setViewState] = useState(viewFromUrl || defaultView);
   /** Vue simple : listing sélectionné porté par l'URL (?listing=) — deep-linkable. */
   const selectedListingId = searchParams.get('listing') || null;
+  /** Multi simple Airbnb : 1 calendrier = 1 roomType (?roomType=). */
+  const selectedRoomTypeId = searchParams.get('roomType') || null;
   const setSelectedListingId = useCallback(
     (id) => {
       setSearchParams(
@@ -88,6 +90,22 @@ export default function CalendarInventoryPage({
           const p = new URLSearchParams(prev);
           if (id) p.set('listing', String(id));
           else p.delete('listing');
+          // Changer de listing → reset roomType (sera ré-auto-sélectionné si Multi)
+          p.delete('roomType');
+          return p;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+  const setSelectedRoomTypeId = useCallback(
+    (id) => {
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev);
+          if (id) p.set('roomType', String(id));
+          else p.delete('roomType');
           return p;
         },
         { replace: true },
@@ -103,6 +121,9 @@ export default function CalendarInventoryPage({
         (prev) => {
           const p = new URLSearchParams(prev);
           p.set('view', v);
+          if (v === 'multi') {
+            // Multi ignore roomType ; on le garde en URL pour revenir en simple
+          }
           return p;
         },
         { replace: true },
@@ -155,20 +176,121 @@ export default function CalendarInventoryPage({
     if (!exists) setSelectedListingId(String(listings[0]._id));
   }, [view, listings, selectedListingId, setSelectedListingId]);
 
-  const selectedListing = useMemo(() => {
-    const cat = listings.find((l) => String(l._id) === String(selectedListingId));
-    if (!cat) return null;
+  /** RoomTypes issus de l'inventaire du listing sélectionné (noms + capacité + jours). */
+  const roomTypesForSelected = useMemo(() => {
+    if (!selectedListingId) return [];
+    const block = inventoryData[selectedListingId] || {};
+    return Object.entries(block)
+      .map(([id, v]) => ({
+        _id: String(id),
+        name: (v && v.name) || `Type ${String(id).slice(-4)}`,
+        roomNumber: Number(v?.roomNumber) || 0,
+        personCapacityMax: Number(v?.personCapacityMax) || 0,
+        availability: (v && v.availability) || {},
+      }))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
+  }, [inventoryData, selectedListingId]);
+
+  const catalogListing = useMemo(
+    () => listings.find((l) => String(l._id) === String(selectedListingId)) || null,
+    [listings, selectedListingId],
+  );
+
+  /** Simple Airbnb Multi : rail = room types (pas l'agrégat hôtel). */
+  const isMultiListing = Boolean(catalogListing) && String(catalogListing.propertyUnit || '') === 'Multi';
+  const isMultiSimple = isMultiListing && roomTypesForSelected.length > 1;
+
+  useEffect(() => {
+    if (view !== 'simple' || !isMultiSimple || roomTypesForSelected.length === 0) return;
+    const exists = roomTypesForSelected.some(
+      (rt) => String(rt._id) === String(selectedRoomTypeId),
+    );
+    if (!exists) setSelectedRoomTypeId(String(roomTypesForSelected[0]._id));
+  }, [
+    view,
+    isMultiSimple,
+    roomTypesForSelected,
+    selectedRoomTypeId,
+    setSelectedRoomTypeId,
+  ]);
+
+  const activeRoomType = useMemo(() => {
+    if (!isMultiListing) return null;
+    return (
+      roomTypesForSelected.find((rt) => String(rt._id) === String(selectedRoomTypeId)) ||
+      roomTypesForSelected[0] ||
+      null
+    );
+  }, [isMultiListing, roomTypesForSelected, selectedRoomTypeId]);
+
+  const simpleInventories = useMemo(() => {
+    // Multi : jamais l'agrégat hôtel — uniquement le roomType actif (ou vide tant que non chargé)
+    if (isMultiListing) return activeRoomType?.availability || {};
+    if (!selectedListingId) return {};
+    return inventoriesByListing[selectedListingId] || {};
+  }, [isMultiListing, activeRoomType, selectedListingId, inventoriesByListing]);
+
+  const simpleRailItems = useMemo(() => {
+    if (!isMultiSimple) return listings;
+    return roomTypesForSelected.map((rt) => ({
+      _id: rt._id,
+      name: rt.name,
+      roomNumber: rt.roomNumber,
+      personCapacityMax: rt.personCapacityMax,
+      city: catalogListing?.name || '',
+    }));
+  }, [isMultiSimple, listings, roomTypesForSelected, catalogListing]);
+
+  const multiHotelMeta = useMemo(() => {
+    if (!isMultiSimple || !catalogListing) return null;
+    const units = roomTypesForSelected.reduce((s, rt) => s + (Number(rt.roomNumber) || 0), 0);
     return {
-      ...cat,
+      name: catalogListing.name || '',
+      city: catalogListing.city || '',
+      coverImageUrl: catalogListing.coverImageUrl || '',
+      photoColor: catalogListing.photoColor || '#fde68a',
+      photoColorDeep: catalogListing.photoColorDeep || '#d97706',
+      roomTypeCount: roomTypesForSelected.length,
+      units,
+    };
+  }, [isMultiSimple, catalogListing, roomTypesForSelected]);
+
+  const selectedListing = useMemo(() => {
+    if (!catalogListing) return null;
+    const rtId = isMultiListing
+      ? String(activeRoomType?._id || selectedRoomTypeId || roomTypesForSelected[0]?._id || '')
+      : String(catalogListing.roomTypeId || roomTypesForSelected[0]?._id || 'default');
+    const rtName = isMultiListing
+      ? activeRoomType?.name || roomTypesForSelected[0]?.name || ''
+      : roomTypesForSelected[0]?.name || 'Standard';
+    return {
+      ...catalogListing,
+      roomTypeId: rtId,
+      roomTypeName: isMultiListing ? rtName : undefined,
       roomTypes: [
         {
-          _id: cat.roomTypeId || 'default',
-          name: 'Standard',
-          inventories: inventoriesByListing[cat._id] || {},
+          _id: rtId || 'default',
+          name: rtName || 'Standard',
+          inventories: simpleInventories,
         },
       ],
     };
-  }, [listings, selectedListingId, inventoriesByListing]);
+  }, [
+    catalogListing,
+    isMultiListing,
+    activeRoomType,
+    selectedRoomTypeId,
+    roomTypesForSelected,
+    simpleInventories,
+  ]);
+
+  const handleSimpleRailSelect = useCallback(
+    (id) => {
+      if (isMultiSimple) setSelectedRoomTypeId(String(id));
+      else setSelectedListingId(String(id));
+    },
+    [isMultiSimple, setSelectedRoomTypeId, setSelectedListingId],
+  );
 
   const commitDate = (d) => {
     const requested = startOfDay(d);
@@ -449,6 +571,7 @@ export default function CalendarInventoryPage({
           listingCatalog={listings}
           dpEnabledByListing={dpEnabledByListing}
           inventoriesByListing={inventoriesByListing}
+          inventoryData={inventoryData}
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
           onCellsSelected={canWrite ? setModalCells : undefined}
@@ -498,16 +621,18 @@ export default function CalendarInventoryPage({
       {view === 'simple' && selectedListing && (
         <SimpleView
           listing={selectedListing}
-          listings={listings}
+          listings={simpleRailItems}
           dpEnabled={dpOn(selectedListingId)}
-          selectedListingId={selectedListingId}
-          onSelectListing={setSelectedListingId}
+          selectedListingId={isMultiSimple ? selectedRoomTypeId : selectedListingId}
+          onSelectListing={handleSimpleRailSelect}
+          railMode={isMultiSimple ? 'roomTypes' : 'listings'}
+          multiHotel={multiHotelMeta}
           year={pivotDate.getFullYear()}
           month={pivotDate.getMonth()}
           monthsCount={simpleMonthsCount}
           onLoadMoreMonths={onLoadMoreMonths}
           inventoryLoading={inventoryLoading}
-          inventories={inventoriesByListing[selectedListingId] || {}}
+          inventories={simpleInventories}
           onCellsSelected={canWrite ? setModalCells : undefined}
           onOpenReservation={openReservationDrawer}
         />

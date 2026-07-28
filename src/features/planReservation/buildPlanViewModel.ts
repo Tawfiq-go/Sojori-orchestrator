@@ -119,6 +119,29 @@ export interface FulltaskPlanDoc {
       scheduledAt: string | Date;
       sentAt?: string | Date | null;
       status: 'en_attente' | 'envoyee' | 'saute' | 'echec';
+      reason?: string;
+      messageId?: string;
+      scheduleRef?: string;
+      scheduleDay?: number;
+      scheduleTime?: string;
+      dispatchLog?: Array<{
+        at: string | Date;
+        ok: boolean;
+        channel?: string;
+        source?: 'manual' | 'scheduler';
+        error?: string;
+      }>;
+    }>;
+    staffStartReminders?: Array<{
+      label: string;
+      scheduledAt: string | Date;
+      sentAt?: string | Date | null;
+      status: 'en_attente' | 'envoyee' | 'saute' | 'echec';
+      reason?: string;
+      messageId?: string;
+      scheduleRef?: string;
+      scheduleDay?: number;
+      scheduleTime?: string;
       dispatchLog?: Array<{
         at: string | Date;
         ok: boolean;
@@ -1359,7 +1382,19 @@ function buildSequenceView(
     };
   });
 
-  const staffReminders: PlanStaffReminderItem[] = (seq.staffReminders ?? []).map((r, i) => {
+  const mapStaffRemRow = (
+    r: {
+      label: string;
+      scheduledAt: string | Date;
+      sentAt?: string | Date | null;
+      status: string;
+      messageId?: string;
+      scheduleRef?: string;
+      scheduleDay?: number;
+      scheduleTime?: string;
+    },
+    i: number,
+  ): PlanStaffReminderItem => {
     const at = toDate(r.scheduledAt) || now;
     const m = mapRelanceExecution(r, i, 'sms', 'staff', now);
     const srRef = normalizeScheduleRef(
@@ -1369,16 +1404,25 @@ function buildSequenceView(
     const srAnchor = resolveScheduleAnchorDate(plan, srRef, seqAnchors, at) || at;
     const scheduleDay = (r as { scheduleDay?: number }).scheduleDay;
     const scheduleTime = (r as { scheduleTime?: string }).scheduleTime;
+    const isStart = String(r.label || '').toLowerCase().includes('début');
     return {
       ...m,
       reminderIndex: i,
       whatsappTemplateId: r.messageId?.trim() || undefined,
       rawStatus: r.status as PlanStaffReminderItem['rawStatus'],
-      scheduleOffsetLabel:
-        formatScheduleOffset(scheduleDay, srRef, scheduleTime, seq.taskType) ??
-        inferScheduleOffsetFromDates(at, srAnchor, srRef, scheduleTime, seq.taskType),
+      scheduleOffsetLabel: isStart
+        ? 'début tâche'
+        : formatScheduleOffset(scheduleDay, srRef, scheduleTime, seq.taskType) ??
+          inferScheduleOffsetFromDates(at, srAnchor, srRef, scheduleTime, seq.taskType),
     };
-  });
+  };
+
+  const staffReminders: PlanStaffReminderItem[] = [
+    ...(seq.staffReminders ?? []).map((r, i) => mapStaffRemRow(r, i)),
+    ...(seq.staffStartReminders ?? []).map((r, i) =>
+      mapStaffRemRow(r, (seq.staffReminders?.length ?? 0) + i),
+    ),
+  ];
 
   const staffAssignment = mapStaffAssignment(seq, staffNames, now);
   const attempts = mapAttempts(seq, staffNames);

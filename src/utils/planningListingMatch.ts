@@ -1,7 +1,7 @@
 /**
  * Helpers planning StayView — matching résa ↔ listing.
- * Orphelines : uniquement pour résas déjà scopées au PM (filterOwnerId),
- * jamais en mode « tous les owners » (évite d’injecter un autre PM).
+ * Grille = listings actifs uniquement (comme calendrier multi).
+ * Pas d’injection de listings inactifs / orphelins.
  */
 
 import type { ListingSummary } from '../types/listings.types';
@@ -100,79 +100,22 @@ export type OrphanListingSeed = {
   city: string;
 };
 
-function reservationBelongsToOwner(res: Reservation, ownerKey: string): boolean {
-  const resOwner = reservationOwnerId(res);
-  // Pas d’ownerId sur la résa : on fait confiance au getList déjà filtré.
-  if (!resOwner) return true;
-  return resOwner === ownerKey;
-}
-
 /**
- * Graines orphelines — SEULEMENT si un PM est sélectionné (ownerKey).
- * En mode « tous », ne rien inventer (sinon listings d’autres owners).
+ * @deprecated Planning = actifs only — toujours [].
+ * Conservé pour compat imports ; ne plus injecter d’inactifs.
  */
 export function collectOrphanListingSeedsForOwner(
-  reservations: Reservation[],
-  activeListings: ListingSummary[],
-  ownerKey: string | undefined,
+  _reservations: Reservation[],
+  _activeListings: ListingSummary[],
+  _ownerKey: string | undefined,
 ): OrphanListingSeed[] {
-  if (!ownerKey) return [];
-
-  const byId = buildListingIdIndex(activeListings);
-  const orphans = new Map<string, OrphanListingSeed>();
-
-  for (const res of reservations) {
-    if (!reservationBelongsToOwner(res, ownerKey)) continue;
-    const listingId = resolveReservationListingId(res);
-    if (!listingId) continue;
-    if (findListingForReservation(res, byId)) continue;
-    if (orphans.has(listingId)) continue;
-    const label = reservationListingLabel(res);
-    orphans.set(listingId, {
-      listingId,
-      listingName: label.name,
-      city: label.city,
-    });
-  }
-
-  return [...orphans.values()];
+  return [];
 }
 
-/** Fusionne listings actifs + graines orphelines (sans doublon). */
+/** Planning : actifs only (ignore les graines orphelines). */
 export function mergeActiveAndOrphanListings(
   activeListings: ListingSummary[],
-  orphans: OrphanListingSeed[],
-): Array<
-  | ListingSummary
-  | (OrphanListingSeed & {
-      id: string;
-      name: string;
-      occupancyStatus?: string;
-      cleanlinessStatus_v2?: string;
-      cleanlinessEmergency?: boolean;
-    })
-> {
-  const byId = buildListingIdIndex(activeListings);
-  const extra: Array<
-    OrphanListingSeed & {
-      id: string;
-      name: string;
-      occupancyStatus?: string;
-      cleanlinessStatus_v2?: string;
-      cleanlinessEmergency?: boolean;
-    }
-  > = [];
-
-  for (const orphan of orphans) {
-    if (byId.has(orphan.listingId)) continue;
-    extra.push({
-      ...orphan,
-      id: orphan.listingId,
-      name: orphan.listingName,
-      occupancyStatus: 'vacant',
-      cleanlinessStatus_v2: 'clean',
-    });
-  }
-
-  return [...activeListings, ...extra];
+  _orphans: OrphanListingSeed[] = [],
+): ListingSummary[] {
+  return activeListings;
 }

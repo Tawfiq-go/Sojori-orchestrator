@@ -7,7 +7,7 @@ import {
   inferTaskPlannedIso,
 } from '../utils/inferTaskPlannedDate';
 import { resolveReservationListingId, reservationListingLabel } from '../utils/planningListingMatch';
-import type { TaskType } from '../components/calendar-views/_shared';
+import type { TaskType, TaskUrgencyInfo } from '../components/calendar-views/_shared';
 
 export interface PlanningTimelineItem {
   type: TaskType;
@@ -18,6 +18,7 @@ export interface PlanningTimelineItem {
   staffName?: string | null;
   status?: string;
   cleaning_type?: string;
+  priority?: TaskUrgencyInfo;
   data?: Record<string, unknown>;
 }
 
@@ -34,6 +35,10 @@ export interface PlanningReservationRow {
   channelName?: string;
   numberOfGuests?: number;
   reservationNumber?: string;
+  roomTypeName?: string;
+  roomTypeId?: string;
+  roomId?: string;
+  roomName?: string;
   timeline: PlanningTimelineItem[];
 }
 
@@ -141,6 +146,19 @@ export function fulltaskToTimelineItem(
       ? String(task.cleaning_type || task.cleaningType || ftType || '')
       : undefined;
 
+  const rawPriority = task.priority as TaskUrgencyInfo | undefined;
+  const priority =
+    rawPriority &&
+    (rawPriority.urgency === 'red' ||
+      rawPriority.urgency === 'orange' ||
+      rawPriority.urgency === 'green')
+      ? {
+          urgency: rawPriority.urgency,
+          reason: rawPriority.reason,
+          dueAt: rawPriority.dueAt,
+        }
+      : undefined;
+
   return {
     type: stayType,
     category: ftType,
@@ -150,14 +168,22 @@ export function fulltaskToTimelineItem(
     staffName: staff?.name ? String(staff.name) : null,
     status: legacyStatus,
     cleaning_type: cleaningType,
+    priority,
     data: {
       taskId: task._id,
       taskCode: task.taskCode,
       fulltask: true,
       ...task,
+      priority,
     },
   };
 }
+
+/**
+ * Résas chargées pour la fenêtre du planning. Le backend ne plafonne pas
+ * (paginate._limit = parseInt brut) ; 200 couvre largement 30 jours de grille.
+ */
+const RESERVATIONS_WINDOW_LIMIT = 200;
 
 /**
  * Planning TaskNew — sans srv-task :
@@ -173,7 +199,10 @@ export async function fetchTaskNewPlanning(params: {
   const startTime = performance.now();
 
   const reservationsPromise = reservationsService.getList({
-    limit: 100, // backend cap 100
+    /* 200 : au-delà de ~100 résas sur la fenêtre, les tâches référençaient des
+       résas hors page → une requête unitaire par résa manquante (cf. batch plus bas).
+       Le backend ne plafonne pas (paginate._limit = parseInt brut). */
+    limit: RESERVATIONS_WINDOW_LIMIT,
     status: 'Confirmed,Pending,Inside',
     dateType: 'arrival_or_departure',
     startDate: params.startDate,
@@ -202,14 +231,18 @@ export async function fetchTaskNewPlanning(params: {
 
   console.log(`⏱️  [fetchTaskNewPlanning] All 3 API calls completed in ${(performance.now() - startTime).toFixed(0)}ms`);
 
-  // ⚡ OPTIMISATION: Augmenter la limite des réservations pour réduire les appels individuels
-  // Si on a plus de tâches que de réservations, on manque probablement des réservations
   const tasksCount = tasksRes?.data?.length || 0;
   const reservationsCount = reservationsRes?.data?.length || 0;
   console.log(`📊 [fetchTaskNewPlanning] Loaded ${reservationsCount} reservations and ${tasksCount} tasks`);
-  if (tasksCount > reservationsCount) {
-    console.warn(`⚠️  [fetchTaskNewPlanning] WARNING: More tasks (${tasksCount}) than reservations (${reservationsCount})! This will cause individual API calls.`);
-    console.warn(`    💡 Solution: Increase limit in reservationsService.getList() from 100 to ${Math.max(200, tasksCount)}`);
+  /* ⚠️ Ne crier QUE sur une vraie troncature : getList a renvoyé exactement la
+     limite demandée → il reste des résas non chargées. Avoir plus de tâches que
+     de résas est normal (plusieurs tâches par séjour, et séjours qui débordent
+     de la fenêtre — ces derniers sont récupérés par le batch groupé plus bas). */
+  if (reservationsCount >= RESERVATIONS_WINDOW_LIMIT) {
+    console.warn(
+      `⚠️  [fetchTaskNewPlanning] Fenêtre tronquée : ${reservationsCount} résas = limite (${RESERVATIONS_WINDOW_LIMIT}).`,
+    );
+    console.warn(`    💡 Augmenter RESERVATIONS_WINDOW_LIMIT dans planningFulltaskMerge.ts.`);
   }
 
   const staffRows = staffRes?.data || [];
@@ -333,6 +366,22 @@ export async function fetchTaskNewPlanning(params: {
       channelName: res.channelName || res.otaCode || 'direct',
       numberOfGuests: res.numberOfGuests ?? res.adults ?? 0,
       reservationNumber: res.reservationNumber || reservationId,
+      roomTypeName: (() => {
+        const n = String(res.roomTypeName || res.roomTypes?.roomTypeName || '').trim();
+        return n || undefined;
+      })(),
+      roomTypeId: (() => {
+        const id = String(res.roomTypeId || '').trim();
+        return id || undefined;
+      })(),
+      roomId: (() => {
+        const id = String((res as { roomId?: string }).roomId || '').trim();
+        return id || undefined;
+      })(),
+      roomName: (() => {
+        const n = String((res as { roomName?: string }).roomName || '').trim();
+        return n || undefined;
+      })(),
       timeline,
     };
 
@@ -402,6 +451,10 @@ export async function fetchTaskNewPlanning(params: {
     let checkOutTime: string | null = null;
     let channelName: string | undefined;
     let numberOfGuests = 0;
+    let roomTypeName: string | undefined;
+    let roomTypeId: string | undefined;
+    let roomId: string | undefined;
+    let roomName: string | undefined;
     const firstTask = timeline[0]?.data as Record<string, unknown> | undefined;
     if (firstTask?.guestName) guestName = String(firstTask.guestName);
 
@@ -417,6 +470,11 @@ export async function fetchTaskNewPlanning(params: {
       checkOutTime = res.checkOutTime ?? null;
       channelName = res.channelName || res.otaCode || 'direct';
       numberOfGuests = res.numberOfGuests ?? res.adults ?? 0;
+      const rt = String(res.roomTypeName || res.roomTypes?.roomTypeName || '').trim();
+      roomTypeName = rt || undefined;
+      roomTypeId = String(res.roomTypeId || '').trim() || undefined;
+      roomId = String((res as { roomId?: string }).roomId || '').trim() || undefined;
+      roomName = String((res as { roomName?: string }).roomName || '').trim() || undefined;
       const realListingId = resolveListingId(res) || listingId;
       if (!listingMeta.has(realListingId)) {
         const label = reservationListingLabel(res);
@@ -433,6 +491,7 @@ export async function fetchTaskNewPlanning(params: {
           r.reservationId === reservationId,
       );
       if (existing) {
+        if (!existing.roomTypeName && roomTypeName) existing.roomTypeName = roomTypeName;
         const seen = new Set(
           existing.timeline.map((t) =>
             String((t.data as { taskId?: unknown } | undefined)?.taskId || `${t.type}-${t.scheduledFor}`),
@@ -459,6 +518,10 @@ export async function fetchTaskNewPlanning(params: {
         channelName,
         numberOfGuests,
         reservationNumber,
+        roomTypeName,
+        roomTypeId,
+        roomId,
+        roomName,
         timeline,
       };
       existingList.push(row);
@@ -478,6 +541,10 @@ export async function fetchTaskNewPlanning(params: {
       checkOutTime,
       status: 'confirmed',
       reservationNumber,
+      roomTypeName,
+      roomTypeId,
+      roomId,
+      roomName,
       timeline,
     };
     const list = reservationsByListing.get(listingId) || [];

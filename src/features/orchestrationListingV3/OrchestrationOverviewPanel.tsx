@@ -70,6 +70,10 @@ import CapabilityAuditStrip from './CapabilityAuditStrip';
 import { V3Section } from './V3Primitives';
 import { GROUP_EMOJI } from './V3Rail';
 import { V3 } from './theme';
+import {
+  fetchListingConciergeArrays,
+  persistListingConciergeSlice,
+} from '../listing/components/ConfigOrchestration/conciergeListingPersist';
 
 const GROUP_ORDER: CapabilityGroupId[] = [
   'cleaning',
@@ -418,6 +422,7 @@ type CapDoc = {
     enabled?: boolean;
     reminders?: Array<Record<string, unknown>>;
     staffReminders?: Array<Record<string, unknown>>;
+    staffStartReminderEnabled?: boolean;
     staffAssignment?: Record<string, unknown> | null;
     escalationEnabled?: boolean;
     deadline?: Record<string, unknown> | null;
@@ -541,6 +546,8 @@ type DecisionFlags = {
   taskEnabled: boolean;
   clientReminders: boolean;
   staffReminders: boolean;
+  /** Rappel « il est temps de commencer » — défaut ON, sans heure. */
+  staffStartReminder: boolean;
   pmEscalation: boolean;
 };
 
@@ -549,12 +556,17 @@ function readDecisionFlags(cap: CapDoc): DecisionFlags {
   const exec = cap.execution ?? {};
   const reminders = exec.reminders ?? [];
   const staffRem = exec.staffReminders ?? [];
+  const hasStaffAssign = Boolean(exec.staffAssignment);
   return {
     orchestrated: d.orchestrated === true,
     clientEnabled: d.clientEnabled === true,
     taskEnabled: d.taskEnabled === true,
     clientReminders: reminders.length > 0,
     staffReminders: staffRem.length > 0,
+    staffStartReminder:
+      d.taskEnabled === true && hasStaffAssign
+        ? exec.staffStartReminderEnabled !== false
+        : false,
     pmEscalation: exec.escalationEnabled === true,
   };
 }
@@ -568,8 +580,12 @@ function applyDecisionFlagRules(
   next.orchestrated = true;
   if (changed === 'taskEnabled' && !next.taskEnabled) {
     next.staffReminders = false;
+    next.staffStartReminder = false;
   }
   if (changed === 'staffReminders' && next.staffReminders && !next.taskEnabled) {
+    next.taskEnabled = true;
+  }
+  if (changed === 'staffStartReminder' && next.staffStartReminder && !next.taskEnabled) {
     next.taskEnabled = true;
   }
   return next;
@@ -636,6 +652,7 @@ function buildExecutionFromFlags(
     enabled: flags.orchestrated !== false,
     reminders,
     staffReminders,
+    staffStartReminderEnabled: Boolean(flags.taskEnabled && flags.staffStartReminder),
     staffAssignment,
     deadline,
     escalationEnabled,
@@ -851,6 +868,9 @@ export default function OrchestrationOverviewPanel({
   const [activationStatus, setActivationStatus] = useState<ServiceActivationStatusEntry[]>([]);
   const [orchestrationEnabled, setOrchestrationEnabled] = useState(true);
   const [openGroups, setOpenGroups] = useState<Set<CapabilityGroupId | 'messages'>>(new Set());
+  /** Listing only — own catalogue vs Partenaires Sojori (J3). */
+  const [conciergeSource, setConciergeSource] = useState<'own' | 'partner'>('own');
+  const [savingConciergeSource, setSavingConciergeSource] = useState(false);
 
   const reload = useCallback((_opts?: { silent?: boolean }) => {
     // Pas de setLoading(true) ici : évite de démonter la grille / les modals (effet « reload page »).
@@ -871,8 +891,22 @@ export default function OrchestrationOverviewPanel({
             /* access doc optional */
           }
           setListingValues(vals);
+          try {
+            const conc = await fetchListingConciergeArrays(listingId);
+            setConciergeSource(conc.conciergeSource === 'partner' ? 'partner' : 'own');
+            setListingValues((prev) => ({
+              ...prev,
+              conciergeSource: conc.conciergeSource,
+              transportServices: conc.transportServices,
+              groceryServices: conc.groceryServices,
+              customServices: conc.customServices,
+            }));
+          } catch {
+            setConciergeSource('own');
+          }
         } catch {
           setListingValues({});
+          setConciergeSource('own');
         }
         return;
       }
@@ -1164,7 +1198,7 @@ export default function OrchestrationOverviewPanel({
     const execution = buildExecutionFromFlags(
       cap,
       noOpsTask
-        ? { ...flagInput, taskEnabled: false, staffReminders: false }
+        ? { ...flagInput, taskEnabled: false, staffReminders: false, staffStartReminder: false }
         : flagInput,
       taskType,
       { onDemand },
@@ -1993,6 +2027,28 @@ export default function OrchestrationOverviewPanel({
     });
   };
 
+  const setConciergeSourceMode = async (next: 'own' | 'partner') => {
+    if (!listingId || next === conciergeSource || savingConciergeSource) return;
+    setSavingConciergeSource(true);
+    try {
+      await persistListingConciergeSlice(listingId, {
+        conciergeSource: next,
+        conciergePartnerId: null,
+      });
+      setConciergeSource(next);
+      setListingValues((prev) => ({ ...prev, conciergeSource: next, conciergePartnerId: null }));
+      toast.success(
+        next === 'partner'
+          ? 'Conciergerie Sojori — les expériences partenaires seront proposées au client'
+          : 'Votre propre conciergerie — catalogue Transport / Courses / Custom',
+      );
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Impossible d’enregistrer le mode conciergerie');
+    } finally {
+      setSavingConciergeSource(false);
+    }
+  };
+
   const configGestionValues = useMemo(() => {
     if (!configModal) return {};
     const capGestion = (caps[configModal.capKey]?.gestion ?? {}) as Record<string, unknown>;
@@ -2123,7 +2179,11 @@ export default function OrchestrationOverviewPanel({
             icon={GROUP_EMOJI[group.id] ?? '•'}
             kind="manage"
             title={group.label}
-            subtitle={`${group.rows.length} flow${group.rows.length > 1 ? 's' : ''}`}
+            subtitle={
+              group.id === 'concierge' && isListingScope && conciergeSource === 'partner'
+                ? 'Conciergerie Sojori · expériences partenaires'
+                : `${group.rows.length} flow${group.rows.length > 1 ? 's' : ''}`
+            }
             open={openGroups.has(group.id)}
             onOpenChange={() => toggleGroup(group.id)}
             badge={
@@ -2140,7 +2200,80 @@ export default function OrchestrationOverviewPanel({
               </Box>
             }
           >
-            <Box sx={{ overflowX: 'auto' }}>
+            {group.id === 'concierge' && isListingScope ? (
+              <Box
+                sx={{
+                  mb: 1.25,
+                  p: 1.25,
+                  borderRadius: 1.5,
+                  border: `1px solid ${conciergeSource === 'partner' ? 'rgba(184,133,26,0.45)' : V3.b}`,
+                  bgcolor: conciergeSource === 'partner' ? V3.pt : V3.alt,
+                }}
+              >
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t, mb: 0.75 }}>
+                  Qui propose les expériences au client&nbsp;?
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 0.75 }}>
+                  <Button
+                    size="small"
+                    disabled={savingConciergeSource}
+                    variant={conciergeSource === 'own' ? 'contained' : 'outlined'}
+                    onClick={() => void setConciergeSourceMode('own')}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      fontSize: 12,
+                      ...(conciergeSource === 'own'
+                        ? { bgcolor: V3.p, '&:hover': { bgcolor: V3.pd } }
+                        : {}),
+                    }}
+                  >
+                    Votre propre conciergerie
+                  </Button>
+                  <Button
+                    size="small"
+                    disabled={savingConciergeSource}
+                    variant={conciergeSource === 'partner' ? 'contained' : 'outlined'}
+                    onClick={() => void setConciergeSourceMode('partner')}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      fontSize: 12,
+                      ...(conciergeSource === 'partner'
+                        ? {
+                            bgcolor: '#E6B022',
+                            color: '#2C2005',
+                            '&:hover': { bgcolor: '#d4a01e' },
+                          }
+                        : { borderColor: '#E6B022', color: '#8a6a00' }),
+                    }}
+                  >
+                    Conciergerie Sojori
+                  </Button>
+                </Box>
+                <Typography sx={{ fontSize: 11.5, color: V3.t2, lineHeight: 1.45 }}>
+                  {conciergeSource === 'partner'
+                    ? 'Les services partenaires Sojori (ville du listing) seront proposés à votre client sur WhatsApp (menu J). Transport, Courses et catalogue custom sont grisés — Sojori gère le catalogue expériences.'
+                    : 'Configurez Transport (J1), Courses (J2) et Conciergerie custom (J3) ci-dessous. Aucun partenaire Sojori n’est injecté.'}
+                </Typography>
+              </Box>
+            ) : null}
+
+            <Box
+              sx={{
+                overflowX: 'auto',
+                ...(group.id === 'concierge' &&
+                conciergeSource === 'partner' &&
+                isListingScope
+                  ? {
+                      opacity: 0.48,
+                      filter: 'grayscale(0.35)',
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                    }
+                  : {}),
+              }}
+            >
               <Box
                 sx={{
                   display: 'grid',
@@ -2613,10 +2746,19 @@ export default function OrchestrationOverviewPanel({
               {hasTaskCol && (
                 <DecisionSwitch
                   label="👷 Rappel staff"
-                  hint="Notif équipe (nécessite Créer tâche)"
+                  hint="Notif équipe avant le jour (J-1…) — nécessite Créer tâche"
                   checked={flags.staffReminders}
                   disabled={locked || !flags.taskEnabled}
                   onChange={(v) => toggle('staffReminders', v)}
+                />
+              )}
+              {hasTaskCol && (
+                <DecisionSwitch
+                  label="⏰ Rappel début tâche"
+                  hint="Une fois : heure de début passée et pas encore commencé — pas d’heure à choisir"
+                  checked={flags.staffStartReminder}
+                  disabled={locked || !flags.taskEnabled}
+                  onChange={(v) => toggle('staffStartReminder', v)}
                 />
               )}
               {hasTaskCol && (

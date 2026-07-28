@@ -5,7 +5,16 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useMemo, useState } from 'react';
 import { Box, Stack, Typography, Button, IconButton } from '@mui/material';
-import { T, type TaskItem, type TaskStatus, TASK_CHIP_STYLES, initialsFrom, SOJORI_KEYFRAMES } from './_shared';
+import {
+  T,
+  type TaskItem,
+  type TaskStatus,
+  type TaskUrgency,
+  TASK_CHIP_STYLES,
+  initialsFrom,
+  SOJORI_KEYFRAMES,
+  resolveTaskUrgency,
+} from './_shared';
 import { DASHBOARD_PAGE, DASHBOARD_PAGE_FILL_SX } from '../../constants/dashboardLayout';
 
 const STAFF_COLOR_BY_INDEX = [
@@ -33,21 +42,57 @@ export interface KanbanViewProps {
 export default function KanbanView({ tasks, onTaskMove, onTaskClick, onNewTask }: KanbanViewProps) {
   const [dragged, setDragged] = useState<TaskItem | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null);
+  const [urgencyFilter, setUrgencyFilter] = useState<'all' | TaskUrgency>('all');
+
+  const urgencyCounts = useMemo(() => {
+    const counts = { red: 0, orange: 0, green: 0 };
+    tasks.forEach((t) => {
+      if (t.taskStatus === 'COMPLETED') return;
+      counts[resolveTaskUrgency(t)] += 1;
+    });
+    return counts;
+  }, [tasks]);
+
+  const filteredTasks = useMemo(() => {
+    if (urgencyFilter === 'all') return tasks;
+    return tasks.filter((t) => {
+      if (t.taskStatus === 'COMPLETED') return urgencyFilter === 'green';
+      return resolveTaskUrgency(t) === urgencyFilter;
+    });
+  }, [tasks, urgencyFilter]);
 
   const grouped = useMemo(() => {
     const map: Record<TaskStatus, TaskItem[]> = { CREATED: [], ASSIGNED: [], IN_PROGRESS: [], COMPLETED: [] };
-    tasks.forEach(t => { (map[t.taskStatus] ||= []).push(t); });
+    const urgencyRank = (t: TaskItem) => {
+      const u = resolveTaskUrgency(t);
+      return u === 'red' ? 0 : u === 'orange' ? 1 : 2;
+    };
+    const timeMs = (t: TaskItem) => {
+      const due = t.priority?.dueAt || t.startDate;
+      if (!due) return Number.POSITIVE_INFINITY;
+      const n = new Date(due).getTime();
+      return Number.isNaN(n) ? Number.POSITIVE_INFINITY : n;
+    };
+    [...filteredTasks]
+      .sort((a, b) => {
+        const byU = urgencyRank(a) - urgencyRank(b);
+        if (byU !== 0) return byU;
+        return timeMs(a) - timeMs(b);
+      })
+      .forEach((t) => {
+        (map[t.taskStatus] ||= []).push(t);
+      });
     return map;
-  }, [tasks]);
+  }, [filteredTasks]);
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     const unassigned = tasks.filter(t => !t.staffId && t.taskStatus !== 'COMPLETED').length;
-    const late = tasks.filter(t => (t.startDate || '').slice(0, 10) < today && t.taskStatus !== 'COMPLETED').length;
+    const late = urgencyCounts.red;
     const completedToday = tasks.filter(t => t.taskStatus === 'COMPLETED' && (t.startDate || '').slice(0, 10) === today).length;
-    const rate = tasks.length ? Math.round((grouped.COMPLETED.length / tasks.length) * 100) : 0;
+    const rate = tasks.length ? Math.round((grouped.COMPLETED.length / Math.max(1, filteredTasks.length)) * 100) : 0;
     return { unassigned, late, total: tasks.length, completedToday, rate };
-  }, [tasks, grouped]);
+  }, [tasks, grouped, urgencyCounts.red, filteredTasks.length]);
 
   return (
     <Box sx={{ ...DASHBOARD_PAGE_FILL_SX, py: DASHBOARD_PAGE.padY, px: 0 }}>
@@ -59,8 +104,42 @@ export default function KanbanView({ tasks, onTaskMove, onTaskClick, onNewTask }
         sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 1.25 }}
       >
         <Typography sx={{ fontSize: 12, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
-          {tasks.length} tâches · glisser-déposer pour changer de statut
+          {filteredTasks.length} tâches · glisser-déposer pour changer de statut
         </Typography>
+        <Stack direction="row" gap={0.5} sx={{ alignItems: 'center' }}>
+          {(
+            [
+              { id: 'red' as const, label: '🔴', count: urgencyCounts.red, color: T.error },
+              { id: 'orange' as const, label: '🟠', count: urgencyCounts.orange, color: T.warning },
+              { id: 'green' as const, label: '🟢', count: urgencyCounts.green, color: T.success },
+            ] as const
+          ).map((p) => {
+            const active = urgencyFilter === p.id;
+            return (
+              <Box
+                key={p.id}
+                component="button"
+                type="button"
+                onClick={() => setUrgencyFilter((prev) => (prev === p.id ? 'all' : p.id))}
+                sx={{
+                  all: 'unset',
+                  cursor: 'pointer',
+                  fontFamily: '"Geist Mono", monospace',
+                  fontSize: 11,
+                  fontWeight: 750,
+                  px: '8px',
+                  py: '3px',
+                  borderRadius: '7px',
+                  border: `1px solid ${active ? p.color : T.border}`,
+                  bgcolor: active ? `${p.color}18` : T.bg1,
+                  color: active ? p.color : T.text2,
+                }}
+              >
+                {p.label} {p.count}
+              </Box>
+            );
+          })}
+        </Stack>
         <Stack direction="row" gap={1} sx={{ ml: 'auto' }}>
           <Button sx={{ ...btnGhost }}>⚙ Filtres</Button>
           <Button onClick={onNewTask} sx={{ ...btnPrim }}>+ Nouvelle tâche</Button>
@@ -170,12 +249,12 @@ function TaskCard({ task, staffIndex, onDragStart, onClick }: {
 }) {
   const type = task.type || 'task';
   const style = TASK_CHIP_STYLES[type] || TASK_CHIP_STYLES.task;
-  const isUnassigned = !task.staffId && task.taskStatus !== 'COMPLETED';
-  const today = new Date().toISOString().slice(0, 10);
-  const isLate = (task.startDate || '').slice(0, 10) < today && task.taskStatus !== 'COMPLETED';
-  const isPriority = isLate || task.emergency === 'urgent';
-  const time = task.startDate ? new Date(task.startDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
   const isCompleted = task.taskStatus === 'COMPLETED';
+  const isUnassigned = !task.staffId && !isCompleted;
+  const urgency = isCompleted ? 'green' : resolveTaskUrgency(task);
+  const urgColor = urgency === 'red' ? T.error : urgency === 'orange' ? T.warning : T.success;
+  const time = task.startDate ? new Date(task.startDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+  const urgLabel = urgency === 'red' ? 'Agir' : urgency === 'orange' ? 'Surveiller' : time;
 
   return (
     <Box draggable onDragStart={onDragStart} onClick={onClick}
@@ -183,10 +262,10 @@ function TaskCard({ task, staffIndex, onDragStart, onClick }: {
         bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.4,
         p: '10px 12px', cursor: 'grab', transition: 'all 0.15s', position: 'relative',
         opacity: isCompleted ? 0.75 : 1,
-        ...(isPriority ? { borderLeft: `3px solid ${T.error}` } : {}),
+        ...(urgency !== 'green' && !isCompleted ? { borderLeft: `3px solid ${urgColor}` } : {}),
         '&:hover': { borderColor: T.borderStrong, boxShadow: '0 4px 10px -2px rgba(20,17,10,0.08)', transform: 'translateY(-1px)' },
       }}>
-      {isPriority && (
+      {urgency === 'red' && !isCompleted && (
         <Box sx={{
           position: 'absolute', top: 8, right: 8, width: 6, height: 6,
           borderRadius: '50%', bgcolor: T.error, animation: 'sojori-pulse-error 1.8s infinite',
@@ -201,10 +280,10 @@ function TaskCard({ task, staffIndex, onDragStart, onClick }: {
         }}>{style.label}</Typography>
         <Box sx={{
           ml: 'auto', fontFamily: '"Geist Mono", monospace', fontSize: 9.5, fontWeight: 700,
-          color: isLate ? T.error : T.text3,
-          bgcolor: isLate ? T.errorTint : T.bg2,
+          color: urgency !== 'green' && !isCompleted ? urgColor : T.text3,
+          bgcolor: urgency === 'red' && !isCompleted ? T.errorTint : urgency === 'orange' && !isCompleted ? T.warningTint : T.bg2,
           px: 0.875, borderRadius: 0.625, letterSpacing: '0.04em',
-        }}>{isCompleted ? `✓ ${time}` : isLate ? 'En retard' : time}</Box>
+        }}>{isCompleted ? `✓ ${time}` : urgLabel}</Box>
       </Stack>
 
       <Typography sx={{

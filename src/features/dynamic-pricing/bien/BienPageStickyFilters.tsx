@@ -156,6 +156,7 @@ export default function BienPageStickyFilters({
           sojoriMinStayByDate={sojoriMinStayByDate}
           onSaved={() => {
             selection.clearSelection();
+            selection.touchCalendarUpdatedAt();
             selection.onPreviewReload?.();
           }}
         />

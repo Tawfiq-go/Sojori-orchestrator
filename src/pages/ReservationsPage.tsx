@@ -61,6 +61,10 @@ interface Reservation {
     _id: string;
     importOnboarding?: { active?: boolean } | null;
   };
+  roomTypeName?: string | null;
+  roomTypes?: { roomTypeName?: string } | null;
+  roomId?: string;
+  roomName?: string | null;
   orchestrationLaunch?: {
     status?: 'pending' | 'launched' | string | null;
     importListingId?: string | null;
@@ -112,6 +116,7 @@ interface Reservation {
 
 import { dashboardTokens as T } from '../design/sojoriBrandTokens';
 import { formatReservationPaid } from '../utils/reservationPaidDisplay';
+import { formatHotelRoomLabel, pickRoomTypeName, pickRoomUnitName } from '../utils/multiListingLabel';
 
 const TOOLBAR_SELECT_SX = {
   minWidth: 0,
@@ -434,7 +439,9 @@ export function ReservationsPage() {
         r.guestName?.toLowerCase().includes(s) ||
         r.guestEmail?.toLowerCase().includes(s) ||
         r.phone?.includes(s) ||
-        r.listing?.name?.toLowerCase().includes(s)
+        r.listing?.name?.toLowerCase().includes(s) ||
+        pickRoomTypeName(r)?.toLowerCase().includes(s) ||
+        pickRoomUnitName(r)?.toLowerCase().includes(s)
       );
     }
     if (selectedChannels.length > 0) {
@@ -962,9 +969,16 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                   <Box component="td">
                     <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
                       <PostImportListingIndicator reservation={r} />
-                      <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text, minWidth: 0 }}>
-                        {r.listing?.name || '—'}
-                      </Typography>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text, minWidth: 0 }} noWrap title={formatHotelRoomLabel(r.listing?.name, pickRoomTypeName(r), pickRoomUnitName(r))}>
+                          {r.listing?.name || '—'}
+                        </Typography>
+                        {(pickRoomTypeName(r) || pickRoomUnitName(r)) ? (
+                          <Typography sx={{ fontSize: 10.5, color: T.text3, fontWeight: 600 }} noWrap title={formatHotelRoomLabel('', pickRoomTypeName(r), pickRoomUnitName(r)).replace(/^—\s*·\s*/, '')}>
+                            {[pickRoomTypeName(r), pickRoomUnitName(r)].filter(Boolean).join(' · ')}
+                          </Typography>
+                        ) : null}
+                      </Box>
                     </Stack>
                   </Box>
                   <Box component="td">
@@ -1187,7 +1201,16 @@ function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpd
 
         <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mb: 0.5, minWidth: 0 }}>
           <PostImportListingIndicator reservation={r} />
-          <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.text, minWidth: 0 }}>{r.listing?.name}</Typography>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.text, minWidth: 0 }} noWrap>
+              {r.listing?.name}
+            </Typography>
+            {pickRoomTypeName(r) || pickRoomUnitName(r) ? (
+              <Typography sx={{ fontSize: 11.5, color: T.text3, fontWeight: 600 }} noWrap>
+                {[pickRoomTypeName(r), pickRoomUnitName(r)].filter(Boolean).join(' · ')}
+              </Typography>
+            ) : null}
+          </Box>
         </Stack>
         <Typography sx={{ fontSize: 12.5, color: T.text2, mb: 1.25 }}>
           {(() => {

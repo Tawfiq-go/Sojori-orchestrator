@@ -19,6 +19,8 @@ export interface InboxReservationData {
   checkOutDisplay?: string;
   nightsCount?: number;
   guestsLabel?: string;
+  /** Composition compacte type planning : 2A · 1E */
+  guestsCompact?: string;
   /** Téléphone voyageur (OTA / résa) */
   guestPhone?: string;
   totalPrice?: number;
@@ -33,4 +35,18 @@ export interface InboxReservationData {
   reviewRating?: number;
   reviewReplied?: boolean;
   reviewResponse?: string;
+  /** Présence séjour (Attendu / En cours / Présent / …) — aligné liste réservations */
+  presenceLabel?: string;
+  /** Enregistrement police : inscrits / à enregistrer */
+  registrationRegistered?: number;
+  registrationTotal?: number;
+  /** Heure d’arrivée choisie par le client (sinon listing par défaut) */
+  arrivalTimeChosen?: boolean;
+  arrivalTimeLabel?: string;
+  departureTimeChosen?: boolean;
+  departureTimeLabel?: string;
+  /** Arrivée / départ réellement déclarés (actualArrival/Departure) */
+  arrivalDeclared?: boolean;
+  departureDeclared?: boolean;
 }
+

@@ -124,6 +124,11 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   }
 
   if (path.startsWith('/admin/pm-lifecycle')) return 'admin/pm-lifecycle';
+  if (path.startsWith('/admin/partners')) {
+    const tab = new URLSearchParams(search).get('tab');
+    if (tab === 'concierge') return 'admin/partners/concierge';
+    return 'admin/partners/list';
+  }
   if (path.startsWith('/admin/mapping')) return 'admin/mapping';
   if (path.includes('/admin/setting/currency') || path.includes('/admin/settings/currency')) {
     return 'admin/setting/currency';

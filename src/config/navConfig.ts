@@ -246,6 +246,23 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
 /** Sections réservées SuperAdmin / Admin (infra, pas PM client). */
 export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
   {
+    group: 'Partenaires',
+    roles: ADMIN_ROLES,
+    items: [
+      {
+        id: 'admin/partners',
+        label: 'Conciergerie partenaires',
+        iconType: 'building',
+        iconColor: '#E6B022',
+        description: 'Fiches partenaires + catalogue conciergerie (NOMMOS…)',
+        sub: [
+          { id: 'admin/partners/list', label: 'Fiches partenaires' },
+          { id: 'admin/partners/concierge', label: 'Conciergerie · services' },
+        ],
+      },
+    ],
+  },
+  {
     group: 'Logs API',
     roles: ADMIN_ROLES,
     items: [
@@ -513,10 +530,11 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Staff: false,
   Équipe: true,
   Finances: true,
+  Partenaires: false,
   'Logs API': true,
   'Monitor & infra': true,
   Cost: true,
-  Administration: true,
+  Administration: false,
   Temp: true,
 };
 

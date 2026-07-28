@@ -719,9 +719,11 @@ export function GuestInfoTab({
             <Typography sx={{ fontSize: 14, fontWeight: 800, color: T.text, mb: 0.35 }}>
               {r.listing?.name || r.listingName || '—'}
             </Typography>
-            {(r.roomTypes?.roomTypeName || r.roomTypeName) && (
+            {(r.roomTypes?.roomTypeName || r.roomTypeName || r.roomName) && (
               <Typography sx={{ fontSize: 12.5, color: T.text2, mb: 1 }}>
-                {r.roomTypes?.roomTypeName || r.roomTypeName}
+                {[r.roomTypes?.roomTypeName || r.roomTypeName, r.roomName]
+                  .filter(Boolean)
+                  .join(' · ')}
               </Typography>
             )}
             {r.sojoriId ? (

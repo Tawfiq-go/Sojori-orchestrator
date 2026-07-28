@@ -35,10 +35,8 @@ import {
 } from '../../utils/planningViewDates';
 import {
   buildListingIdIndex,
-  collectOrphanListingSeedsForOwner,
   mergeActiveAndOrphanListings,
   reservationOwnerId,
-  resolveReservationListingId,
   findListingForReservation,
 } from '../../utils/planningListingMatch';
 import {
@@ -52,6 +50,8 @@ import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { useTaskDetailDrawer } from '../../features/tasksNew/hooks/useTaskDetailDrawer';
 import { usePlanningReservationDrawer } from '../../features/planning/usePlanningReservationDrawer';
 import { fetchTaskNewPlanning } from '../../services/planningFulltaskMerge';
+import PlanningQuickTaskMenu from '../planning/PlanningQuickTaskMenu';
+import type { PlanningCreateContext } from '../calendar-views/_shared';
 import {
   fetchPlanningCommsIndex,
   lookupPlanningComms,
@@ -86,6 +86,16 @@ function mapTimelineItems(raw: unknown): TimelineItem[] {
       (data.cleaningType as TimelineItem['cleaning_type']) ||
       (type === 'cleaning' ? (category as TimelineItem['cleaning_type']) : undefined) ||
       (type === 'cleaning' ? (data.type as TimelineItem['cleaning_type']) : undefined);
+    const rawPriority =
+      (item.priority as TimelineItem['priority']) ||
+      (data.priority as TimelineItem['priority']);
+    const priority =
+      rawPriority &&
+      (rawPriority.urgency === 'red' ||
+        rawPriority.urgency === 'orange' ||
+        rawPriority.urgency === 'green')
+        ? rawPriority
+        : undefined;
     return {
       type,
       category,
@@ -95,6 +105,7 @@ function mapTimelineItems(raw: unknown): TimelineItem[] {
       staffName: (item.staffName as string | null) ?? null,
       status: String(item.status || item.taskStatus || 'CREATED'),
       cleaning_type,
+      priority,
       data,
     };
   });
@@ -132,7 +143,11 @@ export default function ResasTabV2() {
   const { loading: authLoading } = useAuth();
   const scope = usePmTasksScope();
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
-  const listingsCacheKey = `comms-resas:${scope.scopeCacheKey}`;
+  const listingsCacheKey = `comms-resas-multi-v2:${scope.scopeCacheKey}`;
+
+  /* Clic droit grille → menu création tâche (contexte logement + jour + résa déduit). */
+  const [quickTaskCtx, setQuickTaskCtx] = useState<PlanningCreateContext | null>(null);
+  const [quickTaskAnchor, setQuickTaskAnchor] = useState<{ x: number; y: number } | null>(null);
 
   const [startDate, setStartDate] = useState<Date>(() => getPlanningDefaultStartDate());
   const [daysCount] = useState(PLANNING_LOOKBACK_DAYS + PLANNING_FORWARD_DAYS);
@@ -170,7 +185,6 @@ export default function ResasTabV2() {
       listingsHydratedRef.current = true;
       return;
     }
-    let items: ListingSummary[] = [];
     const res = await listingsService.getListings({
       useActiveFilter: true,
       active: true,
@@ -179,17 +193,7 @@ export default function ResasTabV2() {
       limit: 500,
       filterOwnerId: scope.filterOwnerId,
     });
-    items = res.data.items;
-    if (items.length === 0 && scope.filterOwnerId) {
-      const fallback = await listingsService.getListings({
-        useActiveFilter: false,
-        compact: true,
-        forListingsOverview: false,
-        limit: 500,
-        filterOwnerId: scope.filterOwnerId,
-      });
-      items = fallback.data.items;
-    }
+    const items = res.data.items;
     setActiveListings(items);
     setCachedPlanningListings(listingsCacheKey, items);
     listingsHydratedRef.current = true;
@@ -362,12 +366,7 @@ export default function ResasTabV2() {
 
   const listingRows: ListingRow[] = useMemo(() => {
     const ownerKey = scope.filterOwnerId ? String(scope.filterOwnerId) : '';
-    const orphans = collectOrphanListingSeedsForOwner(
-      reservations,
-      activeListings,
-      ownerKey || undefined,
-    );
-    const rowsSource = mergeActiveAndOrphanListings(activeListings, orphans);
+    const rowsSource = mergeActiveAndOrphanListings(activeListings);
     if (rowsSource.length === 0) return [];
 
     const byId = buildListingIdIndex(activeListings);
@@ -382,10 +381,7 @@ export default function ResasTabV2() {
       }
 
       const matched = findListingForReservation(res, byId);
-      const listingId = matched?.id || (ownerKey ? resolveReservationListingId(res) : undefined);
-      if (!listingId) continue;
-      if (!matched && !ownerKey) continue;
-      if (!matched && !orphans.some((o) => o.listingId === listingId)) continue;
+      if (!matched?.id) continue; // inactifs / hors grille : ignorés
 
       const arrival = toIsoDate(res.arrivalDate);
       const departure = toIsoDate(res.departureDate);
@@ -394,6 +390,7 @@ export default function ResasTabV2() {
       const dep = new Date(departure);
       if (dep < windowStart || arr > windowEnd) continue;
 
+      const listingId = matched.id;
       const bucket = reservationsByListing.get(listingId);
       if (bucket) bucket.push(res);
       else reservationsByListing.set(listingId, [res]);
@@ -418,6 +415,10 @@ export default function ResasTabV2() {
         cleanlinessStatus_v2: String(op?.cleanlinessStatus_v2 || 'clean'),
         occupancyStatus: String(op?.occupancyStatus || 'vacant'),
         cleanlinessEmergency: Boolean(op?.cleanlinessEmergency),
+        propertyUnit: String(listing.propertyUnit || 'Single'),
+        roomTypes: listing.roomTypes?.length
+          ? listing.roomTypes.map((rt) => ({ id: String(rt.id), name: String(rt.name) }))
+          : undefined,
         reservations: resas.map((r) => {
           const reservationId = String(
             r.id || (r as { _id?: string })._id || r.reservationNumber || '',
@@ -533,6 +534,22 @@ export default function ResasTabV2() {
             channelName: r.channelName || 'direct',
             numberOfGuests: r.numberOfGuests || 0,
             reservationNumber,
+            roomTypeName: (() => {
+              const n = String(r.roomTypeName || r.roomTypes?.roomTypeName || '').trim();
+              return n || undefined;
+            })(),
+            roomTypeId: (() => {
+              const id = String(r.roomTypeId || '').trim();
+              return id || undefined;
+            })(),
+            roomId: (() => {
+              const id = String(r.roomId || '').trim();
+              return id || undefined;
+            })(),
+            roomName: (() => {
+              const n = String(r.roomName || '').trim();
+              return n || undefined;
+            })(),
             lastOta,
             lastWa,
             timeline,
@@ -656,11 +673,27 @@ export default function ResasTabV2() {
           onNextWeek={() => shiftDays(7)}
           onDateChange={(d) => setStartDate(startOfDay(d))}
           onCleanlinessChange={handleCleanlinessChange}
+          onCreateTaskAt={(ctx, anchor) => {
+            setQuickTaskCtx(ctx);
+            setQuickTaskAnchor(anchor);
+          }}
           compactLayout={isMobile}
           denseToolbar={!isMobile}
           fillViewport
         />
       </Box>
+
+      {/* Clic droit sur une cellule → créer une tâche (contexte déduit de la position). */}
+      <PlanningQuickTaskMenu
+        ctx={quickTaskCtx}
+        anchorPos={quickTaskAnchor}
+        ownerId={scope.filterOwnerId || scope.ownerId || requestOwnerId || undefined}
+        onClose={() => {
+          setQuickTaskCtx(null);
+          setQuickTaskAnchor(null);
+        }}
+        onCreated={() => void fetchWindowData()}
+      />
 
       {reservationDrawer}
       {taskDetailDrawer}

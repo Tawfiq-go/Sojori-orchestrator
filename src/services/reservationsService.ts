@@ -165,8 +165,10 @@ class ReservationsService {
         queryParams.append('page', String(params.page));
       }
 
-      // Backend cap à 100 — défaut liste = 100
-      const limit = Math.min(params.limit ?? 100, 100);
+      /* Défaut liste = 100. Le backend ne plafonne pas (_limit = parseInt brut,
+         srv-reservations/common/utils/paginate) — garde-fou à 500 pour éviter
+         un $facet > 100 MB côté Mongo sur une fenêtre trop large. */
+      const limit = Math.min(params.limit ?? 100, 500);
       queryParams.append('limit', String(limit));
 
       // Ajouter status (filtrage backend comme legacy)

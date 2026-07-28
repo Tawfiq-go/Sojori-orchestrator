@@ -5,6 +5,7 @@ import {
   inferTaskPlannedIso,
   type ReservationDatesLike,
 } from './inferTaskPlannedDate';
+import { formatHotelRoomLabel, pickRoomTypeName } from './multiListingLabel';
 
 export const FULLTASK_TO_LEGACY_STATUS: Record<string, string> = {
   waiting_guest: 'CREATED',
@@ -64,6 +65,8 @@ export interface ReservationMetaLike extends ReservationDatesLike {
   confirmedCheckInTime?: boolean;
   confirmedCheckOutTime?: boolean;
   guestRegistration?: GuestRegistrationMetaLike;
+  /** Type de chambre Multi (batch / getList). */
+  roomTypeName?: string | null;
 }
 
 function slotIdToTimeLabel(slotId: unknown): string | undefined {
@@ -188,6 +191,14 @@ export function fullTaskToListItem(
   const assignedTo = task.assignedTo ? String(task.assignedTo) : '';
   const staff = assignedTo ? staffById[assignedTo] : null;
   const listingId = task.listingId ? String(task.listingId) : '';
+  const hotelName =
+    listingById[listingId] || (payload.listingName as string) || undefined;
+  const roomFromMeta = pickRoomTypeName(reservationMeta);
+  const roomFromPayload = pickRoomTypeName({
+    roomTypeName: payload.roomTypeName as string | undefined,
+  });
+  const roomTypeName = roomFromMeta || roomFromPayload;
+  const listingDisplayName = formatHotelRoomLabel(hotelName, roomTypeName);
   const startIso = inferTaskPlannedIso(task, reservationMeta);
   const endIso = task.dueAt
     ? new Date(String(task.dueAt)).toISOString()
@@ -254,8 +265,22 @@ export function fullTaskToListItem(
     conciergeDetailLine ||
     (task.requestNote ? String(task.requestNote) : '')
 
+  const derivedPriority =
+    task.priority &&
+    typeof task.priority === 'object' &&
+    'urgency' in (task.priority as object)
+      ? (task.priority as {
+          urgency: 'green' | 'orange' | 'red';
+          reason?: string;
+          dueAt?: string;
+        })
+      : undefined;
+  const legacyPriorityStr = typeof task.priority === 'string' ? task.priority : undefined;
+
   return {
     _id: task._id,
+    /* Priorité 3 couleurs dérivée backend (heure vs statut, seuils par type). */
+    priority: derivedPriority,
     itemType: 'Task',
     itemNumber: task.taskCode || task._id,
     name: task.taskCode || task._id,
@@ -271,7 +296,7 @@ export function fullTaskToListItem(
     endDate: endIso,
     taskStatus: legacyStatus,
     status: legacyStatus,
-    emergency: fullTaskPriorityToEmergency(task.priority as string),
+    emergency: fullTaskPriorityToEmergency(legacyPriorityStr),
     source: task.triggeredBy === 'orchestrator'
       ? 'orchestrator'
       : task.triggeredBy === 'whatsapp'
@@ -280,7 +305,7 @@ export function fullTaskToListItem(
     guestName: task.guestName,
     guestPhone: task.guestPhone,
     listingId,
-    listingName: listingById[listingId] || (payload.listingName as string) || undefined,
+    listingName: listingDisplayName || undefined,
     reservationId,
     reservationNumber,
     reservationCheckIn:

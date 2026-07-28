@@ -45,6 +45,7 @@ export default function MultiView({
   dpEnabledByListing = {},
   listings: listingsLegacy,
   inventoriesByListing = {},
+  inventoryData = {},
   inventoryLoading = false,
   selectedColumns = [],
   onCellsSelected,
@@ -62,7 +63,26 @@ export default function MultiView({
 
   /* ─── Expand/collapse par listing — fermé par défaut ─── */
   const [expanded, setExpanded] = useState({});
+  /** Multi only: collapse détail (min stay…) par roomType — clé `${listingId}:${rtId}` */
+  const [rtExpanded, setRtExpanded] = useState({});
   const toggleListing = (id) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
+  const toggleRoomType = useCallback((key) => {
+    setRtExpanded((p) => ({ ...p, [key]: !p[key] }));
+  }, []);
+
+  const roomTypesByListing = useMemo(() => {
+    const map = {};
+    listings.forEach((listing) => {
+      const inv = inventoryData[listing._id] || {};
+      map[listing._id] = Object.entries(inv).map(([id, v]) => ({
+        id,
+        name: v?.name || `Type ${String(id).slice(-4)}`,
+        availability: v?.availability || {},
+      }));
+    });
+    return map;
+  }, [listings, inventoryData]);
+
   /* ─── Sélection Excel vs clic détail tarif ─── */
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
@@ -315,27 +335,77 @@ export default function MultiView({
           />
         )}
         <div style={{ minWidth: LEFT_W + days.length * CELL_W }}>
-          {listings.map((listing) => (
-            <ListingRow
-              key={listing._id}
-              listing={listing}
-              dpEnabled={dpEnabledByListing[String(listing._id)] !== false}
-              inventories={inventoriesByListing[listing._id] || {}}
-              days={days}
-              leftW={LEFT_W}
-              cellW={CELL_W}
-              expanded={!!expanded[listing._id]}
-              onToggle={() => toggleListing(listing._id)}
-              selectedColumns={selectedColumns}
-              isSelected={isSelected}
-              onMouseDown={onMouseDown}
-              onMouseEnter={onMouseEnter}
-              onPriceClick={onPriceClick}
-              onReservationClick={handleReservationDayClick}
-              activeTip={activeTip}
-              onToggleDynamicPrice={onToggleDynamicPrice}
-            />
-          ))}
+          {listings.map((listing) => {
+            const roomTypes = roomTypesByListing[listing._id] || [];
+            const isMultiHotel =
+              String(listing.propertyUnit || '') === 'Multi' && roomTypes.length > 1;
+            const isOpen = !!expanded[listing._id];
+            return (
+              <div key={listing._id}>
+                <ListingRow
+                  listing={{
+                    ...listing,
+                    roomTypeCount: roomTypes.length,
+                  }}
+                  dpEnabled={dpEnabledByListing[String(listing._id)] !== false}
+                  inventories={inventoriesByListing[listing._id] || {}}
+                  days={days}
+                  leftW={LEFT_W}
+                  cellW={CELL_W}
+                  expanded={isOpen}
+                  onToggle={() => toggleListing(listing._id)}
+                  forceChevron={isMultiHotel}
+                  /* Multi hôtel : ▶ ouvre les roomTypes ; min/max stay sur chaque type */
+                  hideDetailCollapse={isMultiHotel}
+                  selectedColumns={selectedColumns}
+                  isSelected={isSelected}
+                  onMouseDown={onMouseDown}
+                  onMouseEnter={onMouseEnter}
+                  onPriceClick={onPriceClick}
+                  onReservationClick={handleReservationDayClick}
+                  activeTip={activeTip}
+                  onToggleDynamicPrice={onToggleDynamicPrice}
+                />
+                {isOpen && isMultiHotel
+                  ? roomTypes.map((rt) => {
+                      const rtKey = `${listing._id}:${rt.id}`;
+                      const rtOpen = !!rtExpanded[rtKey];
+                      return (
+                      <ListingRow
+                        key={`${listing._id}-${rt.id}`}
+                        listing={{
+                          ...listing,
+                          _id: listing._id,
+                          name: rt.name,
+                          roomTypeId: rt.id,
+                          roomTypeName: rt.name,
+                          propertyUnit: 'Single',
+                          _isRoomTypeRow: true,
+                        }}
+                        dpEnabled={dpEnabledByListing[String(listing._id)] !== false}
+                        inventories={rt.availability}
+                        days={days}
+                        leftW={LEFT_W}
+                        cellW={CELL_W}
+                        expanded={rtOpen}
+                        onToggle={() => toggleRoomType(rtKey)}
+                        forceChevron
+                        hideDetailCollapse={false}
+                        selectedColumns={selectedColumns}
+                        isSelected={isSelected}
+                        onMouseDown={onMouseDown}
+                        onMouseEnter={onMouseEnter}
+                        onPriceClick={onPriceClick}
+                        onReservationClick={handleReservationDayClick}
+                        activeTip={activeTip}
+                        onToggleDynamicPrice={onToggleDynamicPrice}
+                      />
+                    );
+                    })
+                  : null}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -410,17 +480,23 @@ const ListingLabel = memo(function ListingLabel({
   listing, expanded, showChevron, onToggle, avgPrice, dpEnabled = true,
 }) {
   const isSingle = listing.propertyUnit === 'Single';
+  const isRoomTypeRow = Boolean(listing._isRoomTypeRow);
   const currency = listing.currencyCode || listing.currency || 'MAD';
   const dpHref = `/dynamic-pricing/bien/${listing._id}`;
+  const roomTypeCount = Number(listing.roomTypeCount) || 0;
+  const simpleHref =
+    isRoomTypeRow && listing.roomTypeId
+      ? `/calendar?view=simple&listing=${encodeURIComponent(String(listing._id))}&roomType=${encodeURIComponent(String(listing.roomTypeId))}`
+      : `/calendar?view=simple&listing=${encodeURIComponent(String(listing._id))}`;
   return (
     <div
       onClick={showChevron ? onToggle : undefined}
       style={{
-        padding: '6px 12px',
+        padding: isRoomTypeRow ? '6px 12px 6px 28px' : '6px 12px',
         display: 'flex',
         alignItems: 'center',
         gap: 9,
-        background: T.bg1,
+        background: isRoomTypeRow ? T.bg2 : T.bg1,
         borderRight: `1px solid ${T.border}`,
         cursor: showChevron ? 'pointer' : 'default',
         transition: 'background 0.15s',
@@ -444,29 +520,36 @@ const ListingLabel = memo(function ListingLabel({
           ▶
         </span>
       )}
-      <div
-        style={{
-          width: 24,
-          height: 24,
-          borderRadius: 6,
-          background: `linear-gradient(135deg, ${listing.photoColor || '#fde68a'}, ${listing.photoColorDeep || '#d97706'})`,
-          flexShrink: 0,
-        }}
-      />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <span
+      {!isRoomTypeRow && (
+        <div
           style={{
-            fontSize: 12.5,
-            fontWeight: 700,
+            width: 24,
+            height: 24,
+            borderRadius: 6,
+            background: `linear-gradient(135deg, ${listing.photoColor || '#fde68a'}, ${listing.photoColorDeep || '#d97706'})`,
+            flexShrink: 0,
+          }}
+        />
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <Link
+          to={simpleHref}
+          title="Ouvrir la vue simple (Airbnb)"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            fontSize: isRoomTypeRow ? 11.5 : 12.5,
+            fontWeight: isRoomTypeRow ? 600 : 700,
             lineHeight: 1.1,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             display: 'block',
+            color: 'inherit',
+            textDecoration: 'none',
           }}
         >
           {listing.name}
-        </span>
+        </Link>
         {avgPrice > 0 ? (
           <span
             style={{
@@ -484,13 +567,27 @@ const ListingLabel = memo(function ListingLabel({
             <span style={{ fontSize: 8, fontWeight: 700, color: T.text4, letterSpacing: '0.04em' }}>
               {currency}
             </span>
+            {!isRoomTypeRow && roomTypeCount > 1 ? (
+              <span style={{ fontSize: 9, color: T.text4, marginLeft: 4 }}>
+                · {roomTypeCount} types
+              </span>
+            ) : null}
           </span>
-        ) : isSingle ? (
+        ) : isSingle && !isRoomTypeRow ? (
           <span style={{ fontSize: 9.5, color: T.text4, marginTop: 2, display: 'block' }}>
             Tarif · Dispo
           </span>
+        ) : !isRoomTypeRow && roomTypeCount > 1 ? (
+          <span style={{ fontSize: 9.5, color: T.text4, marginTop: 2, display: 'block' }}>
+            {roomTypeCount} types — ▶ types, puis ▶ min stay
+          </span>
+        ) : isRoomTypeRow ? (
+          <span style={{ fontSize: 9.5, color: T.text4, marginTop: 2, display: 'block' }}>
+            ▶ Min stay / détail
+          </span>
         ) : null}
       </div>
+      {!isRoomTypeRow && (
       <Link
         to={dpHref}
         title={
@@ -530,6 +627,7 @@ const ListingLabel = memo(function ListingLabel({
       >
         <BoltIcon size={13} color={dpEnabled ? T.ai : T.text3} />
       </Link>
+      )}
     </div>
   );
 });
@@ -537,7 +635,7 @@ const ListingLabel = memo(function ListingLabel({
 /* ─── Ligne d'un listing (prix + dispo sur une ligne, détail en collapse) ─── */
 function ListingRow({
   listing, inventories, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onPriceClick, onReservationClick, activeTip,
-  onToggleDynamicPrice, dpEnabled = true,
+  onToggleDynamicPrice, dpEnabled = true, forceChevron = false, hideDetailCollapse = false,
 }) {
   const primaryCols = calendarPrimaryColumns(selectedColumns);
   const collapseColumns = calendarCollapseColumns(selectedColumns).filter((colId) => {
@@ -545,7 +643,12 @@ function ListingRow({
     if (!dpEnabled && (colId === 'dynamicPrice' || colId === 'priceMode')) return false;
     return true;
   });
-  const showChevron = collapseColumns.length > 0;
+  const isRoomTypeRow = Boolean(listing._isRoomTypeRow);
+  // Multi roomType rows: chevron pour min stay / détail ; Single listing inchangé
+  const showChevron =
+    forceChevron ||
+    (!isRoomTypeRow && !hideDetailCollapse && collapseColumns.length > 0) ||
+    (isRoomTypeRow && collapseColumns.length > 0);
   const showDispo = primaryCols.includes('availableRoom');
   const showRate = primaryCols.includes('rate');
   const getInv = (dateStr) => inventories[dateStr];
@@ -638,8 +741,10 @@ function ListingRow({
         })}
       </div>
 
-      {/* Lignes sélection Excel — collapse (colonnes hors ligne principale) */}
-      {expanded && collapseColumns.map(colId => {
+      {/* Lignes sélection Excel — collapse (colonnes hors ligne principale).
+          Multi hôtel parent: hideDetailCollapse → détail sur chaque roomType.
+          Simple / roomType: expanded montre min stay, max stay, etc. */}
+      {expanded && !hideDetailCollapse && collapseColumns.map(colId => {
         const col = ALL_COLUMNS.find(c => c.id === colId);
         if (!col) return null;
         return (
@@ -652,7 +757,8 @@ function ListingRow({
             animation: 'fadeIn 0.25s both',
           }}>
             <div style={{
-              padding: '5px 16px 5px 38px', display: 'flex', alignItems: 'center', gap: 6,
+              padding: isRoomTypeRow ? '5px 16px 5px 48px' : '5px 16px 5px 38px',
+              display: 'flex', alignItems: 'center', gap: 6,
               fontSize: 11, fontWeight: 600, color: T.text2,
               fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em',
               borderRight: `1px solid ${T.border}`,

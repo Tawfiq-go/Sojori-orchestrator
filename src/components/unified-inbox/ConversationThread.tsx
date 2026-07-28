@@ -283,6 +283,39 @@ export default function ConversationThread({
 
   const avatarBg = isOta ? otaTheme.avatarGradient : thread.avatarColor || T.green;
 
+  const presenceLabel = thread.presenceLabel;
+  const guestsCompact = thread.guestsCompact || thread.guestsLabel;
+  const regTotal = thread.registrationTotal;
+  const regDone = thread.registrationRegistered;
+  const hasReg =
+    typeof regTotal === 'number' && regTotal > 0 && typeof regDone === 'number';
+  const regComplete = hasReg && regDone >= regTotal;
+  const showStayStrip = Boolean(
+    presenceLabel ||
+      guestsCompact ||
+      hasReg ||
+      thread.arrivalTimeLabel ||
+      thread.arrivalTimeChosen ||
+      typeof thread.arrivalDeclared === 'boolean' ||
+      typeof thread.departureDeclared === 'boolean' ||
+      thread.reservationNumber,
+  );
+
+  const stayChipSx = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '3px',
+    px: '6px',
+    py: '1px',
+    borderRadius: '4px',
+    fontSize: 10,
+    fontWeight: 700,
+    fontFamily: '"Geist Mono", monospace',
+    letterSpacing: '0.02em',
+    whiteSpace: 'nowrap' as const,
+    lineHeight: 1.35,
+  };
+
   return (
     <Box
       sx={{
@@ -298,7 +331,7 @@ export default function ConversationThread({
       <Box
         sx={{
           px: isOta ? '12px' : '18px',
-          py: isOta ? '6px' : '11px',
+          py: isOta ? '8px' : '11px',
           borderBottom: `1px solid ${T.border}`,
           bgcolor: T.bg2,
           display: 'flex',
@@ -343,7 +376,7 @@ export default function ConversationThread({
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Stack
             direction="row"
-            sx={{ gap: 0.75, alignItems: 'center', mb: isOta ? 0 : '2px' }}
+            sx={{ gap: 0.75, alignItems: 'center', mb: '2px' }}
           >
             <Typography
               sx={{
@@ -357,7 +390,7 @@ export default function ConversationThread({
             >
               {isOta ? `${otaTheme.headerIcon} ${thread.name}` : thread.name}
             </Typography>
-            {!isOta && flag && (
+            {flag && (
               <Typography sx={{ fontSize: 14, lineHeight: 1 }}>{flag}</Typography>
             )}
             {thread.isVip && (
@@ -379,34 +412,144 @@ export default function ConversationThread({
             )}
           </Stack>
 
-          {/* OTA : méta (listing, résa, check-in…) déjà dans Contexte réservation — une seule ligne nom. */}
-          {!isOta && (
+          <Box
+            sx={{
+              fontSize: 10.5,
+              color: T.text3,
+              fontFamily: '"Geist Mono", monospace',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+              alignItems: 'center',
+            }}
+          >
+            {thread.phone && <span>📱 {thread.phone}</span>}
+            {!isOta && thread.guestPresence && (
+              <>
+                {thread.phone ? <span style={{ color: T.text4 }}>·</span> : null}
+                <span style={{ color: T.success, fontWeight: 700 }}>🟢 {thread.guestPresence}</span>
+              </>
+            )}
+            {thread.reservationNumber && (
+              <>
+                {(thread.phone || (!isOta && thread.guestPresence)) ? (
+                  <span style={{ color: T.text4 }}>·</span>
+                ) : null}
+                <span>{thread.reservationNumber}</span>
+              </>
+            )}
+          </Box>
+
+          {showStayStrip ? (
             <Box
               sx={{
-                fontSize: 10.5,
-                color: T.text3,
-                fontFamily: '"Geist Mono", monospace',
+                mt: 0.625,
                 display: 'flex',
                 flexWrap: 'wrap',
-                gap: 1,
+                gap: 0.5,
                 alignItems: 'center',
               }}
             >
-              {thread.phone && <span>📱 {thread.phone}</span>}
-              {thread.guestPresence && (
-                <>
-                  <span style={{ color: T.text4 }}>·</span>
-                  <span style={{ color: T.success, fontWeight: 700 }}>🟢 {thread.guestPresence}</span>
-                </>
-              )}
-              {thread.reservationNumber && (
-                <>
-                  <span style={{ color: T.text4 }}>·</span>
-                  <span>{thread.reservationNumber}</span>
-                </>
-              )}
+              {presenceLabel ? (
+                <Box
+                  sx={{
+                    ...stayChipSx,
+                    bgcolor:
+                      presenceLabel === 'Présent' || presenceLabel === 'En cours'
+                        ? 'rgba(10,143,94,0.12)'
+                        : presenceLabel === 'Attendu' || presenceLabel === "Aujourd'hui"
+                          ? 'rgba(6,115,179,0.12)'
+                          : presenceLabel === 'Départ auj.'
+                            ? 'rgba(196,101,6,0.12)'
+                            : 'rgba(20,17,10,0.06)',
+                    color:
+                      presenceLabel === 'Présent' || presenceLabel === 'En cours'
+                        ? T.success
+                        : presenceLabel === 'Attendu' || presenceLabel === "Aujourd'hui"
+                          ? T.info
+                          : presenceLabel === 'Départ auj.'
+                            ? T.warning
+                            : T.text2,
+                  }}
+                  title="Présence séjour"
+                >
+                  {presenceLabel}
+                </Box>
+              ) : null}
+              {guestsCompact ? (
+                <Box
+                  sx={{
+                    ...stayChipSx,
+                    bgcolor: T.bg1,
+                    color: T.text,
+                    border: `1px solid ${T.border}`,
+                  }}
+                  title="Composition voyageurs"
+                >
+                  {guestsCompact}
+                </Box>
+              ) : null}
+              {hasReg ? (
+                <Box
+                  sx={{
+                    ...stayChipSx,
+                    bgcolor: regComplete ? 'rgba(10,143,94,0.12)' : 'rgba(196,101,6,0.12)',
+                    color: regComplete ? T.success : T.warning,
+                  }}
+                  title="Enregistrement police"
+                >
+                  📋 {regDone}/{regTotal}
+                </Box>
+              ) : null}
+              {thread.arrivalTimeChosen || thread.arrivalTimeLabel ? (
+                <Box
+                  sx={{
+                    ...stayChipSx,
+                    bgcolor: thread.arrivalTimeChosen
+                      ? 'rgba(124,58,237,0.10)'
+                      : 'rgba(20,17,10,0.05)',
+                    color: thread.arrivalTimeChosen ? '#6d28d9' : T.text3,
+                  }}
+                  title={
+                    thread.arrivalTimeChosen
+                      ? 'Heure d’arrivée choisie par le client'
+                      : 'Heure d’arrivée (listing / défaut)'
+                  }
+                >
+                  Arr. {thread.arrivalTimeLabel || '—'}
+                  {thread.arrivalTimeChosen ? ' ✓' : ''}
+                </Box>
+              ) : null}
+              {typeof thread.arrivalDeclared === 'boolean' ? (
+                <Box
+                  sx={{
+                    ...stayChipSx,
+                    bgcolor: thread.arrivalDeclared
+                      ? 'rgba(10,143,94,0.12)'
+                      : 'rgba(20,17,10,0.05)',
+                    color: thread.arrivalDeclared ? T.success : T.text3,
+                  }}
+                  title="Arrivée déclarée (sur place)"
+                >
+                  {thread.arrivalDeclared ? 'Arr. déclaré' : 'Arr. non décl.'}
+                </Box>
+              ) : null}
+              {typeof thread.departureDeclared === 'boolean' ? (
+                <Box
+                  sx={{
+                    ...stayChipSx,
+                    bgcolor: thread.departureDeclared
+                      ? 'rgba(10,143,94,0.12)'
+                      : 'rgba(20,17,10,0.05)',
+                    color: thread.departureDeclared ? T.success : T.text3,
+                  }}
+                  title="Départ déclaré"
+                >
+                  {thread.departureDeclared ? 'Dép. déclaré' : 'Dép. non décl.'}
+                </Box>
+              ) : null}
             </Box>
-          )}
+          ) : null}
         </Box>
 
         <Stack direction="row" sx={{ gap: 0.5, flexShrink: 0, alignItems: 'center' }}>
@@ -542,11 +685,36 @@ export default function ConversationThread({
             </Box>
           ) : null}
           {!isOta &&
-            ['📞', '🎥', '🔍', '⋮'].map((icon) => (
+            ['📞', '🎥', '⋮'].map((icon) => (
               <Box key={icon} component="button" sx={headerActionBtnSx} title={icon}>
                 {icon}
               </Box>
             ))}
+          {/* Analyse IA : en-tête (toujours visible) — le 🔍 décoratif sans action a été retiré. */}
+          {!isOta && onAIAnalysis && (
+            <Box
+              component="button"
+              type="button"
+              onClick={onAIAnalysis}
+              sx={{
+                ...headerActionBtnSx,
+                width: 'auto',
+                minWidth: 28,
+                height: 28,
+                px: 0.875,
+                gap: 0.4,
+                fontSize: 11,
+                fontWeight: 700,
+                bgcolor: T.aiTint,
+                color: T.ai,
+                border: '1px solid rgba(124,58,237,0.35)',
+                '&:hover': { bgcolor: 'rgba(124,58,237,0.18)', color: T.ai },
+              }}
+              title="Analyse IA de la conversation"
+            >
+              🔍 Analyse
+            </Box>
+          )}
         </Stack>
       </Box>
 
@@ -1486,25 +1654,18 @@ export default function ConversationThread({
             onClick={onAIAnalysis}
             sx={{
               ...iconBtnSx,
-              width: 'auto',
+              width: 34,
               height: 34,
-              px: '10px',
-              gap: 0.5,
               borderRadius: '9px',
               border: '1px solid rgba(124,58,237,0.35)',
               bgcolor: T.aiTint,
               color: T.ai,
-              fontSize: 12,
-              fontWeight: 700,
-              whiteSpace: 'nowrap',
+              flexShrink: 0,
               '&:hover': { bgcolor: 'rgba(124,58,237,0.18)', color: T.ai },
             }}
             title="Analyse IA de la conversation"
           >
-            <Box component="span" sx={{ fontSize: 13, lineHeight: 1 }}>
-              🔍
-            </Box>
-            Analyse
+            🔍
           </Box>
         )}
         <Box

@@ -4,6 +4,12 @@
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
 import { Box, Stack, Tooltip, Typography } from '@mui/material';
+import {
+  getNextTaskStatus,
+  normalizeTaskStatus,
+  TASK_STATUS_LABELS,
+  type TaskStatus as HubTaskStatus,
+} from '../../types/tasks.types';
 
 /* ─── Tokens (alignés DashboardV2) ─── */
 export const T = {
@@ -30,7 +36,7 @@ export const STAY = {
   /** Hauteur ligne vue réservations (barres seules) */
   ROW_H: 74,
   /** Hauteur ligne vue tâches classique (/tasks/planning) */
-  TASK_ROW_H: 96,
+  TASK_ROW_H: 112,
   /** Max chips jour — planning classique 2 ; cockpit Résas override via maxVisible */
   MAX_CHIPS: 2,
   LISTING_ICON_SIZE: 28,
@@ -53,12 +59,12 @@ export const COCKPIT_META = {
   MSG_LINE_H: 17,
   /** Une ligne WA | OTA (badge + date + preview) — hauteur de base. */
   MSG_ROW_H: 36,
-  /** Hauteur d’une ligne de chip tâche */
-  CHIP_LINE_H: 20,
+  /** Hauteur d’une ligne de chip tâche (2 lignes : type · statut/livreur). */
+  CHIP_LINE_H: 40,
   /** Minimum 2 lignes de chips ; au-delà on grandit. */
   TASK_LANE_MIN_LINES: 2,
   TASK_LANE_MAX_LINES: 6,
-  TASK_LANE_GAP: 6,
+  TASK_LANE_GAP: 5,
   BOTTOM_PAD: 8,
   MIN_ROW: 88,
 } as const;
@@ -264,41 +270,57 @@ export const STAY_RES_BAR = {
   CHECKIN_OFFSET: 0.4,
   CHECKOUT_END: 0.4,
   SAME_DAY_WIDTH: 0.5,
-  TURNOVER_WIDTH: 0.4,
 } as const;
 
-/** Position % de la barre Gantt sur la timeline (jours = colonnes égales). */
+export type ReservationBarClip = {
+  /** Arrivée avant le 1er jour visible → barre depuis le bord gauche (pas offset check-in). */
+  clippedStart?: boolean;
+  /** Départ après le dernier jour visible → barre jusqu’au bord droit. */
+  clippedEnd?: boolean;
+};
+
+/**
+ * Position % de la barre Gantt sur la timeline (jours = colonnes égales).
+ * Turnover même jour : départ = [0 → CHECKOUT_END], arrivée = [CHECKIN_OFFSET → …]
+ * (pas de chevauchement barre / messages).
+ */
 export function computeReservationBarLayout(
   startIdx: number,
   endIdx: number,
   daysCount: number,
-  sameDaySlot = 0,
+  clip: ReservationBarClip = {},
 ): { leftPct: number; widthPct: number } {
   if (daysCount <= 0) return { leftPct: 0, widthPct: 0 };
 
   const cellPct = 100 / daysCount;
-  const { CHECKIN_OFFSET, CHECKOUT_END, SAME_DAY_WIDTH, TURNOVER_WIDTH } = STAY_RES_BAR;
+  const { CHECKIN_OFFSET, CHECKOUT_END, SAME_DAY_WIDTH } = STAY_RES_BAR;
+  const { clippedStart = false, clippedEnd = false } = clip;
 
-  if (sameDaySlot > 0) {
+  // Stub checkout seul dans la fenêtre (ex. résa commencée hier, part aujourd’hui) :
+  // occupe le matin [0 → 40%], laisse l’après-midi à l’arrivée du jour.
+  if (clippedStart && startIdx >= endIdx) {
     const leftPct = (startIdx / daysCount) * 100;
-    const widthPct = TURNOVER_WIDTH * cellPct;
-    return { leftPct, widthPct: Math.max(widthPct, 2) };
+    const widthPct = CHECKOUT_END * cellPct;
+    return { leftPct, widthPct: Math.max(widthPct, 1.5) };
   }
 
-  if (startIdx >= endIdx) {
+  // Vrai même-jour (arrivée + départ le même calendrier, non clipée)
+  if (!clippedStart && startIdx >= endIdx) {
     return {
       leftPct: ((startIdx + CHECKIN_OFFSET) / daysCount) * 100,
       widthPct: Math.max(SAME_DAY_WIDTH * cellPct, 2),
     };
   }
 
-  const leftPct = ((startIdx + CHECKIN_OFFSET) / daysCount) * 100;
-  const rightPct = ((endIdx + CHECKOUT_END) / daysCount) * 100;
-  const widthPct = Math.max(rightPct - leftPct, SAME_DAY_WIDTH * cellPct);
+  const leftFrac = clippedStart ? startIdx : startIdx + CHECKIN_OFFSET;
+  const rightFrac = clippedEnd ? endIdx + 1 : endIdx + CHECKOUT_END;
+  const leftPct = (leftFrac / daysCount) * 100;
+  const rightPct = (rightFrac / daysCount) * 100;
+  const widthPct = Math.max(rightPct - leftPct, SAME_DAY_WIDTH * cellPct * 0.5);
 
   return {
     leftPct,
-    widthPct: Math.min(widthPct, 100 - leftPct - cellPct * 0.1),
+    widthPct: Math.min(widthPct, Math.max(0, 100 - leftPct)),
   };
 }
 
@@ -310,9 +332,9 @@ export function computeReservationMessagesLayout(
   startIdx: number,
   endIdx: number,
   daysCount: number,
-  sameDaySlot = 0,
+  clip: ReservationBarClip = {},
 ): { leftPct: number; widthPct: number; narrow: boolean } {
-  const bar = computeReservationBarLayout(startIdx, endIdx, daysCount, sameDaySlot);
+  const bar = computeReservationBarLayout(startIdx, endIdx, daysCount, clip);
   const cellPct = daysCount > 0 ? 100 / daysCount : 100;
   // < ~1,25 colonne → mode compact (empiler WA/OTA), sans élargir
   const narrow = bar.widthPct < cellPct * 1.25;
@@ -336,6 +358,15 @@ export const CHANNEL_COCKPIT: Record<Channel, { color: string; wash: string }> =
 export type CleaningKind = 'free' | 'paid' | 'sojori' | 'checkout' | string;
 export type Cleanliness = 'clean' | 'dirty' | 'in_progress' | 'occupied';
 
+/** Priorité 3 couleurs dérivée backend — vert / orange / rouge. */
+export type TaskUrgency = 'green' | 'orange' | 'red';
+
+export interface TaskUrgencyInfo {
+  urgency: TaskUrgency;
+  reason?: string;
+  dueAt?: string;
+}
+
 export interface TimelineItem {
   type: TaskType;
   category?: string;
@@ -346,6 +377,8 @@ export interface TimelineItem {
   staffInitials?: string | null;
   status?: TaskStatus;
   cleaning_type?: CleaningKind;
+  /** Priorité exécution dérivée (heure vs statut). */
+  priority?: TaskUrgencyInfo;
   data?: Record<string, unknown>;
 }
 
@@ -438,6 +471,13 @@ export interface ReservationRow {
   channelName?: string;           // mapped to Channel via channelFromName()
   numberOfGuests?: number;
   reservationNumber?: string;
+  /** Type de chambre Multi — affiché sur la barre (Single = absent). */
+  roomTypeName?: string;
+  /** Id RoomType (Multi) — filtre ligne roomType. */
+  roomTypeId?: string;
+  /** Unité inventaire (Mews) — affichage chambre exacte. */
+  roomId?: string;
+  roomName?: string;
   timeline?: TimelineItem[];
   /** Dernier message OTA (Airbnb/Booking) — cockpit planning. */
   lastOta?: CommsChannelMeta & { exists?: boolean };
@@ -445,6 +485,26 @@ export interface ReservationRow {
   lastWa?: CommsChannelMeta & { exists?: boolean };
   /** Enreg / heure arr·dép / déclaré — pastilles sous barre. */
   stayOps?: StayOpsMeta;
+}
+
+export type PlanningRoomTypeRef = { id: string; name: string };
+
+/**
+ * Contexte déduit d'un clic droit sur une cellule du planning : la POSITION
+ * porte déjà le logement + le jour, et la résa en cours ce jour-là si elle existe.
+ * Le PM n'a donc plus qu'à choisir le type de tâche.
+ */
+export interface PlanningCreateContext {
+  listingId: string;
+  listingName: string;
+  dayIso: string;
+  reservationId?: string;
+  reservationNumber?: string;
+  guestName?: string;
+  /** true si le jour cliqué est le jour de départ (ménage/check-out probable). */
+  isDepartureDay?: boolean;
+  /** true si le jour cliqué est le jour d'arrivée (check-in probable). */
+  isArrivalDay?: boolean;
 }
 
 export interface ListingRow {
@@ -456,6 +516,16 @@ export interface ListingRow {
   occupancyStatus?: 'available' | 'occupied' | 'vacant';
   cleanlinessEmergency?: boolean;
   reservations: ReservationRow[];
+  /** Single | Multi — gate collapse roomTypes (comme MultiView MEWS). */
+  propertyUnit?: string;
+  roomTypes?: PlanningRoomTypeRef[];
+  /** Ligne enfant roomType (synthetic). */
+  isRoomTypeRow?: boolean;
+  parentListingId?: string;
+  /** Nom hôtel (sur ligne roomType) pour hover / drawer. */
+  parentListingName?: string;
+  roomTypeId?: string;
+  roomTypeCount?: number;
 }
 
 export interface StaffMember {
@@ -482,6 +552,36 @@ export interface TaskItem {
   reservationNumber?: string;
   guestName?: string;
   emergency?: 'low' | 'medium' | 'high' | 'urgent';
+  /** Priorité exécution dérivée (heure vs statut). */
+  priority?: TaskUrgencyInfo;
+}
+
+/** Lit la priorité 3 couleurs (champ dédié ou data.priority du merge fulltask). */
+export function resolveTaskUrgency(
+  item: TimelineItem | TaskItem | Record<string, unknown> | null | undefined,
+): TaskUrgency {
+  if (!item) return 'green';
+  const direct = (item as { priority?: TaskUrgencyInfo }).priority;
+  if (direct?.urgency === 'red' || direct?.urgency === 'orange' || direct?.urgency === 'green') {
+    return direct.urgency;
+  }
+  const data = ('data' in item ? item.data : undefined) as Record<string, unknown> | undefined;
+  const nested = data?.priority as TaskUrgencyInfo | undefined;
+  if (nested?.urgency === 'red' || nested?.urgency === 'orange' || nested?.urgency === 'green') {
+    return nested.urgency;
+  }
+  return 'green';
+}
+
+export function resolveTaskUrgencyInfo(
+  item: TimelineItem | TaskItem | Record<string, unknown> | null | undefined,
+): TaskUrgencyInfo | undefined {
+  if (!item) return undefined;
+  const direct = (item as { priority?: TaskUrgencyInfo }).priority;
+  if (direct?.urgency) return direct;
+  const data = ('data' in item ? item.data : undefined) as Record<string, unknown> | undefined;
+  const nested = data?.priority as TaskUrgencyInfo | undefined;
+  return nested?.urgency ? nested : undefined;
 }
 
 /* ─── Helpers ─── */
@@ -729,6 +829,29 @@ function HoverPanel({ children, maxWidth = 280 }: { children: React.ReactNode; m
   );
 }
 
+function taskStatusLabelFr(raw: string | null | undefined): string {
+  const s = String(raw || '').trim();
+  if (!s || s === '—') return '—';
+  const upper = s.toUpperCase();
+  if (upper in TASK_STATUS_LABELS) {
+    return TASK_STATUS_LABELS[upper as HubTaskStatus];
+  }
+  return TASK_STATUS_LABELS[normalizeTaskStatus(s)];
+}
+
+function taskFutureStatusLabelFr(raw: string | null | undefined): string {
+  const next = getNextTaskStatus(raw);
+  if (!next) {
+    const cur = normalizeTaskStatus(raw);
+    if (cur === 'COMPLETED') return '— (terminée)';
+    if (cur === 'CANCELLED_ADMIN' || cur === 'CANCELLED_CUSTOMER' || cur === 'ARCHIVED') {
+      return '— (annulée)';
+    }
+    return '—';
+  }
+  return TASK_STATUS_LABELS[next];
+}
+
 function HoverLine({
   label,
   value,
@@ -751,7 +874,7 @@ function HoverLine({
           color: accent || '#E6B022',
           flexShrink: 0,
           pt: '1px',
-          minWidth: 28,
+          minWidth: 44,
         }}
       >
         {label}
@@ -805,9 +928,13 @@ export function TaskHoverContent({ item }: { item: TimelineItem | TaskItem }) {
   const note = String(data?.notes || data?.comment || data?.title || data?.description || '').trim();
   const resa = String(data?.reservationNumber || data?.reservationCode || '').trim();
   const guest = String(data?.guestName || '').trim();
+  const urgInfo = resolveTaskUrgencyInfo(item);
+  const urg = urgInfo?.urgency ?? 'green';
+  const urgLabel =
+    urg === 'red' ? '🔴 Agir' : urg === 'orange' ? '🟠 Surveiller' : '🟢 OK';
 
   return (
-    <HoverPanel maxWidth={280}>
+    <HoverPanel maxWidth={300}>
       <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 0.75, letterSpacing: '-0.02em' }}>
         {s.emoji} {richLabel}
       </Typography>
@@ -816,7 +943,19 @@ export function TaskHoverContent({ item }: { item: TimelineItem | TaskItem }) {
         {guest ? <HoverLine label="Voyageur" value={guest} /> : null}
         <HoverLine label="Quand" value={frHoverDateTime(when)} />
         {isCleaning ? <HoverLine label="Type" value={cleaningLabelFr(item)} /> : null}
-        <HoverLine label="Statut" value={status} />
+        <HoverLine
+          label="Priorité"
+          value={urgInfo?.reason ? `${urgLabel} · ${urgInfo.reason}` : urgLabel}
+          accent={urg === 'red' ? '#C4483A' : urg === 'orange' ? '#C46506' : undefined}
+        />
+        <HoverLine label="Actuel" value={taskStatusLabelFr(status)} />
+        <HoverLine
+          label="Futur"
+          value={taskFutureStatusLabelFr(status)}
+          accent={
+            getNextTaskStatus(status) ? '#5CBF8F' : undefined
+          }
+        />
         <HoverLine
           label="Staff"
           value={String(staff)}
@@ -925,6 +1064,9 @@ export function ReservationHoverContent({
   lastWa,
   lastOta,
   otaLabel = 'OTA',
+  roomTypeName,
+  roomName,
+  listingName,
 }: {
   guestName: string;
   reservationNumber?: string;
@@ -937,6 +1079,9 @@ export function ReservationHoverContent({
   lastWa?: CommsChannelMeta & { exists?: boolean };
   lastOta?: CommsChannelMeta & { exists?: boolean };
   otaLabel?: string;
+  roomTypeName?: string;
+  roomName?: string;
+  listingName?: string;
 }) {
   const hasWa = Boolean(lastWa?.exists || lastWa?.text || (lastWa?.count || 0) > 0);
   const hasOta = Boolean(lastOta?.exists || lastOta?.text || (lastOta?.count || 0) > 0);
@@ -946,6 +1091,12 @@ export function ReservationHoverContent({
   const otaText = hasOta
     ? (lastOta?.text || 'Fil OTA')
     : 'Aucun échange OTA';
+  const propertyLine = (() => {
+    const hotel = String(listingName || '').trim();
+    const type = String(roomTypeName || '').trim();
+    const unit = String(roomName || '').trim();
+    return [hotel, type, unit].filter(Boolean).join(' · ');
+  })();
 
   return (
     <HoverPanel maxWidth={300}>
@@ -957,6 +1108,11 @@ export function ReservationHoverContent({
           </Box>
         ) : null}
       </Typography>
+      {propertyLine ? (
+        <Typography sx={{ fontSize: 11.5, fontWeight: 650, color: '#D4C4A8', mb: 0.5 }}>
+          {propertyLine}
+        </Typography>
+      ) : null}
       <Typography
         sx={{
           fontFamily: '"Geist Mono", monospace',
@@ -1028,6 +1184,17 @@ const HOVER_TOOLTIP_SX = {
   },
 };
 
+function taskStatusShortFr(status: string): string {
+  const s = String(status || '').toUpperCase();
+  if (s === 'COMPLETED' || s === 'DONE') return 'OK';
+  if (s === 'IN_PROGRESS' || s === 'DOING') return 'En cours';
+  if (s === 'ACCEPTED' || s === 'CONFIRMED') return 'Acceptée';
+  if (s === 'ASSIGNED' || s === 'PENDING_PARTNER') return 'À accepter';
+  if (s === 'CREATED' || s === 'NEW') return 'Créée';
+  if (s === 'CANCELLED' || s === 'CANCELLED_ADMIN' || s === 'CANCELLED_CUSTOMER') return 'Annulée';
+  return '';
+}
+
 export function TaskChip({
   item,
   compact,
@@ -1049,25 +1216,32 @@ export function TaskChip({
   const status = String(('taskStatus' in item ? item.taskStatus : item.status) || '');
   const done = status === 'COMPLETED' || status === 'CANCELLED';
   const isUnassigned = !staff && !done;
+  const urgency = done ? 'green' : resolveTaskUrgency(item);
+  const urgBar =
+    done || urgency === 'green'
+      ? 'rgba(10,143,94,0.45)'
+      : urgency === 'red'
+        ? T.error
+        : T.warning;
   const isCleaning = type === 'cleaning';
   const label = isCleaning
-    ? rich
-      ? cleaningChipLabelFr(item)
-      : cleaningChipLabelFr(item)
+    ? cleaningChipLabelFr(item)
     : rich
       ? TASK_CHIP_LABELS_RICH[type] || s.label
       : s.label;
-  const when = String(('scheduledFor' in item ? item.scheduledFor : '') || '');
-  const clock = rich && !isCleaning ? taskChipClock(when) : '';
-  // Chip ménage compact : staff seulement au hover (évite empilement Sojori / Amir)
-  const staffShort =
-    isCleaning && (fitContent || rich)
-      ? ''
-      : staff
-        ? rich
-          ? String(staff).trim().split(/\s+/)[0]
-          : initialsFrom(staff)
-        : '';
+  const when = String(
+    ('scheduledFor' in item ? item.scheduledFor : '') ||
+      ('startDate' in item ? item.startDate : '') ||
+      '',
+  );
+  const clock = taskChipClock(when);
+  const staffLabel = isUnassigned
+    ? 'NA'
+    : staff
+      ? String(staff).trim().split(/\s+/)[0]
+      : '';
+  const statusShort = rich ? taskStatusShortFr(status) : '';
+  const chipH = rich ? 38 : 24;
 
   return (
     <Tooltip
@@ -1088,92 +1262,221 @@ export function TaskChip({
         sx={{
           all: onClick ? 'unset' : undefined,
           boxSizing: 'border-box',
-          height: rich ? 19 : 17,
-          borderRadius: 0.75,
-          fontSize: rich ? 10 : 9.5,
-          fontWeight: 600,
+          height: chipH,
+          minHeight: chipH,
+          borderRadius: 0.9,
+          fontSize: rich ? 11 : 11,
+          fontWeight: 700,
           display: 'flex',
           alignItems: 'center',
-          gap: 0.375,
-          px: rich ? 0.7 : 0.625,
+          gap: rich ? 0.35 : 0.4,
+          // Texte collé après la barre priorité (pas de pl parasite)
+          pl: 0,
+          pr: rich ? 0.4 : 0.55,
           overflow: 'hidden',
-          whiteSpace: 'nowrap',
-          bgcolor: s.bg,
-          color: s.color,
+          whiteSpace: rich ? 'normal' : 'nowrap',
+          bgcolor: done ? T.bg2 : s.bg,
+          color: done ? T.text3 : s.color,
           cursor: onClick ? 'pointer' : 'default',
           fontFamily: 'inherit',
           textAlign: 'left',
           width: fitContent ? 'auto' : '100%',
           maxWidth: fitContent ? '100%' : undefined,
-          minWidth: 0,
-          ...(isUnassigned ? { boxShadow: `inset 0 0 0 1px ${T.error}` } : {}),
+          minWidth: rich ? (fitContent ? 88 : 0) : 0,
+          lineHeight: 1.1,
+          border: `1px solid ${done ? T.border : `${s.color}33`}`,
+          borderLeft: `3px solid ${urgBar}`,
+          opacity: done ? 0.78 : 1,
           ...(onClick
-            ? { '&:hover': { filter: 'brightness(0.97)', boxShadow: `inset 0 0 0 1px ${s.color}` } }
+            ? {
+                '&:hover': {
+                  filter: 'brightness(0.97)',
+                  borderColor: s.color,
+                  borderLeftColor: urgBar,
+                },
+              }
             : {}),
         }}
       >
-        <Box component="span" sx={{ fontSize: rich ? 11 : 11, flexShrink: 0 }}>
-          {done ? '✓' : s.emoji}
+        <Box
+          component="span"
+          sx={{
+            fontSize: rich ? 12 : 12,
+            flexShrink: 0,
+            lineHeight: 1,
+            width: rich ? 14 : 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            alignSelf: 'stretch',
+            bgcolor: done ? 'transparent' : `${s.color}10`,
+          }}
+        >
+          {s.emoji}
         </Box>
-        {!compact && (
+
+        {rich && !compact ? (
           <Box
-            component="span"
             sx={{
-              flex: fitContent ? '0 1 auto' : 1,
+              flex: 1,
               minWidth: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1px',
+              justifyContent: 'center',
+              py: 0,
+              pr: '2px',
             }}
           >
-            {label}
+            {/* L1 — type + heure */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 0.35,
+                minWidth: 0,
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                component="span"
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  letterSpacing: '-0.01em',
+                  fontWeight: 800,
+                  fontSize: 11,
+                }}
+              >
+                {label}
+              </Box>
+              {clock ? (
+                <Box
+                  component="span"
+                  sx={{
+                    fontFamily: '"Geist Mono", monospace',
+                    fontSize: 10,
+                    fontWeight: 750,
+                    flexShrink: 0,
+                    opacity: 0.9,
+                  }}
+                >
+                  {clock}
+                </Box>
+              ) : null}
+            </Box>
+            {/* L2 — statut · livreur */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.35,
+                minWidth: 0,
+              }}
+            >
+              {statusShort ? (
+                <Box
+                  component="span"
+                  sx={{
+                    fontFamily: '"Geist Mono", monospace',
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: T.text2,
+                    flex: 1,
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title="Statut tâche"
+                >
+                  {statusShort}
+                </Box>
+              ) : (
+                <Box component="span" sx={{ flex: 1, minWidth: 0 }} />
+              )}
+              {staffLabel ? (
+                <Box
+                  component="span"
+                  sx={{
+                    fontFamily: '"Geist Mono", monospace',
+                    fontSize: 9.5,
+                    fontWeight: 800,
+                    bgcolor: isUnassigned ? T.errorTint : 'rgba(255,255,255,0.82)',
+                    color: isUnassigned ? T.error : s.color,
+                    px: 0.4,
+                    py: 0,
+                    borderRadius: 0.45,
+                    flexShrink: 0,
+                    maxWidth: '42%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    border: isUnassigned ? `1px solid ${T.error}55` : `1px solid ${s.color}28`,
+                  }}
+                  title={isUnassigned ? 'Non assigné' : 'Livreur / staff'}
+                >
+                  {staffLabel}
+                </Box>
+              ) : null}
+            </Box>
           </Box>
-        )}
-        {clock && (
-          <Box
-            component="span"
-            sx={{
-              fontFamily: '"Geist Mono", monospace',
-              fontSize: 8.5,
-              fontWeight: 700,
-              flexShrink: 0,
-              opacity: 0.9,
-            }}
-          >
-            {clock}
-          </Box>
-        )}
-        {staffShort && (
-          <Box
-            component="span"
-            sx={{
-              fontFamily: '"Geist Mono", monospace',
-              fontSize: rich ? 8.5 : 8.5,
-              fontWeight: 800,
-              bgcolor: 'rgba(255,255,255,0.7)',
-              px: 0.5,
-              borderRadius: 0.375,
-              flexShrink: 0,
-              maxWidth: rich ? 52 : undefined,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {staffShort}
-          </Box>
-        )}
-        {isUnassigned && (
-          <Box
-            component="span"
-            sx={{
-              width: 5,
-              height: 5,
-              borderRadius: '50%',
-              bgcolor: T.error,
-              ml: 0.25,
-              flexShrink: 0,
-              animation: 'sojori-pulse-error 1.8s infinite',
-            }}
-          />
+        ) : (
+          <>
+            {!compact && (
+              <Box
+                component="span"
+                sx={{
+                  flex: fitContent ? '0 1 auto' : 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                {label}
+              </Box>
+            )}
+            {clock && !isCleaning ? (
+              <Box
+                component="span"
+                sx={{
+                  fontFamily: '"Geist Mono", monospace',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                  opacity: 0.9,
+                }}
+              >
+                {clock}
+              </Box>
+            ) : null}
+            {staffLabel ? (
+              <Box
+                component="span"
+                sx={{
+                  fontFamily: '"Geist Mono", monospace',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  bgcolor: isUnassigned ? T.errorTint : 'rgba(255,255,255,0.75)',
+                  color: isUnassigned ? T.error : s.color,
+                  px: 0.5,
+                  py: '2px',
+                  borderRadius: 0.6,
+                  flexShrink: 0,
+                  maxWidth: 48,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  border: isUnassigned ? `1px solid ${T.error}55` : '1px solid transparent',
+                }}
+              >
+                {staffLabel}
+              </Box>
+            ) : null}
+          </>
         )}
       </Box>
     </Tooltip>
@@ -1219,13 +1522,13 @@ export function CockpitTaskChip({
         boxSizing: 'border-box',
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '4px',
-        height: 18,
-        px: '7px',
-        borderRadius: '4px',
+        gap: '5px',
+        height: 26,
+        px: '9px',
+        borderRadius: '6px',
         flexShrink: 0,
-        fontSize: 11,
-        fontWeight: 600,
+        fontSize: 12.5,
+        fontWeight: 650,
         letterSpacing: '-0.01em',
         lineHeight: 1,
         whiteSpace: 'nowrap',
@@ -1233,10 +1536,11 @@ export function CockpitTaskChip({
         opacity: dim ? 0.45 : 1,
         color,
         bgcolor: done ? 'transparent' : T.bg1,
-        border: `1px ${unassigned ? 'dashed' : 'solid'} ${done ? T.borderStrong : color}`,
+        border: `1.5px ${unassigned ? 'dashed' : 'solid'} ${done ? T.borderStrong : color}`,
+        '&:hover': onClick ? { filter: 'brightness(0.97)' } : undefined,
       }}
     >
-      <Box component="span" sx={{ fontSize: 10, lineHeight: 1 }}>{done ? '✓' : unassigned ? '!' : s.emoji}</Box>
+      <Box component="span" sx={{ fontSize: 12, lineHeight: 1 }}>{s.emoji}</Box>
       {s.label}
       {firstName && !unassigned ? (
         <Box component="span" sx={{ color: '#BEB7AA', fontWeight: 500 }}>·{firstName}</Box>
@@ -1990,6 +2294,9 @@ export function GanttBar({
   departureDate,
   lastWa,
   lastOta,
+  roomTypeName,
+  roomName,
+  listingName,
 }: {
   channel: Channel;
   guestName: string;
@@ -2007,6 +2314,11 @@ export function GanttBar({
   departureDate?: string;
   lastWa?: CommsChannelMeta & { exists?: boolean };
   lastOta?: CommsChannelMeta & { exists?: boolean };
+  /** Type Multi — affiché à côté du voyageur (Single = omis). */
+  roomTypeName?: string;
+  /** Unité inventaire Mews (101) — prioritaire sur la barre. */
+  roomName?: string;
+  listingName?: string;
 }) {
   const ch = CHANNEL_COCKPIT[channel];
   const channelLabel = { airbnb: 'Airbnb', booking: 'Booking', vrbo: 'Vrbo', direct: 'Direct' }[channel];
@@ -2025,6 +2337,11 @@ export function GanttBar({
     const n = Math.round((d - a) / 86400000);
     return n > 0 ? n : null;
   })();
+  const typeLabel = String(roomTypeName || '').trim();
+  const unitLabel = String(roomName || '').trim();
+  const barSuffix = unitLabel || typeLabel;
+  const hoverType = typeLabel || undefined;
+  const hoverUnit = unitLabel || undefined;
 
   return (
     <Tooltip
@@ -2041,6 +2358,9 @@ export function GanttBar({
           lastWa={lastWa}
           lastOta={lastOta}
           otaLabel={otaLabel}
+          roomTypeName={hoverType}
+          roomName={hoverUnit}
+          listingName={listingName}
         />
       )}
       placement="top"
@@ -2093,6 +2413,19 @@ export function GanttBar({
           )}
           <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
             {guestName}
+            {barSuffix && !compact ? (
+              <Box
+                component="span"
+                sx={{
+                  fontWeight: 650,
+                  color: T.text2,
+                  ml: 0.5,
+                  fontSize: compact ? 8.5 : 11,
+                }}
+              >
+                · {barSuffix}
+              </Box>
+            ) : null}
             {nights != null && nights > 0 ? (
               <Box
                 component="span"

@@ -383,6 +383,8 @@ class FulltaskTasksService {
     actualDepartureTime?: Date | string | null;
     confirmedCheckInTime?: boolean;
     confirmedCheckOutTime?: boolean;
+    roomTypeName?: string | null;
+    roomTypes?: { roomTypeName?: string } | null;
     guestRegistration?: {
       nbre_guest_registered?: number;
       nbre_guest_to_register?: number;
@@ -402,6 +404,12 @@ class FulltaskTasksService {
       actualDepartureTime: res.actualDepartureTime != null ? String(res.actualDepartureTime) : null,
       confirmedCheckInTime: res.confirmedCheckInTime,
       confirmedCheckOutTime: res.confirmedCheckOutTime,
+      roomTypeName:
+        String(
+          (res as { roomTypeName?: string | null }).roomTypeName ||
+            (res as { roomTypes?: { roomTypeName?: string } }).roomTypes?.roomTypeName ||
+            '',
+        ).trim() || null,
       guestRegistration: res.guestRegistration
         ? {
             nbre_guest_registered: res.guestRegistration.nbre_guest_registered,

@@ -6,6 +6,8 @@ export type ProcessedInventoryData = Record<
     string,
     {
       name?: string;
+      roomNumber?: number;
+      personCapacityMax?: number;
       availability: Record<string, Record<string, unknown>>;
     }
   >
@@ -21,13 +23,17 @@ export function processInventoryResponse(inventory: unknown[]): ProcessedInvento
     (listing.roomTypes || []).forEach((room: {
       roomTypeId: string;
       name?: string;
+      roomNumber?: number;
+      personCapacityMax?: number;
       availableRoomsByDay?: Array<Record<string, unknown>>;
     }) => {
       processedData[listing.listingId][room.roomTypeId] = {
         name: room.name,
+        roomNumber: Number(room.roomNumber) || 0,
+        personCapacityMax: Number(room.personCapacityMax) || 0,
         availability: (room.availableRoomsByDay || []).reduce(
           (dayAcc: Record<string, Record<string, unknown>>, day: Record<string, unknown>) => {
-            const dateStr = moment(day.date as string | Date).format('YYYY-MM-DD');
+            const dateStr = moment.utc(day.date as string | Date).format('YYYY-MM-DD');
             dayAcc[dateStr] = {
               isArchived: Boolean(day.isArchived),
               availableRoom: day.availableRoom,

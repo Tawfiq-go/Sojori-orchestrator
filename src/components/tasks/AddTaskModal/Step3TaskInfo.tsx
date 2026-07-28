@@ -2,8 +2,8 @@
  * Étape 3: Info Tâche & Validation
  */
 
-import React, { useState, useEffect } from 'react';
-import { Box, TextField, Grid, MenuItem, Autocomplete, Typography, Alert, Chip, Paper, Divider, CircularProgress, FormControlLabel, Checkbox, RadioGroup, Radio, FormControl, FormLabel, Button } from '@mui/material';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Box, TextField, Grid, MenuItem, Autocomplete, Typography, Alert, Chip, Paper, Divider, CircularProgress, FormControlLabel, Checkbox, RadioGroup, Radio, FormControl, FormLabel, Button, Stack } from '@mui/material';
 import { ManageSearch as SmartIcon } from '@mui/icons-material';
 import { fetchStaffSimplified } from './addTaskApi';
 import type { TaskFormData, TaskInfoData } from './types';
@@ -24,6 +24,51 @@ interface Staff {
   whatsappPhone?: string;
   tasksThisWeek?: number;
 }
+
+const DURATION_PRESETS = [
+  { label: '30 min', hours: 0.5 },
+  { label: '1 h', hours: 1 },
+  { label: '2 h', hours: 2 },
+  { label: '3 h', hours: 3 },
+  { label: '4 h', hours: 4 },
+] as const;
+
+function pad2(n: number) {
+  return String(n).padStart(2, '0');
+}
+
+/** datetime-local en heure locale (évite le décalage UTC de toISOString). */
+function toLocalDatetimeValue(d: Date | string | null | undefined): string {
+  if (!d) return '';
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+function parseLocalDatetime(value: string): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function endFromStart(start: Date, durationHours: number): Date {
+  return new Date(start.getTime() + Math.max(0.5, durationHours) * 3600 * 1000);
+}
+
+function formatDurationLabel(hours: number): string {
+  const h = Math.max(0.5, hours);
+  if (h < 1) return `${Math.round(h * 60)} min`;
+  const whole = Math.floor(h);
+  const mins = Math.round((h - whole) * 60);
+  if (mins === 0) return `${whole} h`;
+  if (whole === 0) return `${mins} min`;
+  return `${whole} h ${mins} min`;
+}
+
+function snapDurationHours(hours: number): number {
+  return Math.max(0.5, Math.round(hours * 2) / 2);
+}
+
 export function Step3TaskInfo({
   formData,
   onChange,
@@ -45,29 +90,32 @@ export function Step3TaskInfo({
     useFulltaskApi ? 'manual' : 'auto',
   );
   const [smartSelectorOpen, setSmartSelectorOpen] = useState(false);
+  const [customDuration, setCustomDuration] = useState(
+    () => !DURATION_PRESETS.some((p) => p.hours === (formData.taskInfo.duration || 2)),
+  );
 
   const taskTypeForStaff = formData.fulltaskTypeId || taskType;
 
-  // Fulltask : dates depuis la réservation si pas encore renseignées
+  // Fulltask : début = check-in 12:00 (ou aujourd’hui) + durée — jamais check-out comme fin.
   useEffect(() => {
-    if (!useFulltaskApi || !reservation) return;
-    if (taskInfo.startDate && taskInfo.endDate) return;
-    const startRaw = reservation.checkIn || reservation.arrivalDate;
-    const endRaw = reservation.checkOut || reservation.departureDate;
-    if (!startRaw || !endRaw) return;
-    const startDate = new Date(startRaw);
-    const endDate = new Date(endRaw);
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return;
-    const durationHours = Math.max(
-      0.5,
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60),
-    );
+    if (!useFulltaskApi) return;
+    if (taskInfo.startDate) return;
+    const duration = snapDurationHours(Number(taskInfo.duration) || 2);
+    let start = new Date();
+    start.setSeconds(0, 0);
+    const checkIn = reservation?.checkIn || reservation?.arrivalDate;
+    if (checkIn) {
+      const d = new Date(checkIn);
+      if (!Number.isNaN(d.getTime())) start = new Date(d);
+    }
+    start.setHours(12, 0, 0, 0);
     onChange({
       ...taskInfo,
-      startDate,
-      endDate,
-      duration: durationHours,
+      startDate: start,
+      endDate: endFromStart(start, duration),
+      duration,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useFulltaskApi, reservation?._id, reservation?.id]);
 
   // Load staff list
@@ -105,58 +153,96 @@ export function Step3TaskInfo({
     }
   }, [ownerId, useFulltaskApi, listingId, taskTypeForStaff]);
 
-  // Auto-fill dates from clientRequest
+  // Legacy : auto-fill dates from clientRequest
   useEffect(() => {
+    if (useFulltaskApi) return;
     if (!clientRequest.date) {
       return;
     }
     const date = new Date(clientRequest.date);
-    // ✅ Always update startDate when clientRequest changes (date or timeslot)
     const startDate = new Date(date);
 
-    // Set time based on timeslot or type
     if (clientRequest.timeslot?.start !== undefined) {
       startDate.setHours(clientRequest.timeslot.start, 0, 0, 0);
     } else if (clientRequest.pickupTime) {
       const pickupDate = new Date(clientRequest.pickupTime);
       startDate.setHours(pickupDate.getHours(), pickupDate.getMinutes(), 0, 0);
     } else {
-      startDate.setHours(9, 0, 0, 0); // Default 9h
+      startDate.setHours(9, 0, 0, 0);
     }
-    // ✅ Always update endDate when clientRequest changes
     const endDate = new Date(date);
     if (clientRequest.timeslot?.end !== undefined) {
       endDate.setHours(clientRequest.timeslot.end, 0, 0, 0);
     } else {
-      // Use local startDate variable (not taskInfo.startDate which is not updated yet)
       endDate.setHours(startDate.getHours() + taskInfo.duration, 0, 0, 0);
     }
-    // ✅ Update both dates together
     onChange({
       ...taskInfo,
       startDate,
       endDate,
-      duration: clientRequest.timeslot ? clientRequest.timeslot.end - clientRequest.timeslot.start : taskInfo.duration
+      duration: clientRequest.timeslot
+        ? clientRequest.timeslot.end - clientRequest.timeslot.start
+        : taskInfo.duration,
     });
-  }, [clientRequest.date, clientRequest.timeslot, clientRequest.pickupTime, taskInfo.duration]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientRequest.date, clientRequest.timeslot, clientRequest.pickupTime, useFulltaskApi]);
 
-  // Auto-calculate duration when start/end change
-  useEffect(() => {
-    if (taskInfo.startDate && taskInfo.endDate) {
-      const start = new Date(taskInfo.startDate);
-      const end = new Date(taskInfo.endDate);
-      const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-      if (durationHours > 0 && durationHours !== taskInfo.duration) {
-        handleChange('duration', Math.max(0.5, durationHours));
-      }
+  const applyStartAndDuration = (start: Date | null, durationHours: number) => {
+    if (!start) {
+      onChange({
+        ...taskInfo,
+        startDate: null as unknown as Date,
+        endDate: null as unknown as Date,
+        duration: snapDurationHours(durationHours),
+      });
+      return;
     }
-  }, [taskInfo.startDate, taskInfo.endDate]);
+    const duration = snapDurationHours(durationHours);
+    onChange({
+      ...taskInfo,
+      startDate: start,
+      duration,
+      endDate: endFromStart(start, duration),
+    });
+  };
+
   const handleChange = (field: keyof TaskInfoData, value: any) => {
     onChange({
       ...taskInfo,
-      [field]: value
+      [field]: value,
     });
   };
+
+  const handleStartChange = (value: string) => {
+    const start = parseLocalDatetime(value);
+    applyStartAndDuration(start, Number(taskInfo.duration) || 2);
+  };
+
+  const handleDurationPreset = (hours: number) => {
+    setCustomDuration(false);
+    const start = taskInfo.startDate ? new Date(taskInfo.startDate) : null;
+    applyStartAndDuration(start && !Number.isNaN(start.getTime()) ? start : null, hours);
+  };
+
+  const handleCustomHoursMinutes = (hoursPart: number, minutesPart: 0 | 30) => {
+    setCustomDuration(true);
+    const duration = snapDurationHours(hoursPart + minutesPart / 60);
+    const start = taskInfo.startDate ? new Date(taskInfo.startDate) : null;
+    applyStartAndDuration(start && !Number.isNaN(start.getTime()) ? start : null, duration);
+  };
+
+  const customParts = useMemo(() => {
+    const d = snapDurationHours(Number(taskInfo.duration) || 2);
+    const hoursPart = Math.floor(d);
+    const minutesPart = Math.round((d - hoursPart) * 60) >= 30 ? 30 : 0;
+    return { hoursPart, minutesPart: minutesPart as 0 | 30 };
+  }, [taskInfo.duration]);
+
+  const endPreview =
+    taskInfo.startDate && taskInfo.duration
+      ? endFromStart(new Date(taskInfo.startDate), Number(taskInfo.duration))
+      : null;
+
   const handleAssignmentModeChange = (mode: 'auto' | 'manual') => {
     setAssignmentMode(mode);
     if (mode === 'auto') {
@@ -222,29 +308,161 @@ export function Step3TaskInfo({
           </Typography>
         </Grid>
 
-        <Grid item xs={12} md={6}>
-          <TextField label="Début" type="datetime-local" value={taskInfo.startDate ? new Date(taskInfo.startDate).toISOString().slice(0, 16) : ''} onChange={e => handleChange('startDate', new Date(e.target.value))} fullWidth InputLabelProps={{
-          shrink: true
-        }} required />
+        <Grid item xs={12} md={useFulltaskApi ? 12 : 6}>
+          <TextField
+            label="Début"
+            type="datetime-local"
+            value={toLocalDatetimeValue(taskInfo.startDate)}
+            onChange={(e) => handleStartChange(e.target.value)}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+            required
+            helperText={
+              useFulltaskApi
+                ? reservation
+                  ? 'Par défaut : jour de check-in à 12:00 — modifiable'
+                  : 'Choisissez date et heure de début'
+                : undefined
+            }
+          />
         </Grid>
 
-        <Grid item xs={12} md={6}>
-          <TextField label="Fin" type="datetime-local" value={taskInfo.endDate ? new Date(taskInfo.endDate).toISOString().slice(0, 16) : ''} onChange={e => handleChange('endDate', new Date(e.target.value))} fullWidth InputLabelProps={{
-          shrink: true
-        }} required slotProps={{
-          htmlInput: {
-            min: taskInfo.startDate ? new Date(taskInfo.startDate).toISOString().slice(0, 16) : undefined
-          }
-        }} />
-        </Grid>
+        {!useFulltaskApi && (
+          <Grid item xs={12} md={6}>
+            <TextField
+              label="Fin"
+              type="datetime-local"
+              value={toLocalDatetimeValue(taskInfo.endDate)}
+              onChange={(e) => {
+                const end = parseLocalDatetime(e.target.value);
+                if (!end || !taskInfo.startDate) {
+                  handleChange('endDate', end);
+                  return;
+                }
+                const start = new Date(taskInfo.startDate);
+                const duration = snapDurationHours(
+                  (end.getTime() - start.getTime()) / (1000 * 60 * 60),
+                );
+                onChange({ ...taskInfo, endDate: end, duration });
+              }}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              required
+              slotProps={{
+                htmlInput: {
+                  min: toLocalDatetimeValue(taskInfo.startDate) || undefined,
+                },
+              }}
+            />
+          </Grid>
+        )}
 
         <Grid item xs={12}>
-          <TextField label="Durée (heures)" type="number" value={taskInfo.duration} onChange={e => handleChange('duration', parseFloat(e.target.value) || 0.5)} fullWidth slotProps={{
-          htmlInput: {
-            min: 0.5,
-            step: 0.5
-          }
-        }} helperText={taskInfo.startDate && taskInfo.endDate ? `Auto-calculé: ${taskInfo.duration}h` : 'Durée estimée de la tâche'} />
+          {useFulltaskApi ? (
+            <>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+                Durée
+              </Typography>
+              <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mb: 1.5 }}>
+                {DURATION_PRESETS.map((p) => (
+                  <Chip
+                    key={p.label}
+                    label={p.label}
+                    clickable
+                    color={!customDuration && taskInfo.duration === p.hours ? 'primary' : 'default'}
+                    variant={
+                      !customDuration && taskInfo.duration === p.hours ? 'filled' : 'outlined'
+                    }
+                    onClick={() => handleDurationPreset(p.hours)}
+                  />
+                ))}
+                <Chip
+                  label="Personnalisé"
+                  clickable
+                  color={customDuration ? 'primary' : 'default'}
+                  variant={customDuration ? 'filled' : 'outlined'}
+                  onClick={() => {
+                    setCustomDuration(true);
+                    handleCustomHoursMinutes(
+                      customParts.hoursPart || 1,
+                      customParts.minutesPart,
+                    );
+                  }}
+                />
+              </Stack>
+              {customDuration ? (
+                <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
+                  <TextField
+                    select
+                    label="Heures"
+                    size="small"
+                    value={customParts.hoursPart}
+                    onChange={(e) =>
+                      handleCustomHoursMinutes(Number(e.target.value), customParts.minutesPart)
+                    }
+                    sx={{ minWidth: 100 }}
+                  >
+                    {Array.from({ length: 13 }, (_, i) => (
+                      <MenuItem
+                        key={i}
+                        value={i}
+                        disabled={i === 0 && customParts.minutesPart === 0}
+                      >
+                        {i} h
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    select
+                    label="Minutes"
+                    size="small"
+                    value={customParts.minutesPart}
+                    onChange={(e) =>
+                      handleCustomHoursMinutes(
+                        customParts.hoursPart,
+                        Number(e.target.value) as 0 | 30,
+                      )
+                    }
+                    sx={{ minWidth: 110 }}
+                  >
+                    <MenuItem value={0}>00</MenuItem>
+                    <MenuItem value={30}>30</MenuItem>
+                  </TextField>
+                </Stack>
+              ) : null}
+              <Typography variant="caption" color="text.secondary">
+                {formatDurationLabel(Number(taskInfo.duration) || 2)}
+                {endPreview
+                  ? ` · Fin calculée : ${endPreview.toLocaleString('fr-FR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}`
+                  : ''}
+              </Typography>
+            </>
+          ) : (
+            <TextField
+              label="Durée (heures)"
+              type="number"
+              value={taskInfo.duration}
+              onChange={(e) => handleChange('duration', parseFloat(e.target.value) || 0.5)}
+              fullWidth
+              slotProps={{
+                htmlInput: {
+                  min: 0.5,
+                  step: 0.5,
+                },
+              }}
+              helperText={
+                taskInfo.startDate && taskInfo.endDate
+                  ? `Auto-calculé: ${taskInfo.duration}h`
+                  : 'Durée estimée de la tâche'
+              }
+            />
+          )}
         </Grid>
 
         <Grid item xs={12}>
@@ -517,7 +735,9 @@ export function Step3TaskInfo({
           </Grid>
           <Grid item xs={6}>
             <Typography variant="body2" fontWeight="bold">
-              {reservation?.number || reservation?.reservationNumber} - {reservation?.guestName}
+              {reservation
+                ? `${reservation.number || reservation.reservationNumber} - ${reservation.guestName}`
+                : 'Sans réservation'}
             </Typography>
           </Grid>
 

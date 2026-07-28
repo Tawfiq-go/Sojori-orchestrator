@@ -3,7 +3,7 @@ import { MICROSERVICE_BASE_URL } from '../../../config/backendServer.config';
 import { formatRuError } from '../utils/formatRuError';
 
 export const RentalUnitedApi = {
-  async getUserToken(ownerId, languageId) {
+  async getUserToken(ownerId, languageId, force = false) {
     if (!ownerId) {
       throw new Error('Owner requis pour le widget Rental United');
     }
@@ -12,8 +12,9 @@ export const RentalUnitedApi = {
       throw new Error('URL srv-user non configurée (MICROSERVICE_BASE_URL.SRV_USER)');
     }
     try {
+      const forceQ = force ? '&force=1' : '';
       const response = await apiClient.get(
-        `${base}/rentals-white-label/get-user-token/${ownerId}?languageId=${languageId}`,
+        `${base}/rentals-white-label/get-user-token/${ownerId}?languageId=${languageId}${forceQ}`,
       );
       return response.data;
     } catch (error) {
@@ -23,4 +24,3 @@ export const RentalUnitedApi = {
 };
 
 export default RentalUnitedApi;
-

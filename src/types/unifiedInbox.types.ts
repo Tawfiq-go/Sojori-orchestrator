@@ -53,10 +53,22 @@ export interface Thread {
   isVip?: boolean;
   nightsCount?: number;
   guestsLabel?: string;
+  /** Composition compacte 2A · 1E */
+  guestsCompact?: string;
   /** Badges liste threads */
   checkInBadge?: string;
   taskCount?: number;
   stayBadge?: string;
+  /** Présence séjour (Attendu / En cours / …) — bandeau chat */
+  presenceLabel?: string;
+  registrationRegistered?: number;
+  registrationTotal?: number;
+  arrivalTimeChosen?: boolean;
+  arrivalTimeLabel?: string;
+  departureTimeChosen?: boolean;
+  departureTimeLabel?: string;
+  arrivalDeclared?: boolean;
+  departureDeclared?: boolean;
   /** OTA : fil en attente de réponse hôte */
   needsReply?: boolean;
   /** OTA recherche mot-clé : occurrences dans ce fil */
