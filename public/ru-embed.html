@@ -206,6 +206,7 @@
         var h = location.hostname;
         var isLocal = h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
         if (!isLocal) return;
+        // pms-dist couvre JS *et* CSS : styles.css mesuré à 5 142 ms sans cache.
         var PMS = /^https:\/\/new\.rentalsunited\.com\/app\/pms-dist\/(.+)$/i;
         var rewrite = function (v) {
           var m = PMS.exec(String(v));
@@ -226,12 +227,27 @@
               d.set.call(this, rewrite(v));
             },
           });
-          // 2) setAttribute('src', …) — chemin réellement emprunté par jQuery
+          // 2) href des <link rel=stylesheet> — styles.css pèse lourd et était
+          //    mesuré à 5 142 ms sans cache (il n'a pas de .src, d'où cet ajout)
+          var dh = Object.getOwnPropertyDescriptor(HTMLLinkElement.prototype, 'href');
+          Object.defineProperty(HTMLLinkElement.prototype, 'href', {
+            configurable: true,
+            enumerable: dh.enumerable,
+            get: function () {
+              return dh.get.call(this);
+            },
+            set: function (v) {
+              dh.set.call(this, rewrite(v));
+            },
+          });
+          // 3) setAttribute('src'|'href', …) — chemin emprunté par jQuery
           var origSetAttr = Element.prototype.setAttribute;
           Element.prototype.setAttribute = function (name, value) {
-            if (this.tagName === 'SCRIPT' && String(name).toLowerCase() === 'src') {
-              return origSetAttr.call(this, name, rewrite(value));
-            }
+            var n = String(name).toLowerCase();
+            var isAsset =
+              (this.tagName === 'SCRIPT' && n === 'src') ||
+              (this.tagName === 'LINK' && n === 'href');
+            if (isAsset) return origSetAttr.call(this, name, rewrite(value));
             return origSetAttr.call(this, name, value);
           };
           // 3) jQuery._evalUrl passe par $.ajax : on réécrit aussi les XHR
@@ -243,6 +259,62 @@
           };
         } catch (e) {
           /* si l'interception échoue, on retombe sur le chargement direct */
+        }
+
+        /**
+         * Préchargement parallèle des bundles pms-dist.
+         *
+         * Le script client RU (qui porte le token) met ~550 ms, et ce n'est
+         * qu'ENSUITE qu'il injecte les bundles. Ces 550 ms étaient du temps mort.
+         * On lance donc le préchargement immédiatement : quand RU les demande,
+         * ils sont déjà dans le cache HTTP du navigateur.
+         *
+         * Sans risque : mêmes URLs que celles que RU demandera (donc réutilisées,
+         * pas retéléchargées), et servies par notre proxy local.
+         */
+        try {
+          var ASSETS = [
+            'runtime.js',
+            'polyfills.js',
+            'vendor.js',
+            'scripts.js',
+            'main.js',
+            'styles.css',
+          ];
+          ASSETS.forEach(function (name) {
+            var l = document.createElement('link');
+            l.rel = 'preload';
+            l.as = name.slice(-4) === '.css' ? 'style' : 'script';
+            // setAttribute direct : contourne notre propre réécriture de href
+            // (l'URL est déjà celle du proxy).
+            l.setAttribute('href', location.origin + '/ru-assets/' + name + '?v=1.0.0.0');
+            document.head.appendChild(l);
+          });
+        } catch (e) {
+          /* préchargement best-effort : un échec ne doit rien casser */
+        }
+
+        /**
+         * Filet : Angular insère styles.css par un chemin qui échappe aux
+         * interceptions ci-dessus (mesuré à 6 704 ms en direct depuis RU).
+         * On surveille donc le <head> et on réécrit tout lien pms-dist qui
+         * apparaît, avant que le navigateur ne le télécharge.
+         */
+        try {
+          new MutationObserver(function (muts) {
+            for (var i = 0; i < muts.length; i++) {
+              var nodes = muts[i].addedNodes;
+              for (var j = 0; j < nodes.length; j++) {
+                var n = nodes[j];
+                if (!n || n.tagName !== 'LINK') continue;
+                var href = n.getAttribute('href') || '';
+                var fixed = rewrite(href);
+                if (fixed !== href) n.setAttribute('href', fixed);
+              }
+            }
+          }).observe(document.documentElement, { childList: true, subtree: true });
+        } catch (e) {
+          /* best-effort */
         }
       })();
     </script>
