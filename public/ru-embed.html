@@ -219,11 +219,15 @@
          * en amont : URL vide = pas de requête, pas d'erreur.
          */
         var BLOQUES = /superblocks\.com|googletagmanager\.com|google-analytics\.com/i;
+        /** URL sentinelle : un <script> qui la porte ne sera jamais inséré. */
+        var BLOQUE_MARQUEUR = 'about:blank#sojori-bloque';
         var rewrite = function (v) {
           var s = String(v);
-          // about:blank plutôt que '' : une chaîne vide relance une requête
-          // sur la page courante (boucle), about:blank ne charge rien.
-          if (BLOQUES.test(s)) return 'about:blank';
+          // Marqueur reconnu par l'interception d'insertion ci-dessous. On ne
+          // peut pas neutraliser par une URL (about:blank comme data: sont tous
+          // deux refusés par script-src 'self' → erreur CSP rouge) : il faut
+          // empêcher le <script> d'entrer dans le DOM.
+          if (BLOQUES.test(s)) return BLOQUE_MARQUEUR;
           // URL absolue obligatoire : le <base> RU réécrirait un chemin relatif
           // vers new.rentalsunited.com et le cache serait contourné.
           var m = PMS.exec(s);
@@ -287,6 +291,26 @@
             var args = [].slice.call(arguments);
             args[1] = rewrite(url);
             return origOpen.apply(this, args);
+          };
+          // 5) Blocage à l'insertion : appendChild/insertBefore refusent
+          //    silencieusement les <script> marqués. Une URL neutre ne suffit
+          //    pas — toute valeur hors allowlist déclenche une erreur CSP.
+          var estBloque = function (n) {
+            return (
+              n &&
+              n.tagName === 'SCRIPT' &&
+              String(n.getAttribute && n.getAttribute('src')) === BLOQUE_MARQUEUR
+            );
+          };
+          var origAppend = Node.prototype.appendChild;
+          Node.prototype.appendChild = function (n) {
+            if (estBloque(n)) return n; // jamais inséré → aucune requête
+            return origAppend.call(this, n);
+          };
+          var origInsert = Node.prototype.insertBefore;
+          Node.prototype.insertBefore = function (n, ref) {
+            if (estBloque(n)) return n;
+            return origInsert.call(this, n, ref);
           };
         } catch (e) {
           /* si l'interception échoue, on retombe sur le chargement direct */
