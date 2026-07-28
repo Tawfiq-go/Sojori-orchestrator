@@ -60,7 +60,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     groupLabel: 'Communication',
     taskType: null,
     workflowKey: null,
-    menuCodes: ['A', 'B', 'C', 'D', 'J'],
+    menuCodes: ['A', 'B', 'C', 'D', 'J', 'M'],
     orchestrationFlag: null,
     columns: { managed: 'yes', client: 'yes', orchestrated: 'na', task: 'na', execution: 'na' },
     durationKind: 'na',

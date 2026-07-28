@@ -650,6 +650,8 @@ export type DayPlanStep = {
   taskType?: string;
   /** Statut brut de la tâche (new/confirmed/doing/done…) — distingue « accepté » de « commencé ». */
   taskStatus?: string;
+  /** Priorité 3 couleurs dérivée backend — « vert je continue, orange je regarde, rouge j'agis ». */
+  priority?: { urgency: 'green' | 'orange' | 'red'; reason?: string; dueAt?: string };
   staffName?: string | null;
   registrationPending?: boolean;
   /** Mode à l'arrivée — affiché, non bloquant, accès WhatsApp OK. */

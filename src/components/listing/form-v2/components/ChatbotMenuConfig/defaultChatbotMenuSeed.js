@@ -201,6 +201,14 @@ export const SOJORI_DEFAULT_MENU_OPTIONS = [
     action: 'contact_service_client',
     createsTask: false,
   },
+  {
+    code: 'M',
+    label: 'Mes demandes 📋',
+    enabled: true,
+    availability: { type: 'always' },
+    action: 'show_mes_demandes',
+    createsTask: false,
+  },
 ];
 
 export function cloneSojoriDefaultMenuOptions() {

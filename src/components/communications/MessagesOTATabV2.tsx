@@ -963,8 +963,23 @@ export default function MessagesOTATabV2() {
         inbox.activeRow.listingName ??
         base.listingName,
       guestsLabel: inbox.reservation?.guestsLabel ?? base.guestsLabel,
+      guestsCompact: inbox.reservation?.guestsCompact ?? base.guestsCompact,
+      reservationNumber:
+        inbox.reservation?.reservationNumber ??
+        inbox.activeRow.reservationNumber ??
+        base.reservationNumber,
       reservationCreatedDisplay:
         inbox.reservation?.reservationCreatedDisplay ?? base.reservationCreatedDisplay,
+      presenceLabel: inbox.reservation?.presenceLabel ?? base.presenceLabel,
+      registrationRegistered: inbox.reservation?.registrationRegistered,
+      registrationTotal: inbox.reservation?.registrationTotal,
+      arrivalTimeChosen: inbox.reservation?.arrivalTimeChosen,
+      arrivalTimeLabel: inbox.reservation?.arrivalTimeLabel,
+      departureTimeChosen: inbox.reservation?.departureTimeChosen,
+      departureTimeLabel: inbox.reservation?.departureTimeLabel,
+      arrivalDeclared: inbox.reservation?.arrivalDeclared,
+      departureDeclared: inbox.reservation?.departureDeclared,
+      guestFlag: base.guestFlag,
       taskCount: inbox.tasks.length,
       tasks: inbox.tasks,
       tasksLoading: inbox.loadingTasks,

@@ -16,6 +16,7 @@ import { apiOrchestrationToDesign } from '../utils/fulltaskMappers';
 import { unwrapFulltaskData } from '../utils/unwrapFulltaskResponse';
 import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout';
 import OwnerConfigScopeBarWithSync from '../features/taskHub/components/OwnerConfigScopeBarWithSync';
+import TaskPrioritySection from '../features/taskHub/TaskPrioritySection';
 import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import { useFulltaskConfigOwner } from '../hooks/useFulltaskConfigOwner';
 import { useAuth } from '../hooks/useAuth';
@@ -341,6 +342,8 @@ function TasksOrchestrationFulltaskPageInner() {
           ownerConfigStatus={ownerConfigStatus}
         />
       ) : null}
+      {/* 🚦 Priorité 3 couleurs — presets par type (navette ≠ ménage), cascade owner. */}
+      <TaskPrioritySection ownerKey={effectiveOwnerKey} />
       {isAdminTemplate &&
       adminScopeTab !== 'global' &&
       configSource === 'global_template' &&

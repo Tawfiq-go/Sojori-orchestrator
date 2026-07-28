@@ -264,6 +264,7 @@ export default function ConciergeConfigTab({
     [listingValues.customServices],
   );
   const [config, setConfig] = useState<ConciergeConfig>(EMPTY_CONCIERGE);
+  const [conciergeSource, setConciergeSource] = useState<'own' | 'partner'>('own');
   const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
   const [cityOptions, setCityOptions] = useState<Array<{ _id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
@@ -323,7 +324,10 @@ export default function ConciergeConfigTab({
     }
     try {
       setLoading(true);
-      let data: { customServices?: Array<Record<string, unknown>> } | null = null;
+      let data: {
+        customServices?: Array<Record<string, unknown>>;
+        conciergeSource?: string;
+      } | null = null;
       if (isOwnerTemplate && templateOwnerKey) {
         const res = await listingsService.getListingOwnerConfigTemplate(templateOwnerKey);
         const payload = (res as { data?: { concierge?: { customServices?: unknown[] } } })?.data ?? res;
@@ -334,20 +338,26 @@ export default function ConciergeConfigTab({
           await listingsService.createListingConciergeConfig(listingId);
           res = await listingsService.getListingConciergeConfig(listingId);
         }
-        data = res.data as { customServices?: Array<Record<string, unknown>> } | null;
+        data = res.data as {
+          customServices?: Array<Record<string, unknown>>;
+          conciergeSource?: string;
+        } | null;
       }
       const custom = data?.customServices;
       if (data != null && Array.isArray(custom)) {
         logOrchConfig('concierge.load ←', {
           source: isOwnerTemplate ? `template:${templateOwnerKey}` : `listing:${listingId}`,
           count: custom.length,
+          conciergeSource: data.conciergeSource,
         });
         setConfig(configFromCustomServices(custom));
+        setConciergeSource(data.conciergeSource === 'partner' ? 'partner' : 'own');
       } else {
         logOrchConfig('concierge.load ← empty (no saved concierge)', {
           source: isOwnerTemplate ? `template:${templateOwnerKey}` : `listing:${listingId}`,
         });
         setConfig(EMPTY_CONCIERGE);
+        setConciergeSource('own');
       }
     } catch (err) {
       orchConfigError('concierge.load FAIL', err);
@@ -399,7 +409,11 @@ export default function ConciergeConfigTab({
       if (useOrchestrationGestion && onListingPatch) {
         await onListingPatch({ customServices });
         if (!templateMode && listingId) {
-          const merged = await persistListingConciergeSlice(listingId, { customServices });
+          const merged = await persistListingConciergeSlice(listingId, {
+            customServices,
+            conciergeSource,
+            conciergePartnerId: null,
+          });
           rawDocRef.current = merged;
         } else {
           rawDocRef.current = {
@@ -417,7 +431,11 @@ export default function ConciergeConfigTab({
           customServices,
         });
       } else if (listingId) {
-        await persistListingConciergeSlice(listingId, { customServices });
+        await persistListingConciergeSlice(listingId, {
+          customServices,
+          conciergeSource,
+          conciergePartnerId: null,
+        });
       } else {
         return;
       }
@@ -448,7 +466,29 @@ export default function ConciergeConfigTab({
     templateMode,
     templateOwnerKey,
     useOrchestrationGestion,
+    conciergeSource,
   ]);
+
+  const setSourceMode = useCallback(
+    async (next: 'own' | 'partner') => {
+      if (isAdminGlobal || isOwnerTemplate || !listingId) {
+        setConciergeSource(next);
+        return;
+      }
+      setConciergeSource(next);
+      try {
+        await persistListingConciergeSlice(listingId, {
+          conciergeSource: next,
+          conciergePartnerId: null,
+        });
+        logOrchConfig('concierge.source ←', { next });
+      } catch (err) {
+        orchConfigError('concierge.source FAIL', err);
+        setConciergeSource(next === 'partner' ? 'own' : 'partner');
+      }
+    },
+    [isAdminGlobal, isOwnerTemplate, listingId],
+  );
 
   useEffect(() => {
     if (manualSaveMode || loading || !hydratedRef.current || isAdminGlobal || !dirtyRef.current) return;
@@ -564,6 +604,51 @@ export default function ConciergeConfigTab({
         </Typography>
       )}
 
+      {!isAdminGlobal && !isOwnerTemplate && listingId ? (
+        <Box
+          sx={{
+            mb: 2,
+            p: 1.5,
+            borderRadius: 1.25,
+            border: `1px solid ${T.border}`,
+            bgcolor: T.bg1,
+          }}
+        >
+          <Typography sx={{ ...TYPO.bodyBold, fontSize: 13, mb: 1 }}>
+            Source conciergerie (expériences WhatsApp)
+          </Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} alignItems={{ sm: 'center' }}>
+            <Button
+              variant={conciergeSource === 'own' ? 'contained' : 'outlined'}
+              size="small"
+              onClick={() => void setSourceMode('own')}
+              sx={{ textTransform: 'none', fontWeight: 700 }}
+            >
+              Votre propre conciergerie
+            </Button>
+            <Button
+              variant={conciergeSource === 'partner' ? 'contained' : 'outlined'}
+              size="small"
+              onClick={() => void setSourceMode('partner')}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 700,
+                ...(conciergeSource === 'partner'
+                  ? { bgcolor: '#E6B022', color: '#2C2005', '&:hover': { bgcolor: '#d4a01e' } }
+                  : { borderColor: '#E6B022', color: '#8a6a00' }),
+              }}
+            >
+              Conciergerie Sojori
+            </Button>
+          </Stack>
+          <Typography sx={{ ...TYPO.monoHelp, mt: 1, display: 'block', lineHeight: 1.45 }}>
+            {conciergeSource === 'partner'
+              ? 'Les services partenaires Sojori seront proposés à votre client (WhatsApp). Votre catalogue ci-dessous est désactivé.'
+              : 'Le guest voit vos services configurés ci-dessous. Aucun partenaire Sojori n’est injecté.'}
+          </Typography>
+        </Box>
+      ) : null}
+
       {/* Bibliothèque — modèles → ajout dans customServices[] (persisté) */}
       <Box sx={{
         mb: 2,
@@ -571,6 +656,8 @@ export default function ConciergeConfigTab({
         borderRadius: 1.25,
         overflow: 'hidden',
         bgcolor: T.bg1,
+        opacity: conciergeSource === 'partner' ? 0.55 : 1,
+        pointerEvents: conciergeSource === 'partner' ? 'none' : 'auto',
       }}>
         <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, px: 1.25, py: 0.75, bgcolor: T.bg2, borderBottom: `1px solid ${T.border}` }}>
           <Typography sx={{ ...TYPO.bodyBold, fontSize: 12.5 }}>📚 Bibliothèque</Typography>

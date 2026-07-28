@@ -25,8 +25,16 @@ export interface TaskDescription {
   description: string;
 }
 
+/** Priorité 3 couleurs dérivée backend — « vert je continue, orange je regarde, rouge j'agis ». */
+export interface TaskUrgencyInfo {
+  urgency: 'green' | 'orange' | 'red';
+  reason?: string;
+  dueAt?: string;
+}
+
 export interface TaskListItem {
   _id: string;
+  priority?: TaskUrgencyInfo;
   itemType: TaskItemType | string;
   itemNumber: string;
   name: string;

@@ -108,9 +108,11 @@ export function AddTaskModal({
 
   const steps = useFulltaskApi ? STEPS_FULLTASK : STEPS_LEGACY;
   const canProceedStep1 = useFulltaskApi
-    ? formData.fulltaskTypeId && formData.listing && formData.reservation
-    : formData.taskType && formData.listing && formData.reservation;
-  const canSubmit = formData.taskInfo.startDate && formData.taskInfo.endDate;
+    ? Boolean(formData.fulltaskTypeId && formData.listing)
+    : Boolean(formData.taskType && formData.listing && formData.reservation);
+  const canSubmit = useFulltaskApi
+    ? Boolean(formData.taskInfo.startDate && formData.taskInfo.duration)
+    : Boolean(formData.taskInfo.startDate && formData.taskInfo.endDate);
   const lastStepIndex = steps.length - 1;
 
   const resolvedOwnerId =

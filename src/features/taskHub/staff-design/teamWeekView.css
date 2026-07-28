@@ -143,6 +143,198 @@
   font-weight: 700;
 }
 
+.twv-day-count {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 28px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #92400e;
+  background: rgba(234, 179, 8, 0.14);
+  border: 1px dashed rgba(202, 138, 4, 0.45);
+}
+
+.twv-day-count:hover {
+  background: rgba(234, 179, 8, 0.28);
+}
+
+.twv-focus-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: #f6f5f1;
+  border: 1px solid rgba(26, 22, 17, 0.08);
+}
+
+.twv-focus-chip {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 750;
+  color: #7a756c;
+}
+
+.twv-focus-chip span {
+  font-size: 10px;
+  font-weight: 800;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 17, 10, 0.08);
+  color: #55504a;
+}
+
+.twv-focus-chip.on {
+  background: #fff;
+  color: #14110a;
+  box-shadow: 0 1px 2px rgba(20, 17, 10, 0.08);
+}
+
+.twv-focus-chip--accept.on {
+  color: #92400e;
+  background: rgba(234, 179, 8, 0.2);
+}
+.twv-focus-chip--accept.on span {
+  background: rgba(202, 138, 4, 0.25);
+  color: #92400e;
+}
+
+.twv-focus-chip--start.on {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.16);
+}
+.twv-focus-chip--start.on span {
+  background: rgba(37, 99, 235, 0.2);
+  color: #1d4ed8;
+}
+
+.twv-focus-chip--finish.on {
+  color: #c2410c;
+  background: rgba(249, 115, 22, 0.16);
+}
+.twv-focus-chip--finish.on span {
+  background: rgba(234, 88, 12, 0.2);
+  color: #c2410c;
+}
+
+.twv-cell-dimmed {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #c4bfb5;
+  text-align: center;
+  padding: 6px 0;
+}
+
+.twv-chip--lc-waiting_start {
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
+}
+
+.twv-row--focused .twv-chip--lc-waiting_start {
+  background: #eff6ff;
+  box-shadow: 0 0 0 1.5px rgba(37, 99, 235, 0.45);
+}
+
+.twv-unassigned-panel {
+  margin: 0 0 10px;
+  border: 1px solid rgba(202, 138, 4, 0.35);
+  border-radius: 10px;
+  background: #fffdf8;
+  overflow: hidden;
+}
+
+.twv-unassigned-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(202, 138, 4, 0.22);
+  font-size: 12px;
+  color: #7a756c;
+}
+
+.twv-unassigned-panel-head strong {
+  color: #92400e;
+  font-size: 13px;
+}
+
+.twv-unassigned-close {
+  all: unset;
+  cursor: pointer;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 800;
+  color: #ba7517;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.twv-unassigned-close:hover {
+  background: rgba(202, 138, 4, 0.15);
+}
+
+.twv-unassigned-panel-body {
+  max-height: min(28vh, 240px);
+  overflow: auto;
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.twv-unassigned-day-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: capitalize;
+  color: #7a756c;
+  margin-bottom: 5px;
+}
+
+.twv-unassigned-day-label span {
+  font-size: 10px;
+  font-weight: 800;
+  min-width: 20px;
+  height: 18px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(202, 138, 4, 0.2);
+  color: #92400e;
+}
+
+.twv-unassigned-day-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 6px;
+}
+
+.twv-unassigned-day-chips .twv-chip {
+  margin-bottom: 0;
+}
+
 .twv-toolbar-nav {
   display: flex;
   gap: 6px;
@@ -386,17 +578,78 @@ th.twv-today .twv-day-num {
   background: #fffdf8;
 }
 
+.twv-chip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 1px;
+}
+
 .twv-chip-time {
   font-weight: 700;
 }
 
 .twv-chip-listing {
   display: block;
+  font-size: 10px;
   color: #9a948a;
-  font-size: 11px;
+  opacity: 0.95;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.twv-chip-status {
+  display: block;
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.twv-chip-lc {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.twv-chip-lc--waiting_accept {
+  background: rgba(234, 179, 8, 0.2);
+  color: #92400e;
+}
+.twv-chip-lc--waiting_start {
+  background: rgba(59, 130, 246, 0.16);
+  color: #1d4ed8;
+}
+.twv-chip-lc--waiting_finish {
+  background: rgba(249, 115, 22, 0.16);
+  color: #c2410c;
+}
+.twv-chip-lc--finished {
+  background: rgba(16, 185, 129, 0.16);
+  color: #047857;
+}
+
+.twv-chip--lc-waiting_accept {
+  border-left-color: #ca8a04;
+}
+.twv-chip--lc-waiting_start {
+  border-left-color: #2563eb;
+}
+.twv-chip--lc-waiting_finish {
+  border-left-color: #ea580c;
+}
+.twv-chip--lc-finished {
+  border-left-color: #059669;
 }
 
 .twv-more {
@@ -415,4 +668,17 @@ th.twv-today .twv-day-num {
   text-align: center;
   color: #9a948a;
   font-size: 12.5px;
+}
+
+.twv-refreshing {
+  font-size: 11px;
+  font-weight: 700;
+  color: #b8851a;
+  margin: 0 0 6px;
+  padding: 0 2px;
+}
+
+.twv-scroll--refreshing {
+  opacity: 0.92;
+  transition: opacity 0.15s ease;
 }

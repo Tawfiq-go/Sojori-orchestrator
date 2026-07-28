@@ -144,6 +144,8 @@ export default function StaffRoleView({ staff, listings = [], loading }: Props) 
   const [date, setDate] = useState(todayInputValue);
   const [tasks, setTasks] = useState<StaffRoleTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [refreshingTasks, setRefreshingTasks] = useState(false);
+  const [hasTasksOnce, setHasTasksOnce] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [openChecklistId, setOpenChecklistId] = useState<string | null>(null);
 
@@ -161,34 +163,44 @@ export default function StaffRoleView({ staff, listings = [], loading }: Props) 
     [listings],
   );
 
-  const loadTasks = useCallback(async () => {
-    if (!staffId) {
-      setTasks([]);
-      return;
-    }
-    setLoadingTasks(true);
-    try {
-      const res =
-        range === 'day'
-          ? await fulltaskApi.listStaffTasksToday(staffId, date)
-          : await fulltaskApi.listStaffTasksWeek(staffId, date);
-      if (!res?.success) {
-        toast.error(res?.error || 'Impossible de charger les tâches');
+  const loadTasks = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!staffId) {
         setTasks([]);
+        setHasTasksOnce(false);
         return;
       }
-      setTasks((res.data || []) as StaffRoleTask[]);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erreur chargement tâches');
-      setTasks([]);
-    } finally {
-      setLoadingTasks(false);
-    }
-  }, [staffId, range, date]);
+      const silent = Boolean(opts?.silent) || hasTasksOnce;
+      if (silent) setRefreshingTasks(true);
+      else setLoadingTasks(true);
+      try {
+        const res =
+          range === 'day'
+            ? await fulltaskApi.listStaffTasksToday(staffId, date)
+            : await fulltaskApi.listStaffTasksWeek(staffId, date);
+        if (!res?.success) {
+          toast.error(res?.error || 'Impossible de charger les tâches');
+          if (!silent) setTasks([]);
+          return;
+        }
+        setTasks((res.data || []) as StaffRoleTask[]);
+        setHasTasksOnce(true);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Erreur chargement tâches');
+        if (!silent) setTasks([]);
+      } finally {
+        setLoadingTasks(false);
+        setRefreshingTasks(false);
+      }
+    },
+    [staffId, range, date, hasTasksOnce],
+  );
 
   useEffect(() => {
-    void loadTasks();
-  }, [loadTasks]);
+    setHasTasksOnce(false);
+    void loadTasks({ silent: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staffId, range, date]);
 
   useEffect(() => {
     if (staffId && staff.some((s) => s._id === staffId)) return;
@@ -214,7 +226,24 @@ export default function StaffRoleView({ staff, listings = [], loading }: Props) 
     action: 'accept' | 'reject' | 'start' | 'complete',
   ) => {
     if (!staffId) return;
+    const prevTasks = tasks;
+    const nextStatus =
+      action === 'accept'
+        ? 'confirmed'
+        : action === 'start'
+          ? 'doing'
+          : action === 'complete'
+            ? 'done'
+            : null;
     setBusyId(taskId);
+    // Optimistic — pas de reload plein écran
+    if (action === 'reject') {
+      setTasks((list) => list.filter((t) => t._id !== taskId));
+    } else if (nextStatus) {
+      setTasks((list) =>
+        list.map((t) => (t._id === taskId ? { ...t, status: nextStatus } : t)),
+      );
+    }
     try {
       let res: { success?: boolean; error?: string };
       if (action === 'accept') {
@@ -236,8 +265,9 @@ export default function StaffRoleView({ staff, listings = [], loading }: Props) 
         complete: 'Terminée',
       } as const;
       toast.success(labels[action]);
-      await loadTasks();
+      void loadTasks({ silent: true });
     } catch (e) {
+      setTasks(prevTasks);
       toast.error(e instanceof Error ? e.message : 'Erreur action');
     } finally {
       setBusyId(null);
@@ -374,10 +404,10 @@ export default function StaffRoleView({ staff, listings = [], loading }: Props) 
           <button
             type="button"
             className="srv-btn ghost"
-            disabled={!staffId || loadingTasks}
-            onClick={() => void loadTasks()}
+            disabled={!staffId || loadingTasks || refreshingTasks}
+            onClick={() => void loadTasks({ silent: hasTasksOnce })}
           >
-            Actualiser
+            {refreshingTasks ? '…' : 'Actualiser'}
           </button>
         </div>
         {activeStaff ? (
@@ -396,12 +426,12 @@ export default function StaffRoleView({ staff, listings = [], loading }: Props) 
 
       {!staffId ? (
         <p className="srv-empty">Choisissez un membre pour voir ses tâches et agir à sa place.</p>
-      ) : loadingTasks ? (
+      ) : loadingTasks && !hasTasksOnce ? (
         <p className="srv-empty">Chargement des tâches…</p>
       ) : tasks.length === 0 ? (
         <p className="srv-empty">Aucune tâche assignée sur cette période.</p>
       ) : (
-        <div className="srv-board">
+        <div className={`srv-board${refreshingTasks ? ' srv-board--refreshing' : ''}`}>
           {BUCKETS.map((b) => (
             <section key={b.id} className="srv-col">
               <header className="srv-col-head">

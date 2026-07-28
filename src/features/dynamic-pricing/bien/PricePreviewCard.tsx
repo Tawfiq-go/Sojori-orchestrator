@@ -7,14 +7,24 @@
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
 import { Box, Stack, Typography, Button, CircularProgress, Tooltip, Checkbox, Switch, FormControlLabel } from '@mui/material';
+import { toast } from 'react-toastify';
 import { T } from '../_tokens';
 import type { ApplyPreviewDiffDto, ApplyPreviewDiffRowDto } from '../../../services/dynamicPricingApi';
 import type { PricingEvent } from './PricingControls';
 import { usePricePreviewSelectionOptional } from './pricePreviewSelectionContext';
 import { BIEN_STICKY_FILTER_TOP_OFFSET, BIEN_STICKY_TOP_CSS_VAR } from './BienPageStickyFilters';
+import { calendarService } from '../../../services/calendarService';
+import { processInventoryResponse } from '../../../components/calendar-v3/processInventoryResponse';
 
 const MONO = '"Geist Mono", monospace';
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR');
+
+/** Affiche YYYY-MM-DD → jj/mm/aaaa (local, sans timezone shift). */
+function fmtIsoDayFr(iso: string | null | undefined): string | null {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return null;
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return `${d}/${m}/${y}`;
+}
 
 /** En-tête : sticky sous le bandeau listing (scroll page — le bloc monte, puis la tête reste). */
 const TH_STICKY_SX = {
@@ -76,6 +86,83 @@ function calendarPriceMode(row: ApplyPreviewDiffRowDto): CalendarPriceMode {
 
 function priceModeLabel(mode: CalendarPriceMode): string {
   return mode === 'manual' ? 'Prix manuel calendrier' : 'Prix dynamique';
+}
+
+async function resolveRoomTypeId(listingId: string): Promise<string> {
+  const today = new Date().toISOString().slice(0, 10);
+  const end = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
+  const raw = await calendarService.getInventoryForListings(
+    [listingId],
+    today,
+    end,
+    false,
+    false,
+  );
+  const processed = processInventoryResponse(raw as never[]);
+  const rtId = Object.keys(processed[listingId] ?? {})[0];
+  if (!rtId) throw new Error('Room type introuvable pour ce bien');
+  return rtId;
+}
+
+/** Toggle Dyn / Manu compact (colonne Mode). */
+function DayModeToggle({
+  mode,
+  disabled,
+  busy,
+  onChange,
+}: {
+  mode: CalendarPriceMode;
+  disabled?: boolean;
+  busy?: boolean;
+  onChange: (next: CalendarPriceMode) => void;
+}) {
+  const isDyn = mode === 'dynamic';
+  return (
+    <Box
+      role="group"
+      aria-label="Mode prix"
+      sx={{
+        display: 'inline-flex',
+        border: `1px solid ${T.borderStrong}`,
+        borderRadius: 1,
+        overflow: 'hidden',
+        opacity: disabled || busy ? 0.55 : 1,
+        pointerEvents: disabled || busy ? 'none' : 'auto',
+      }}
+    >
+      {([
+        { id: 'dynamic' as const, label: 'Dyn' },
+        { id: 'manual' as const, label: 'Manu' },
+      ]).map((opt) => {
+        const on = mode === opt.id;
+        return (
+          <Box
+            key={opt.id}
+            component="button"
+            type="button"
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              if (!on) onChange(opt.id);
+            }}
+            sx={{
+              border: 'none',
+              cursor: 'pointer',
+              px: 0.75,
+              py: 0.35,
+              fontFamily: MONO,
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.02em',
+              bgcolor: on ? (isDyn && opt.id === 'dynamic' ? T.goldTint : T.infoTint) : T.bg1,
+              color: on ? (opt.id === 'dynamic' ? T.goldDeep : T.info) : T.text3,
+            }}
+          >
+            {busy && on ? '…' : opt.label}
+          </Box>
+        );
+      })}
+    </Box>
+  );
 }
 
 function statusWord(st: RowStatus): string {
@@ -359,6 +446,38 @@ export default function PricePreviewCard({
   const [periodKey, setPeriodKey] = React.useState<(typeof PERIODS)[number]['key']>('30');
   /** Prix figés à la résa (colonne cal.) — masqués par défaut. */
   const [showBookedCalPrices, setShowBookedCalPrices] = React.useState(false);
+  const [roomTypeId, setRoomTypeId] = React.useState<string | null>(null);
+  const [modeOverrides, setModeOverrides] = React.useState<Record<string, CalendarPriceMode>>({});
+  const [priceOverrides, setPriceOverrides] = React.useState<Record<string, number>>({});
+  const [savingKey, setSavingKey] = React.useState<string | null>(null);
+  const [editingDate, setEditingDate] = React.useState<string | null>(null);
+  const [editDraft, setEditDraft] = React.useState('');
+
+  const listingId = data?.listingId ? String(data.listingId) : '';
+
+  React.useEffect(() => {
+    setModeOverrides({});
+    setPriceOverrides({});
+    setEditingDate(null);
+  }, [data?.previewComputedAt, listingId]);
+
+  React.useEffect(() => {
+    if (!listingId || !selection) {
+      setRoomTypeId(null);
+      return;
+    }
+    let cancelled = false;
+    void resolveRoomTypeId(listingId)
+      .then((id) => {
+        if (!cancelled) setRoomTypeId(id);
+      })
+      .catch(() => {
+        if (!cancelled) setRoomTypeId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [listingId, selection]);
 
   const period = PERIODS.find((p) => p.key === periodKey) ?? PERIODS[2];
 
@@ -446,6 +565,132 @@ export default function PricePreviewCard({
   };
 
   const canEditInventory = canSelect;
+
+  const effectiveMode = React.useCallback(
+    (r: ApplyPreviewDiffRowDto): CalendarPriceMode =>
+      modeOverrides[r.date] ?? calendarPriceMode(r),
+    [modeOverrides],
+  );
+
+  const effectiveCalPrice = React.useCallback(
+    (r: ApplyPreviewDiffRowDto): number | null => {
+      if (priceOverrides[r.date] != null) return priceOverrides[r.date];
+      return r.calendarCurrentMad != null ? r.calendarCurrentMad : null;
+    },
+    [priceOverrides],
+  );
+
+  const ensureRoomType = React.useCallback(async () => {
+    if (roomTypeId) return roomTypeId;
+    if (!listingId) throw new Error('Listing inconnu');
+    const id = await resolveRoomTypeId(listingId);
+    setRoomTypeId(id);
+    return id;
+  }, [listingId, roomTypeId]);
+
+  const persistDayMode = React.useCallback(
+    async (date: string, mode: CalendarPriceMode) => {
+      if (!listingId) return;
+      const key = `mode:${date}`;
+      setSavingKey(key);
+      const prev = modeOverrides[date];
+      setModeOverrides((m) => ({ ...m, [date]: mode }));
+      try {
+        const rtId = await ensureRoomType();
+        const base = { roomTypeId: rtId, date_from: date, date_to: date };
+        await calendarService.updateCalendar([
+          {
+            type: 'setUseDynamicPriceManual',
+            ...base,
+            setUseDynamicPriceManual: mode === 'dynamic',
+          },
+          {
+            type: 'setPriceMode',
+            ...base,
+            priceMode: mode,
+          },
+        ] as never);
+        toast.success(mode === 'dynamic' ? 'Mode Dyn' : 'Mode Manu');
+        selection?.touchCalendarUpdatedAt();
+        onReload?.();
+      } catch (e) {
+        setModeOverrides((m) => {
+          const next = { ...m };
+          if (prev) next[date] = prev;
+          else delete next[date];
+          return next;
+        });
+        toast.error(e instanceof Error ? e.message : 'Échec mode prix');
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [ensureRoomType, listingId, modeOverrides, onReload, selection],
+  );
+
+  const persistCalendarPrice = React.useCallback(
+    async (date: string, price: number) => {
+      if (!listingId) return;
+      const key = `price:${date}`;
+      setSavingKey(key);
+      const prevPrice = priceOverrides[date];
+      const prevMode = modeOverrides[date];
+      setPriceOverrides((p) => ({ ...p, [date]: price }));
+      setModeOverrides((m) => ({ ...m, [date]: 'manual' }));
+      try {
+        const rtId = await ensureRoomType();
+        await calendarService.updateCalendar([
+          {
+            type: 'manualPrice',
+            roomTypeId: rtId,
+            date_from: date,
+            date_to: date,
+            price: Math.round(price),
+          },
+        ] as never);
+        toast.success(`Prix manuel · ${fmt(price)} MAD`);
+        selection?.touchCalendarUpdatedAt();
+        onReload?.();
+      } catch (e) {
+        setPriceOverrides((p) => {
+          const next = { ...p };
+          if (prevPrice != null) next[date] = prevPrice;
+          else delete next[date];
+          return next;
+        });
+        setModeOverrides((m) => {
+          const next = { ...m };
+          if (prevMode) next[date] = prevMode;
+          else delete next[date];
+          return next;
+        });
+        toast.error(e instanceof Error ? e.message : 'Échec prix calendrier');
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [ensureRoomType, listingId, modeOverrides, onReload, priceOverrides, selection],
+  );
+
+  const startEditCal = (r: ApplyPreviewDiffRowDto) => {
+    const cur = effectiveCalPrice(r);
+    setEditingDate(r.date);
+    setEditDraft(cur != null ? String(Math.round(cur)) : '');
+  };
+
+  const commitEditCal = async (date: string) => {
+    if (editingDate !== date) return;
+    const n = Number(editDraft.replace(/\s/g, '').replace(',', '.'));
+    setEditingDate(null);
+    if (!Number.isFinite(n) || n <= 0) {
+      toast.error('Prix invalide');
+      return;
+    }
+    const row = rows.find((x) => x.date === date);
+    const cur = row ? effectiveCalPrice(row) : null;
+    if (cur != null && Math.round(cur) === Math.round(n)) return;
+    await persistCalendarPrice(date, n);
+  };
 
   const maxPrice = React.useMemo(
     () =>
@@ -907,9 +1152,14 @@ export default function PricePreviewCard({
                 />
               }
               label={
-                <Typography sx={{ fontSize: 11.5, color: T.text2, fontWeight: 600 }}>
-                  Afficher prix à la réservation (jours réservés)
-                </Typography>
+                <Box>
+                  <Typography sx={{ fontSize: 11.5, color: T.text2, fontWeight: 600 }}>
+                    Afficher prix à la réservation (jours réservés)
+                  </Typography>
+                  <Typography sx={{ fontSize: 10, color: T.text3, display: 'block', fontWeight: 400 }}>
+                    + date à laquelle la résa a été prise
+                  </Typography>
+                </Box>
               }
               sx={{ mr: 0, ml: 0 }}
             />
@@ -958,8 +1208,8 @@ export default function PricePreviewCard({
                     </Box>
                   ) : null}
                   {(ownerMode
-                    ? ['Date', 'Prix dynamique', 'Prix cal. / réservé', 'Min stay', 'Statut']
-                    : ['Date', 'Prix dynamique', 'Prix cal. / réservé', 'Δ', 'Min stay', 'Statut']
+                    ? ['Date', 'Prix dynamique', 'Prix cal. / réservé', 'Dynamic', 'Min stay', 'Statut']
+                    : ['Date', 'Prix dynamique', 'Prix cal. / réservé', 'Dynamic', 'Δ', 'Min stay', 'Statut']
                   ).map((h, i) => (
                     <Box
                       key={h}
@@ -971,7 +1221,12 @@ export default function PricePreviewCard({
                         letterSpacing: '0.07em',
                         textTransform: 'uppercase',
                         color: T.text3,
-                        textAlign: i === 0 ? 'left' : /Min stay|Statut/.test(h) ? 'center' : 'right',
+                        textAlign:
+                          i === 0
+                            ? 'left'
+                            : /Dynamic|Min stay|Statut/.test(h)
+                              ? 'center'
+                              : 'right',
                         p: '9px 12px',
                         whiteSpace: 'nowrap',
                       }}
@@ -987,14 +1242,17 @@ export default function PricePreviewCard({
                   const rule = ruleForDate(r.date);
                   const showMonth = i === 0 || r.date.slice(0, 7) !== rows[i - 1].date.slice(0, 7);
                   const delta = r.deltaMad;
+                  const mode = effectiveMode(r);
+                  const calPrice = effectiveCalPrice(r);
                   const calDisplay =
                     st === 'reserved'
                       ? showBookedCalPrices && r.bookedPriceMad != null
                         ? fmt(r.bookedPriceMad)
                         : '—'
-                      : r.calendarCurrentMad != null
-                        ? fmt(r.calendarCurrentMad)
+                      : calPrice != null
+                        ? fmt(calPrice)
                         : '—';
+                  const canInlineEdit = canEditInventory && st === 'free';
                   const cellSx = {
                     p: '7px 12px',
                     borderBottom: `1px solid ${T.border}`,
@@ -1011,7 +1269,9 @@ export default function PricePreviewCard({
                         <Box component="tr">
                           <Box
                             component="td"
-                            colSpan={canEditInventory ? 7 : 6}
+                            colSpan={
+                              (ownerMode ? 6 : 7) + (canEditInventory ? 1 : 0)
+                            }
                             sx={{ bgcolor: T.bg3, fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.text2, fontWeight: 800, p: '5px 12px' }}
                           >
                             {monthLabelFr(r.date)}
@@ -1096,13 +1356,107 @@ export default function PricePreviewCard({
                             st === 'reserved'
                               ? showBookedCalPrices
                                 ? r.bookedPriceMad != null
-                                  ? 'Prix figé à la réservation (priceBreakdown)'
+                                  ? r.bookedAt
+                                    ? `Prix figé à la réservation · résa le ${fmtIsoDayFr(r.bookedAt)}`
+                                    : 'Prix figé à la réservation (priceBreakdown)'
                                   : 'Prix à la réservation indisponible'
                                 : 'Activez le toggle pour voir le prix à la réservation'
-                              : undefined
+                              : canInlineEdit
+                                ? 'Clic pour modifier le prix calendrier (passe en Manu)'
+                                : undefined
                           }
+                          onClick={(e) => {
+                            if (!canInlineEdit) return;
+                            e.stopPropagation();
+                            if (editingDate !== r.date) startEditCal(r);
+                          }}
                         >
-                          {calDisplay}
+                          {st === 'reserved' && showBookedCalPrices && r.bookedPriceMad != null ? (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.15 }}>
+                              <Box component="span">{fmt(r.bookedPriceMad)}</Box>
+                              {fmtIsoDayFr(r.bookedAt) ? (
+                                <Box
+                                  component="span"
+                                  sx={{ fontSize: 9.5, fontWeight: 600, color: T.info, opacity: 0.9, whiteSpace: 'nowrap' }}
+                                >
+                                  résa {fmtIsoDayFr(r.bookedAt)}
+                                </Box>
+                              ) : (
+                                <Box
+                                  component="span"
+                                  sx={{ fontSize: 9.5, fontWeight: 500, color: T.text4, whiteSpace: 'nowrap' }}
+                                >
+                                  date résa —
+                                </Box>
+                              )}
+                            </Box>
+                          ) : canInlineEdit && editingDate === r.date ? (
+                            <Box
+                              component="input"
+                              autoFocus
+                              value={editDraft}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                setEditDraft(e.target.value)
+                              }
+                              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                              onBlur={() => void commitEditCal(r.date)}
+                              onKeyDown={(e: React.KeyboardEvent) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  void commitEditCal(r.date);
+                                }
+                                if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  setEditingDate(null);
+                                }
+                              }}
+                              sx={{
+                                width: 72,
+                                textAlign: 'right',
+                                fontFamily: MONO,
+                                fontSize: 12,
+                                fontWeight: 800,
+                                border: `1px solid ${T.goldDeep}`,
+                                borderRadius: 0.75,
+                                px: 0.5,
+                                py: 0.25,
+                                outline: 'none',
+                                bgcolor: '#fff',
+                              }}
+                            />
+                          ) : canInlineEdit ? (
+                            <Box
+                              component="span"
+                              sx={{
+                                cursor: 'text',
+                                borderBottom: `1px dashed ${T.borderStrong}`,
+                                fontWeight: mode === 'manual' ? 800 : 400,
+                                color: mode === 'manual' ? T.info : undefined,
+                              }}
+                            >
+                              {calDisplay}
+                              {savingKey === `price:${r.date}` ? ' …' : ''}
+                            </Box>
+                          ) : (
+                            calDisplay
+                          )}
+                        </Box>
+                        <Box
+                          component="td"
+                          sx={{ ...cellSx, textAlign: 'center' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {canInlineEdit ? (
+                            <DayModeToggle
+                              mode={mode}
+                              busy={savingKey === `mode:${r.date}`}
+                              onChange={(next) => void persistDayMode(r.date, next)}
+                            />
+                          ) : (
+                            <Typography sx={{ fontSize: 10, fontWeight: 700, color: T.text4, fontFamily: MONO }}>
+                              {st === 'reserved' ? '—' : mode === 'manual' ? 'Manu' : 'Dyn'}
+                            </Typography>
+                          )}
                         </Box>
                         {!ownerMode ? (
                         <Box
@@ -1131,8 +1485,6 @@ export default function PricePreviewCard({
                             </Box>
                           ) : st === 'blocked' ? (
                             <Box component="span" sx={{ fontSize: 9.5, color: T.text4, fontWeight: 400, ml: 0.625 }}>non poussé</Box>
-                          ) : calendarPriceMode(r) === 'manual' ? (
-                            <Box component="span" sx={{ fontSize: 9.5, color: T.info, fontWeight: 400, ml: 0.625 }}>Manu</Box>
                           ) : null}
                         </Box>
                         ) : null}
@@ -1152,8 +1504,8 @@ export default function PricePreviewCard({
 
           {/* Pied : aide */}
           <Typography sx={{ fontSize: 11, color: T.text3, mt: 1.75 }}>
-            Cochez des jours libres → « Modifier » dans le bandeau en haut.
-            Hover sur le prix dynamique pour le détail du calcul · jours réservés : prix à la résa masqué sauf toggle.
+            Cochez des jours libres → « Modifier » en haut · colonne Dynamic = Dyn/Manu (flag seul) ·
+            clic sur le prix calendrier = édition inline → Manu (Entrée ou blur).
           </Typography>
         </>
       ) : null}

@@ -113,3 +113,29 @@ export function computeMultiViewVisibleRange(pivot: moment.Moment): { from: stri
   if (to.isAfter(maxEnd)) to = maxEnd.clone().endOf('day');
   return { from: from.format('YYYY-MM-DD'), to: to.format('YYYY-MM-DD') };
 }
+
+/**
+ * Vue multi uniquement : plage API = fenêtre affichée (31j).
+ * Pas le mois entier — le reste se charge à la demande / prefetch.
+ */
+export function computeMultiViewFetchRange(pivot: moment.Moment): { from: string; to: string } {
+  return computeMultiViewVisibleRange(pivot);
+}
+
+/** Prefetch multi : fenêtre suivante juste après la visible. */
+export function computeMultiViewPrefetchRange(pivot: moment.Moment): { from: string; to: string } {
+  return computeMultiViewVisibleRange(pivot.clone().add(MULTI_VISIBLE_DAYS, 'days'));
+}
+
+/** Liste YYYY-MM-DD inclusifs (pour couverture cache multi). */
+export function eachIsoDayInclusive(from: string, to: string): string[] {
+  const out: string[] = [];
+  const cursor = moment(from).startOf('day');
+  const end = moment(to).startOf('day');
+  if (!cursor.isValid() || !end.isValid() || cursor.isAfter(end)) return out;
+  while (cursor.isSameOrBefore(end, 'day')) {
+    out.push(cursor.format('YYYY-MM-DD'));
+    cursor.add(1, 'day');
+  }
+  return out;
+}

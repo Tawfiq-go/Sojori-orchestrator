@@ -1669,15 +1669,17 @@ function ChecksList({
           s.kind === 'cleaning' && s.state !== 'done' && !s.staffName;
         const regBlocking = Boolean(s.registrationPending) && s.state !== 'done';
         /* Heure confirmée dépassée (+20 min de grâce) sans déclaration/constat → orange :
-           c'est le « vert théorique » qui vient d'expirer. */
+           c'est le « vert théorique » qui vient d'expirer. La priorité backend
+           (seuils par type : navette ≠ ménage) prime quand elle est fournie. */
         const stepMin = toMin(s.time ?? undefined);
-        const lateNotDone =
+        const localLate =
           nowMin != null &&
           s.state !== 'done' &&
           !s.hourUnknown &&
           stepMin != null &&
           nowMin > stepMin + 20 &&
           (s.kind === 'departure' || s.kind === 'arrival' || s.kind === 'cleaning');
+        const lateNotDone = s.priority ? s.priority.urgency === 'red' : localLate;
         /* À l'arrivée = vigilance orange (non bloquant, mais à surveiller le jour J). */
         const regAtArrival =
           isRegistration && Boolean(s.registrationAtArrival) && s.state !== 'done';

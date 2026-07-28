@@ -107,6 +107,13 @@ export default function TasksKanbanPage() {
       reservationNumber: t.reservationNumber,
       guestName: t.guestName,
       emergency: t.emergency,
+      priority: t.priority?.urgency
+        ? {
+            urgency: t.priority.urgency,
+            reason: t.priority.reason,
+            dueAt: t.priority.dueAt,
+          }
+        : undefined,
     }));
   }, [rawTasks]);
 

@@ -40,10 +40,8 @@ import {
 import {
   findListingForReservation,
   buildListingIdIndex,
-  collectOrphanListingSeedsForOwner,
   mergeActiveAndOrphanListings,
   reservationOwnerId,
-  resolveReservationListingId,
 } from '../utils/planningListingMatch';
 
 function mapReservationStatus(status?: string): 'confirmed' | 'pending' {
@@ -63,7 +61,7 @@ export function ReservationsPlanningPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { loading: authLoading } = useAuth();
   const scope = usePmTasksScope();
-  const listingsCacheKey = scope.scopeCacheKey;
+  const listingsCacheKey = `planning-multi-v2:${scope.scopeCacheKey}`;
   const { openReservation, drawer: reservationDrawer } = usePlanningReservationDrawer();
 
   const [startDate, setStartDate] = useState<Date>(() => getPlanningDefaultStartDate());
@@ -114,7 +112,6 @@ export function ReservationsPlanningPage() {
       listingsHydratedRef.current = true;
       return;
     }
-    let items: ListingSummary[] = [];
     const res = await listingsService.getListings({
       useActiveFilter: true,
       active: true,
@@ -123,24 +120,7 @@ export function ReservationsPlanningPage() {
       limit: 500,
       filterOwnerId: scope.filterOwnerId,
     });
-    items = res.data.items;
-    // Après migration owner/host : listings parfois non « active » → grille vide.
-    if (items.length === 0 && scope.filterOwnerId) {
-      const fallback = await listingsService.getListings({
-        useActiveFilter: false,
-        compact: true,
-        forListingsOverview: false,
-        limit: 500,
-        filterOwnerId: scope.filterOwnerId,
-      });
-      items = fallback.data.items;
-      if (items.length > 0) {
-        console.warn('[ReservationsPlanning] fallback listings sans filtre active', {
-          count: items.length,
-          filterOwnerId: scope.filterOwnerId,
-        });
-      }
-    }
+    const items = res.data.items;
     console.log('[ReservationsPlanning] fetchActiveListings', {
       count: items.length,
       sample: items.slice(0, 3).map((l) => ({
@@ -270,32 +250,22 @@ export function ReservationsPlanningPage() {
 
   const listingRows: ListingRow[] = useMemo(() => {
     const ownerKey = scope.filterOwnerId ? String(scope.filterOwnerId) : '';
-    // Orphelines seulement en scope PM unique (ex. listing inactif « Sojori CFC fibre »).
-    const orphans = collectOrphanListingSeedsForOwner(reservations, activeListings, ownerKey || undefined);
-    const rowsSource = mergeActiveAndOrphanListings(activeListings, orphans);
+    const rowsSource = mergeActiveAndOrphanListings(activeListings);
     if (rowsSource.length === 0) return [];
 
     const byId = buildListingIdIndex(activeListings);
     const windowStart = startDate;
     const windowEnd = addDays(startDate, daysCount);
-    let unmatchedForeign = 0;
 
     const reservationsByListing = new Map<string, Reservation[]>();
     for (const res of reservations) {
       if (ownerKey) {
         const resOwner = reservationOwnerId(res);
-        if (resOwner && resOwner !== ownerKey) {
-          unmatchedForeign += 1;
-          continue;
-        }
+        if (resOwner && resOwner !== ownerKey) continue;
       }
 
       const matched = findListingForReservation(res, byId);
-      const listingId = matched?.id || (ownerKey ? resolveReservationListingId(res) : undefined);
-      if (!listingId) continue;
-      // Sans matched : seulement si orpheline autorisée (owner scopé).
-      if (!matched && !ownerKey) continue;
-      if (!matched && !orphans.some((o) => o.listingId === listingId)) continue;
+      if (!matched?.id) continue; // inactifs / hors grille : ignorés
 
       const arrival = toIsoDate(res.arrivalDate);
       const departure = toIsoDate(res.departureDate);
@@ -305,18 +275,10 @@ export function ReservationsPlanningPage() {
       const dep = new Date(departure);
       if (dep < windowStart || arr > windowEnd) continue;
 
+      const listingId = matched.id;
       const bucket = reservationsByListing.get(listingId);
       if (bucket) bucket.push(res);
       else reservationsByListing.set(listingId, [res]);
-    }
-
-    if (orphans.length > 0 || unmatchedForeign > 0) {
-      console.warn('[ReservationsPlanning] match listings', {
-        orphans: orphans.map((o) => o.listingName),
-        unmatchedForeign,
-        activeListings: activeListings.length,
-        filterOwnerId: ownerKey || null,
-      });
     }
 
     return rowsSource.map((listing) => {
@@ -335,6 +297,10 @@ export function ReservationsPlanningPage() {
         cleanlinessStatus_v2: String(op?.cleanlinessStatus_v2 || 'clean'),
         occupancyStatus: String(op?.occupancyStatus || 'vacant'),
         cleanlinessEmergency: Boolean(op?.cleanlinessEmergency),
+        propertyUnit: String(listing.propertyUnit || 'Single'),
+        roomTypes: listing.roomTypes?.length
+          ? listing.roomTypes.map((rt) => ({ id: String(rt.id), name: String(rt.name) }))
+          : undefined,
         reservations: resas.map((r) => ({
           reservationId: String(r.id || (r as { _id?: string })._id || r.reservationNumber || ''),
           guestName: r.guestName || 'Guest',
@@ -344,6 +310,26 @@ export function ReservationsPlanningPage() {
           channelName: r.channelName || 'direct',
           numberOfGuests: r.numberOfGuests || 0,
           reservationNumber: r.reservationNumber || '',
+          roomTypeName: (() => {
+            const n = String(
+              (r as { roomTypeName?: string }).roomTypeName ||
+                (r as { roomTypes?: { roomTypeName?: string } }).roomTypes?.roomTypeName ||
+                '',
+            ).trim();
+            return n || undefined;
+          })(),
+          roomTypeId: (() => {
+            const id = String((r as { roomTypeId?: string }).roomTypeId || '').trim();
+            return id || undefined;
+          })(),
+          roomId: (() => {
+            const id = String((r as { roomId?: string }).roomId || '').trim();
+            return id || undefined;
+          })(),
+          roomName: (() => {
+            const n = String((r as { roomName?: string }).roomName || '').trim();
+            return n || undefined;
+          })(),
           timeline: [],
         })),
       };

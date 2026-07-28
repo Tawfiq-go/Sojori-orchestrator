@@ -44,14 +44,18 @@ export function useUpdateListingConciergeServices() {
   return useMutation({
     mutationFn: async (args: {
       listingId: string;
-      transportServices: unknown[];
-      groceryServices: unknown[];
-      customServices: unknown[];
+      transportServices?: unknown[];
+      groceryServices?: unknown[];
+      customServices?: unknown[];
+      conciergeSource?: 'own' | 'partner';
+      conciergePartnerId?: string | null;
     }) => {
       const result = await listingsService.updateListingConciergeServices(args.listingId, {
         transportServices: args.transportServices,
         groceryServices: args.groceryServices,
         customServices: args.customServices,
+        conciergeSource: args.conciergeSource,
+        conciergePartnerId: args.conciergePartnerId,
       });
       if (result.error) throw new Error(result.error);
       return result.data;

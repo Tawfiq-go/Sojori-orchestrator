@@ -66,7 +66,7 @@ export default function TasksPlanningPageV2() {
   });
   const { loading: authLoading } = useAuth();
   const scope = usePmTasksScope();
-  const listingsCacheKey = scope.scopeCacheKey;
+  const listingsCacheKey = `planning-multi-v2:${scope.scopeCacheKey}`;
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -115,7 +115,6 @@ export default function TasksPlanningPageV2() {
       listingsHydratedRef.current = true;
       return;
     }
-    let items: ListingSummary[] = [];
     const listingsResponse = await listingsService.getListings({
       useActiveFilter: true,
       active: true,
@@ -124,23 +123,7 @@ export default function TasksPlanningPageV2() {
       limit: 500,
       filterOwnerId: scope.filterOwnerId,
     });
-    items = listingsResponse.data.items;
-    if (items.length === 0 && scope.filterOwnerId) {
-      const fallback = await listingsService.getListings({
-        useActiveFilter: false,
-        compact: true,
-        forListingsOverview: false,
-        limit: 500,
-        filterOwnerId: scope.filterOwnerId,
-      });
-      items = fallback.data.items;
-      if (items.length > 0) {
-        console.warn('[TasksPlanning] fallback listings sans filtre active', {
-          count: items.length,
-          filterOwnerId: scope.filterOwnerId,
-        });
-      }
-    }
+    const items = listingsResponse.data.items;
     setActiveListings(items);
     setCachedPlanningListings(listingsCacheKey, items);
     listingsHydratedRef.current = true;
@@ -272,51 +255,27 @@ export default function TasksPlanningPageV2() {
 
 
   const listings: ListingRow[] = useMemo(() => {
-    const ownerKey = scope.filterOwnerId || scope.ownerId ? String(scope.filterOwnerId || scope.ownerId) : '';
     const activeById = buildListingIdIndex(activeListings);
     const reservationsByListing = new Map<string, Array<Record<string, unknown>>>();
     const operationalByListing = new Map<string, Record<string, unknown>>();
-    const orphanSeeds: Array<{ listingId: string; listingName: string; city: string }> = [];
 
     if (rawData?.listings) {
       rawData.listings.forEach((l) => {
         const listingId = String(l.listingId || l._id || '');
         if (!listingId) return;
         const matched = activeById.get(listingId);
+        if (!matched) return; // inactifs / hors grille : ignorés (comme calendrier multi)
+
         const hasResas = Array.isArray(l.reservations) && l.reservations.length > 0;
-
-        if (matched) {
-          if (hasResas) {
-            reservationsByListing.set(matched.id, l.reservations as Array<Record<string, unknown>>);
-          }
-          operationalByListing.set(matched.id, l);
-          return;
+        if (hasResas) {
+          reservationsByListing.set(matched.id, l.reservations as Array<Record<string, unknown>>);
         }
-
-        // Orpheline : seulement si un PM est sélectionné (résas déjà filtrées par owner).
-        if (ownerKey && hasResas) {
-          orphanSeeds.push({
-            listingId,
-            listingName: String(
-              l.listingName || l.name || 'Listing (inactif / hors grille)',
-            ),
-            city: String(l.city || '—'),
-          });
-          reservationsByListing.set(listingId, l.reservations as Array<Record<string, unknown>>);
-          operationalByListing.set(listingId, l);
-        }
+        operationalByListing.set(matched.id, l);
       });
     }
 
-    const rowsSource = mergeActiveAndOrphanListings(activeListings, orphanSeeds);
+    const rowsSource = mergeActiveAndOrphanListings(activeListings);
     if (rowsSource.length === 0) return [];
-
-    if (orphanSeeds.length > 0) {
-      console.warn('[TasksPlanning] listings inactifs du PM (orphelines scopées)', {
-        orphans: orphanSeeds.map((o) => o.listingName),
-        ownerId: ownerKey,
-      });
-    }
 
     return rowsSource.map((listing) => {
       const listingId = String(listing.id || '');
@@ -334,6 +293,10 @@ export default function TasksPlanningPageV2() {
         cleanlinessStatus_v2: String(op?.cleanlinessStatus_v2 || 'clean'),
         occupancyStatus: String(op?.occupancyStatus || 'vacant'),
         cleanlinessEmergency: Boolean(op?.cleanlinessEmergency),
+        propertyUnit: String(listing.propertyUnit || 'Single'),
+        roomTypes: listing.roomTypes?.length
+          ? listing.roomTypes.map((rt) => ({ id: String(rt.id), name: String(rt.name) }))
+          : undefined,
         reservations: resas.map((r) => ({
           reservationId: String(r.reservationId || r._id || ''),
           guestName: String(r.guestName || 'Guest'),
@@ -343,6 +306,22 @@ export default function TasksPlanningPageV2() {
           channelName: String(r.channelName || 'direct'),
           numberOfGuests: Number(r.numberOfGuests || 0),
           reservationNumber: String(r.reservationNumber || ''),
+          roomTypeName: (() => {
+            const n = String((r as { roomTypeName?: string }).roomTypeName || '').trim();
+            return n || undefined;
+          })(),
+          roomTypeId: (() => {
+            const id = String((r as { roomTypeId?: string }).roomTypeId || '').trim();
+            return id || undefined;
+          })(),
+          roomId: (() => {
+            const id = String((r as { roomId?: string }).roomId || '').trim();
+            return id || undefined;
+          })(),
+          roomName: (() => {
+            const n = String((r as { roomName?: string }).roomName || '').trim();
+            return n || undefined;
+          })(),
           timeline: (Array.isArray(r.timeline) ? r.timeline : []).map((t: Record<string, unknown>) => ({
             type: (t.type || 'task') as TimelineItem['type'],
             category: t.category as string | undefined,

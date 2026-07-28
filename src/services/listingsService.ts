@@ -385,6 +385,19 @@ function normalizeListingSummary(source: unknown): ListingSummary {
     cleanlinessEmergency: record.cleanlinessEmergency === true ? true : undefined,
     // Présent aussi dans raw — exposé pour filtres planning / permissions ville
     cityId: pickFirstString(record, ['cityId']) || undefined,
+    roomTypes: (() => {
+      const rts = Array.isArray(record.roomTypes) ? record.roomTypes : [];
+      const mapped = rts
+        .map((rt) => {
+          const row = asRecord(rt);
+          const id = asString(row._id || row.id);
+          const name = pickFirstString(row, ['roomTypeName', 'name']);
+          if (!id || !name) return null;
+          return { id, name };
+        })
+        .filter(Boolean) as Array<{ id: string; name: string }>;
+      return mapped.length > 0 ? mapped : undefined;
+    })(),
     raw: record,
   };
 }
@@ -1019,7 +1032,13 @@ export const listingsService = {
 
   async updateListingConciergeServices(
     listingId: string,
-    body: { transportServices: unknown[]; groceryServices: unknown[]; customServices: unknown[] },
+    body: {
+      transportServices?: unknown[];
+      groceryServices?: unknown[];
+      customServices?: unknown[];
+      conciergeSource?: 'own' | 'partner';
+      conciergePartnerId?: string | null;
+    },
   ): Promise<ListingSrvConfigFetchResult> {
     return safeListingConfigPut(`${LISTING_API_BASE_URL}/concierge-config/${listingId}`, body);
   },

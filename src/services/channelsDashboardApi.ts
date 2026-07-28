@@ -601,3 +601,35 @@ export function fetchBusinessListingStats(query: Record<string, unknown> = {}) {
     timeout: 30000,
   });
 }
+
+/** POC Mews — status bootstrap (owner + hôtel). */
+export function fetchMewsPocStatus() {
+  return apiClient.get(`${CHANNELS_DASHBOARD}/mews/poc/status`, {
+    ...channelsDashboardAxiosConfig(),
+    timeout: 30000,
+  });
+}
+
+/** Admin « Récupérer listing » — owner MEWS + hôtel + resources. */
+export function postMewsPocPullListings(body: Record<string, unknown> = {}) {
+  return apiClient.post(`${CHANNELS_DASHBOARD}/mews/poc/pull-listings`, body, {
+    ...channelsDashboardAxiosConfig(),
+    timeout: 180000,
+  });
+}
+
+/** Admin « Récupérer resa » — pull résas tag MEWS. */
+export function postMewsPocPullReservations(body: Record<string, unknown> = {}) {
+  return apiClient.post(`${CHANNELS_DASHBOARD}/mews/poc/pull-reservations`, body, {
+    ...channelsDashboardAxiosConfig(),
+    timeout: 180000,
+  });
+}
+
+/** Admin « Récupérer calendrier » — dispo Mews → inventory. */
+export function postMewsPocPullAvailability(body: Record<string, unknown> = {}) {
+  return apiClient.post(`${CHANNELS_DASHBOARD}/mews/poc/pull-availability`, body, {
+    ...channelsDashboardAxiosConfig(),
+    timeout: 180000,
+  });
+}
