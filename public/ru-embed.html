@@ -211,8 +211,19 @@
         // CDN icônes/images : 14 fichiers = 9 189 ms cumulés sur l'écran d'un
         // canal (clic sur Airbnb), tous statiques donc cachables.
         var CDN = /^https:\/\/cdn\.rentalsunited\.com\/(.+)$/i;
+        /**
+         * Scripts tiers embarqués par RU dont on n'a aucun usage ici
+         * (Superblocks : outil interne RU ; GTM/GA : analytics RU).
+         * Ils sont de toute façon refusés par notre CSP, ce qui remplit la
+         * console d'erreurs rouges à chaque chargement. On les neutralise donc
+         * en amont : URL vide = pas de requête, pas d'erreur.
+         */
+        var BLOQUES = /superblocks\.com|googletagmanager\.com|google-analytics\.com/i;
         var rewrite = function (v) {
           var s = String(v);
+          // about:blank plutôt que '' : une chaîne vide relance une requête
+          // sur la page courante (boucle), about:blank ne charge rien.
+          if (BLOQUES.test(s)) return 'about:blank';
           // URL absolue obligatoire : le <base> RU réécrirait un chemin relatif
           // vers new.rentalsunited.com et le cache serait contourné.
           var m = PMS.exec(s);
