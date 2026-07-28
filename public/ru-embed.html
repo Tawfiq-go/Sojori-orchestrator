@@ -96,6 +96,66 @@
     <div id="ru-embed-status">Chargement Channel Manager…</div>
     <div id="ruApp"></div>
     <script>
+      /**
+       * ⚠️ CRITICAL — cache des bundles RU (incident 2026-07-28).
+       *
+       * RU sert vendor.js (2 Mo) + main.js (1,8 Mo) avec `cache-control:
+       * no-store` : le navigateur les retélécharge à CHAQUE ouverture. Sur une
+       * liaison lente vers RU (22 Ko/s mesurés depuis le Maroc, contre
+       * 4 500 Ko/s depuis GKE Paris — routage opérateur), cela fait ~60 s
+       * d'écran blanc à chaque fois.
+       *
+       * On réécrit donc les URLs pms-dist vers /ru-assets/* (proxy avec cache
+       * disque, cf. security/ruAssetCache.ts). Premier chargement identique,
+       * puis quasi instantané. Uniquement en dev : en production le front est
+       * servi par Vercel, où ce middleware n'existe pas — d'où le test
+       * d'origine locale ci-dessous.
+       */
+      (function () {
+        var h = location.hostname;
+        var isLocal = h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+        if (!isLocal) return;
+        var PMS = /^https:\/\/new\.rentalsunited\.com\/app\/pms-dist\/(.+)$/i;
+        var rewrite = function (v) {
+          var m = PMS.exec(String(v));
+          // URL absolue obligatoire : le <base> RU réécrirait un chemin relatif
+          // vers new.rentalsunited.com et le cache serait contourné.
+          return m ? location.origin + '/ru-assets/' + m[1] : v;
+        };
+        try {
+          // 1) propriété .src sur le prototype (couvre el.src = '...')
+          var d = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+          Object.defineProperty(HTMLScriptElement.prototype, 'src', {
+            configurable: true,
+            enumerable: d.enumerable,
+            get: function () {
+              return d.get.call(this);
+            },
+            set: function (v) {
+              d.set.call(this, rewrite(v));
+            },
+          });
+          // 2) setAttribute('src', …) — chemin réellement emprunté par jQuery
+          var origSetAttr = Element.prototype.setAttribute;
+          Element.prototype.setAttribute = function (name, value) {
+            if (this.tagName === 'SCRIPT' && String(name).toLowerCase() === 'src') {
+              return origSetAttr.call(this, name, rewrite(value));
+            }
+            return origSetAttr.call(this, name, value);
+          };
+          // 3) jQuery._evalUrl passe par $.ajax : on réécrit aussi les XHR
+          var origOpen = XMLHttpRequest.prototype.open;
+          XMLHttpRequest.prototype.open = function (method, url) {
+            var args = [].slice.call(arguments);
+            args[1] = rewrite(url);
+            return origOpen.apply(this, args);
+          };
+        } catch (e) {
+          /* si l'interception échoue, on retombe sur le chargement direct */
+        }
+      })();
+    </script>
+    <script>
       (function () {
         var params = new URLSearchParams(window.location.search);
         var scriptUrl = params.get('script');

@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { execSync } from 'node:child_process'
 import { devSecurityHeaders, previewSecurityHeaders } from './security/csp'
+import { ruAssetCachePlugin } from './security/ruAssetCache'
 
 /** Ingress K8s prod (dev.sojori.com). sojori.com = vitrine sans /api. Override : VITE_DEV_PROXY_TARGET. */
 const devProxyTarget = process.env.VITE_DEV_PROXY_TARGET || 'https://dev.sojori.com'
@@ -148,7 +149,7 @@ const appDeployEnv = process.env.VERCEL_ENV || process.env.NODE_ENV || 'developm
 // https://vite.dev/config/
 export default defineConfig({
   appType: 'spa',
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), ruAssetCachePlugin()],
 
   define: {
     'import.meta.env.VITE_APP_BUILD_SHA': JSON.stringify(appBuildSha),
