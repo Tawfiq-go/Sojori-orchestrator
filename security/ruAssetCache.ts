@@ -33,6 +33,13 @@ const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 type CacheEntry = { body: Buffer; contentType: string; fetchedAt: number }
 
 const memory = new Map<string, CacheEntry>()
+/**
+ * Assets absents chez RU (404/403). Sans cette mémoire, chaque rendu relance
+ * un aller-retour réseau pour un fichier qu'on sait manquant — sur liaison
+ * dégradée cela finissait en timeout, donc en 502 bruyant dans la console.
+ */
+const missing = new Map<string, number>()
+const MISSING_TTL_MS = 60 * 60 * 1000
 
 function cacheFile(key: string): string {
   return join(CACHE_DIR, `${createHash('sha1').update(key).digest('hex')}.bin`)
@@ -101,6 +108,16 @@ export function ruAssetCachePlugin(): Plugin {
             return
           }
 
+          // Absent chez RU et déjà constaté : on répond 404 immédiatement,
+          // sans aller-retour réseau (sinon timeout → 502 sur liaison lente).
+          const missedAt = missing.get(key)
+          if (missedAt && Date.now() - missedAt < MISSING_TTL_MS) {
+            res.statusCode = 404
+            res.setHeader('x-ru-cache', 'MISSING')
+            res.end()
+            return
+          }
+
           // 3 min : sur liaison dégradée le premier téléchargement est très
           // lent, mais il n'a lieu qu'une seule fois.
           fetch(upstream, { signal: AbortSignal.timeout(180_000) })
@@ -109,6 +126,7 @@ export function ruAssetCachePlugin(): Plugin {
               // le statut réel plutôt qu'un 502 : sinon le widget affiche une
               // erreur réseau bruyante pour une image simplement absente.
               if (r.status === 404 || r.status === 403) {
+                missing.set(key, Date.now())
                 res.statusCode = r.status
                 res.setHeader('x-ru-cache', 'BYPASS')
                 res.end()
@@ -152,8 +170,12 @@ export function ruAssetCachePlugin(): Plugin {
             })
             .catch((err) => {
               server.config.logger.warn(`[ru-cache] échec ${key}: ${err?.message || err}`)
-              res.statusCode = 502
-              res.end(`/* ru-asset-cache: échec récupération ${key} */`)
+              // 404 et non 502 : un timeout réseau sur une icône est un échec
+              // transitoire, pas une panne serveur. Le 502 s'affichait en rouge
+              // dans la console du widget pour une simple image absente.
+              res.statusCode = 404
+              res.setHeader('x-ru-cache', 'ERROR')
+              res.end()
             })
         }
 
