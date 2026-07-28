@@ -69,18 +69,33 @@
         background: #fff;
       }
       body {
-        padding: 6px;
+        /* Aucun padding : le cadre est déjà dessiné par le conteneur React.
+           Un padding ici créait une seconde barre de défilement imbriquée. */
+        padding: 0;
       }
       #ruApp {
         width: 100%;
         height: 100%;
-        min-height: 520px;
         overflow: auto;
+        /* Ascenseur discret — le widget RU est dense */
+        scrollbar-width: thin;
+        /* Masqué tant que la grille des canaux n'est pas complète : évite de
+           voir apparaître la barre de recherche seule, puis le contenu. */
+        opacity: 0;
+        transition: opacity 0.25s ease;
+      }
+      #ruApp.ru-ready {
+        opacity: 1;
       }
       #ruApp .connected-channels-container {
         box-shadow: none !important;
         -webkit-box-shadow: none !important;
         -moz-box-shadow: none !important;
+      }
+      /* Barre de recherche RU masquée : sans usage (les canaux tiennent à
+         l'écran) et elle coûtait 92 px de hauteur en haut du widget. */
+      #ruApp .connected-channels-container > .header {
+        display: none !important;
       }
       #ruApp * {
         box-sizing: border-box;
@@ -90,10 +105,86 @@
         color: #666;
         padding: 8px;
       }
+      /* Écran d'attente : les bundles RU pèsent ~3,8 Mo et peuvent être lents
+         à arriver selon la liaison. Sans retour visuel, l'écran blanc laisse
+         croire à une panne (incident 2026-07-28). */
+      .ru-boot {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 420px;
+        font: 14px/1.5 system-ui, -apple-system, sans-serif;
+        color: #374151;
+      }
+      .ru-boot-spinner {
+        width: 30px;
+        height: 30px;
+        border: 3px solid #e5e7eb;
+        border-top-color: #c8a24a;
+        border-radius: 50%;
+        animation: ru-spin 0.9s linear infinite;
+      }
+      @keyframes ru-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .ru-boot-title {
+        font-weight: 600;
+        color: #111827;
+      }
+      .ru-boot-step {
+        font-size: 12.5px;
+        color: #6b7280;
+      }
+      .ru-boot-bar {
+        width: min(320px, 70%);
+        height: 4px;
+        background: #eef0f3;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .ru-boot-bar-fill {
+        height: 100%;
+        width: 0;
+        background: #c8a24a;
+        border-radius: 999px;
+        transition: width 0.4s ease;
+      }
+      .ru-boot-hint {
+        font-size: 12px;
+        color: #9ca3af;
+        text-align: center;
+        max-width: 380px;
+        min-height: 16px;
+      }
+      .ru-boot-error {
+        color: #b91c1c;
+      }
+      .ru-boot-retry {
+        margin-top: 4px;
+        padding: 7px 14px;
+        font: 13px system-ui, sans-serif;
+        color: #fff;
+        background: #c8a24a;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
-    <div id="ru-embed-status">Chargement Channel Manager…</div>
+    <div id="ru-embed-status">
+      <div class="ru-boot">
+        <div class="ru-boot-spinner"></div>
+        <div class="ru-boot-title">Connexion à votre Channel Manager…</div>
+        <div class="ru-boot-step" id="ru-boot-step">Préparation</div>
+        <div class="ru-boot-bar"><div class="ru-boot-bar-fill" id="ru-boot-fill"></div></div>
+        <div class="ru-boot-hint" id="ru-boot-hint"></div>
+      </div>
+    </div>
     <div id="ruApp"></div>
     <script>
       /**
@@ -156,35 +247,167 @@
       })();
     </script>
     <script>
+      /**
+       * Séquencement du démarrage RU + retour visuel.
+       *
+       * Le widget passe par 3 étapes invisibles pour l'utilisateur :
+       *   1. chargement du script client RU (léger, porte le token)
+       *   2. injection + téléchargement des bundles pms-dist (~3,8 Mo)
+       *   3. bootstrap Angular, puis PREMIER RENDU dans #ruApp
+       *
+       * L'ancien code affichait « conteneur vide » après un setTimeout fixe de
+       * 4 s : sur liaison lente c'était un faux négatif systématique, et rien
+       * n'indiquait la progression (écran blanc → panne supposée).
+       *
+       * Ici on observe le DOM : on masque l'écran d'attente au moment exact où
+       * RU a réellement peint son contenu, jamais sur un délai deviné.
+       */
       (function () {
+        var t0 = Date.now();
         var params = new URLSearchParams(window.location.search);
         var scriptUrl = params.get('script');
         var statusEl = document.getElementById('ru-embed-status');
-        if (!scriptUrl) {
-          if (statusEl) statusEl.textContent = 'Erreur: script URL manquante';
-          return;
+        var stepEl = document.getElementById('ru-boot-step');
+        var fillEl = document.getElementById('ru-boot-fill');
+        var hintEl = document.getElementById('ru-boot-hint');
+        var app = document.getElementById('ruApp');
+        var done = false;
+
+        function ms() {
+          return ((Date.now() - t0) / 1000).toFixed(1) + 's';
         }
-        // Only allow RU white-pms script hosts
+        function log(msg, extra) {
+          console.info('[ru-embed ' + ms() + '] ' + msg, extra === undefined ? '' : extra);
+        }
+        function step(label, pct) {
+          if (stepEl) stepEl.textContent = label;
+          if (fillEl && pct != null) fillEl.style.width = pct + '%';
+          log('étape → ' + label + (pct != null ? ' (' + pct + '%)' : ''));
+        }
+        function fail(msg, detail) {
+          if (done) return;
+          done = true;
+          console.error('[ru-embed ' + ms() + '] ÉCHEC: ' + msg, detail || '');
+          if (!statusEl) return;
+          statusEl.innerHTML = '';
+          var box = document.createElement('div');
+          box.className = 'ru-boot';
+          var t = document.createElement('div');
+          t.className = 'ru-boot-title ru-boot-error';
+          t.textContent = 'Channel Manager indisponible';
+          var h = document.createElement('div');
+          h.className = 'ru-boot-hint';
+          h.textContent = msg;
+          var b = document.createElement('button');
+          b.className = 'ru-boot-retry';
+          b.textContent = 'Réessayer';
+          b.onclick = function () {
+            location.reload();
+          };
+          box.appendChild(t);
+          box.appendChild(h);
+          box.appendChild(b);
+          statusEl.appendChild(box);
+        }
+        function succeed(childCount) {
+          if (done) return;
+          done = true;
+          var secs = (Date.now() - t0) / 1000;
+          log('✅ widget rendu — ' + childCount + ' élément(s) dans #ruApp');
+          console.info(
+            '[ru-embed] prêt en ' + secs.toFixed(1) + 's' +
+              (secs > 15 ? ' — liaison lente vers Rental United' : ''),
+          );
+          if (statusEl) statusEl.style.display = 'none';
+          if (app) app.classList.add('ru-ready');
+        }
+
+        if (!scriptUrl) return fail('Adresse du widget manquante.');
+        // Allowlist stricte : uniquement les hôtes RU.
         if (!/^https:\/\/([a-z0-9-]+\.)*rentalsunited\.com\//i.test(scriptUrl)) {
-          if (statusEl) statusEl.textContent = 'Erreur: script URL non autorisée';
-          return;
+          return fail('Adresse du widget non autorisée.');
         }
+
+        step('Connexion au Channel Manager', 10);
+
+        // Message rassurant si l'attente se prolonge (liaison lente ≠ panne).
+        var hintTimer = setTimeout(function () {
+          if (!done && hintEl) {
+            hintEl.textContent =
+              'Le chargement est plus long que d’habitude — le Channel Manager envoie environ 4 Mo de données.';
+          }
+        }, 12000);
+
+        /**
+         * Détection du rendu réel.
+         *
+         * Angular peint en deux temps : d'abord la coquille (barre de
+         * recherche, titres), puis la grille des canaux quand les données
+         * arrivent. Démasquer dès la coquille donnait un affichage « en deux
+         * étapes » disgracieux — on attend donc que les VIGNETTES DE CANAUX
+         * soient présentes, puis qu'elles se stabilisent (2 relevés
+         * identiques), pour révéler l'ensemble d'un seul coup.
+         */
+        var lastCount = -1;
+        var stableTicks = 0;
+        var settleTimer = null;
+
+        function checkPainted() {
+          if (done || !app) return;
+          var shell = app.querySelector('app-white-pms-page, [class*="container"]');
+          if (!shell) return;
+          var logos = app.querySelectorAll('img').length;
+          if (logos === 0) {
+            step('Récupération de vos canaux', 75);
+            return;
+          }
+          step('Affichage de vos canaux', 92);
+          // Stabilisation : 2 relevés consécutifs au même compte = rendu fini.
+          if (logos === lastCount) {
+            stableTicks += 1;
+          } else {
+            stableTicks = 0;
+            lastCount = logos;
+          }
+          if (stableTicks >= 2) {
+            clearTimeout(hintTimer);
+            if (settleTimer) clearInterval(settleTimer);
+            observer.disconnect();
+            log('grille stabilisée — ' + logos + ' canaux');
+            succeed(app.childElementCount);
+          }
+        }
+
+        // Le MutationObserver capte l'arrivée du contenu ; l'intervalle assure
+        // la stabilisation même quand RU cesse de muter le DOM.
+        settleTimer = setInterval(checkPainted, 250);
+        var observer = new MutationObserver(checkPainted);
+        if (app) observer.observe(app, { childList: true, subtree: true });
+
+        // Filet de sécurité : 4 min couvrent le pire cas mesuré (~98 s) avec
+        // une marge large, sans jamais afficher un faux échec.
+        var hardTimeout = setTimeout(function () {
+          if (done) return;
+          observer.disconnect();
+          var n = app ? app.childElementCount : 0;
+          if (n > 0) return succeed(n); // rendu partiel : on affiche quand même
+          fail(
+            'Le Channel Manager n’a pas répondu à temps. Vérifiez votre connexion, puis réessayez.',
+          );
+        }, 240000);
+
         var s = document.createElement('script');
         s.src = scriptUrl;
         s.async = false;
         s.onload = function () {
-          if (statusEl) statusEl.textContent = '';
-          setTimeout(function () {
-            var app = document.getElementById('ruApp');
-            var n = app ? app.childElementCount : -1;
-            console.info('[ru-embed] #ruApp children=', n, 'base=', document.querySelector('base') && document.querySelector('base').href);
-            if (statusEl && n <= 0) {
-              statusEl.textContent = 'Widget RU: conteneur vide (token/scripts?)';
-            }
-          }, 4000);
+          step('Chargement de l’interface', 45);
+          log('script client RU chargé — bundles pms-dist en cours');
         };
         s.onerror = function () {
-          if (statusEl) statusEl.textContent = 'Erreur: échec chargement script RU';
+          clearTimeout(hintTimer);
+          clearTimeout(hardTimeout);
+          observer.disconnect();
+          fail('Impossible de joindre Rental United. Vérifiez votre connexion.');
         };
         document.body.appendChild(s);
       })();

@@ -26,11 +26,6 @@ const OwnerSelectorV2 = ({
   title = 'Compte property manager',
   subtitle,
 }) => {
-  const selectedOwner = owners.find(
-    (owner) => String(owner._id ?? owner.id) === String(selectedOwnerId),
-  );
-  const selectedRuEmail = selectedOwner ? resolveRuEmailDisplay(selectedOwner) : '';
-
   return (
     <div>
       <label
@@ -70,32 +65,9 @@ const OwnerSelectorV2 = ({
           );
         })}
       </select>
-      {selectedOwner && (
-        <div
-          style={{
-            marginTop: 10,
-            padding: '10px 12px',
-            background: T.bg2,
-            borderRadius: 8,
-            border: `1px solid ${T.border}`,
-            fontSize: 12,
-            lineHeight: 1.55,
-            color: T.text2,
-          }}
-        >
-          <div>
-            <strong style={{ color: T.text }}>Email dashboard :</strong>{' '}
-            {selectedOwner.email || '—'}
-          </div>
-          <div>
-            <strong style={{ color: T.text }}>Email R.U. (extranet) :</strong>{' '}
-            {selectedRuEmail || '—'}
-          </div>
-          <div style={{ marginTop: 4, color: T.text3 }}>
-            Le widget Channel Manager se connecte avec l’email R.U.
-          </div>
-        </div>
-      )}
+      {/* Bloc emails (dashboard / R.U. extranet) retiré : information technique
+          sans usage pour l'opérateur, elle mangeait de la hauteur au-dessus du
+          widget. Les emails restent visibles dans les options du sélecteur. */}
     </div>
   );
 };

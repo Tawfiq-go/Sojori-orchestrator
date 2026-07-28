@@ -27,8 +27,10 @@ const RentalUnitedContainerV2 = ({
         </div>
       )}
 
-      <div className="bg-white !h-full border border-gray-200" style={{ minHeight: '100%' }}>
-        <div className="!h-full" style={{ minHeight: '100%' }}>
+      {/* Pas de bordure ici : le conteneur de page en dessine déjà une —
+          deux cadres imbriqués donnaient un rendu « boîte dans une boîte ». */}
+      <div className="bg-white !h-full">
+        <div className="!h-full">
           {scriptUrl ? (
             <RentalUnitedIframe
               scriptUrl={scriptUrl}

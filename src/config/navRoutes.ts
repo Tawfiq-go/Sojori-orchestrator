@@ -63,7 +63,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'admin/channels/logapiru': '/channels?tab=LogApiRU',
   'admin/channels/summary': '/admin/channels?tab=Sum',
   'admin/ChannelManager/channel-manager': '/admin/ChannelManager?tab=channel-manager',
-  'admin/ChannelManager/distribution': '/admin/ChannelManager?tab=distribution',
+  'admin/ChannelManager/distribution': '/admin/ChannelManager',
 
   // Relation client
   comms: '/communications?section=guest&tab=whatsapp',
@@ -158,7 +158,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'temp/pricing-calendar': '/pricing',
   'temp/orch-rules': '/orchestration/config',
   'temp/sojori-logs': '/admin/sojori-logs',
-  'temp/channel-distribution': '/admin/ChannelManager?tab=distribution',
+  'temp/channel-distribution': '/admin/ChannelManager',
   'temp/settings-template': '/admin/settings?tab=template',
   'temp/settings-currency': '/admin/setting/currency',
   'temp/settings-admin-config': '/admin/settings?tab=admin-config',

@@ -68,7 +68,12 @@ const RentalUnitedIframe = ({ scriptUrl, isAdmin, openSection, onWidgetError }) 
       src={embedSrc}
       style={{
         width: '100%',
-        height: isAdmin ? 'calc(100vh - 200px)' : 'calc(100vh - 70px)',
+        // Hauteur calée sur le viewport moins l'en-tête Sojori (barre + onglets
+        // catalogue + marges) : le widget scrolle en interne, un seul
+        // ascenseur au lieu de deux imbriqués.
+        height: isAdmin ? 'calc(100vh - 195px)' : 'calc(100vh - 160px)',
+        minHeight: 520,
+        display: 'block',
         border: 'none',
         background: 'white',
       }}
