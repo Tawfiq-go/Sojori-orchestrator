@@ -9,6 +9,35 @@
       Parent orchestrator CSP is NOT inherited on a navigated iframe document.
     -->
     <base href="https://new.rentalsunited.com/" />
+    <script>
+      /**
+       * ⚠️ CRITICAL — ne pas retirer. Doit s'exécuter AVANT tout script RU.
+       *
+       * Le <base> ci-dessus est indispensable (les scripts pms-dist de RU sont
+       * résolus relativement à lui), mais il fait croire au routeur Angular de
+       * RU que l'URL courante est https://new.rentalsunited.com/… Il appelle
+       * alors history.replaceState() avec cette URL depuis un document servi
+       * par notre origine → le navigateur lève :
+       *   SecurityError: Failed to execute 'replaceState' on 'History'
+       * Angular remonte l'erreur à son ErrorHandler → showError() → « OOOPS ».
+       *
+       * Le widget n'a AUCUN besoin de manipuler l'historique : il vit dans une
+       * iframe sans navigation propre. On neutralise donc push/replaceState en
+       * no-op tolérant. Sans ça, le widget casse de façon intermittente selon
+       * la route interne empruntée (d'où « ça marche puis ça s'arrête »).
+       */
+      (function () {
+        var noop = function () {
+          /* iframe embarquée : pas d'historique à manipuler */
+        };
+        try {
+          history.pushState = noop;
+          history.replaceState = noop;
+        } catch (e) {
+          /* certains navigateurs figent History.prototype — on ignore */
+        }
+      })();
+    </script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <link
       rel="stylesheet"

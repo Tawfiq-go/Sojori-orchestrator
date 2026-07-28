@@ -62,13 +62,32 @@ function compactDetail(detail: unknown): unknown {
   }
 }
 
+/** Hôtes de développement — seuls endroits où le panneau de logs peut s'afficher. */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1', '0.0.0.0']);
+
+/**
+ * ⚠️ CRITICAL — la garde s'appuie sur le HOSTNAME RÉEL, jamais sur les seuls
+ * flags de build.
+ *
+ * Incident 2026-07-28 : un déploiement produit sans `--prod` fige
+ * `import.meta.env.DEV` à `true` ; la garde disparaît à la compilation et le
+ * panneau « Runtime logs » (tokens, e-mails, ids) s'affiche chez les clients.
+ * Un flag de build ne peut donc pas être la seule barrière.
+ *
+ * Règle : hors d'un hôte local, le panneau est TOUJOURS masqué — quel que soit
+ * le mode de build. Sur un hôte local, DEV ou un flag explicite l'active.
+ */
 export function isRuntimeLogPanelEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  const host = window.location.hostname;
+  const isLocalHost = LOCAL_HOSTS.has(host) || host.endsWith('.localhost');
+  // Verrou dur : aucun flag de build ne peut ouvrir le panneau en dehors du local.
+  if (!isLocalHost) return false;
+
   if (import.meta.env.VITE_RUNTIME_LOG_UI === 'true') return true;
   if (import.meta.env.VITE_DASHBOARD_DEBUG === 'true') return true;
-  if (import.meta.env.DEV) return true;
-  if (typeof window === 'undefined') return false;
-  const host = window.location.hostname;
-  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+  return Boolean(import.meta.env.DEV);
 }
 
 export function subscribeRuntimeLogs(listener: () => void): () => void {
