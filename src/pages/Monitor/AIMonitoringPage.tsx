@@ -229,6 +229,7 @@ export default function AIMonitoringPage() {
 
   useEffect(() => {
     if (activeTab === 'summary') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- tab data fetch
       void fetchSummary();
       if (!live) return;
       const interval = setInterval(fetchSummary, 30000);
@@ -237,10 +238,6 @@ export default function AIMonitoringPage() {
     if (activeTab === 'calls') void fetchCalls();
     else void fetchErrors();
   }, [activeTab, fetchSummary, fetchCalls, fetchErrors, live]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [provider, status, service]);
 
   const totalProblems =
     summaryData?.byProvider?.reduce((s, p) => s + (p.total || 0), 0) ?? 0;
@@ -357,7 +354,7 @@ export default function AIMonitoringPage() {
               <Stack spacing={1.25}>
                 {(summaryData.byProvider?.length ?? 0) > 0 && (
                   <MonitorSection dense title="Par fournisseur" desc="clic → Appels">
-                    <Stack direction="row" gap={0.75} sx={{ flexWrap: 'wrap' }}>
+                    <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
                       {summaryData.byProvider!.map((ps) => (
                         <FilterChip
                           key={ps._id}
@@ -365,6 +362,7 @@ export default function AIMonitoringPage() {
                           active={provider === ps._id}
                           onClick={() => {
                             setProvider(ps._id || 'all');
+                            setPage(1);
                             setActiveTab('calls');
                           }}
                         />
@@ -407,7 +405,7 @@ export default function AIMonitoringPage() {
                         {' · '}
                         {e.service || '—'}
                         {' · '}
-                        {formatCasablancaDate(e.timestamp)}
+                        {formatCasablancaDate(e.timestamp || '')}
                       </>
                     )}
                   />
@@ -434,7 +432,10 @@ export default function AIMonitoringPage() {
             <MonitorSelectFilter
               label="Service"
               value={service}
-              onChange={setService}
+              onChange={(v) => {
+                setService(v);
+                setPage(1);
+              }}
               options={[
                 { value: 'all', label: 'Tous' },
                 { value: 'srv-fullchatbot', label: 'fullchatbot' },
@@ -447,7 +448,10 @@ export default function AIMonitoringPage() {
             <MonitorSelectFilter
               label="Fournisseur"
               value={provider}
-              onChange={setProvider}
+              onChange={(v) => {
+                setProvider(v);
+                setPage(1);
+              }}
               options={[
                 { value: 'all', label: 'Tous' },
                 { value: 'openai', label: 'OpenAI' },
@@ -465,7 +469,10 @@ export default function AIMonitoringPage() {
                 key={f.value}
                 label={f.label}
                 active={status === f.value}
-                onClick={() => setStatus(f.value)}
+                onClick={() => {
+                  setStatus(f.value);
+                  setPage(1);
+                }}
               />
             ))}
           </Stack>
@@ -485,7 +492,7 @@ export default function AIMonitoringPage() {
                   width: '120px',
                   render: (row: AiCall & { id: string }) => (
                     <Typography sx={{ fontSize: 11, color: t.text2, whiteSpace: 'nowrap' }}>
-                      {formatCasablancaDate(row.timestamp)}
+                      {formatCasablancaDate(row.timestamp || '')}
                     </Typography>
                   ),
                 },
@@ -604,16 +611,20 @@ export default function AIMonitoringPage() {
                       `${e.data?.ai_status} — ${e.data?.llm_provider}`,
                   )
                 }
-                renderMeta={(e) => (
-                  <>
-                    {formatModelDisplay(e.data?.llm_provider, e.data?.model)}
-                    {e.data?.tokens_used ? ` · ${e.data.tokens_used} tokens` : ''}
-                    {e.data?.cost_usd != null ? ` · $${e.data.cost_usd.toFixed(4)}` : ''}
-                    {e.data?.latency_ms ? ` · ${e.data.latency_ms} ms` : ''}
-                    {' · '}
-                    {formatCasablancaDate(e.timestamp)}
-                  </>
-                )}
+                renderMeta={(e) => {
+                  const d = e.data as AiCall['data'] | undefined;
+                  const cost = typeof d?.cost_usd === 'number' ? d.cost_usd : null;
+                  return (
+                    <>
+                      {formatModelDisplay(d?.llm_provider, d?.model)}
+                      {d?.tokens_used ? ` · ${d.tokens_used} tokens` : ''}
+                      {cost != null ? ` · $${cost.toFixed(4)}` : ''}
+                      {d?.latency_ms ? ` · ${d.latency_ms} ms` : ''}
+                      {' · '}
+                      {formatCasablancaDate(e.timestamp || '')}
+                    </>
+                  );
+                }}
               />
             </MonitorSection>
           )}
