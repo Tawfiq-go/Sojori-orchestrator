@@ -336,24 +336,33 @@ export default function AIMonitoringUsageTab() {
       setData(res.data);
     } catch (err: unknown) {
       setData(null);
-      const msg =
-        err && typeof err === 'object' && 'response' in err
-          ? String(
-              (err as { response?: { data?: { error?: string }; status?: number } }).response?.data
-                ?.error ||
-                (err as { message?: string }).message ||
-                'Erreur réseau',
-            )
-          : err instanceof Error
-            ? err.message
-            : 'Erreur réseau';
-      setError(msg);
+      const ax = err as {
+        response?: {
+          status?: number;
+          data?: { error?: string; errors?: Array<{ message?: string }> };
+        };
+        message?: string;
+      };
+      const status = ax.response?.status;
+      const apiMsg =
+        ax.response?.data?.error ||
+        ax.response?.data?.errors?.[0]?.message ||
+        ax.message;
+      if (status === 404 || apiMsg?.includes('Not Found')) {
+        setError(
+          'Endpoint ai-usage-breakdown absent sur l’API distante (dev.sojori.com). Le code est dans git mais srv-admin (et fullchatbot / channels / fulltask / reservations) n’ont pas encore été redéployés. Relancer le workflow « Build and Push » (workflow_dispatch) ou un push avec [full-rebuild].',
+        );
+      } else {
+        setError(apiMsg || (err instanceof Error ? err.message : 'Erreur réseau'));
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Fetch initial breakdown — setState inside load() is intentional remote data fetch.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount fetch
     void load();
   }, [load]);
 
@@ -587,7 +596,7 @@ export default function AIMonitoringUsageTab() {
                 ),
               },
             ]}
-            rows={recentCalls.map((r, i) => ({ id: r.id || `rc-${i}`, ...r }))}
+            rows={recentCalls.map((r, i) => ({ ...r, id: r.id || `rc-${i}` }))}
           />
         </MonitorSection>
       ) : null}
