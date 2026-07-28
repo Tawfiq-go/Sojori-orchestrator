@@ -24,6 +24,8 @@ import type { Plugin } from 'vite'
  */
 
 const RU_ORIGIN = 'https://new.rentalsunited.com'
+/** CDN des icônes/images RU — 14 fichiers = 9 189 ms cumulés sans cache. */
+const RU_CDN_ORIGIN = 'https://cdn.rentalsunited.com'
 const CACHE_DIR = join(tmpdir(), 'sojori-ru-assets')
 /** Les bundles RU sont versionnés par ?v= — 7 jours est prudent. */
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -66,55 +68,115 @@ export function ruAssetCachePlugin(): Plugin {
   return {
     name: 'sojori-ru-asset-cache',
     configureServer(server) {
-      server.middlewares.use('/ru-assets', (req, res, next) => {
-        const rawPath = (req.url || '').split('?')[0]
-        // Verrou dur : uniquement les assets pms-dist (js/css/polices), rien
-        // d'autre. styles.css était mesuré à 5 142 ms sans cache.
-        if (!/^\/[a-zA-Z0-9._-]+\.(js|css|woff2?|ttf|eot|svg)$/.test(rawPath)) return next()
+      /**
+       * Fabrique un middleware de cache pour un préfixe donné.
+       *
+       * @param mount    chemin monté côté dev (ex. /ru-assets)
+       * @param toUpstream construit l'URL amont à partir du chemin demandé
+       * @param allow    extensions autorisées (verrou dur, pas de proxy ouvert)
+       */
+      const makeHandler =
+        (mount: string, toUpstream: (key: string) => string, allow: RegExp) =>
+        (req: { url?: string }, res: any, next: () => void) => {
+          const rawPath = (req.url || '').split('?')[0]
+          if (!allow.test(rawPath)) return next()
 
-        const key = req.url || rawPath
-        const upstream = `${RU_ORIGIN}/app/pms-dist${key}`
+          // Namespacé par point de montage : /ru-assets/x.svg et
+          // /ru-cdn/x.svg sont deux ressources distinctes.
+          const key = `${mount}${req.url || rawPath}`
+          const upstream = toUpstream(req.url || rawPath)
 
-        const serve = (entry: CacheEntry, hit: boolean) => {
-          res.setHeader('content-type', entry.contentType)
-          // Cache navigateur agressif : l'URL porte déjà ?v=<version RU>
-          res.setHeader('cache-control', 'public, max-age=604800, immutable')
-          res.setHeader('x-ru-cache', hit ? 'HIT' : 'MISS')
-          res.end(entry.body)
+          const serve = (entry: CacheEntry, hit: boolean) => {
+            res.setHeader('content-type', entry.contentType)
+            // Cache navigateur agressif : les URLs RU portent déjà ?v=<version>
+            res.setHeader('cache-control', 'public, max-age=604800, immutable')
+            res.setHeader('x-ru-cache', hit ? 'HIT' : 'MISS')
+            res.end(entry.body)
+          }
+
+          const mem = memory.get(key) ?? readDisk(key)
+          if (mem) {
+            memory.set(key, mem)
+            serve(mem, true)
+            return
+          }
+
+          // 3 min : sur liaison dégradée le premier téléchargement est très
+          // lent, mais il n'a lieu qu'une seule fois.
+          fetch(upstream, { signal: AbortSignal.timeout(180_000) })
+            .then(async (r) => {
+              // Certains logos n'existent pas chez RU (404 légitime). Relayer
+              // le statut réel plutôt qu'un 502 : sinon le widget affiche une
+              // erreur réseau bruyante pour une image simplement absente.
+              if (r.status === 404 || r.status === 403) {
+                res.statusCode = r.status
+                res.setHeader('x-ru-cache', 'BYPASS')
+                res.end()
+                return
+              }
+              if (!r.ok) throw new Error(`upstream ${r.status}`)
+              let buf = Buffer.from(await r.arrayBuffer())
+              const contentType = r.headers.get('content-type') || 'application/octet-stream'
+
+              // ⚠️ Les icônes RU sont référencées par url() DANS le CSS, pas par
+              // des balises <img> : aucune interception JS ne peut les capter
+              // (13 fichiers, ~90 s cumulés au premier affichage d'un canal).
+              // On réécrit donc les url() du CSS vers notre proxy, à la source.
+              if (/text\/css/i.test(contentType)) {
+                buf = Buffer.from(
+                  buf
+                    .toString('utf8')
+                    .replace(
+                      /https:\/\/cdn\.rentalsunited\.com\//g,
+                      '/ru-cdn/',
+                    )
+                    .replace(
+                      /https:\/\/new\.rentalsunited\.com\/app\/pms-dist\//g,
+                      '/ru-assets/',
+                    ),
+                  'utf8',
+                )
+              }
+
+              const entry: CacheEntry = {
+                body: buf,
+                contentType,
+                fetchedAt: Date.now(),
+              }
+              memory.set(key, entry)
+              writeDisk(key, entry)
+              server.config.logger.info(
+                `[ru-cache] mis en cache ${key} (${Math.round(buf.length / 1024)} Ko)`,
+              )
+              serve(entry, false)
+            })
+            .catch((err) => {
+              server.config.logger.warn(`[ru-cache] échec ${key}: ${err?.message || err}`)
+              res.statusCode = 502
+              res.end(`/* ru-asset-cache: échec récupération ${key} */`)
+            })
         }
 
-        const mem = memory.get(key) ?? readDisk(key)
-        if (mem) {
-          memory.set(key, mem)
-          serve(mem, true)
-          return
-        }
+      // Bundles applicatifs (js/css/polices) — styles.css : 6 704 ms sans cache.
+      server.middlewares.use(
+        '/ru-assets',
+        makeHandler(
+          '/ru-assets',
+          (key) => `${RU_ORIGIN}/app/pms-dist${key}`,
+          /^\/[a-zA-Z0-9._-]+\.(js|css|woff2?|ttf|eot|svg)$/,
+        ),
+      )
 
-        // 3 min : sur liaison dégradée le premier téléchargement est très lent,
-        // mais il n'a lieu qu'une seule fois.
-        const timeout = AbortSignal.timeout(180_000)
-        fetch(upstream, { signal: timeout })
-          .then(async (r) => {
-            if (!r.ok) throw new Error(`upstream ${r.status}`)
-            const buf = Buffer.from(await r.arrayBuffer())
-            const entry: CacheEntry = {
-              body: buf,
-              contentType: r.headers.get('content-type') || 'application/javascript',
-              fetchedAt: Date.now(),
-            }
-            memory.set(key, entry)
-            writeDisk(key, entry)
-            server.config.logger.info(
-              `[ru-cache] mis en cache ${key} (${Math.round(buf.length / 1024)} Ko)`,
-            )
-            serve(entry, false)
-          })
-          .catch((err) => {
-            server.config.logger.warn(`[ru-cache] échec ${key}: ${err?.message || err}`)
-            res.statusCode = 502
-            res.end(`// ru-asset-cache: échec récupération ${key}`)
-          })
-      })
+      // Icônes et images du CDN RU — 14 fichiers, 9 189 ms cumulés sans cache.
+      // Sous-dossiers autorisés (assets/icons/ru-v5/…), extensions image seules.
+      server.middlewares.use(
+        '/ru-cdn',
+        makeHandler(
+          '/ru-cdn',
+          (key) => `${RU_CDN_ORIGIN}${key}`,
+          /^\/[a-zA-Z0-9._\-/]+\.(svg|png|jpe?g|gif|webp|woff2?|ttf|css|ico)$/,
+        ),
+      )
     },
   }
 }
