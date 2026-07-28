@@ -208,11 +208,18 @@
         if (!isLocal) return;
         // pms-dist couvre JS *et* CSS : styles.css mesuré à 5 142 ms sans cache.
         var PMS = /^https:\/\/new\.rentalsunited\.com\/app\/pms-dist\/(.+)$/i;
+        // CDN icônes/images : 14 fichiers = 9 189 ms cumulés sur l'écran d'un
+        // canal (clic sur Airbnb), tous statiques donc cachables.
+        var CDN = /^https:\/\/cdn\.rentalsunited\.com\/(.+)$/i;
         var rewrite = function (v) {
-          var m = PMS.exec(String(v));
+          var s = String(v);
           // URL absolue obligatoire : le <base> RU réécrirait un chemin relatif
           // vers new.rentalsunited.com et le cache serait contourné.
-          return m ? location.origin + '/ru-assets/' + m[1] : v;
+          var m = PMS.exec(s);
+          if (m) return location.origin + '/ru-assets/' + m[1];
+          var c = CDN.exec(s);
+          if (c) return location.origin + '/ru-cdn/' + c[1];
+          return v;
         };
         try {
           // 1) propriété .src sur le prototype (couvre el.src = '...')
@@ -240,12 +247,25 @@
               dh.set.call(this, rewrite(v));
             },
           });
-          // 3) setAttribute('src'|'href', …) — chemin emprunté par jQuery
+          // 3) src des <img> — icônes/images du CDN RU (9 189 ms cumulés sur
+          //    l'écran d'un canal). Angular les pose via la propriété .src.
+          var di = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+          Object.defineProperty(HTMLImageElement.prototype, 'src', {
+            configurable: true,
+            enumerable: di.enumerable,
+            get: function () {
+              return di.get.call(this);
+            },
+            set: function (v) {
+              di.set.call(this, rewrite(v));
+            },
+          });
+          // 4) setAttribute('src'|'href', …) — chemin emprunté par jQuery
           var origSetAttr = Element.prototype.setAttribute;
           Element.prototype.setAttribute = function (name, value) {
             var n = String(name).toLowerCase();
             var isAsset =
-              (this.tagName === 'SCRIPT' && n === 'src') ||
+              ((this.tagName === 'SCRIPT' || this.tagName === 'IMG') && n === 'src') ||
               (this.tagName === 'LINK' && n === 'href');
             if (isAsset) return origSetAttr.call(this, name, rewrite(value));
             return origSetAttr.call(this, name, value);
