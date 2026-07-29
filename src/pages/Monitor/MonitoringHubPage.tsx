@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 import { ViewToggle, monitorTokens as t } from '../../features/monitoring/shared/MonitorDesign';
+import { MonitorAdminGate } from '../../features/monitoring/shared/MonitorAdminGate';
 import UnifiedMonitoringPage from './UnifiedMonitoringPage';
 import LogsPage from './LogsPage';
 import MetricsPageUltra from './MetricsPageUltra';
@@ -84,41 +85,44 @@ export default function MonitoringHubPage() {
   }, [tabParam, searchParams, setSearchParams]);
 
   return (
-    <DashboardWrapper breadcrumb={['Monitor', tab]}>
-      <Box className="sojori-main-enter" sx={{ minWidth: 0 }}>
-        <Box
-          sx={{
-            mb: 1.25,
-            pb: 1,
-            borderBottom: `1px solid ${t.border}`,
-          }}
-        >
-          <ViewToggle
-            options={TAB_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-            value={tab}
-            onChange={(v) => {
-              const next = new URLSearchParams(searchParams);
-              next.set('tab', v);
-              setSearchParams(next);
+    <MonitorAdminGate>
+      <DashboardWrapper breadcrumb={['Monitor', tab]}>
+        <Box className="sojori-main-enter" sx={{ minWidth: 0 }}>
+          <Box
+            sx={{
+              mb: 1.25,
+              pb: 1,
+              borderBottom: `1px solid ${t.border}`,
+              overflowX: 'auto',
             }}
-          />
-        </Box>
+          >
+            <ViewToggle
+              options={TAB_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+              value={tab}
+              onChange={(v) => {
+                const next = new URLSearchParams(searchParams);
+                next.set('tab', v);
+                setSearchParams(next);
+              }}
+            />
+          </Box>
 
-        <Box sx={{ minWidth: 0 }}>
-          {tab === 'Summary' && <UnifiedMonitoringPage />}
-          {tab === 'Logs' && <LogsPage />}
-          {tab === 'Metrics' && <MetricsPageUltra />}
-          {tab === 'RabbitMQ' && <RabbitMQPage />}
-          {tab === 'WhatsApp' && <WhatsAppMonitoringPage />}
-          {tab === 'Sockets' && <SocketMonitoringPage />}
-          {tab === 'API' && <APIMonitoringPage />}
-          {tab === 'AI' && <AIMonitoringPage />}
-          {tab === 'Infrastructure' && <InfrastructureMonitoringPage />}
-          {tab === 'Pods' && <PodsMonitoringPage />}
-          {tab === 'ReservationSync' && <ReservationSyncMonitorTab />}
-          {tab === 'Cron' && <CronMonitoringPage />}
+          <Box sx={{ minWidth: 0 }}>
+            {tab === 'Summary' && <UnifiedMonitoringPage />}
+            {tab === 'Logs' && <LogsPage />}
+            {tab === 'Metrics' && <MetricsPageUltra />}
+            {tab === 'RabbitMQ' && <RabbitMQPage />}
+            {tab === 'WhatsApp' && <WhatsAppMonitoringPage />}
+            {tab === 'Sockets' && <SocketMonitoringPage />}
+            {tab === 'API' && <APIMonitoringPage />}
+            {tab === 'AI' && <AIMonitoringPage />}
+            {tab === 'Infrastructure' && <InfrastructureMonitoringPage />}
+            {tab === 'Pods' && <PodsMonitoringPage />}
+            {tab === 'ReservationSync' && <ReservationSyncMonitorTab />}
+            {tab === 'Cron' && <CronMonitoringPage />}
+          </Box>
         </Box>
-      </Box>
-    </DashboardWrapper>
+      </DashboardWrapper>
+    </MonitorAdminGate>
   );
 }
