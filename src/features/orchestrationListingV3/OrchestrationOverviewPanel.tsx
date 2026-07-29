@@ -72,7 +72,6 @@ import { GROUP_EMOJI } from './V3Rail';
 import { V3 } from './theme';
 import {
   fetchListingConciergeArrays,
-  persistListingConciergeSlice,
 } from '../listing/components/ConfigOrchestration/conciergeListingPersist';
 
 const GROUP_ORDER: CapabilityGroupId[] = [
@@ -868,9 +867,6 @@ export default function OrchestrationOverviewPanel({
   const [activationStatus, setActivationStatus] = useState<ServiceActivationStatusEntry[]>([]);
   const [orchestrationEnabled, setOrchestrationEnabled] = useState(true);
   const [openGroups, setOpenGroups] = useState<Set<CapabilityGroupId | 'messages'>>(new Set());
-  /** Listing only — own catalogue vs Partenaires Sojori (J3). */
-  const [conciergeSource, setConciergeSource] = useState<'own' | 'partner'>('own');
-  const [savingConciergeSource, setSavingConciergeSource] = useState(false);
 
   const reload = useCallback((_opts?: { silent?: boolean }) => {
     // Pas de setLoading(true) ici : évite de démonter la grille / les modals (effet « reload page »).
@@ -893,20 +889,19 @@ export default function OrchestrationOverviewPanel({
           setListingValues(vals);
           try {
             const conc = await fetchListingConciergeArrays(listingId);
-            setConciergeSource(conc.conciergeSource === 'partner' ? 'partner' : 'own');
             setListingValues((prev) => ({
               ...prev,
               conciergeSource: conc.conciergeSource,
               transportServices: conc.transportServices,
               groceryServices: conc.groceryServices,
               customServices: conc.customServices,
+              enabledExperienceIds: conc.enabledExperienceIds,
             }));
           } catch {
-            setConciergeSource('own');
+            /* optional */
           }
         } catch {
           setListingValues({});
-          setConciergeSource('own');
         }
         return;
       }
@@ -2027,28 +2022,6 @@ export default function OrchestrationOverviewPanel({
     });
   };
 
-  const setConciergeSourceMode = async (next: 'own' | 'partner') => {
-    if (!listingId || next === conciergeSource || savingConciergeSource) return;
-    setSavingConciergeSource(true);
-    try {
-      await persistListingConciergeSlice(listingId, {
-        conciergeSource: next,
-        conciergePartnerId: null,
-      });
-      setConciergeSource(next);
-      setListingValues((prev) => ({ ...prev, conciergeSource: next, conciergePartnerId: null }));
-      toast.success(
-        next === 'partner'
-          ? 'Conciergerie Sojori — les expériences partenaires seront proposées au client'
-          : 'Votre propre conciergerie — catalogue Transport / Courses / Custom',
-      );
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Impossible d’enregistrer le mode conciergerie');
-    } finally {
-      setSavingConciergeSource(false);
-    }
-  };
-
   const configGestionValues = useMemo(() => {
     if (!configModal) return {};
     const capGestion = (caps[configModal.capKey]?.gestion ?? {}) as Record<string, unknown>;
@@ -2179,11 +2152,7 @@ export default function OrchestrationOverviewPanel({
             icon={GROUP_EMOJI[group.id] ?? '•'}
             kind="manage"
             title={group.label}
-            subtitle={
-              group.id === 'concierge' && isListingScope && conciergeSource === 'partner'
-                ? 'Conciergerie Sojori · expériences partenaires'
-                : `${group.rows.length} flow${group.rows.length > 1 ? 's' : ''}`
-            }
+            subtitle={`${group.rows.length} flow${group.rows.length > 1 ? 's' : ''}`}
             open={openGroups.has(group.id)}
             onOpenChange={() => toggleGroup(group.id)}
             badge={
@@ -2201,79 +2170,13 @@ export default function OrchestrationOverviewPanel({
             }
           >
             {group.id === 'concierge' && isListingScope ? (
-              <Box
-                sx={{
-                  mb: 1.25,
-                  p: 1.25,
-                  borderRadius: 1.5,
-                  border: `1px solid ${conciergeSource === 'partner' ? 'rgba(184,133,26,0.45)' : V3.b}`,
-                  bgcolor: conciergeSource === 'partner' ? V3.pt : V3.alt,
-                }}
-              >
-                <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t, mb: 0.75 }}>
-                  Qui propose les expériences au client&nbsp;?
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 0.75 }}>
-                  <Button
-                    size="small"
-                    disabled={savingConciergeSource}
-                    variant={conciergeSource === 'own' ? 'contained' : 'outlined'}
-                    onClick={() => void setConciergeSourceMode('own')}
-                    sx={{
-                      textTransform: 'none',
-                      fontWeight: 700,
-                      fontSize: 12,
-                      ...(conciergeSource === 'own'
-                        ? { bgcolor: V3.p, '&:hover': { bgcolor: V3.pd } }
-                        : {}),
-                    }}
-                  >
-                    Votre propre conciergerie
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={savingConciergeSource}
-                    variant={conciergeSource === 'partner' ? 'contained' : 'outlined'}
-                    onClick={() => void setConciergeSourceMode('partner')}
-                    sx={{
-                      textTransform: 'none',
-                      fontWeight: 700,
-                      fontSize: 12,
-                      ...(conciergeSource === 'partner'
-                        ? {
-                            bgcolor: '#E6B022',
-                            color: '#2C2005',
-                            '&:hover': { bgcolor: '#d4a01e' },
-                          }
-                        : { borderColor: '#E6B022', color: '#8a6a00' }),
-                    }}
-                  >
-                    Conciergerie Sojori
-                  </Button>
-                </Box>
-                <Typography sx={{ fontSize: 11.5, color: V3.t2, lineHeight: 1.45 }}>
-                  {conciergeSource === 'partner'
-                    ? 'Les services partenaires Sojori (ville du listing) seront proposés à votre client sur WhatsApp (menu J). Transport, Courses et catalogue custom sont grisés — Sojori gère le catalogue expériences.'
-                    : 'Configurez Transport (J1), Courses (J2) et Conciergerie custom (J3) ci-dessous. Aucun partenaire Sojori n’est injecté.'}
-                </Typography>
-              </Box>
+              <Typography sx={{ fontSize: 11.5, color: V3.t3, mb: 1.25, lineHeight: 1.45 }}>
+                Les expériences (J3) se cochent dans l’onglet listing <b>Expériences</b>. Ici :
+                Transport &amp; Courses uniquement.
+              </Typography>
             ) : null}
 
-            <Box
-              sx={{
-                overflowX: 'auto',
-                ...(group.id === 'concierge' &&
-                conciergeSource === 'partner' &&
-                isListingScope
-                  ? {
-                      opacity: 0.48,
-                      filter: 'grayscale(0.35)',
-                      pointerEvents: 'none',
-                      userSelect: 'none',
-                    }
-                  : {}),
-              }}
-            >
+            <Box sx={{ overflowX: 'auto' }}>
               <Box
                 sx={{
                   display: 'grid',

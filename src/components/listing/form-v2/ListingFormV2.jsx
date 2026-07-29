@@ -22,6 +22,7 @@ import { PricingTab, AvailabilityTab, FeesTab }             from './tabs/DetailT
 import { DistributionTab, DirectBookingTab, RoomsTab, LicenseTab } from './tabs/DetailTabsDistribution';
 import { RuImportDataTab } from './tabs/DetailTabsRuImport';
 import PostImportOnboardingTab from './tabs/PostImportOnboardingTab';
+import ListingExperiencesTab from './tabs/ListingExperiencesTab';
 import ListingOrchestrationV3Embed from '../../../features/orchestrationListingV3/ListingOrchestrationV3Embed';
 
 export default function ListingFormV2({
@@ -44,6 +45,8 @@ export default function ListingFormV2({
   const { isActive: simulationActive } = usePmSimulation();
   const isAdmin = hasAdminAccess(user?.role);
   const showListingActiveToggle = isAdmin && !simulationActive;
+  /** Owner : pas de Publier — sync RU casse le contenu si l’import n’est pas optimal. Admin only. */
+  const showPublish = isAdmin && !simulationActive;
   const [values, setValues] = useState(initialValues);
   const [publishLoading, setPublishLoading] = useState(false);
   const [importOnboardingActive, setImportOnboardingActive] = useState(
@@ -229,6 +232,15 @@ export default function ListingFormV2({
         }
         return <RoomsTab {...common} listingId={listingId} />;
       }
+      if (tabKey === 'experiences') {
+        return (
+          <ListingExperiencesTab
+            listingId={listingId}
+            listingCityId={values.cityId}
+            listingOwnerId={values.ownerId}
+          />
+        );
+      }
       if (tabKey === 'license')      return <LicenseTab     {...common} />;
     }
     return null;
@@ -293,6 +305,7 @@ export default function ListingFormV2({
       }
       onSave={() => onSave?.(values)}
       onPublish={handlePublish}
+      showPublish={showPublish}
       publishLoading={publishLoading}
       publishDisabled={!isPersistedListingId(listingId)}
       onPreview={() => window.open(`/listings/${listingId}/preview`)}

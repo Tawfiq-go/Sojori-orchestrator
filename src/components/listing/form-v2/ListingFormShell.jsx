@@ -47,6 +47,7 @@ export const DETAIL_TABS = [
   ]},
   { group: 'Inventaire', items: [
     { id: 'rooms',        icon: '🛏️', label: 'Rooms & Beds' },
+    { id: 'experiences',  icon: '✨', label: 'Expériences' },
     { id: 'license',      icon: '📄', label: 'License' },
     { id: 'ru-import',    icon: '🗄️', label: 'Trace import RU' },
   ]},
@@ -75,6 +76,7 @@ export const DETAIL_TABS_MULTI = [
     { id: 'ota',            icon: '📡', label: 'OTA' },
   ]},
   { group: 'Admin', items: [
+    { id: 'experiences',  icon: '✨', label: 'Expériences' },
     { id: 'license',      icon: '📄', label: 'License' },
     { id: 'ru-import',    icon: '🗄️', label: 'Trace import RU' },
   ]},
@@ -244,6 +246,7 @@ export default function ListingFormShell({
   hiddenConfigTabIds = [],    // ex. ['transport-config'] sur template Admin global
   onSave,
   onPublish,
+  showPublish = false,        // admin only — owner ne doit pas sync RU (import souvent incomplet)
   publishLoading = false,     // loading state pour le bouton Publier
   publishDisabled = false,
   onPreview,
@@ -631,10 +634,14 @@ export default function ListingFormShell({
                 Sauvegarder pour enregistrer cet écran
               </Stack>
               <Box sx={{ flex: 1 }} />
-              <Button onClick={onSave} sx={btnGhost} disabled={publishLoading}>Sauvegarder</Button>
-              <Button onClick={onPublish} sx={btnPrim} disabled={publishLoading || publishDisabled}>
-                {publishLoading ? 'Synchronisation OTAs...' : 'Publier →'}
+              <Button onClick={onSave} sx={showPublish ? btnGhost : btnPrim} disabled={publishLoading}>
+                Sauvegarder
               </Button>
+              {showPublish ? (
+                <Button onClick={onPublish} sx={btnPrim} disabled={publishLoading || publishDisabled}>
+                  {publishLoading ? 'Synchronisation OTAs...' : 'Publier →'}
+                </Button>
+              ) : null}
             </Stack>
             )}
           </Box>

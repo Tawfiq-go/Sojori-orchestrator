@@ -7,6 +7,8 @@ export type ConciergeServicesSlice = {
   conciergeSource?: 'own' | 'partner';
   /** Toujours null côté owner — Sojori résout par ville. */
   conciergePartnerId?: string | null;
+  /** Ids PartnerService cochés sur le listing (undefined = legacy all). */
+  enabledExperienceIds?: string[];
 };
 
 export type ConciergeServicesArrays = {
@@ -15,6 +17,7 @@ export type ConciergeServicesArrays = {
   customServices: unknown[];
   conciergeSource?: 'own' | 'partner';
   conciergePartnerId?: string | null;
+  enabledExperienceIds?: string[] | null;
 };
 
 /** Read current listing_concierge_services (source of truth for WhatsApp snapshot). */
@@ -22,13 +25,21 @@ export async function fetchListingConciergeArrays(
   listingId: string,
 ): Promise<ConciergeServicesArrays> {
   const res = await listingsService.getListingConciergeConfig(listingId);
-  const doc = (res.data || {}) as ConciergeServicesSlice;
+  const doc = (res.data || {}) as ConciergeServicesSlice & {
+    enabledExperienceIds?: unknown;
+  };
+  const enabledRaw = doc.enabledExperienceIds;
+  const enabledExperienceIds =
+    enabledRaw === undefined || enabledRaw === null
+      ? null
+      : (Array.isArray(enabledRaw) ? enabledRaw : []).map(String).filter(Boolean);
   return {
     transportServices: Array.isArray(doc.transportServices) ? doc.transportServices : [],
     groceryServices: Array.isArray(doc.groceryServices) ? doc.groceryServices : [],
     customServices: Array.isArray(doc.customServices) ? doc.customServices : [],
     conciergeSource: doc.conciergeSource === 'partner' ? 'partner' : 'own',
     conciergePartnerId: doc.conciergePartnerId ?? null,
+    enabledExperienceIds,
   };
 }
 
@@ -56,6 +67,9 @@ export async function persistListingConciergeSlice(
   } else if (slice.conciergePartnerId !== undefined) {
     body.conciergePartnerId = slice.conciergePartnerId;
   }
+  if (slice.enabledExperienceIds !== undefined) {
+    body.enabledExperienceIds = slice.enabledExperienceIds;
+  }
   const res = await listingsService.updateListingConciergeServices(listingId, body);
   if (res.error) throw new Error(res.error);
   return {
@@ -64,5 +78,9 @@ export async function persistListingConciergeSlice(
     customServices: body.customServices as unknown[],
     conciergeSource: body.conciergeSource ?? existing.conciergeSource,
     conciergePartnerId: body.conciergePartnerId ?? null,
+    enabledExperienceIds:
+      body.enabledExperienceIds !== undefined
+        ? body.enabledExperienceIds
+        : existing.enabledExperienceIds,
   };
 }
