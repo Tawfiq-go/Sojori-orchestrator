@@ -63,6 +63,7 @@ Ces classes forcent une scrollbar visible (`scrollbar-width: thin`, couleurs Soj
 | Modifier inventaire (calendrier V3) | `src/components/calendar-v3/UpdateInventoryModal.jsx` | `calendar-update-inventory-scroll` |
 | Audit disponibilité (calendrier V3) | `src/components/calendar-v3/AuditBlockedDaysModal.jsx` | `calendar-audit-modal-scroll` |
 | Drawer résa planning (Vue ops) | `src/features/planning/PlanningReservationDrawer.tsx` | `planning-reservation-drawer-scroll`, `planning-thread-scroll` |
+| Import Airbnb (SA) | `src/components/listing/import-airbnb/ImportAirbnbModal.tsx` | `import-airbnb-modal-scroll` |
 
 ### Cas particulier : modale hors layout (portal)
 
@@ -105,5 +106,6 @@ createPortal(
 
 ## Historique
 
+- **2026-07-29** — `ImportAirbnbModal` (import SA) : `disableScrollLock`, hauteur fixe, `ModalScrollColumn` + `import-airbnb-modal-scroll` (timeline phase C + liste phase B).
 - **2026-05-21** — `MessageBodyModal` (orchestration config) : portal `document.body`, centrage viewport, scroll variables via `orch-message-vars-scroll` + `ModalScrollColumn`.
 - **2026-05-18** — Pattern extrait de `CreateReservationModal`, appliqué à `UploadDialog` (upload photos listing, lots 5 fichiers, barre de progression). Composant partagé `ModalScrollColumn`.

@@ -59,6 +59,7 @@ interface Reservation {
   listing: {
     name: string;
     _id: string;
+    propertyUnit?: string;
     importOnboarding?: { active?: boolean } | null;
   };
   roomTypeName?: string | null;
@@ -966,15 +967,39 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                   <Box component="td" sx={{ textAlign: 'center' }}>
                     <ReservationSourceIcon reservation={r} />
                   </Box>
-                  <Box component="td">
+                  <Box component="td" sx={{ maxWidth: 220 }}>
                     <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
                       <PostImportListingIndicator reservation={r} />
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text, minWidth: 0 }} noWrap title={formatHotelRoomLabel(r.listing?.name, pickRoomTypeName(r), pickRoomUnitName(r))}>
+                      <Box sx={{ minWidth: 0, maxWidth: '100%' }}>
+                        <Typography
+                          sx={{
+                            fontSize: 12.5,
+                            fontWeight: 600,
+                            color: T.text,
+                            minWidth: 0,
+                            maxWidth: 200,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={r.listing?.name || '—'}
+                        >
                           {r.listing?.name || '—'}
                         </Typography>
-                        {(pickRoomTypeName(r) || pickRoomUnitName(r)) ? (
-                          <Typography sx={{ fontSize: 10.5, color: T.text3, fontWeight: 600 }} noWrap title={formatHotelRoomLabel('', pickRoomTypeName(r), pickRoomUnitName(r)).replace(/^—\s*·\s*/, '')}>
+                        {String(r.listing?.propertyUnit || '') === 'Multi' &&
+                        (pickRoomTypeName(r) || pickRoomUnitName(r)) ? (
+                          <Typography
+                            sx={{
+                              fontSize: 10.5,
+                              color: T.text3,
+                              fontWeight: 600,
+                              maxWidth: 200,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={[pickRoomTypeName(r), pickRoomUnitName(r)].filter(Boolean).join(' · ')}
+                          >
                             {[pickRoomTypeName(r), pickRoomUnitName(r)].filter(Boolean).join(' · ')}
                           </Typography>
                         ) : null}
@@ -1201,12 +1226,34 @@ function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpd
 
         <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mb: 0.5, minWidth: 0 }}>
           <PostImportListingIndicator reservation={r} />
-          <Box sx={{ minWidth: 0 }}>
-            <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.text, minWidth: 0 }} noWrap>
+          <Box sx={{ minWidth: 0, maxWidth: '100%' }}>
+            <Typography
+              sx={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: T.text,
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={r.listing?.name || '—'}
+            >
               {r.listing?.name}
             </Typography>
-            {pickRoomTypeName(r) || pickRoomUnitName(r) ? (
-              <Typography sx={{ fontSize: 11.5, color: T.text3, fontWeight: 600 }} noWrap>
+            {String(r.listing?.propertyUnit || '') === 'Multi' &&
+            (pickRoomTypeName(r) || pickRoomUnitName(r)) ? (
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  color: T.text3,
+                  fontWeight: 600,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={[pickRoomTypeName(r), pickRoomUnitName(r)].filter(Boolean).join(' · ')}
+              >
                 {[pickRoomTypeName(r), pickRoomUnitName(r)].filter(Boolean).join(' · ')}
               </Typography>
             ) : null}

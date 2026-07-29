@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, Box, Stack, Typography, Button, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import { ModalScrollColumn } from '../../common/ModalScrollColumn';
 import { T, KEYFRAMES } from './_tokens';
 import type { Owner, RuProperty, SojoriCity, ImportProgress, ImportResultItem } from './_tokens';
 import OwnerSearch from './OwnerSearch';
@@ -192,13 +193,19 @@ export default function ImportAirbnbModal({
       open={open}
       onClose={isImporting ? undefined : onClose}
       maxWidth={false}
+      disableScrollLock
       slotProps={{
         paper: {
           sx: {
-            width: 720, maxWidth: '95vw', m: { xs: 1, sm: 3 },
-            borderRadius: '16px', overflow: 'hidden',
-            display: 'grid', gridTemplateRows: 'auto auto 1fr auto',
-            minHeight: 540, maxHeight: 'calc(100vh - 100px)',
+            width: 720,
+            maxWidth: '95vw',
+            m: { xs: 1, sm: 2 },
+            borderRadius: '16px',
+            height: 'min(84vh, 740px)',
+            maxHeight: 'calc(100vh - 32px) !important',
+            overflow: 'hidden !important',
+            display: 'flex !important',
+            flexDirection: 'column !important',
             boxShadow: '0 32px 72px rgba(20,17,10,0.18)',
           },
         },
@@ -207,8 +214,18 @@ export default function ImportAirbnbModal({
     >
       <style>{KEYFRAMES}</style>
 
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateRows: 'auto auto 1fr auto',
+          height: '100%',
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
       {/* HEADER */}
-      <Stack direction="row" gap={1.75} sx={{ alignItems: 'center',
+      <Stack direction="row" gap={1.75} sx={{
+        alignItems: 'center', flexShrink: 0,
         p: '20px 24px', borderBottom: `1px solid ${T.border}`,
         background: `linear-gradient(180deg, #fff, ${T.bg2})`,
       }}>
@@ -246,7 +263,8 @@ export default function ImportAirbnbModal({
       </Stack>
 
       {/* PHASE STRIP */}
-      <Stack direction="row" gap={1} sx={{ alignItems: 'center',
+      <Stack direction="row" gap={1} sx={{
+        alignItems: 'center', flexShrink: 0,
         px: 3, py: 1.25, bgcolor: T.bg2, borderBottom: `1px solid ${T.border}`,
         fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace',
         letterSpacing: '0.04em', textTransform: 'uppercase', fontWeight: 700,
@@ -260,161 +278,155 @@ export default function ImportAirbnbModal({
         <PhaseStep label="D · Terminé" active={phase === 'D'} done={false} />
       </Stack>
 
-      {/* BODY — phase B : liste scrollable + ville fixe en bas (pas de scroll global) */}
-      <Box
-        sx={{
-          p: '22px 24px',
-          minHeight: 0,
-          overflow: phase === 'B' ? 'hidden' : 'auto',
-          overflowY: phase === 'B' ? 'hidden' : 'auto',
-          display: phase === 'B' ? 'flex' : 'block',
-          flexDirection: 'column',
-          animation: 'sj-fadeIn 0.28s',
-        }}
-      >
-        {phase === 'A-admin' && (
-          <OwnerSearch searchOwners={searchOwners} selectedOwner={owner} onSelect={setOwner} />
-        )}
+      {/* BODY — une seule zone scroll (docs/scroll) */}
+      {phase === 'B' && owner ? (
+        <Box
+          sx={{
+            minHeight: 0,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            px: '24px',
+            pt: '22px',
+            pb: selectedIds.length > 0 ? 0 : '22px',
+            animation: 'sj-fadeIn 0.28s',
+          }}
+        >
+          {propsError && (
+            <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1.25, bgcolor: T.errorTint, border: `1px solid rgba(220,38,38,0.25)`, flexShrink: 0 }}>
+              <Typography sx={{ fontSize: 12.5, color: T.error, fontWeight: 600 }}>{propsError}</Typography>
+            </Box>
+          )}
 
-        {phase === 'A-owner' && !owner && (
-          <Stack sx={{ alignItems: 'center',  py: 5 }}>
-            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
-              {!authReady ? 'Connexion au compte hôte…' : 'Compte hôte introuvable'}
-            </Typography>
-            <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.625 }}>
-              {!authReady
-                ? 'Chargement de votre session…'
-                : 'Reconnectez-vous ou contactez le support.'}
-            </Typography>
-          </Stack>
-        )}
-
-        {phase === 'A-owner' && owner && propsLoading && (
-          <Stack sx={{ alignItems: 'center',  py: 5 }}>
+          <Stack
+            direction="row"
+            gap={1.5}
+            sx={{
+              alignItems: 'center',
+              flexShrink: 0,
+              p: '12px 14px',
+              mb: 1.5,
+              background: `linear-gradient(180deg, ${T.primaryTint}, #fff)`,
+              border: `1px solid ${T.primaryTint2}`,
+              borderRadius: 1.375,
+            }}
+          >
             <Box sx={{
-              width: 48, height: 48, borderRadius: '50%',
-              border: `3px solid ${T.border}`, borderTopColor: T.primary,
-              mb: 2.25, animation: 'sj-spin 0.8s linear infinite',
-            }} />
-            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Chargement de vos annonces Airbnb…</Typography>
-            <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.625 }}>
-              Synchronisation Rentals United · jusqu&apos;à 1 min
-            </Typography>
+              width: 36, height: 36, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #fcd34d, #d97706)',
+              color: '#fff', fontFamily: '"Geist Mono", monospace',
+              fontSize: 13, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>{(owner.firstName?.[0] || '') + (owner.lastName?.[0] || '')}</Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>
+                {`${owner.firstName || ''} ${owner.lastName || ''}`.trim() || owner.email}
+              </Typography>
+              <Typography sx={{ fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace', mt: 0.125 }}>
+                {owner.email}
+              </Typography>
+            </Box>
+            {isAdmin && (
+              <Box component="button" onClick={() => { setOwner(null); setPhase('A-admin'); }} sx={{
+                all: 'unset', cursor: 'pointer', fontSize: 11, color: T.primaryDeep, fontWeight: 700,
+                '&:hover': { textDecoration: 'underline' },
+              }}>Changer →</Box>
+            )}
           </Stack>
-        )}
 
-        {phase === 'B' && propsError && (
-          <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1.25, bgcolor: T.errorTint, border: `1px solid rgba(220,38,38,0.25)` }}>
-            <Typography sx={{ fontSize: 12.5, color: T.error, fontWeight: 600 }}>{propsError}</Typography>
-          </Box>
-        )}
+          <ModalScrollColumn
+            active={open}
+            className="import-airbnb-modal-scroll"
+            wrapperSx={{ flex: 1, minHeight: 0 }}
+            innerSx={{ pr: 0.5 }}
+          >
+            <PropertyList
+              properties={properties}
+              selectedIds={selectedIds}
+              onToggle={handleToggle}
+              onSelectAll={handleSelectAll}
+              loading={propsLoading}
+            />
+          </ModalScrollColumn>
 
-        {phase === 'B' && owner && (
-          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            {/* Owner banner — fixe */}
-            <Stack
-              direction="row"
-              gap={1.5}
-              sx={{
-                alignItems: 'center',
-                flexShrink: 0,
-                p: '12px 14px',
-                mb: 1.5,
-                background: `linear-gradient(180deg, ${T.primaryTint}, #fff)`,
-                border: `1px solid ${T.primaryTint2}`,
-                borderRadius: 1.375,
-              }}
-            >
-              <Box sx={{
-                width: 36, height: 36, borderRadius: '50%',
-                background: 'linear-gradient(135deg, #fcd34d, #d97706)',
-                color: '#fff', fontFamily: '"Geist Mono", monospace',
-                fontSize: 13, fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>{(owner.firstName?.[0] || '') + (owner.lastName?.[0] || '')}</Box>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>
-                  {`${owner.firstName || ''} ${owner.lastName || ''}`.trim() || owner.email}
-                </Typography>
-                <Typography sx={{ fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace', mt: 0.125 }}>
-                  {owner.email}
-                </Typography>
-              </Box>
-              {isAdmin && (
-                <Box component="button" onClick={() => { setOwner(null); setPhase('A-admin'); }} sx={{
-                  all: 'unset', cursor: 'pointer', fontSize: 11, color: T.primaryDeep, fontWeight: 700,
-                  '&:hover': { textDecoration: 'underline' },
-                }}>Changer →</Box>
-              )}
-            </Stack>
-
-            {/* Liste annonces — seule zone scrollable */}
+          {selectedIds.length > 0 && (
             <Box
               sx={{
-                flex: 1,
-                minHeight: 120,
-                maxHeight: selectedIds.length > 0 ? 'min(42vh, 320px)' : 'min(52vh, 400px)',
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                pr: 0.5,
-                mr: -0.5,
-                WebkitOverflowScrolling: 'touch',
-                '&::-webkit-scrollbar': { width: 6 },
-                '&::-webkit-scrollbar-thumb': {
-                  bgcolor: 'rgba(20,17,10,0.15)',
-                  borderRadius: 99,
-                },
+                flexShrink: 0,
+                mt: 1.5,
+                pt: 2,
+                pb: '22px',
+                borderTop: `1px solid ${T.border}`,
+                bgcolor: T.bg1,
+                animation: 'sj-slideUp 0.25s both',
               }}
             >
-              <PropertyList
-                properties={properties}
-                selectedIds={selectedIds}
-                onToggle={handleToggle}
-                onSelectAll={handleSelectAll}
-                loading={propsLoading}
+              <CityAutocomplete
+                cities={cities}
+                selected={city}
+                loading={citiesLoading || cityResolving}
+                autoDetected={cityAutoFromRu && !!city}
+                onSelect={(c) => {
+                  setCity(c);
+                  setCityAutoFromRu(false);
+                  setCityError(false);
+                }}
+                error={cityError}
               />
             </Box>
+          )}
+        </Box>
+      ) : (
+        <ModalScrollColumn
+          active={open}
+          className="import-airbnb-modal-scroll"
+          wrapperSx={{ minHeight: 0 }}
+          innerSx={{ p: '22px 24px', animation: 'sj-fadeIn 0.28s' }}
+        >
+          {phase === 'A-admin' && (
+            <OwnerSearch searchOwners={searchOwners} selectedOwner={owner} onSelect={setOwner} />
+          )}
 
-            {/* Ville Sojori — toujours visible sous la liste */}
-            {selectedIds.length > 0 && (
-              <Box
-                sx={{
-                  flexShrink: 0,
-                  mt: 1.5,
-                  pt: 2,
-                  borderTop: `1px solid ${T.border}`,
-                  bgcolor: T.bg1,
-                  animation: 'sj-slideUp 0.25s both',
-                }}
-              >
-                <CityAutocomplete
-                  cities={cities}
-                  selected={city}
-                  loading={citiesLoading || cityResolving}
-                  autoDetected={cityAutoFromRu && !!city}
-                  onSelect={(c) => {
-                    setCity(c);
-                    setCityAutoFromRu(false);
-                    setCityError(false);
-                  }}
-                  error={cityError}
-                />
-              </Box>
-            )}
-          </Box>
-        )}
+          {phase === 'A-owner' && !owner && (
+            <Stack sx={{ alignItems: 'center', py: 5 }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+                {!authReady ? 'Connexion au compte hôte…' : 'Compte hôte introuvable'}
+              </Typography>
+              <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.625 }}>
+                {!authReady
+                  ? 'Chargement de votre session…'
+                  : 'Reconnectez-vous ou contactez le support.'}
+              </Typography>
+            </Stack>
+          )}
 
-        {phase === 'C' && importProgress && (
-          <ImportProgressTimeline progress={importProgress} />
-        )}
+          {phase === 'A-owner' && owner && propsLoading && (
+            <Stack sx={{ alignItems: 'center', py: 5 }}>
+              <Box sx={{
+                width: 48, height: 48, borderRadius: '50%',
+                border: `3px solid ${T.border}`, borderTopColor: T.primary,
+                mb: 2.25, animation: 'sj-spin 0.8s linear infinite',
+              }} />
+              <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Chargement de vos annonces Airbnb…</Typography>
+              <Typography sx={{ fontSize: 12, color: T.text3, mt: 0.625 }}>
+                Synchronisation Rentals United · jusqu&apos;à 1 min
+              </Typography>
+            </Stack>
+          )}
 
-        {phase === 'D' && importResults && (
-          <ImportResultRecap results={importResults} />
-        )}
-      </Box>
+          {phase === 'C' && importProgress && (
+            <ImportProgressTimeline progress={importProgress} />
+          )}
+
+          {phase === 'D' && importResults && (
+            <ImportResultRecap results={importResults} />
+          )}
+        </ModalScrollColumn>
+      )}
 
       {/* FOOTER */}
-      <Stack direction="row" gap={1.5} sx={{ alignItems: 'center',
+      <Stack direction="row" gap={1.5} sx={{
+        alignItems: 'center', flexShrink: 0,
         p: '16px 24px', borderTop: `1px solid ${T.border}`, bgcolor: T.bg2,
       }}>
         <Typography sx={{ fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
@@ -460,6 +472,7 @@ export default function ImportAirbnbModal({
           )}
         </Stack>
       </Stack>
+      </Box>
     </Dialog>
   );
 }
