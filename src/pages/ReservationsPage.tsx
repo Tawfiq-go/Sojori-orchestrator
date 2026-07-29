@@ -117,7 +117,7 @@ interface Reservation {
 
 import { dashboardTokens as T } from '../design/sojoriBrandTokens';
 import { formatReservationPaid } from '../utils/reservationPaidDisplay';
-import { formatHotelRoomLabel, pickRoomTypeName, pickRoomUnitName } from '../utils/multiListingLabel';
+import { pickRoomTypeName, pickRoomUnitName } from '../utils/multiListingLabel';
 
 const TOOLBAR_SELECT_SX = {
   minWidth: 0,
@@ -261,9 +261,11 @@ export function ReservationsPage() {
     arr7days: false, dep7days: false,
   });
 
+  const PAGE_SIZE_OPTIONS = [100, 200, 300] as const;
   const [page, setPage] = useState(0);
   const [totalReservations, setTotalReservations] = useState(0);
-  const limit = 100;
+  const [limit, setLimit] = useState<number>(100);
+  const totalPages = Math.max(1, Math.ceil(totalReservations / limit));
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -387,6 +389,11 @@ export function ReservationsPage() {
   }, [page, limit, selectedStatuses, globalFilter, scopeFetchReady, requestOwnerId]);
 
   useEffect(() => { setPage(0); }, [requestOwnerId]);
+
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(totalReservations / limit) - 1);
+    if (page > maxPage) setPage(maxPage);
+  }, [totalReservations, limit, page]);
 
   useEffect(() => { fetchReservations(); }, [fetchReservations]);
 
@@ -784,6 +791,50 @@ export function ReservationsPage() {
           </Box>
         )}
 
+        {!isLoading && totalReservations > 0 && (
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            sx={{ mb: 1.5, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 1.5 }}
+          >
+            <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
+              {page * limit + 1}–{Math.min((page + 1) * limit, totalReservations)} sur {totalReservations}
+              {' · '}page {page + 1}/{totalPages}
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+              <Typography sx={{ fontSize: 12, color: T.text3 }}>Par page</Typography>
+              <Select
+                size="small"
+                value={limit}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  setPage(0);
+                }}
+                sx={{ minWidth: 72, fontSize: 13, height: 32 }}
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <MenuItem key={size} value={size}>{size}</MenuItem>
+                ))}
+              </Select>
+              <Button
+                size="small"
+                disabled={page === 0 || isLoading}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                sx={{ textTransform: 'none' }}
+              >
+                ← Précédent
+              </Button>
+              <Button
+                size="small"
+                disabled={page + 1 >= totalPages || isLoading}
+                onClick={() => setPage((p) => p + 1)}
+                sx={{ textTransform: 'none' }}
+              >
+                Suivant →
+              </Button>
+            </Stack>
+          </Stack>
+        )}
+
         {/* MOBILE : cards · DESKTOP : table */}
         {!isLoading && !isMobile && visibleRows.length > 0 && (
           <DesktopTable rows={visibleRows} onRowClick={handleViewDetails} onNavigate={navigate} onAcknowledge={handleAcknowledgeCancellation} onStayUpdate={handleStayFieldUpdate} onRegistrationUpdate={handleRegistrationUpdate} />
@@ -805,15 +856,33 @@ export function ReservationsPage() {
           </Paper>
         )}
 
-        {/* Pagination */}
-        {!isLoading && totalReservations > 0 && (
-          <Stack direction="row" sx={{ mt: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* Pagination bas */}
+        {!isLoading && totalReservations > limit && (
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            sx={{ mt: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 1.5 }}
+          >
             <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
               {page * limit + 1}–{Math.min((page + 1) * limit, totalReservations)} sur {totalReservations}
+              {' · '}page {page + 1}/{totalPages}
             </Typography>
-            <Stack direction="row" spacing={1}>
-              <Button size="small" disabled={page === 0} onClick={() => setPage(page - 1)} sx={{ textTransform: 'none' }}>← Précédent</Button>
-              <Button size="small" disabled={(page + 1) * limit >= totalReservations} onClick={() => setPage(page + 1)} sx={{ textTransform: 'none' }}>Suivant →</Button>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+              <Button
+                size="small"
+                disabled={page === 0 || isLoading}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                sx={{ textTransform: 'none' }}
+              >
+                ← Précédent
+              </Button>
+              <Button
+                size="small"
+                disabled={page + 1 >= totalPages || isLoading}
+                onClick={() => setPage((p) => p + 1)}
+                sx={{ textTransform: 'none' }}
+              >
+                Suivant →
+              </Button>
             </Stack>
           </Stack>
         )}
@@ -959,9 +1028,6 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                       <Typography className="reservation-number" sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 700, color: T.primaryDeep }}>
                         {r.reservationNumber || '—'}
                       </Typography>
-                      {r.rentalsReservationId && (
-                        <Typography sx={{ fontSize: 10, color: T.text4, mt: 0.25 }}>RU·{r.rentalsReservationId}</Typography>
-                      )}
                     </Box>
                   </Box>
                   <Box component="td" sx={{ textAlign: 'center' }}>

@@ -40,7 +40,7 @@ import {
 } from '../utils/cleanlinessDisplay';
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
-const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 50;
 const LISTINGS_GRID_COLUMNS = 5;
 const LISTING_CARD_WIDTH = 280;
 
@@ -208,6 +208,18 @@ export function ListingsOverviewPage() {
   useEffect(() => {
     void loadListings();
   }, [listingsQueryOptions, scopeFetchReady]);
+
+  // Reset page quand filtre / recherche / owner change
+  useEffect(() => {
+    setPage(0);
+  }, [statusFilter, search, requestOwnerId]);
+
+  // Si la page courante dépasse le total (ex. après filtre), recaler
+  useEffect(() => {
+    if (totalListings <= 0) return;
+    const maxPage = Math.max(0, Math.ceil(totalListings / pageSize) - 1);
+    if (page > maxPage) setPage(maxPage);
+  }, [totalListings, pageSize, page]);
 
   useEffect(() => {
     void listingsService.getCities({ allCities: true, limit: 2000 }).then((rows) => {
@@ -378,7 +390,7 @@ export function ListingsOverviewPage() {
             : `${totalListings} annonce(s) ${statusFilter === 'active' ? 'active(s)' : 'inactive(s)'}`
         }
       >
-        {!loading && totalListings > 0 && (
+        {!loading && totalListings === 0 ? null : (
           <Box
             sx={{
               display: 'flex',
@@ -392,10 +404,12 @@ export function ListingsOverviewPage() {
             }}
           >
             <Typography sx={{ fontSize: 12, color: t.text3 }}>
-              {totalListings === 0
-                ? 'Aucun résultat'
-                : `${pageStart}–${pageEnd} sur ${totalListings} · page ${page + 1}/${totalPages}`}
-              {statsLoading ? '' : ` · ${stats.total} total (stats)`}
+              {loading && listings.length === 0
+                ? 'Chargement…'
+                : totalListings === 0
+                  ? 'Aucun résultat'
+                  : `${pageStart}–${pageEnd} sur ${totalListings} · page ${page + 1}/${totalPages}`}
+              {!statsLoading && stats.total > 0 ? ` · ${stats.total} total (stats)` : ''}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
               <Typography sx={{ fontSize: 12, color: t.text3, mr: 0.5 }}>Par page</Typography>
@@ -414,12 +428,12 @@ export function ListingsOverviewPage() {
                   </MenuItem>
                 ))}
               </Select>
-              <Button sx={btnGhostSx} disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+              <Button sx={btnGhostSx} disabled={page === 0 || loading} onClick={() => setPage((p) => Math.max(0, p - 1))}>
                 Précédent
               </Button>
               <Button
                 sx={btnGhostSx}
-                disabled={page + 1 >= totalPages}
+                disabled={page + 1 >= totalPages || loading || totalListings === 0}
                 onClick={() => setPage((p) => p + 1)}
               >
                 Suivant
@@ -592,6 +606,37 @@ export function ListingsOverviewPage() {
             })}
           </Box>
         )}
+
+        {!loading && totalListings > pageSize ? (
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 1.5,
+              mt: 2,
+              pt: 2,
+              borderTop: `1px solid ${t.border}`,
+            }}
+          >
+            <Typography sx={{ fontSize: 12, color: t.text3 }}>
+              {pageStart}–{pageEnd} sur {totalListings} · page {page + 1}/{totalPages}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Button sx={btnGhostSx} disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                Précédent
+              </Button>
+              <Button
+                sx={btnGhostSx}
+                disabled={page + 1 >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Suivant
+              </Button>
+            </Box>
+          </Box>
+        ) : null}
       </Panel>
 
       <ImportAirbnbModalContainer
