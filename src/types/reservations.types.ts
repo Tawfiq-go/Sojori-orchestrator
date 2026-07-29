@@ -109,6 +109,7 @@ export interface Reservation {
   listing?: {
     _id?: string;
     name?: string;
+    propertyUnit?: string;
     importOnboarding?: { active?: boolean } | null;
   };
   orchestrationLaunch?: {

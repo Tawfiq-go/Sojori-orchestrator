@@ -20,9 +20,28 @@ const WEEKDAYS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
 const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
 const RESA_BAR_COLORS = {
-  Confirmed: { bg: '#3d3a33', text: '#fff' },
-  Pending: { bg: 'rgba(196,101,6,0.88)', text: '#fff' },
+  airbnb: { bg: '#FF5A5F', text: '#fff', label: 'Airbnb' },
+  booking: { bg: '#003580', text: '#fff', label: 'Booking.com' },
+  vrbo: { bg: '#3B82F6', text: '#fff', label: 'Vrbo' },
+  expedia: { bg: '#FEC10D', text: '#1a1a1a', label: 'Expedia' },
+  mews: { bg: '#0D9488', text: '#fff', label: 'Mews' },
+  direct: { bg: '#7C3AED', text: '#fff', label: 'Direct' },
+  pending: { bg: '#D97706', text: '#fff', label: 'En attente' },
+  default: { bg: '#64748B', text: '#fff', label: 'Autre' },
 };
+
+function reservationBarColors(res) {
+  const status = String(res?.status || '').toLowerCase();
+  if (status.includes('pend')) return RESA_BAR_COLORS.pending;
+  const c = String(res?.channelName || res?.channel || '').toLowerCase();
+  if (c.includes('airbnb') || c.includes('air bnb')) return RESA_BAR_COLORS.airbnb;
+  if (c.includes('booking')) return RESA_BAR_COLORS.booking;
+  if (c.includes('vrbo') || c.includes('homeaway')) return RESA_BAR_COLORS.vrbo;
+  if (c.includes('expedia')) return RESA_BAR_COLORS.expedia;
+  if (c.includes('mews')) return RESA_BAR_COLORS.mews;
+  if (c.includes('direct') || c.includes('sojori') || c.includes('manual')) return RESA_BAR_COLORS.direct;
+  return RESA_BAR_COLORS.default;
+}
 
 function isoDate(v) {
   if (!v) return null;
@@ -233,7 +252,9 @@ export default function SimpleView({
               </button>
             </h3>
             <div style={{ display: 'flex', gap: 14, fontSize: 10.5, color: T.text3, flexShrink: 0 }}>
-              <Legend dot="#3d3a33" label="Réservé" />
+              <Legend dot={RESA_BAR_COLORS.airbnb.bg} label="Airbnb" />
+              <Legend dot={RESA_BAR_COLORS.booking.bg} label="Booking" />
+              <Legend dot={RESA_BAR_COLORS.pending.bg} label="Attente" />
               <Legend dot={T.error} label="Stop sell" />
               {dpEnabled ? <Legend dot={T.ai} label="Prix dynamique" /> : null}
               {inventoryLoading && <span style={{ fontWeight: 700 }}>Chargement…</span>}
@@ -686,17 +707,18 @@ function WeekRow({ week, monthReservations, selected, currency, onToggleDay, onO
       {segments.map(({ res, startIdx, endIdx, startsHere, endsHere }, si) => {
         const left = ((startIdx + (startsHere ? 0.55 : 0)) / 7) * 100;
         const right = ((endIdx + (endsHere ? 0.45 : 1)) / 7) * 100;
-        const colors = RESA_BAR_COLORS[res.status] || RESA_BAR_COLORS.Confirmed;
+        const colors = reservationBarColors(res);
         const guests = Number(res.numberOfGuests) || 0;
         const name = res.guestName || res.guestFirstName || 'Réservation';
         const label = guests > 1 ? `${name} + ${guests - 1}` : name;
         const showLabel = startsHere || startIdx === 0;
+        const channelHint = colors.label || res.channelName || '';
         return (
           <button
             key={`${res._id}-${si}`}
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenReservation?.(res); }}
-            title={`${label} · ${isoDate(res.arrivalDate)} → ${isoDate(res.departureDate)}${res.status ? ` · ${res.status}` : ''}`}
+            title={`${label} · ${isoDate(res.arrivalDate)} → ${isoDate(res.departureDate)}${channelHint ? ` · ${channelHint}` : ''}${res.status ? ` · ${res.status}` : ''}`}
             style={{
               position: 'absolute', top: 48, height: 30,
               left: `${left}%`, width: `${Math.max(right - left, 4)}%`,
@@ -714,7 +736,7 @@ function WeekRow({ week, monthReservations, selected, currency, onToggleDay, onO
               <>
                 <span style={{
                   width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                  background: 'rgba(255,255,255,0.22)', color: '#fff',
+                  background: 'rgba(255,255,255,0.22)', color: colors.text,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 11, fontWeight: 800,
                 }}>
