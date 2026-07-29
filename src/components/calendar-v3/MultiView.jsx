@@ -862,9 +862,9 @@ function ListingRow({
 }
 
 /* ─── Jour indisponible SANS réservation Sojori : classification de la cause ───
- * Contexte : les dates fermées côté canal (Airbnb/Rentals United) sont importées
- * dans l'inventaire avec availableRoom=0 (et stopSell=false), sans objet
- * réservation Sojori. On les distingue du stop-sell manuel pour l'affichage. */
+ * Contexte : les dates fermées côté canal sont importées dans l'inventaire avec
+ * availableRoom=0 (et stopSell=false), sans objet réservation Sojori. On les
+ * distingue du stop-sell manuel pour l'affichage. */
 function blockedNoResaInfo(inv) {
   if (!inv || !hasInventoryData(inv)) return null;
   if ((inv.reservations?.length ?? 0) > 0) return null; // occupé par une résa → normal
@@ -876,13 +876,13 @@ function blockedNoResaInfo(inv) {
     return {
       kind: 'stop',
       color: T.error,
-      label: 'Stop-sell OTA — bloqué manuellement sur les canaux, aucune réservation Sojori.',
+      label: 'Stop-sell — bloqué manuellement sur les canaux, aucune réservation Sojori.',
     };
   }
   return {
     kind: 'channel',
     color: T.warning,
-    label: 'Bloqué côté canal (Airbnb / Rentals United) — date fermée à l’import, sans réservation Sojori. Ne pas rouvrir sans vérifier le canal (risque de sur-réservation).',
+    label: 'Bloqué côté canal — date fermée à l’import, sans réservation Sojori. Ne pas rouvrir sans vérifier le canal (risque de sur-réservation).',
   };
 }
 
