@@ -36,7 +36,6 @@ import OwnerPmMonogramBadge from './OwnerPmMonogramBadge';
 import * as fullchatbotApi from '../../../services/fullchatbotApi';
 import { useTranslation } from 'react-i18next';
 import { hasAdminAccess } from '../../../utils/rbac.utils';
-import { WHATSAPP_AI_TIER_OPTIONS, tierOptionDropdownLabel } from '../../../constants/whatsappAiTier';
 import SearchableSelect from './SearchableSelect';
 import { useChannelsFillCompanyPickers } from '../hooks/useChannelsFillCompanyPickers';
 import { sortCurrenciesByOrderedCodes } from '../utils/currencySort';
@@ -264,9 +263,8 @@ const OWNER_TABS = [
   { id: 'compte', label: 'Compte' },
   { id: 'entreprise', label: 'Entreprise RU' },
   { id: 'webhooks-ru', label: 'Webhooks RU' },
-  { id: 'sojori-web', label: 'Site sojori-vente' },
+  { id: 'sojori-web', label: 'Direct booking' },
   { id: 'orchestration', label: 'Orchestration' },
-  { id: 'config-ia', label: 'Config IA' },
 ];
 
 const EMPTY_WEBHOOK_STATUS = {
@@ -400,11 +398,8 @@ const UpdateOwnerSidebar = ({
     if (!isCreate) {
       tabs = tabs.filter((tab) => tab.id !== 'orchestration');
     }
-    if (!isPlatformAdmin) {
-      tabs = tabs.filter((tab) => tab.id !== 'config-ia');
-    }
     return tabs;
-  }, [isCreate, isPlatformAdmin, isPmSelfService]);
+  }, [isCreate, isPmSelfService]);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [activeTab, setActiveTab] = useState('compte');
   const drawerRef = useRef(null);
@@ -2245,12 +2240,12 @@ const UpdateOwnerSidebar = ({
                         <>
                           <b>Entreprise</b> — informations légales et fiche société (sauvegarde locale).
                           Identité et coordonnées : onglet <b>Compte</b>. Vitrine publique : onglet{' '}
-                          <b>Site sojori-vente</b>.
+                          <b>Direct booking</b>.
                         </>
                       ) : (
                         <>
                       <b>Entreprise RU</b> — données légales et fiche société envoyées à <b>Rental United</b> uniquement.
-                      Ce n’est <b>pas</b> la vitrine sojori-vente (photos, slogan → onglet <b>Site sojori-vente</b>).
+                      Ce n’est <b>pas</b> la vitrine sojori-vente (photos, slogan → onglet <b>Direct booking</b>).
                       Prénom, nom, emails, téléphone et ville : onglet <b>Compte</b> uniquement.
                       {values.ruEnabled
                         ? ' Utilisez « Créer entreprise RU » pour pousser vers Rental United.'
@@ -2766,36 +2761,6 @@ const UpdateOwnerSidebar = ({
                 )}
               />
 
-              <TabPanel
-                active={activeTab}
-                id="config-ia"
-                render={() => (
-                  <>
-                <div className="owner-form-hint" style={{ marginBottom: 10 }}>
-                  Modèle Claude pour les réponses automatiques aux voyageurs (du moins cher au plus
-                  capable). Met à jour tous les séjours whitelist de ce propriétaire (sauf override par
-                  séjour dans Mémoire bot).
-                </div>
-                <div className="field">
-                  <div className="field-label">Modèle Claude</div>
-                  <select
-                    className="input"
-                    name="whatsappConversationalTier"
-                    value={Number(values.whatsappConversationalTier) || 2}
-                    onChange={(e) =>
-                      setFieldValue('whatsappConversationalTier', Number(e.target.value))
-                    }
-                  >
-                    {WHATSAPP_AI_TIER_OPTIONS.map((opt) => (
-                      <option key={opt.tier} value={opt.tier}>
-                        {tierOptionDropdownLabel(opt)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                  </>
-                )}
-              />
             </div>
 
               <div className="drawer-foot">
