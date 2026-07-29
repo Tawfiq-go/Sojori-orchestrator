@@ -11,6 +11,7 @@ import { LegacyReduxProvider } from '../components/LegacyReduxBridge';
 import AdminOwnerScopeLayout from '../components/AdminOwnerScopeLayout/AdminOwnerScopeLayout.jsx';
 import { PropertyManagerTab } from '../components/team/PropertyManagerTab';
 import { AccessMarketplacesTab } from '../components/team/AccessMarketplacesTab';
+import { AdminConfigTab } from '../components/team/AdminConfigTab';
 import { RolesPermissionsTab } from '../components/team/RolesPermissionsTab';
 import { GroupsTab } from '../components/team/GroupsTab';
 import { TeamViewProvider, useTeamViewMode } from '../context/TeamViewContext';
@@ -63,6 +64,13 @@ const ALL_SECTIONS: Array<{ id: TeamSection; label: string; icon: string; hint: 
     label: 'Access Marketplaces',
     icon: '🛒',
     hint: 'Autorisations canal par PM — Sojori, direct booking, WhatsApp, inter-PMs',
+    adminOnly: true,
+  },
+  {
+    id: 'admin-config',
+    label: 'Config PM',
+    icon: '🤖',
+    hint: 'Tier IA WhatsApp + plafond des moyens de paiement par PM — réglages Admin uniquement',
     adminOnly: true,
   },
 ];
@@ -139,6 +147,7 @@ export function TeamRolesHubPage() {
       groups: 'groups',
       onboarding: 'onboarding',
       'access-marketplaces': 'marketplaces',
+      'admin-config': 'admin-config',
     };
     next.set('tab', tabMap[id]);
     if (id === 'onboarding') {
@@ -229,6 +238,7 @@ export function TeamRolesHubPage() {
             <PmOnboardingWizard embedded />
           ) : null}
           {section === 'access-marketplaces' && isPlatformAdmin ? <AccessMarketplacesTab /> : null}
+          {section === 'admin-config' && isPlatformAdmin ? <AdminConfigTab /> : null}
         </div>
       </div>
       </TeamViewProvider>

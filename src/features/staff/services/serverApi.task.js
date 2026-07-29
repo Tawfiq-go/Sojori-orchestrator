@@ -702,6 +702,38 @@ export function getOwnerRuLoginCredentials(ownerId) {
       throw new Error(msg);
     });
 }
+
+/**
+ * Admin PM Config — objet séparé de Account/pmProfile : plafond des moyens de
+ * paiement direct booking par PM (carte/virement/cash). Admin only.
+ */
+export function listAdminPmConfigs() {
+  return axios
+    .get(`${MICROSERVICE_BASE_URL.SRV_USER}/user/admin-pm-config/list`)
+    .then((r) => r.data?.data || []);
+}
+
+export function updateAdminPmConfig(ownerId, directPayment) {
+  return axios
+    .put(
+      `${MICROSERVICE_BASE_URL.SRV_USER}/user/admin-pm-config/${encodeURIComponent(String(ownerId))}`,
+      { directPayment },
+    )
+    .then((r) => r.data?.data);
+}
+
+/** Plafond plateforme (Sojori) — un seul document, au-dessus du plafond par PM. */
+export function getPlatformPaymentPolicy() {
+  return axios
+    .get(`${MICROSERVICE_BASE_URL.SRV_USER}/user/platform-payment-policy`)
+    .then((r) => r.data?.data);
+}
+
+export function updatePlatformPaymentPolicy(directPayment) {
+  return axios
+    .put(`${MICROSERVICE_BASE_URL.SRV_USER}/user/platform-payment-policy`, { directPayment })
+    .then((r) => r.data?.data);
+}
 /**
  * Date création compte RU + date dernière sync entreprise RU pour une liste d'owners
  * (une requête, pas une par carte). `null` par owner si jamais synchronisé, ou si
