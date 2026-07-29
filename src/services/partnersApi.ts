@@ -54,11 +54,30 @@ export const DEFAULT_SCHEDULE: PartnerServiceSchedule = {
   note: '',
 };
 
+export type PaymentMethod = 'card' | 'cash' | 'transfer';
+export type PaymentCollection = 'full' | 'deposit';
+
+export type PartnerServicePayment = {
+  methods: PaymentMethod[];
+  collection: PaymentCollection;
+  depositPercent?: number | null;
+};
+
+export const DEFAULT_PAYMENT: PartnerServicePayment = {
+  methods: ['cash'],
+  collection: 'full',
+  depositPercent: null,
+};
+
 export type PartnerService = {
   id: string;
   _id?: string;
   ownerId: string | null;
   partnerId: string | null;
+  /** Label provider pour le picker listing (fiche Dreams / NOMMOS…). */
+  providerId?: string | null;
+  providerName?: string | null;
+  providerKind?: 'owner' | 'partner' | null;
   category: string;
   subCategory?: string;
   title: string;
@@ -70,6 +89,7 @@ export type PartnerService = {
   photos: string[];
   formules: PartnerServiceFormule[];
   schedule?: PartnerServiceSchedule;
+  payment?: PartnerServicePayment;
   commissionType?: CommissionType | null;
   commissionPercent?: number | null;
   commissionFixedMad?: number | null;
@@ -90,10 +110,15 @@ function unwrap<T>(res: { data?: { success?: boolean; data?: T; error?: string }
 }
 
 export const partnersApi = {
-  async list(params?: { ownerId?: string | 'platform'; active?: boolean }): Promise<Partner[]> {
+  async list(params?: {
+    ownerId?: string | 'platform';
+    active?: boolean;
+    includePlatform?: boolean;
+  }): Promise<Partner[]> {
     const q = new URLSearchParams();
     if (params?.ownerId) q.set('ownerId', params.ownerId);
     if (params?.active) q.set('active', 'true');
+    if (params?.includePlatform === false) q.set('includePlatform', 'false');
     const url = q.toString() ? `${BASE}?${q}` : BASE;
     const res = await apiClient.get(url);
     return unwrap<Partner[]>(res) || [];
@@ -147,5 +172,49 @@ export const partnersApi = {
 
   async removeService(partnerId: string, serviceId: string): Promise<void> {
     await apiClient.delete(`${BASE}/${partnerId}/services/${serviceId}`);
+  },
+
+  /** Expériences PM (partnerId null) — même structure PartnerService */
+  async listExperiences(params?: { ownerId?: string; active?: boolean }): Promise<PartnerService[]> {
+    const q = new URLSearchParams();
+    if (params?.ownerId) q.set('ownerId', params.ownerId);
+    if (params?.active) q.set('active', 'true');
+    const url = q.toString() ? `${BASE}/experiences?${q}` : `${BASE}/experiences`;
+    const res = await apiClient.get(url);
+    return unwrap<PartnerService[]>(res) || [];
+  },
+
+  /** Catalogue pour picker listing (all = PM + Sojori unifié). */
+  async listExperienceCatalog(params: {
+    scope?: 'own' | 'sojori' | 'all';
+    cityId?: string | null;
+    ownerId?: string;
+  }): Promise<PartnerService[]> {
+    const q = new URLSearchParams();
+    q.set('scope', params.scope || 'all');
+    if (params.cityId) q.set('cityId', params.cityId);
+    if (params.ownerId) q.set('ownerId', params.ownerId);
+    const res = await apiClient.get(`${BASE}/experiences/catalog?${q}`);
+    return unwrap<PartnerService[]>(res) || [];
+  },
+
+  async createExperience(
+    body: Omit<Partial<PartnerService>, 'id'> & {
+      category: string;
+      title: string;
+      formules: PartnerServiceFormule[];
+    },
+  ): Promise<PartnerService> {
+    const res = await apiClient.post(`${BASE}/experiences`, body);
+    return unwrap<PartnerService>(res);
+  },
+
+  async updateExperience(serviceId: string, body: Partial<PartnerService>): Promise<PartnerService> {
+    const res = await apiClient.put(`${BASE}/experiences/${serviceId}`, body);
+    return unwrap<PartnerService>(res);
+  },
+
+  async removeExperience(serviceId: string): Promise<void> {
+    await apiClient.delete(`${BASE}/experiences/${serviceId}`);
   },
 };
