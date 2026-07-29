@@ -69,19 +69,6 @@ function getStatusVariant(status: ListingStatus): 'success' | 'warning' | 'neutr
   return 'neutral';
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return 'Date indisponible';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString('fr-FR');
-}
-
-function formatRuIdsLabel(ids: string[] | undefined): string | null {
-  const clean = (ids || []).map((id) => String(id).trim()).filter(Boolean);
-  if (!clean.length) return null;
-  return `RU #${clean.join(', #')}`;
-}
-
 function normalizeAuthRole(role?: string): string {
   return String(role || '')
     .toLowerCase()
@@ -465,7 +452,6 @@ export function ListingsOverviewPage() {
           >
             {listings.map((listing, index) => {
               const gradient = CARD_GRADIENTS[index % CARD_GRADIENTS.length];
-              const ruLabel = formatRuIdsLabel(listing.rentalUnitedIds);
               const otaAuditing = otaAuditListingId === listing.id;
               const displayStatus = deriveDisplayCleanliness({
                 occupancyStatus: listing.occupancyStatus,
@@ -518,13 +504,6 @@ export function ListingsOverviewPage() {
                         Propriétaire : {listing.ownerName}
                       </Typography>
                     )}
-                    {ruLabel && (
-                      <Typography
-                        sx={{ mt: 0.5, fontSize: 11.5, fontWeight: 700, color: '#f97316', fontFamily: 'Geist Mono' }}
-                      >
-                        {ruLabel}
-                      </Typography>
-                    )}
                     <Typography sx={{ mt: 0.5, fontSize: 12.5, color: t.text2, display: 'flex', alignItems: 'center', gap: 1 }}>
                       Type : {listing.propertyUnit}
                       {String(listing.propertyUnit || '').toLowerCase() === 'multi' && (
@@ -547,12 +526,6 @@ export function ListingsOverviewPage() {
                             : ''}
                         </Box>
                       )}
-                    </Typography>
-                    <Typography sx={{ mt: 0.5, fontSize: 12.5, color: t.text2 }}>
-                      Channel manager: {listing.channelManager || 'Non défini'}
-                    </Typography>
-                    <Typography sx={{ mt: 0.75, fontSize: 11.5, color: t.text3, fontFamily: 'Geist Mono' }}>
-                      Maj: {formatDate(listing.updatedAt)}
                     </Typography>
 
                     <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap', alignItems: 'center' }}>
