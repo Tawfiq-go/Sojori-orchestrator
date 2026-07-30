@@ -7,6 +7,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { RouteAccessGuard } from './components/RouteAccessGuard';
 import { DashboardShellLayout } from './components/DashboardShellLayout';
 import { AdminRoute } from './components/AdminRoute';
+import { HomeRedirect } from './components/HomeRedirect';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { DevRuntimeLogPanel } from './components/DevRuntimeLogPanel';
 import { ToastContainer } from 'react-toastify';
@@ -225,6 +226,12 @@ const SettingsHubPage = lazyWithReload(() =>
 const PartnersAdminPage = lazyWithReload(() =>
   import('./pages/PartnersAdminPage').then((module) => ({ default: module.PartnersAdminPage }))
 );
+const OwnerExperiencesPage = lazyWithReload(() =>
+  import('./pages/OwnerExperiencesPage').then((module) => ({ default: module.OwnerExperiencesPage }))
+);
+const OwnerProviderPage = lazyWithReload(() =>
+  import('./pages/OwnerProviderPage').then((module) => ({ default: module.OwnerProviderPage }))
+);
 const SettingsLegacyRedirect = lazyWithReload(() =>
   import('./pages/SettingsHubPage').then((module) => ({ default: module.SettingsLegacyRedirect }))
 );
@@ -242,6 +249,9 @@ const PricingHubPage = lazyWithReload(() =>
 );
 const PmLifecycleHubPage = lazyWithReload(() =>
   import('./pages/PmLifecycleHubPage').then((module) => ({ default: module.PmLifecycleHubPage }))
+);
+const OwnerMonitorPage = lazyWithReload(() =>
+  import('./pages/OwnerMonitorPage').then((module) => ({ default: module.OwnerMonitorPage }))
 );
 const PmLifecycleDetailPage = lazyWithReload(() =>
   import('./pages/PmLifecycleDetailPage').then((module) => ({ default: module.PmLifecycleDetailPage }))
@@ -323,7 +333,7 @@ function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<DashboardShellLayout />}>
               <Route element={<RouteAccessGuard />}>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<HomeRedirect />} />
 
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
@@ -396,6 +406,8 @@ function App() {
               <Route path="/reviews" element={<LazyRoute><ReviewsPage /></LazyRoute>} />
 
               <Route path="/listings" element={<LazyRoute><ListingsPage /></LazyRoute>} />
+              <Route path="/providers" element={<LazyRoute><OwnerProviderPage /></LazyRoute>} />
+              <Route path="/experiences" element={<LazyRoute><OwnerExperiencesPage /></LazyRoute>} />
               <Route element={<AdminRoute />}>
                 <Route path="/listings/mapping/*" element={<LazyRoute><ListingsMappingHubPage /></LazyRoute>} />
               </Route>
@@ -459,6 +471,7 @@ function App() {
                 element={<Navigate to="/admin/equipe/notifications?tab=historique" replace />}
               />
               <Route element={<AdminRoute />}>
+                <Route path="/admin/owner-monitor" element={<LazyRoute><OwnerMonitorPage /></LazyRoute>} />
                 <Route path="/admin/pm-lifecycle" element={<LazyRoute><PmLifecycleHubPage /></LazyRoute>} />
                 <Route path="/admin/pm-lifecycle/:ownerId" element={<LazyRoute><PmLifecycleDetailPage /></LazyRoute>} />
                 <Route path="/admin/partners" element={<LazyRoute><PartnersAdminPage /></LazyRoute>} />

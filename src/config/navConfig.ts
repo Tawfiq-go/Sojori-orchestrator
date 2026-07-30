@@ -48,6 +48,16 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     group: 'Dashboard',
     roles: PM_ROLES,
     items: [
+      {
+        id: 'admin/owner-monitor',
+        label: 'Monitor',
+        iconType: 'monitor',
+        iconColor: '#C81E1E',
+        badge: 'Live',
+        /** Sécurité max : SuperAdmin / Admin uniquement — jamais Owner / Worker / Landlord. */
+        roles: ADMIN_ROLES,
+        description: 'Activité des owners (Admin only) — résas, messages, prix, sync',
+      },
       { id: 'dashboard', label: 'Tableau de bord', iconType: 'dashboard', iconColor: '#D4A574', badge: 'Live' },
       { id: 'analytics', label: 'Analytics', iconType: 'chart', iconColor: '#5B9BD5' },
     ],
@@ -113,6 +123,15 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         roles: ADMIN_ROLES,
         description: 'Ligne résa Sojori — conversations sans owner',
       },
+      // Vue unifiée web + WhatsApp des demandes de réservation (analyse client)
+      {
+        id: 'comms/conversations',
+        label: 'Conversations Résa',
+        iconType: 'chat',
+        iconColor: '#2D6CB5',
+        roles: ADMIN_ROLES,
+        description: 'Demandes clients web + WhatsApp unifiées',
+      },
     ],
   },
   {
@@ -132,6 +151,26 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
       { id: 'orch/plans', label: 'Plans par séjour', iconType: 'settings', iconColor: '#666666', badge: 'CORE' },
       { id: 'orch/day-plan', label: 'Plan de journée', iconType: 'settings', iconColor: '#666666', badge: 'NEW' },
       { id: 'orch/workflows', label: 'Workflows · config', iconType: 'settings', iconColor: '#666666' },
+    ],
+  },
+  {
+    group: 'Expériences',
+    roles: PM_ROLES,
+    items: [
+      {
+        id: 'providers',
+        label: 'Ma fiche',
+        iconType: 'building',
+        iconColor: '#E6B022',
+        description: 'Se déclarer pour vendre (forSale)',
+      },
+      {
+        id: 'experiences',
+        label: 'Catalogue',
+        iconType: 'home',
+        iconColor: '#E6B022',
+        description: 'Activités par ville · lettre J',
+      },
     ],
   },
   {
@@ -246,18 +285,18 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
 /** Sections réservées SuperAdmin / Admin (infra, pas PM client). */
 export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
   {
-    group: 'Partenaires',
+    group: 'Expériences',
     roles: ADMIN_ROLES,
     items: [
       {
         id: 'admin/partners',
-        label: 'Conciergerie partenaires',
+        label: 'Expériences',
         iconType: 'building',
         iconColor: '#E6B022',
-        description: 'Fiches partenaires + catalogue conciergerie (NOMMOS…)',
+        description: 'Fiches (liées à un owner) + catalogue',
         sub: [
-          { id: 'admin/partners/list', label: 'Fiches partenaires' },
-          { id: 'admin/partners/concierge', label: 'Conciergerie · services' },
+          { id: 'admin/partners/list', label: 'Fiches' },
+          { id: 'admin/partners/concierge', label: 'Catalogue' },
         ],
       },
     ],
@@ -276,6 +315,7 @@ export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
           { id: 'admin/channels/summary', label: 'Summary' },
           { id: 'admin/channels/business', label: 'Business' },
           { id: 'admin/channels/logapiru', label: 'LogApiRU' },
+          { id: 'admin/channels/logapimews', label: 'LogApiMews' },
           { id: 'admin/channels/debug', label: 'Debug' },
         ],
       },
@@ -522,6 +562,8 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Réservations: false,
   Task: false,
   Orchestration: false,
+  Expériences: false,
+  Providers: false,
   Annonces: false,
   'Inbox Guest': false,
   'Inbox Staff': false,
@@ -531,6 +573,7 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Équipe: true,
   Finances: true,
   Partenaires: false,
+  Providers: false,
   'Logs API': true,
   'Monitor & infra': true,
   Cost: true,

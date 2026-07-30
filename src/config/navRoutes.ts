@@ -1,6 +1,7 @@
 /** Mapping nav id → pathname (react-router). Source unique avec navConfig. */
 export const NAV_TO_ROUTE: Record<string, string> = {
   // Pilotage
+  'admin/owner-monitor': '/admin/owner-monitor',
   dashboard: '/dashboard',
   analytics: '/analytics',
   reports: '/reports',
@@ -46,6 +47,8 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   // Catalogue & revenue
   listings: '/listings',
   'listings/list': '/listings',
+  experiences: '/experiences',
+  providers: '/providers',
   'listings/mapping': '/listings/mapping',
   'listings/config': '/listings/orchestration-model',
   'listings/orchestration-model': '/listings/orchestration-model',
@@ -61,6 +64,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'admin/channels/business': '/admin/channels?tab=Business&biz=api&api=m',
   'admin/channels/debug': '/admin/channels?tab=Debug&type=pull',
   'admin/channels/logapiru': '/channels?tab=LogApiRU',
+  'admin/channels/logapimews': '/channels?tab=LogApiMews',
   'admin/channels/summary': '/admin/channels?tab=Sum',
   'admin/ChannelManager/channel-manager': '/admin/ChannelManager?tab=channel-manager',
   'admin/ChannelManager/distribution': '/admin/ChannelManager',
@@ -70,6 +74,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'comms/inbox': '/communications?section=guest&tab=whatsapp',
   'comms/guests': '/communications?section=guest&tab=whatsapp',
   'comms/booking': '/communications?section=staff&tab=booking',
+  'comms/conversations': '/communications?section=staff&tab=conversations',
   'comms/staff': '/communications?section=staff&tab=staff',
   'comms/admin': '/communications?section=staff&tab=admin',
   'comms/ota': '/communications?section=guest&tab=ota',

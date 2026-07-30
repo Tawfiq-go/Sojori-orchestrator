@@ -91,6 +91,8 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
     return 'pricing/portfolio';
   }
 
+  if (path.startsWith('/admin/owner-monitor')) return 'admin/owner-monitor';
+
   if (path.startsWith('/monitor') || path.startsWith('/admin/monitor')) {
     const tab = new URLSearchParams(search).get('tab') || 'Summary';
     const tabToNav: Record<string, string> = {
@@ -123,6 +125,8 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
     return 'admin/channels/business';
   }
 
+  if (path.startsWith('/providers')) return 'providers';
+  if (path.startsWith('/experiences')) return 'experiences';
   if (path.startsWith('/admin/pm-lifecycle')) return 'admin/pm-lifecycle';
   if (path.startsWith('/admin/partners')) {
     const tab = new URLSearchParams(search).get('tab');
