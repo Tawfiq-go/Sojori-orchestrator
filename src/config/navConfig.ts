@@ -285,7 +285,8 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
 /** Sections réservées SuperAdmin / Admin (infra, pas PM client). */
 export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
   {
-    group: 'Expériences',
+    // Distinct du groupe owner « Expériences » : même nom = clé React + état collapsed en collision.
+    group: 'Expériences · admin',
     roles: ADMIN_ROLES,
     items: [
       {
@@ -563,6 +564,7 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Task: false,
   Orchestration: false,
   Expériences: false,
+  'Expériences · admin': true,
   Providers: false,
   Annonces: false,
   'Inbox Guest': false,

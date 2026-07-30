@@ -530,7 +530,7 @@ export function AppSidebar({
           },
         },
       }}>
-        {navGroups.map((group) => {
+        {navGroups.map((group, groupIndex) => {
           const isCollapsed = collapsed[group.group] ?? true;
           const isCore = Boolean(group.core);
           const isTaskGroup = group.group === 'Task';
@@ -543,7 +543,7 @@ export function AppSidebar({
               ? `${taskIndicators.unassigned} tÃ¢che(s) non assignÃ©e(s), ${taskIndicators.overdue} en retard`
               : undefined;
           return (
-            <React.Fragment key={group.group}>
+            <React.Fragment key={`${group.group}-${groupIndex}`}>
               <Box
                 onClick={() => toggleGroup(group.group)}
                 sx={{
@@ -735,6 +735,7 @@ const OWNER_QUICK_ACTIONS = [
  */
 const ADMIN_QUICK_ACTIONS = [
   { emoji: '🛰️', label: 'LogApiRU', to: '/channels?tab=LogApiRU' },
+  { emoji: '🏨', label: 'LogApiMews', to: '/channels?tab=LogApiMews' },
   { emoji: '🏗️', label: 'Summary infra', to: '/monitor?tab=Infrastructure' },
 ];
 
@@ -2056,6 +2057,9 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISug
                     when={m.when || formatTime(m.timestamp)}
                     status={m.status}
                     readAt={m.readAt}
+                    translatedFr={m.translatedFr}
+                    translatedAry={m.translatedAry}
+                    originalText={m.originalText}
                   />
             )}
             {loading && messages.length > 0 && (
@@ -2152,8 +2156,19 @@ function DayLabel({ children }) {
   );
 }
 
-function Message({ from, text, when, status, readAt }) {
+function Message({ from, text, when, status, readAt, translatedFr, translatedAry, originalText }) {
   const you = from === 'you' || from === 'host';
+  // Original masqué par défaut (clic sur 🌐 plutôt que hover : le survol ne marche pas
+  // au doigt et se déclenche au scroll).
+  const [showOriginal, setShowOriginal] = React.useState(false);
+
+  const hasTranslation = Boolean(translatedFr || translatedAry);
+  // Le français prend la place du texte principal ; l'original passe dessous.
+  const mainText = translatedFr || text;
+  const original = originalText || text;
+  // Ne pas reproposer l'original s'il est identique à ce qui est déjà affiché
+  // (message déjà en français, ou traduction absente).
+  const originalDiffers = hasTranslation && original.trim() !== String(mainText || '').trim();
 
   return (
     <Box sx={{
@@ -2167,7 +2182,56 @@ function Message({ from, text, when, status, readAt }) {
       background: you ? 'linear-gradient(135deg,#fef9e7,#fdf3ce)' : t.bg1,
       border: '1px solid', borderColor: you ? 'rgba(230,176,34,0.25)' : t.border,
     }}>
-      {text}
+      {/* dir=auto : les messages mélangent souvent arabe et codes/chiffres latins. */}
+      <Box component="span" dir="auto" sx={{ display: 'block' }}>{mainText}</Box>
+
+      {/* Darija — présent mais discret (plus petit, atténué). */}
+      {translatedAry && (
+        <Box
+          dir="auto"
+          sx={{
+            mt: 0.75, pt: 0.75,
+            borderTop: `1px dashed ${t.border}`,
+            fontSize: 11.5, lineHeight: 1.6,
+            color: t.text3,
+          }}
+        >
+          {translatedAry}
+        </Box>
+      )}
+
+      {/* Original — révélé au clic. */}
+      {originalDiffers && (
+        <Box sx={{ mt: 0.75 }}>
+          <Box
+            component="button"
+            type="button"
+            onClick={() => setShowOriginal((v) => !v)}
+            sx={{
+              p: 0, border: 0, background: 'none', cursor: 'pointer',
+              fontFamily: 'Geist Mono', fontSize: 9.5, letterSpacing: 0.3,
+              color: t.text4, display: 'inline-flex', alignItems: 'center', gap: 0.5,
+              '&:hover': { color: t.text3, textDecoration: 'underline' },
+            }}
+          >
+            🌐 {showOriginal ? 'masquer l’original' : 'voir l’original'}
+          </Box>
+          {showOriginal && (
+            <Box
+              dir="auto"
+              sx={{
+                mt: 0.5, p: '6px 8px',
+                borderRadius: '6px',
+                bgcolor: t.bg2 || 'rgba(0,0,0,0.03)',
+                fontSize: 11.5, lineHeight: 1.55, color: t.text3,
+                fontStyle: 'italic',
+              }}
+            >
+              {original}
+            </Box>
+          )}
+        </Box>
+      )}
       {/* ✅ Status indicators + timestamp */}
       <Box sx={{
         fontSize: 9.5,
