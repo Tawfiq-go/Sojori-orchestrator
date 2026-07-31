@@ -181,6 +181,37 @@ export default function CalendarInventoryPage({
     if (!exists) setSelectedListingId(String(listings[0]._id));
   }, [view, listings, selectedListingId, setSelectedListingId]);
 
+  /**
+   * Libère un CalendarBlock (partagé vue simple + modal) :
+   * 1. métadonnée d'abord (retire blockId des jours) — si échec, on s'arrête et la dispo n'est pas touchée ;
+   * 2. réouverture dispo via le chemin existant (→ RU U=1, Channex) + refetch.
+   */
+  const releaseBlock = useCallback(
+    async (block, fromIso, toIso) => {
+      await calendarService.releaseCalendarBlock(String(block._id), {
+        dateFrom: fromIso,
+        dateTo: toIso,
+      });
+      await onUpdateInventory?.([
+        {
+          roomTypeId: String(block.roomTypeId),
+          date_from: fromIso,
+          date_to: toIso,
+          type: 'availability',
+          availableRoom: 1,
+        },
+        {
+          roomTypeId: String(block.roomTypeId),
+          date_from: fromIso,
+          date_to: toIso,
+          type: 'stopSell',
+          stopSell: false,
+        },
+      ]);
+    },
+    [onUpdateInventory],
+  );
+
   /** RoomTypes issus de l'inventaire du listing sélectionné (noms + capacité + jours). */
   const roomTypesForSelected = useMemo(() => {
     if (!selectedListingId) return [];
@@ -645,35 +676,7 @@ export default function CalendarInventoryPage({
           calendarBlocksById={calendarBlocksById}
           onCellsSelected={canWrite ? setModalCells : undefined}
           onOpenReservation={openReservationDrawer}
-          onReleaseBlock={
-            canWrite
-              ? async (block, fromIso, toIso) => {
-                  // 1. Métadonnée d'abord (retire blockId des jours) — si échec, on s'arrête
-                  //    et la dispo n'est pas touchée.
-                  await calendarService.releaseCalendarBlock(String(block._id), {
-                    dateFrom: fromIso,
-                    dateTo: toIso,
-                  });
-                  // 2. Réouverture dispo via le chemin existant (→ RU U=1, Channex) + refetch.
-                  await onUpdateInventory?.([
-                    {
-                      roomTypeId: String(block.roomTypeId),
-                      date_from: fromIso,
-                      date_to: toIso,
-                      type: 'availability',
-                      availableRoom: 1,
-                    },
-                    {
-                      roomTypeId: String(block.roomTypeId),
-                      date_from: fromIso,
-                      date_to: toIso,
-                      type: 'stopSell',
-                      stopSell: false,
-                    },
-                  ]);
-                }
-              : undefined
-          }
+          onReleaseBlock={canWrite ? releaseBlock : undefined}
           onCalendarImportReviewFinished={onCalendarImportReviewFinished}
           onCalendarImportReviewActivated={onCalendarImportReviewActivated}
         />
@@ -707,6 +710,8 @@ export default function CalendarInventoryPage({
         selectedCells={modalCells || []}
         currency={resolveSelectionCurrency(modalCells, listings, 'MAD')}
         inventoryData={inventoryData}
+        calendarBlocksById={calendarBlocksById}
+        onReleaseBlock={canWrite ? releaseBlock : undefined}
         listings={listings}
         onClose={() => setModalCells(null)}
         onSave={async (payloads) => {
