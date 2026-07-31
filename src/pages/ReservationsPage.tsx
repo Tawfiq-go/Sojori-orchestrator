@@ -8,6 +8,7 @@
 // ════════════════════════════════════════════════════════════════════
 
 import { useCallback, useEffect, useMemo, useState, startTransition, memo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Box, Stack, Typography, Paper, Chip, IconButton, Tooltip, Button,
   TextField, InputAdornment, FormControl, Select, MenuItem, Checkbox,
@@ -131,6 +132,49 @@ const TOOLBAR_SEARCH_SX = {
   maxWidth: 280,
   '& .MuiOutlinedInput-root': { height: 30, fontSize: 12 },
 } as const;
+
+function ListFullscreenEnterBtn({
+  onClick,
+  disabled = false,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      title="Liste plein écran"
+      aria-label="Liste plein écran"
+      disabled={disabled}
+      onClick={disabled ? undefined : onClick}
+      sx={{
+        all: 'unset',
+        boxSizing: 'border-box',
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 30,
+        height: 28,
+        borderRadius: '6px',
+        border: `1px solid ${T.borderStrong}`,
+        bgcolor: T.bg1,
+        color: disabled ? T.text4 : T.text2,
+        fontSize: 15,
+        fontWeight: 600,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontFamily: 'inherit',
+        lineHeight: 1,
+        opacity: disabled ? 0.5 : 1,
+        boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
+        '&:hover': disabled ? {} : { bgcolor: T.bg2, borderColor: T.primary, color: T.primaryDeep },
+      }}
+    >
+      ⛶
+    </Box>
+  );
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────
 const isReservationCancelled = (status: string) => {
@@ -996,9 +1040,11 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
+  // Élévation calquée sur la colonne Listing du calendrier multi :
+  // liseré net + ombre permanente, approfondie pendant le scroll.
   const pinnedShadow = hScrolled
-    ? '6px 0 12px -2px rgba(20,17,10,0.20), 1px 0 0 rgba(20,17,10,0.10)'
-    : '2px 0 4px rgba(20,17,10,0.06)';
+    ? `inset -1px 0 0 ${T.borderStrong}, 8px 0 16px -2px rgba(20,17,10,0.28)`
+    : `inset -1px 0 0 ${T.borderStrong}, 3px 0 8px rgba(20,17,10,0.10)`;
 
   return (
     <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.5, overflow: 'hidden' }}>
