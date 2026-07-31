@@ -62,6 +62,9 @@ export function sanitizeInventoryUpdatePayload(item) {
 export default function UpdateInventoryModal({
   open, onClose, dpEnabled = true, selectedCells = [], currency = 'MAD', inventoryData = {}, listings = [], onSave,
   sojoriMinStayByDate = {},
+  calendarBlocksById = {},
+  /** Libère un CalendarBlock (métadonnée + réouverture dispo + refetch) : (block, fromIso, toIso) => Promise */
+  onReleaseBlock,
 }) {
   const [step, setStep] = useState('form'); // 'form' | 'confirm'
   const [error, setError] = useState(null);
@@ -205,6 +208,54 @@ export default function UpdateInventoryModal({
     if (form.availability !== '' && +form.availability === 0) return true;
     return false;
   }, [form.stopSell, form.availability]);
+
+  /** L'action en cours rouvre-t-elle des jours ? (règle « rouvrir = libérer ») */
+  const isReopeningAction = useMemo(() => {
+    if (form.stopSell === false) return true;
+    if (form.availability !== '' && +form.availability > 0) return true;
+    return false;
+  }, [form.stopSell, form.availability]);
+
+  /**
+   * Blocs (CalendarBlock) présents sur la sélection : [{block, days: [iso…]}].
+   * days = jours sélectionnés portant ce blockId — sert au bouton « Libérer la sélection »
+   * et à la libération auto quand on rouvre.
+   */
+  const blocksInSelection = useMemo(() => {
+    if (!selectedCells.length) return [];
+    const byBlock = new Map();
+    selectedCells.forEach((cell) => {
+      const inv = inventoryData[cell.listingId]?.[cell.roomTypeId]?.availability?.[cell.dateStr];
+      const blockId = inv?.blockId ? String(inv.blockId) : null;
+      if (!blockId) return;
+      const block = calendarBlocksById[blockId];
+      if (!block) return;
+      const entry = byBlock.get(blockId) || { block, days: [] };
+      entry.days.push(cell.dateStr);
+      byBlock.set(blockId, entry);
+    });
+    return [...byBlock.values()].map((e) => ({ ...e, days: [...new Set(e.days)].sort() }));
+  }, [selectedCells, inventoryData, calendarBlocksById]);
+
+  const [releasing, setReleasing] = useState(false);
+
+  const handleReleaseBlock = async (block, fromIso, toIso, label) => {
+    if (!onReleaseBlock || releasing) return;
+    const ok = window.confirm(
+      `Libérer ${label} (${fromIso} → ${toIso}) ?\n\nLes dates seront rouvertes à la vente, OTAs incluses.`,
+    );
+    if (!ok) return;
+    setReleasing(true);
+    setError(null);
+    try {
+      await onReleaseBlock(block, fromIso, toIso);
+      onClose?.();
+    } catch (e) {
+      setError(e?.message || 'Échec de la libération');
+    } finally {
+      setReleasing(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) {
@@ -367,6 +418,20 @@ export default function UpdateInventoryModal({
   const handleConfirm = async () => {
     setLoading(true);
     try {
+      // Règle « rouvrir = libérer » : si on remet des jours en vente alors qu'ils
+      // portent un blockId, on libère la métadonnée du bloc pour ces jours AVANT
+      // la dispo — sinon le bloc reste « actif » en base sur des jours rouverts.
+      // Non bloquant : si échec, la dispo rouvre quand même (métadonnée stale, sans impact OTA).
+      if (isReopeningAction && blocksInSelection.length > 0) {
+        await Promise.all(blocksInSelection.map(({ block, days }) =>
+          calendarService.releaseCalendarBlock(String(block._id), {
+            dateFrom: days[0],
+            dateTo: days[days.length - 1],
+          }).catch(err => {
+            console.error('Libération métadonnée bloc échouée (non bloquant):', err?.message || err);
+          }),
+        ));
+      }
       // Métadonnée CalendarBlock (titre/note/auteur) AVANT la dispo : le refetch
       // d'inventaire déclenché par onSave récupère ainsi les blockId déjà posés.
       // Non bloquant : si échec, la dispo est quand même bloquée par onSave
@@ -674,6 +739,69 @@ export default function UpdateInventoryModal({
                   <p style={{ fontSize: 11, color: T.text3, margin: '6px 0 0', lineHeight: 1.45 }}>
                     Le titre apparaîtra comme une réservation dans le planning ; la note et votre
                     nom seront visibles au clic sur le blocage.
+                  </p>
+                </Section>
+              )}
+
+              {blocksInSelection.length > 0 && (
+                <Section label={`Blocage${blocksInSelection.length > 1 ? 's' : ''} sur la sélection`}>
+                  {blocksInSelection.map(({ block, days }) => {
+                    const bFrom = String(block.dateFrom).slice(0, 10);
+                    const bTo = String(block.dateTo).slice(0, 10);
+                    const selFrom = days[0];
+                    const selTo = days[days.length - 1];
+                    const isWholeBlock = selFrom === bFrom && selTo === bTo;
+                    const relBtnStyle = {
+                      width: '100%', marginTop: 6, padding: '8px 10px', borderRadius: 8,
+                      border: '1px solid rgba(220,38,38,0.8)', background: 'transparent',
+                      color: 'rgba(220,38,38,0.95)', fontSize: 11.5, fontWeight: 800,
+                      cursor: releasing ? 'wait' : 'pointer', fontFamily: 'inherit',
+                      opacity: releasing ? 0.6 : 1,
+                    };
+                    return (
+                      <div key={String(block._id)} style={{
+                        padding: '8px 10px', borderRadius: 9, marginBottom: 8,
+                        background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.25)',
+                      }}>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: 'rgba(220,38,38,0.95)' }}>
+                          🚫 {block.title}
+                        </div>
+                        {block.note ? (
+                          <div style={{ fontSize: 11, color: T.text2, lineHeight: 1.4, marginTop: 2, whiteSpace: 'pre-wrap' }}>
+                            {block.note}
+                          </div>
+                        ) : null}
+                        <div style={{ fontSize: 10.5, color: T.text3, marginTop: 3, fontFamily: '"Geist Mono", monospace' }}>
+                          {bFrom} → {bTo}
+                          {block.createdBy?.name ? ` · par ${block.createdBy.name}` : ''}
+                        </div>
+                        {onReleaseBlock ? (
+                          <>
+                            {!isWholeBlock ? (
+                              <button
+                                type="button"
+                                disabled={releasing}
+                                onClick={() => handleReleaseBlock(block, selFrom, selTo, `les jours sélectionnés`)}
+                                style={relBtnStyle}
+                              >
+                                🔓 Libérer la sélection ({selFrom === selTo ? selFrom : `${selFrom} → ${selTo}`})
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              disabled={releasing}
+                              onClick={() => handleReleaseBlock(block, bFrom, bTo, 'tout le blocage')}
+                              style={relBtnStyle}
+                            >
+                              🔓 Libérer tout le blocage
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  <p style={{ fontSize: 10.5, color: T.text3, margin: '2px 0 0', lineHeight: 1.4 }}>
+                    Astuce : remettre ces jours en « Dispo ✅ » libère aussi le blocage automatiquement.
                   </p>
                 </Section>
               )}
