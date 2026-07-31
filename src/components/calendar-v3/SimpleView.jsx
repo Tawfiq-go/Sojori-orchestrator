@@ -1019,7 +1019,7 @@ function PanelRow({ label, value, color, strong }) {
   );
 }
 
-function DaySidePanel({ selected, focusIso, inventories, currency, onModify, onClose, dpEnabled = true }) {
+function DaySidePanel({ selected, focusIso, inventories, calendarBlocksById = {}, currency, onModify, onClose, dpEnabled = true }) {
   const [tab, setTab] = useState('infos');
   const sorted = useMemo(() => [...selected].sort(), [selected]);
   const inv = inventories[focusIso];
