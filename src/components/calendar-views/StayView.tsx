@@ -1804,15 +1804,16 @@ function ListingRowComp({
               r.lastOta?.text ||
               (r.lastOta?.count || 0) > 0,
           );
+          const isBlockRow = r.kind === 'block';
           return (
             <Box
               key={r.reservationId}
               onClick={
-                onReservationClick
+                onReservationClick && !isBlockRow
                   ? () => onReservationClick(r, listingCtx)
                   : undefined
               }
-              sx={{ pointerEvents: 'auto', cursor: onReservationClick ? 'pointer' : 'default' }}
+              sx={{ pointerEvents: 'auto', cursor: onReservationClick && !isBlockRow ? 'pointer' : 'default' }}
             >
               <GanttBar
                 channel={channel}
@@ -1834,8 +1835,11 @@ function ListingRowComp({
                 listingName={
                   listing.parentListingName || listing.listingName
                 }
+                isBlock={isBlockRow}
+                blockNote={r.blockNote}
+                blockAuthor={r.blockAuthor}
               />
-              {showMessageSnippets && !checkoutStubOnly && (
+              {showMessageSnippets && !checkoutStubOnly && !isBlockRow && (
                 <Box
                   sx={{
                     position: 'absolute',

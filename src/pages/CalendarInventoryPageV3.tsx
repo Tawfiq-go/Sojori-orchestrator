@@ -9,7 +9,7 @@ import { Box, Button, Stack, Typography } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import listingsService from '../services/listingsService';
-import calendarService from '../services/calendarService';
+import calendarService, { type CalendarBlockDto } from '../services/calendarService';
 import type { Listing as ListingType } from '../types/listings.types';
 import CalendarInventoryPage from '../components/calendar-v3/CalendarInventoryPage.jsx';
 import {
@@ -68,6 +68,9 @@ export function CalendarInventoryPageV3() {
   const multiLoadedDaysRef = useRef<Map<string, Set<string>>>(new Map());
   const [dpSyncSummary, setDpSyncSummary] = useState<PortfolioApplySyncSummaryDto | null>(null);
   const [dpSyncLoading, setDpSyncLoading] = useState(false);
+  /** Métadonnées des blocages (titre/note/auteur) par blockId — chargées en fond, jamais bloquant. */
+  const [calendarBlocksById, setCalendarBlocksById] = useState<Record<string, CalendarBlockDto>>({});
+  const [blocksRefreshKey, setBlocksRefreshKey] = useState(0);
 
   /**
    * Simple : inchangé (mois / load-more).
@@ -208,6 +211,36 @@ export function CalendarInventoryPageV3() {
     });
     return m;
   }, [listings]);
+
+  /**
+   * Blocages (métadonnées) — fetch "smart" : en fond, après le paint inventaire,
+   * getCalendarBlocks retourne [] sur erreur → l'affichage se dégrade en
+   * "Bloqué" générique sans jamais casser ni ralentir le calendrier.
+   */
+  useEffect(() => {
+    if (inventoryListingIds.length === 0) {
+      setCalendarBlocksById({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const blocks = await calendarService.getCalendarBlocks(
+        inventoryListingIds,
+        fetchRange.from,
+        fetchRange.to,
+        'active',
+      );
+      if (cancelled) return;
+      const map: Record<string, CalendarBlockDto> = {};
+      blocks.forEach((b) => {
+        map[b._id] = b;
+      });
+      setCalendarBlocksById(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [inventoryListingIds.join(','), fetchRange.from, fetchRange.to, blocksRefreshKey]);
 
   const applyRoomTypeDefaults = useCallback((listingIds: string[], processed: ProcessedInventoryData) => {
     setRoomTypeByListing((prev) => {
@@ -401,6 +434,7 @@ export function CalendarInventoryPageV3() {
         photoColor: listing.photoColor || '#fde68a',
         photoColorDeep: listing.photoColorDeep || '#d97706',
         roomTypeId: roomTypeByListing[listing._id] || 'default',
+        calendarImportReview: listing.calendarImportReview || null,
       })),
     [listings, roomTypeByListing],
   );
@@ -459,6 +493,8 @@ export function CalendarInventoryPageV3() {
       merge: !simpleMode,
       silent: false,
     });
+    // Recharge les métadonnées de blocage (un bloc a pu être créé/libéré).
+    setBlocksRefreshKey((k) => k + 1);
   };
 
   const handleDateChange = (newDate: Date) => {
@@ -519,6 +555,7 @@ export function CalendarInventoryPageV3() {
         listingCatalog={listingCatalog}
         inventoriesByListing={inventoriesByListing}
         inventoryData={inventoryData}
+        calendarBlocksById={calendarBlocksById}
         inventoryLoading={inventoryLoading || listingsLoading}
         defaultView="multi"
         simpleMonthsCount={simpleMonths}
@@ -528,6 +565,40 @@ export function CalendarInventoryPageV3() {
         dpSyncSummary={dpSyncSummary}
         dpSyncLoading={dpSyncLoading}
         listingNameById={listingNameById}
+        onCalendarImportReviewFinished={(listingId: string) => {
+          setListings((prev) =>
+            prev.map((l) =>
+              String(l._id) === String(listingId)
+                ? {
+                    ...l,
+                    calendarImportReview: {
+                      ...(l.calendarImportReview || {}),
+                      active: false,
+                      completedAt: new Date().toISOString(),
+                    },
+                  }
+                : l,
+            ),
+          );
+        }}
+        onCalendarImportReviewActivated={(listingId: string, data?: { active?: boolean; startedAt?: string | null }) => {
+          setListings((prev) =>
+            prev.map((l) =>
+              String(l._id) === String(listingId)
+                ? {
+                    ...l,
+                    calendarImportReview: {
+                      ...(l.calendarImportReview || {}),
+                      ...(data || {}),
+                      active: true,
+                      startedAt: data?.startedAt || new Date().toISOString(),
+                      completedAt: null,
+                    },
+                  }
+                : l,
+            ),
+          );
+        }}
       />
     </DashboardWrapper>
   );

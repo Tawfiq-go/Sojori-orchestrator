@@ -44,6 +44,7 @@ export function processInventoryResponse(inventory: unknown[]): ProcessedInvento
               applyManual: day.applyManual,
               priceMode: day.priceMode,
               stopSell: day.stopSell,
+              blockId: day.blockId || null,
               useDynamicPrice: day.useDynamicPrice,
               setUseDynamicPriceManual: day.setUseDynamicPriceManual,
               minStay: day.min_stay_arrival,

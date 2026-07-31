@@ -15,6 +15,11 @@ import AuditBlockedDaysModal from './AuditBlockedDaysModal';
 import { TooltipBody } from './TooltipBreakdown';
 import { normalizeCalendarReservations } from './reservationCalendarUtils';
 import calendarService from '../../services/calendarService';
+import {
+  activateListingCalendarImportReview,
+  finishListingCalendarImportReview,
+  isCalendarImportReviewActive,
+} from '../../services/calendarImportReviewService';
 
 const WEEKDAYS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
 const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
@@ -66,8 +71,11 @@ export default function SimpleView({
   onLoadMoreMonths,
   inventoryLoading = false,
   inventories = {},
+  calendarBlocksById = {},
   onCellsSelected,
   onOpenReservation,
+  onCalendarImportReviewFinished,
+  onCalendarImportReviewActivated,
 }) {
   const todayIso = toIso(new Date());
 
@@ -142,10 +150,43 @@ export default function SimpleView({
 
   /* ─── Audit jours bloqués sans réservation ─── */
   const [auditOpen, setAuditOpen] = useState(false);
-  const [auditResult, setAuditResult] = useState({ loading: false, error: null, roomTypes: [] });
+  const [auditResult, setAuditResult] = useState({
+    loading: false, error: null, roomTypes: [], postImportAudit: null,
+  });
+  const [finishingCalendarImport, setFinishingCalendarImport] = useState(false);
+  const [activatingCalendarImport, setActivatingCalendarImport] = useState(false);
+  const calendarReviewActive = isCalendarImportReviewActive(listing);
   const handleAuditClick = () => {
     setAuditOpen(true);
-    setAuditResult({ loading: true, error: null, roomTypes: [] });
+    setAuditResult({ loading: true, error: null, roomTypes: [], postImportAudit: null });
+  };
+  const handleFinishCalendarImport = async () => {
+    if (!listing?._id || finishingCalendarImport) return;
+    setFinishingCalendarImport(true);
+    try {
+      await finishListingCalendarImportReview(String(listing._id));
+      onCalendarImportReviewFinished?.(String(listing._id));
+    } catch (err) {
+      window.alert(err?.message || 'Impossible de finir l’import calendrier');
+    } finally {
+      setFinishingCalendarImport(false);
+    }
+  };
+  const handleActivateCalendarImport = async () => {
+    if (!listing?._id || activatingCalendarImport) return;
+    const ok = window.confirm(
+      'Passer en mode Import calendrier ?\n\n• Prix non modifiables\n• Pas de publication canaux tant que vous n’avez pas fini l’import',
+    );
+    if (!ok) return;
+    setActivatingCalendarImport(true);
+    try {
+      const data = await activateListingCalendarImportReview(String(listing._id));
+      onCalendarImportReviewActivated?.(String(listing._id), data);
+    } catch (err) {
+      window.alert(err?.response?.data?.error || err?.message || 'Impossible d’activer le mode Import');
+    } finally {
+      setActivatingCalendarImport(false);
+    }
   };
   useEffect(() => {
     if (!auditOpen || !auditResult.loading) return;
@@ -154,9 +195,23 @@ export default function SimpleView({
     (async () => {
       try {
         const result = await calendarService.auditBlockedDays(listing._id, roomTypeId);
-        if (!cancelled) setAuditResult({ loading: false, error: null, roomTypes: result.roomTypes });
+        if (!cancelled) {
+          setAuditResult({
+            loading: false,
+            error: null,
+            roomTypes: result.roomTypes,
+            postImportAudit: result.postImportAudit || null,
+          });
+        }
       } catch (err) {
-        if (!cancelled) setAuditResult({ loading: false, error: err?.message || 'Erreur inconnue', roomTypes: [] });
+        if (!cancelled) {
+          setAuditResult({
+            loading: false,
+            error: err?.message || 'Erreur inconnue',
+            roomTypes: [],
+            postImportAudit: null,
+          });
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -215,15 +270,59 @@ export default function SimpleView({
             padding: '7px 14px', borderBottom: `1px solid ${T.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
           }}>
-            <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <h3 style={{
+              margin: 0, fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.01em',
+              display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
+              color: calendarReviewActive ? '#b91c1c' : 'inherit',
+            }}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {headerTitle}
               </span>
               {headerSubtitle ? (
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: T.text3, flexShrink: 0 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: calendarReviewActive ? '#b91c1c' : T.text3, flexShrink: 0 }}>
                   · {headerSubtitle}
                 </span>
               ) : null}
+              {calendarReviewActive ? (
+                <button
+                  type="button"
+                  title="Ouvrir l’analyse import — Oui/Non pour sortir du mode Import dans la popup"
+                  onClick={handleAuditClick}
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    color: '#fff',
+                    background: '#b91c1c',
+                    border: 0,
+                    borderRadius: 7,
+                    padding: '4px 9px',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  Revue import
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  title="Passer en mode Import calendrier — prix non modifiables, pas de push canal"
+                  disabled={activatingCalendarImport}
+                  onClick={handleActivateCalendarImport}
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    color: '#b91c1c',
+                    background: 'rgba(185,28,28,0.08)',
+                    border: '1px solid rgba(185,28,28,0.28)',
+                    borderRadius: 7,
+                    padding: '4px 9px',
+                    cursor: activatingCalendarImport ? 'wait' : 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  {activatingCalendarImport ? '…' : 'Mode Import'}
+                </button>
+              )}
               {isRoomTypeRail ? (
                 <a
                   href={`/calendar?view=multi`}
@@ -238,17 +337,35 @@ export default function SimpleView({
               ) : null}
               <button
                 type="button"
-                title="Audit disponibilité — bloqué sans résa OU résa confirmée encore disponible (365 j.)"
+                title={calendarReviewActive
+                  ? 'Revue calendrier post-import — overbooking, prix, jours bloqués'
+                  : 'Audit disponibilité — bloqué sans résa OU résa confirmée encore disponible (365 j.)'}
                 onClick={handleAuditClick}
                 style={{
-                  background: 'none', border: 0, padding: '0 2px', flexShrink: 0,
-                  color: T.text4, fontSize: 10, fontWeight: 600, cursor: 'pointer', lineHeight: 1,
-                  opacity: 0.7, transition: 'opacity 0.15s, color 0.15s',
+                  background: calendarReviewActive ? 'rgba(185,28,28,0.08)' : 'none',
+                  border: calendarReviewActive ? '1px solid rgba(185,28,28,0.28)' : 0,
+                  borderRadius: calendarReviewActive ? 7 : 0,
+                  padding: calendarReviewActive ? '3px 8px' : '0 2px',
+                  flexShrink: 0,
+                  color: calendarReviewActive ? '#b91c1c' : T.text4,
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer', lineHeight: 1,
+                  opacity: calendarReviewActive ? 1 : 0.7,
+                  transition: 'opacity 0.15s, color 0.15s',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = T.primary; }}
-                onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.color = T.text4; }}
+                onMouseEnter={(e) => {
+                  if (!calendarReviewActive) {
+                    e.currentTarget.style.opacity = '1';
+                    e.currentTarget.style.color = T.primary;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!calendarReviewActive) {
+                    e.currentTarget.style.opacity = '0.7';
+                    e.currentTarget.style.color = T.text4;
+                  }
+                }}
               >
-                ▶ audit
+                {calendarReviewActive ? '▶ revue cal.' : '▶ audit'}
               </button>
             </h3>
             <div style={{ display: 'flex', gap: 14, fontSize: 10.5, color: T.text3, flexShrink: 0 }}>
@@ -304,6 +421,7 @@ export default function SimpleView({
           selected={selected}
           focusIso={focusIso || selected[selected.length - 1]}
           inventories={inventories}
+          calendarBlocksById={calendarBlocksById}
           currency={currency}
           onModify={commitSelection}
           onClose={clearSelection}
@@ -318,6 +436,10 @@ export default function SimpleView({
         loading={auditResult.loading}
         error={auditResult.error}
         roomTypes={auditResult.roomTypes}
+        postImportAudit={auditResult.postImportAudit}
+        calendarReviewActive={calendarReviewActive}
+        onFinishCalendarImport={calendarReviewActive ? handleFinishCalendarImport : undefined}
+        finishingCalendarImport={finishingCalendarImport}
         onRelease={async (range) => {
           const roomTypeId = range.roomTypeId || listing.roomTypeId || listing.roomTypes?.[0]?._id;
           if (!roomTypeId) throw new Error('Room type introuvable');
@@ -328,12 +450,42 @@ export default function SimpleView({
             listingName: listing.name || '',
             roomTypeName: range.roomTypeName || '',
           };
-          // Rouvre à la vente : dispo 1 + stop-sell levé → publié vers les canaux
           await calendarService.updateCalendar([
             { ...base, type: 'availability', availableRoom: 1 },
             { ...base, type: 'stopSell', stopSell: false },
           ]);
           setAuditResult((s) => ({ ...s, loading: true }));
+        }}
+        onBlockForReservation={async (range) => {
+          const roomTypeId = range.roomTypeId || listing.roomTypeId || listing.roomTypes?.[0]?._id;
+          if (!roomTypeId) throw new Error('Room type introuvable');
+          const base = {
+            roomTypeId: String(roomTypeId),
+            date_from: range.from,
+            date_to: range.to,
+            listingName: listing.name || '',
+            roomTypeName: range.roomTypeName || '',
+          };
+          await calendarService.updateCalendar([
+            { ...base, type: 'availability', availableRoom: 0 },
+            { ...base, type: 'stopSell', stopSell: false },
+          ]);
+          setAuditResult((s) => ({ ...s, loading: true }));
+        }}
+        onFixPrice={async (row) => {
+          const roomTypeId = row.roomTypeId || listing.roomTypeId || listing.roomTypes?.[0]?._id;
+          if (!roomTypeId) throw new Error('Room type introuvable');
+          await calendarService.updateCalendar([
+            {
+              roomTypeId: String(roomTypeId),
+              date_from: row.date,
+              date_to: row.date,
+              listingName: listing.name || '',
+              roomTypeName: row.roomTypeName || '',
+              type: 'manualPrice',
+              price: Number(row.newPrice),
+            },
+          ]);
         }}
       />
     </div>
@@ -514,6 +666,7 @@ function ListingRail({ listings, selectedId, onSelect, tooltipSecondaryLabel }) 
       {listings.map((l) => {
         const id = String(l._id);
         const active = String(selectedId) === id;
+        const reviewActive = isCalendarImportReviewActive(l);
         return (
           <button
             key={id}
@@ -524,12 +677,16 @@ function ListingRail({ listings, selectedId, onSelect, tooltipSecondaryLabel }) 
               setHovered({ id, top: r.top + r.height / 2, left: r.right + 10 });
             }}
             onMouseLeave={() => setHovered((h) => (h?.id === id ? null : h))}
-            aria-label={l.name}
+            aria-label={reviewActive ? `${l.name} — import calendrier à finir` : l.name}
             style={{
               width: RAIL_THUMB, height: RAIL_THUMB, padding: 0, borderRadius: 12, overflow: 'hidden',
               cursor: 'pointer', display: 'block',
-              border: active ? `2px solid ${T.text}` : `1px solid ${T.border}`,
-              boxShadow: active ? '0 0 0 2px rgba(20,17,10,0.10)' : 'none',
+              border: reviewActive
+                ? '2px solid #b91c1c'
+                : (active ? `2px solid ${T.text}` : `1px solid ${T.border}`),
+              boxShadow: reviewActive
+                ? '0 0 0 2px rgba(185,28,28,0.25)'
+                : (active ? '0 0 0 2px rgba(20,17,10,0.10)' : 'none'),
               opacity: active ? 1 : 0.75,
               transform: active ? 'scale(1.04)' : 'scale(1)',
               transition: 'all 0.15s',
@@ -564,12 +721,16 @@ function ListingRail({ listings, selectedId, onSelect, tooltipSecondaryLabel }) 
         return (
           <div style={{
             position: 'fixed', left: hovered.left, top: hovered.top, transform: 'translateY(-50%)',
-            background: T.text, color: '#fff', padding: '6px 11px', borderRadius: 9,
+            background: isCalendarImportReviewActive(l) ? '#b91c1c' : T.text, color: '#fff', padding: '6px 11px', borderRadius: 9,
             fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', zIndex: 80,
             boxShadow: '0 6px 20px rgba(20,17,10,0.25)', pointerEvents: 'none',
           }}>
             {l.name}
-            {secondary ? <span style={{ fontWeight: 500, opacity: 0.7 }}> · {secondary}</span> : null}
+            {isCalendarImportReviewActive(l) ? (
+              <span style={{ fontWeight: 500, opacity: 0.9 }}> · import calendrier à finir</span>
+            ) : secondary ? (
+              <span style={{ fontWeight: 500, opacity: 0.7 }}> · {secondary}</span>
+            ) : null}
           </div>
         );
       })()}
@@ -954,6 +1115,29 @@ function DaySidePanel({ selected, focusIso, inventories, currency, onModify, onC
               value={inv.stopSell ? '🚫 Stop sell' : `${inv.availableRoom ?? '—'} dispo`}
               color={inv.stopSell ? T.error : (inv.availableRoom ?? 1) <= 0 ? T.warning : T.success}
             />
+            {(() => {
+              const dayBlock = inv.blockId ? calendarBlocksById[String(inv.blockId)] : null;
+              if (!dayBlock) return null;
+              return (
+                <div style={{
+                  margin: '4px 0 2px', padding: '8px 10px', borderRadius: 9,
+                  background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.25)',
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: T.error, marginBottom: 2 }}>
+                    🚫 {dayBlock.title}
+                  </div>
+                  {dayBlock.note ? (
+                    <div style={{ fontSize: 11.5, color: T.text2, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
+                      {dayBlock.note}
+                    </div>
+                  ) : null}
+                  <div style={{ fontSize: 10.5, color: T.text3, marginTop: 4 }}>
+                    Bloqué par {dayBlock.createdBy?.name || '—'}
+                    {dayBlock.createdAt ? ` · ${new Date(dayBlock.createdAt).toLocaleDateString('fr-FR')}` : ''}
+                  </div>
+                </div>
+              );
+            })()}
             {(inv.reservations?.length ?? 0) > 0 && (
               <PanelRow label="Réservations" value={String(inv.reservations.length)} color={T.info} />
             )}
