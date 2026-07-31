@@ -829,7 +829,7 @@ function ListingRail({ listings, selectedId, onSelect, tooltipSecondaryLabel }) 
 
 /* ════════════════ Grille d'un mois ════════════════ */
 
-function MonthGrid({ year, month, inventories, todayIso, currency, selected, onToggleDay, onOpenReservation }) {
+function MonthGrid({ year, month, inventories, todayIso, currency, selected, showReservations = true, onToggleDay, onOpenReservation }) {
   const first = new Date(year, month, 1);
   const offset = (first.getDay() + 6) % 7; // Lun = 0
   const lastDay = new Date(year, month + 1, 0).getDate();
