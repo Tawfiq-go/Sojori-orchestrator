@@ -74,6 +74,8 @@ export default function SimpleView({
   calendarBlocksById = {},
   onCellsSelected,
   onOpenReservation,
+  /** Libère un CalendarBlock (métadonnée + réouverture dispo) : (block, fromIso, toIso) => Promise */
+  onReleaseBlock,
   onCalendarImportReviewFinished,
   onCalendarImportReviewActivated,
 }) {
@@ -425,6 +427,7 @@ export default function SimpleView({
           currency={currency}
           onModify={commitSelection}
           onClose={clearSelection}
+          onReleaseBlock={onReleaseBlock}
         />
       )}
 
@@ -1019,7 +1022,9 @@ function PanelRow({ label, value, color, strong }) {
   );
 }
 
-function DaySidePanel({ selected, focusIso, inventories, calendarBlocksById = {}, currency, onModify, onClose, dpEnabled = true }) {
+function DaySidePanel({ selected, focusIso, inventories, calendarBlocksById = {}, currency, onModify, onClose, onReleaseBlock, dpEnabled = true }) {
+  const [releasing, setReleasing] = useState(false);
+  const [releaseError, setReleaseError] = useState(null);
   const [tab, setTab] = useState('infos');
   const sorted = useMemo(() => [...selected].sort(), [selected]);
   const inv = inventories[focusIso];
@@ -1118,6 +1123,35 @@ function DaySidePanel({ selected, focusIso, inventories, calendarBlocksById = {}
             {(() => {
               const dayBlock = inv.blockId ? calendarBlocksById[String(inv.blockId)] : null;
               if (!dayBlock) return null;
+              const bFrom = String(dayBlock.dateFrom).slice(0, 10);
+              const bTo = String(dayBlock.dateTo).slice(0, 10);
+              const selMin = sorted[0];
+              const selMax = sorted[sorted.length - 1];
+              const selectionInsideBlock = selMin >= bFrom && selMax <= bTo;
+              const isPartialSelection = selectionInsideBlock && (selMin !== bFrom || selMax !== bTo);
+              const doRelease = async (fromIso, toIso, label) => {
+                if (!onReleaseBlock || releasing) return;
+                const ok = window.confirm(
+                  `Libérer ${label} (${fromIso} → ${toIso}) ?\n\nLes dates seront rouvertes à la vente, OTAs incluses.`,
+                );
+                if (!ok) return;
+                setReleasing(true);
+                setReleaseError(null);
+                try {
+                  await onReleaseBlock(dayBlock, fromIso, toIso);
+                  onClose?.();
+                } catch (e) {
+                  setReleaseError(e?.message || 'Échec de la libération');
+                } finally {
+                  setReleasing(false);
+                }
+              };
+              const relBtnStyle = {
+                width: '100%', marginTop: 6, padding: '8px 10px', borderRadius: 8,
+                border: `1px solid ${T.error}`, background: 'transparent', color: T.error,
+                fontSize: 11.5, fontWeight: 800, cursor: releasing ? 'wait' : 'pointer',
+                fontFamily: 'inherit', opacity: releasing ? 0.6 : 1,
+              };
               return (
                 <div style={{
                   margin: '4px 0 2px', padding: '8px 10px', borderRadius: 9,
@@ -1134,7 +1168,35 @@ function DaySidePanel({ selected, focusIso, inventories, calendarBlocksById = {}
                   <div style={{ fontSize: 10.5, color: T.text3, marginTop: 4 }}>
                     Bloqué par {dayBlock.createdBy?.name || '—'}
                     {dayBlock.createdAt ? ` · ${new Date(dayBlock.createdAt).toLocaleDateString('fr-FR')}` : ''}
+                    {` · ${bFrom} → ${bTo}`}
                   </div>
+                  {onReleaseBlock ? (
+                    <>
+                      {isPartialSelection ? (
+                        <button
+                          type="button"
+                          disabled={releasing}
+                          onClick={() => doRelease(selMin, selMax, `les ${sorted.length > 1 ? `${sorted.length} jours sélectionnés` : 'le jour sélectionné'}`)}
+                          style={relBtnStyle}
+                        >
+                          🔓 Libérer la sélection ({selMin === selMax ? selMin : `${selMin} → ${selMax}`})
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={releasing}
+                        onClick={() => doRelease(bFrom, bTo, 'tout le blocage')}
+                        style={relBtnStyle}
+                      >
+                        🔓 Libérer tout le blocage
+                      </button>
+                      {releaseError ? (
+                        <div style={{ fontSize: 10.5, color: T.error, marginTop: 4, fontWeight: 700 }}>
+                          {releaseError}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
                 </div>
               );
             })()}
