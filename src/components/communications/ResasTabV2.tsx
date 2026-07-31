@@ -15,6 +15,7 @@ import StayView from '../calendar-views/StayView';
 import type { ListingRow, TimelineItem } from '../calendar-views/_shared';
 import reservationsService from '../../services/reservationsService';
 import listingsService from '../../services/listingsService';
+import calendarService, { type CalendarBlockDto } from '../../services/calendarService';
 import { usePmTasksScope } from '../../hooks/usePmTasksScope';
 import cleanlinessService from '../../services/cleanlinessService';
 import type { DisplayCleanliness } from '../../utils/cleanlinessDisplay';
@@ -155,6 +156,8 @@ export default function ResasTabV2() {
     return getCachedPlanningListings(listingsCacheKey) ?? [];
   });
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  /** Blocages calendrier (métadonnées) — chargés en fond APRÈS les résas, jamais bloquant. */
+  const [calendarBlocks, setCalendarBlocks] = useState<CalendarBlockDto[]>([]);
   const [taskTimelineByKey, setTaskTimelineByKey] = useState<Map<string, TimelineItem[]>>(
     () => new Map(),
   );
@@ -364,6 +367,29 @@ export default function ResasTabV2() {
     void fetchWindowData();
   }, [startDate, calendarReady, fetchWindowData]);
 
+  /**
+   * Blocages calendrier — fetch "smart" : APRÈS le rendu des résas (calendarReady),
+   * non bloquant (getCalendarBlocks → [] sur erreur). Le planning affiche donc
+   * toujours les résas, avec ou sans les blocs.
+   */
+  useEffect(() => {
+    if (!calendarReady) return;
+    const ids = activeListings.map((l) => String(l.id)).filter(Boolean);
+    if (ids.length === 0) {
+      setCalendarBlocks([]);
+      return;
+    }
+    let cancelled = false;
+    const { apiStart, apiEnd } = windowRange();
+    void (async () => {
+      const blocks = await calendarService.getCalendarBlocks(ids, apiStart, apiEnd, 'active');
+      if (!cancelled) setCalendarBlocks(blocks);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [calendarReady, activeListings, windowRange]);
+
   const listingRows: ListingRow[] = useMemo(() => {
     const ownerKey = scope.filterOwnerId ? String(scope.filterOwnerId) : '';
     const rowsSource = mergeActiveAndOrphanListings(activeListings);
@@ -395,6 +421,21 @@ export default function ResasTabV2() {
       if (bucket) bucket.push(res);
       else reservationsByListing.set(listingId, [res]);
     }
+
+    // Blocages calendrier → pseudo-résas (kind:'block') par listing
+    const blocksByListing = new Map<string, CalendarBlockDto[]>();
+    for (const b of calendarBlocks) {
+      const lid = String(b.listingId);
+      const bucket = blocksByListing.get(lid);
+      if (bucket) bucket.push(b);
+      else blocksByListing.set(lid, [b]);
+    }
+    /** dateTo de bloc = inclusif ; la barre planning attend un départ exclusif → +1 jour. */
+    const isoPlusOneDay = (iso: string) => {
+      const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
+      d.setDate(d.getDate() + 1);
+      return format(d, 'yyyy-MM-dd');
+    };
 
     return rowsSource.map((listing) => {
       const listingId = String(listing.id);
@@ -567,10 +608,25 @@ export default function ResasTabV2() {
           };
         }),
       };
+    }).map((row) => {
+      const blockRows = (blocksByListing.get(String(row.listingId)) || []).map((b) => ({
+        reservationId: `block-${b._id}`,
+        guestName: b.title,
+        arrivalDate: String(b.dateFrom).slice(0, 10),
+        departureDate: isoPlusOneDay(String(b.dateTo)),
+        status: 'confirmed' as const,
+        channelName: 'direct',
+        kind: 'block' as const,
+        blockNote: b.note,
+        blockAuthor: b.createdBy?.name,
+      }));
+      if (blockRows.length === 0) return row;
+      return { ...row, reservations: [...row.reservations, ...blockRows] };
     });
   }, [
     activeListings,
     reservations,
+    calendarBlocks,
     startDate,
     daysCount,
     scope.filterOwnerId,

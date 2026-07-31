@@ -7,6 +7,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ModalPortal } from '../ModalPortal';
 import { ModalScrollColumn } from '../common/ModalScrollColumn';
 import { T, toIso, parseIsoLocal, daysBetweenIsoInclusive, resolvePriceMode, resolveSelectionCurrency } from './_shared';
+import { isCalendarImportReviewActive } from '../../services/calendarImportReviewService';
+import { calendarService } from '../../services/calendarService';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -69,6 +71,15 @@ export default function UpdateInventoryModal({
     () => resolveSelectionCurrency(selectedCells, listings, currency || 'MAD'),
     [selectedCells, listings, currency],
   );
+
+  /** Mode Import calendrier : dispo OK, prix / mode tarif bloqués. */
+  const priceEditLocked = useMemo(() => {
+    if (!selectedCells?.length || !listings?.length) return false;
+    const ids = new Set(selectedCells.map((c) => String(c.listingId)));
+    return listings.some(
+      (l) => ids.has(String(l._id || l.id)) && isCalendarImportReviewActive(l),
+    );
+  }, [selectedCells, listings]);
 
   /* ─── Date range from selectedCells ─── */
   const selectionMeta = useMemo(() => {
@@ -156,6 +167,7 @@ export default function UpdateInventoryModal({
     manualPrice: '', availability: '', stopSell: null,
     minStay: '', maxStay: '', closedArrival: false, closedDeparture: false,
     priceMode: null,
+    blockTitle: '', blockNote: '',
   });
   // Dates toujours éditables (Date objects for MUI DatePicker)
   const [editableStartDate, setEditableStartDate] = useState(null);
@@ -183,6 +195,17 @@ export default function UpdateInventoryModal({
 
   const upd = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
+  /**
+   * L'action en cours bloque-t-elle des jours ?
+   * Single : "Pas dispo" (availability '0') · Multi : stopSell Oui.
+   * Dans ce cas Titre + Note deviennent obligatoires (métadonnée CalendarBlock).
+   */
+  const isBlockingAction = useMemo(() => {
+    if (form.stopSell === true) return true;
+    if (form.availability !== '' && +form.availability === 0) return true;
+    return false;
+  }, [form.stopSell, form.availability]);
+
   useEffect(() => {
     if (!open) {
       setStep('form');
@@ -191,6 +214,7 @@ export default function UpdateInventoryModal({
         manualPrice: '', availability: '', stopSell: null,
         minStay: '', maxStay: '', closedArrival: false, closedDeparture: false,
         priceMode: null,
+        blockTitle: '', blockNote: '',
       });
       setEditableStartDate(null);
       setEditableEndDate(null);
@@ -204,7 +228,7 @@ export default function UpdateInventoryModal({
 
   const changesSummary = useMemo(() => {
     const out = [];
-    if (form.manualPrice !== '') out.push(`Prix manuel: ${form.manualPrice} ${displayCurrency}`);
+    if (!priceEditLocked && form.manualPrice !== '') out.push(`Prix manuel: ${form.manualPrice} ${displayCurrency}`);
     if (form.availability !== '') {
       if (cellsAnalysis.isSingleListing) {
         out.push(`Disponibilité: ${form.availability === '1' ? 'Dispo ✅' : 'Pas dispo 🚫'}`);
@@ -219,11 +243,14 @@ export default function UpdateInventoryModal({
     if (form.maxStay !== '') out.push(`Max Stay: ${form.maxStay} nuit(s)`);
     if (form.closedArrival) out.push('Arrivée fermée ⛔');
     if (form.closedDeparture) out.push('Départ fermé ⛔');
-    if (form.priceMode !== null) {
+    if (isBlockingAction && form.blockTitle.trim()) {
+      out.push(`Motif blocage: « ${form.blockTitle.trim()} »`);
+    }
+    if (!priceEditLocked && form.priceMode !== null) {
       out.push(`Prix dynamique: ${form.priceMode === 'dynamic' ? 'ON ⚡' : 'OFF'}`);
     }
     return out;
-  }, [form, displayCurrency, cellsAnalysis.isSingleListing]);
+  }, [form, displayCurrency, cellsAnalysis.isSingleListing, priceEditLocked, isBlockingAction]);
 
   /** Reco min stay Sojori (gap / event) si identique sur toute la sélection. */
   const sojoriMinStayReco = useMemo(() => {
@@ -238,6 +265,10 @@ export default function UpdateInventoryModal({
 
   const handleSubmit = () => {
     if (changesSummary.length === 0) { setError('Veuillez modifier au moins un champ'); return; }
+    if (isBlockingAction && (!form.blockTitle.trim() || !form.blockNote.trim())) {
+      setError('Titre et note obligatoires pour un blocage — ils expliquent le motif dans le planning.');
+      return;
+    }
     setError(null); setStep('confirm');
   };
 
@@ -261,18 +292,18 @@ export default function UpdateInventoryModal({
           }];
       ranges.forEach(({ from: dateFrom, to: dateTo }) => {
       const base = { roomTypeId: g.roomTypeId, date_from: dateFrom, date_to: dateTo };
-      if (form.manualPrice !== '')   payloads.push({ type: 'manualPrice',         ...base, price: +form.manualPrice });
+      const listing = listings.find((l) => String(l._id || l.id) === String(g.listingId));
+      const lockPrice = isCalendarImportReviewActive(listing);
+      if (!lockPrice && form.manualPrice !== '')   payloads.push({ type: 'manualPrice',         ...base, price: +form.manualPrice });
       if (form.availability !== '') {
         const rooms = +form.availability;
         payloads.push({ type: 'availability', ...base, availableRoom: rooms });
         // Single : synchroniser arrêt des ventes avec dispo / pas dispo
-        const listing = listings.find((l) => (l._id || l.id) === g.listingId);
         if (listing?.propertyUnit === 'Single') {
           payloads.push({ type: 'stopSell', ...base, stopSell: rooms < 1 });
         }
       }
       if (form.stopSell !== null) {
-        const listing = listings.find((l) => (l._id || l.id) === g.listingId);
         if (listing?.propertyUnit !== 'Single') {
           payloads.push({ type: 'stopSell', ...base, stopSell: form.stopSell });
         }
@@ -281,7 +312,7 @@ export default function UpdateInventoryModal({
       if (form.maxStay !== '')       payloads.push({ type: 'max_stay',            ...base, max_stay: +form.maxStay });
       if (form.closedArrival)        payloads.push({ type: 'closed_to_arrival',   ...base, closed_to_arrival: true });
       if (form.closedDeparture)      payloads.push({ type: 'closed_to_departure', ...base, closed_to_departure: true });
-      if (form.priceMode !== null) {
+      if (!lockPrice && form.priceMode !== null) {
         // setUseDynamicPriceManual = API prod actuelle ; setPriceMode = API priceMode unifié
         payloads.push({
           type: 'setUseDynamicPriceManual',
@@ -299,9 +330,57 @@ export default function UpdateInventoryModal({
     return payloads.map(sanitizeInventoryUpdatePayload);
   };
 
+  /**
+   * Plages (roomTypeId + from/to) où l'action bloque réellement des jours —
+   * mêmes groupes/ranges que buildPayloads, pour créer les CalendarBlock.
+   */
+  const buildBlockRanges = () => {
+    const cellsByRoom = {};
+    selectedCells.forEach(c => {
+      const k = `${c.listingId}|${c.roomTypeId}`;
+      if (!cellsByRoom[k]) cellsByRoom[k] = { listingId: c.listingId, roomTypeId: c.roomTypeId, dates: new Set() };
+      cellsByRoom[k].dates.add(c.dateStr);
+    });
+    const blockRanges = [];
+    Object.values(cellsByRoom).forEach(g => {
+      const listing = listings.find((l) => String(l._id || l.id) === String(g.listingId));
+      const isSingle = listing?.propertyUnit === 'Single';
+      const blocksThisListing = isSingle
+        ? (form.availability !== '' && +form.availability === 0)
+        : (form.stopSell === true);
+      if (!blocksThisListing) return;
+      const sortedDates = [...g.dates].sort();
+      const hasGaps = selectedDatesHaveGaps(sortedDates);
+      const ranges = hasGaps
+        ? splitContiguousIsoRanges(sortedDates)
+        : [{
+            from: editableStartDate ? toIso(editableStartDate) : sortedDates[0],
+            to: editableEndDate ? toIso(editableEndDate) : sortedDates[sortedDates.length - 1],
+          }];
+      ranges.forEach(({ from, to }) => {
+        blockRanges.push({ roomTypeId: g.roomTypeId, dateFrom: from, dateTo: to });
+      });
+    });
+    return blockRanges;
+  };
+
   const handleConfirm = async () => {
     setLoading(true);
     try {
+      // Métadonnée CalendarBlock (titre/note/auteur) AVANT la dispo : le refetch
+      // d'inventaire déclenché par onSave récupère ainsi les blockId déjà posés.
+      // Non bloquant : si échec, la dispo est quand même bloquée par onSave
+      // (chemin update-inventory → RU/Channex) et le jour s'affiche "Bloqué" générique.
+      if (isBlockingAction) {
+        const title = form.blockTitle.trim();
+        const note = form.blockNote.trim();
+        const blockRanges = buildBlockRanges();
+        await Promise.all(blockRanges.map(r =>
+          calendarService.createCalendarBlock({ ...r, title, note }).catch(err => {
+            console.error('CalendarBlock non créé (jour restera "Bloqué" générique):', err?.message || err);
+          }),
+        ));
+      }
       await onSave?.(buildPayloads());
       onClose?.();
     } catch (e) {
@@ -473,6 +552,16 @@ export default function UpdateInventoryModal({
               </Section>
 
               <Section label="Prix manuel">
+                {priceEditLocked ? (
+                  <div style={{
+                    fontSize: 11.5, fontWeight: 700, color: '#b91c1c', lineHeight: 1.4,
+                    background: 'rgba(185,28,28,0.08)', border: '1px solid rgba(185,28,28,0.22)',
+                    borderRadius: 8, padding: '8px 10px',
+                  }}>
+                    Mode Import calendrier — modification des prix désactivée. Vous pouvez libérer la dispo ; finissez l’import pour republier les canaux.
+                  </div>
+                ) : (
+                  <>
                 {cellsAnalysis.price.common !== null && (
                   <div style={{ fontSize: 11, color: T.text3, marginBottom: 4, fontFamily: '"Geist Mono", monospace' }}>
                     Actuel: <b>{cellsAnalysis.price.common} {displayCurrency}</b>
@@ -490,6 +579,8 @@ export default function UpdateInventoryModal({
                     onChange={e => upd('manualPrice', e.target.value)} />
                   <span style={{ fontSize: 10.5, color: T.text3, fontFamily: '"Geist Mono", monospace', fontWeight: 600 }}>{displayCurrency}</span>
                 </FieldBox>
+                  </>
+                )}
               </Section>
 
               <Section label="Disponibilité">
@@ -549,7 +640,34 @@ export default function UpdateInventoryModal({
                 </Section>
               )}
 
-              {dpEnabled ? (
+              {isBlockingAction && (
+                <Section label="Motif du blocage · obligatoire">
+                  <FieldBox>
+                    <input
+                      placeholder="Titre — affiché dans le planning (ex: Travaux salle de bain)"
+                      value={form.blockTitle}
+                      maxLength={120}
+                      onChange={e => upd('blockTitle', e.target.value)} />
+                  </FieldBox>
+                  <textarea
+                    placeholder="Note interne — détail du motif, contexte…"
+                    value={form.blockNote}
+                    maxLength={2000}
+                    rows={3}
+                    onChange={e => upd('blockNote', e.target.value)}
+                    style={{
+                      width: '100%', marginTop: 8, padding: '9px 12px', boxSizing: 'border-box',
+                      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 9,
+                      font: 'inherit', fontSize: 13, color: T.text, outline: 0, resize: 'vertical',
+                    }} />
+                  <p style={{ fontSize: 11, color: T.text3, margin: '6px 0 0', lineHeight: 1.45 }}>
+                    Le titre apparaîtra comme une réservation dans le planning ; la note et votre
+                    nom seront visibles au clic sur le blocage.
+                  </p>
+                </Section>
+              )}
+
+              {dpEnabled && !priceEditLocked ? (
               <Section label="Prix dynamique">
                 <ToggleGroup
                   value={

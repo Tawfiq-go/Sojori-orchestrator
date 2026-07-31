@@ -2,14 +2,36 @@
 // MultiView.jsx — grille Multi-listing · ligne principale (prix + dispo) + détail optionnel
 // Excel selection drag · scroll sync · tooltip breakdown · popover rotations
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback, useContext, memo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   T, ALL_COLUMNS, priceOf, cellKey, genDays, isArchiveDay, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
   hasInventoryData, resolveInventoryCellState, formatInventoryRateLabel, OUT_OF_WINDOW_CELL_BG,
-  resolvePriceMode, PRICE_MODE_LABEL,
+  resolvePriceMode, PRICE_MODE_LABEL, PRICE_MODE_LETTER,
   calendarPrimaryColumns, calendarCollapseColumns,
 } from './_shared';
+
+/** Fonds soft — uniquement statut inventaire (jamais M/D). */
+const CELL_BG = {
+  reserved: 'rgba(22, 163, 74, 0.14)',   // vert = réservé
+  available: 'rgba(37, 99, 235, 0.12)',  // bleu = disponible
+  blocked: 'rgba(220, 38, 38, 0.14)',    // rouge = bloqué
+};
+
+/** Couleur de fond cellule selon réservé / dispo / bloqué — pas selon M/D. */
+function inventoryStatusBackground(state, inv) {
+  if (state === 'out_of_window') return OUT_OF_WINDOW_CELL_BG;
+  if (state === 'archive') return ARCHIVE_CELL_BG;
+  if (state === 'missing' || !hasInventoryData(inv)) return T.bg2;
+  const isBooked = (inv?.reservations?.length ?? 0) > 0;
+  if (isBooked) return CELL_BG.reserved;
+  const isStop = inv?.stopSell === true;
+  const ar = inv?.availableRoom;
+  const isZero = ar != null && Number(ar) <= 0;
+  const isClosed = inv?.available === false;
+  if (isStop || isZero || isClosed) return CELL_BG.blocked;
+  return CELL_BG.available;
+}
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
 import PopoverReservations from './PopoverReservations';
@@ -17,6 +39,14 @@ import AuditBlockedDaysModal from './AuditBlockedDaysModal';
 import { normalizeCalendarReservations } from './reservationCalendarUtils';
 import { useCalendarBreakpoint } from '../../hooks/useCalendarBreakpoint';
 import calendarService from '../../services/calendarService';
+import {
+  activateListingCalendarImportReview,
+  finishListingCalendarImportReview,
+  isCalendarImportReviewActive,
+} from '../../services/calendarImportReviewService';
+
+/** Métadonnées CalendarBlock par blockId — contexte pour éviter le prop drilling jusqu'aux cellules. */
+const CalendarBlocksContext = React.createContext({});
 
 const CELL_W_DESKTOP = 90;
 const CELL_W_MOBILE = 76;
@@ -46,11 +76,14 @@ export default function MultiView({
   listings: listingsLegacy,
   inventoriesByListing = {},
   inventoryData = {},
+  calendarBlocksById = {},
   inventoryLoading = false,
   selectedColumns = [],
   onCellsSelected,
   onOpenReservation,
   onToggleDynamicPrice,
+  onCalendarImportReviewFinished,
+  onCalendarImportReviewActivated,
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsLegacy || [];
   const { isMobile } = useCalendarBreakpoint();
@@ -258,6 +291,7 @@ export default function MultiView({
 
 
   return (
+    <CalendarBlocksContext.Provider value={calendarBlocksById}>
     <div style={{
       background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 14,
       overflow: 'hidden', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
@@ -276,13 +310,11 @@ export default function MultiView({
           Légende
         </span>
         <div style={{ display: 'flex', gap: 12, fontSize: 10.5, color: T.text2, fontWeight: 600 }}>
-          <Legend dot="rgba(6,115,179,0.7)" label="Réservé" />
-          <Legend dot="rgba(200,30,30,0.7)" label="Stop sell" />
-          <Legend dot={T.warning} label="Bloqué canal (sans résa Sojori)" />
-          {listings.some((l) => dpEnabledByListing[String(l._id)] !== false) ? (
-            <Legend dot={T.ai} label="Prix dynamique" />
-          ) : null}
-          <Legend dot={T.bg2} label="Weekend" />
+          <Legend dot="rgba(22,163,74,0.85)" label="Réservé" />
+          <Legend dot="rgba(37,99,235,0.85)" label="Disponible" />
+          <Legend dot="rgba(220,38,38,0.85)" label="Bloqué" />
+          <Legend dot="#b91c1c" label="Import calendrier à finir" />
+          <span style={{ color: T.text3, fontWeight: 600 }}>Lettres : M = manuel · D = dynamique</span>
           <Legend dot={ARCHIVE_CELL_BG} label="Historique (lecture seule)" />
           <Legend dot={T.text4} label="Hors inventaire (—)" />
         </div>
@@ -364,7 +396,11 @@ export default function MultiView({
                   onPriceClick={onPriceClick}
                   onReservationClick={handleReservationDayClick}
                   activeTip={activeTip}
-                  onToggleDynamicPrice={onToggleDynamicPrice}
+                  onToggleDynamicPrice={
+                    isCalendarImportReviewActive(listing) ? undefined : onToggleDynamicPrice
+                  }
+                  onCalendarImportReviewFinished={onCalendarImportReviewFinished}
+                  onCalendarImportReviewActivated={onCalendarImportReviewActivated}
                 />
                 {isOpen && isMultiHotel
                   ? roomTypes.map((rt) => {
@@ -398,7 +434,9 @@ export default function MultiView({
                         onPriceClick={onPriceClick}
                         onReservationClick={handleReservationDayClick}
                         activeTip={activeTip}
-                        onToggleDynamicPrice={onToggleDynamicPrice}
+                        onToggleDynamicPrice={
+                          isCalendarImportReviewActive(listing) ? undefined : onToggleDynamicPrice
+                        }
                       />
                     );
                     })
@@ -438,6 +476,7 @@ export default function MultiView({
         />
       )}
     </div>
+    </CalendarBlocksContext.Provider>
   );
 }
 
@@ -478,12 +517,15 @@ const DayHeader = memo(function DayHeader({ day, loading }) {
 /* ─── Colonne listing (sticky) — ne dépend pas des dates ─── */
 const ListingLabel = memo(function ListingLabel({
   listing, expanded, showChevron, onToggle, avgPrice, dpEnabled = true,
+  onFinishCalendarImport, finishingCalendarImport = false,
+  onActivateCalendarImport, activatingCalendarImport = false,
 }) {
   const isSingle = listing.propertyUnit === 'Single';
   const isRoomTypeRow = Boolean(listing._isRoomTypeRow);
   const currency = listing.currencyCode || listing.currency || 'MAD';
   const dpHref = `/dynamic-pricing/bien/${listing._id}`;
   const roomTypeCount = Number(listing.roomTypeCount) || 0;
+  const reviewActive = !isRoomTypeRow && isCalendarImportReviewActive(listing);
   const simpleHref =
     isRoomTypeRow && listing.roomTypeId
       ? `/calendar?view=simple&listing=${encodeURIComponent(String(listing._id))}&roomType=${encodeURIComponent(String(listing.roomTypeId))}`
@@ -496,7 +538,7 @@ const ListingLabel = memo(function ListingLabel({
         display: 'flex',
         alignItems: 'center',
         gap: 9,
-        background: isRoomTypeRow ? T.bg2 : T.bg1,
+        background: reviewActive ? 'rgba(185,28,28,0.06)' : (isRoomTypeRow ? T.bg2 : T.bg1),
         borderRight: `1px solid ${T.border}`,
         cursor: showChevron ? 'pointer' : 'default',
         transition: 'background 0.15s',
@@ -526,15 +568,18 @@ const ListingLabel = memo(function ListingLabel({
             width: 24,
             height: 24,
             borderRadius: 6,
-            background: `linear-gradient(135deg, ${listing.photoColor || '#fde68a'}, ${listing.photoColorDeep || '#d97706'})`,
+            background: reviewActive
+              ? 'linear-gradient(135deg, #fecaca, #b91c1c)'
+              : `linear-gradient(135deg, ${listing.photoColor || '#fde68a'}, ${listing.photoColorDeep || '#d97706'})`,
             flexShrink: 0,
+            boxShadow: reviewActive ? '0 0 0 2px rgba(185,28,28,0.35)' : 'none',
           }}
         />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <Link
           to={simpleHref}
-          title="Ouvrir la vue simple (Airbnb)"
+          title={reviewActive ? 'Import calendrier non terminé — ouvrir vue simple' : 'Ouvrir la vue simple (Airbnb)'}
           onClick={(e) => e.stopPropagation()}
           style={{
             fontSize: isRoomTypeRow ? 11.5 : 12.5,
@@ -544,48 +589,100 @@ const ListingLabel = memo(function ListingLabel({
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             display: 'block',
-            color: 'inherit',
+            color: reviewActive ? '#b91c1c' : 'inherit',
             textDecoration: 'none',
           }}
         >
           {listing.name}
         </Link>
-        {avgPrice > 0 ? (
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              color: T.text3,
-              fontFamily: '"Geist Mono", monospace',
-              marginTop: 2,
-              display: 'flex',
-              alignItems: 'baseline',
-              gap: 3,
-            }}
-          >
-            <span>Moy: {avgPrice}</span>
-            <span style={{ fontSize: 8, fontWeight: 700, color: T.text4, letterSpacing: '0.04em' }}>
-              {currency}
+        {reviewActive ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 9.5, fontWeight: 800, color: '#b91c1c', letterSpacing: '0.02em' }}>
+              Import calendrier
             </span>
-            {!isRoomTypeRow && roomTypeCount > 1 ? (
-              <span style={{ fontSize: 9, color: T.text4, marginLeft: 4 }}>
-                · {roomTypeCount} types
-              </span>
+            {onFinishCalendarImport ? (
+              <button
+                type="button"
+                title="Ouvrir l’analyse import (prix min/max, overbooking) — la sortie du mode Import se fait dans la popup"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFinishCalendarImport();
+                }}
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 800,
+                  color: '#fff',
+                  background: '#b91c1c',
+                  border: 0,
+                  borderRadius: 6,
+                  padding: '2px 7px',
+                  cursor: 'pointer',
+                  lineHeight: 1.3,
+                }}
+              >
+                Revue import
+              </button>
             ) : null}
-          </span>
-        ) : isSingle && !isRoomTypeRow ? (
-          <span style={{ fontSize: 9.5, color: T.text4, marginTop: 2, display: 'block' }}>
-            Tarif · Dispo
-          </span>
-        ) : !isRoomTypeRow && roomTypeCount > 1 ? (
-          <span style={{ fontSize: 9.5, color: T.text4, marginTop: 2, display: 'block' }}>
-            {roomTypeCount} types — ▶ types, puis ▶ min stay
-          </span>
-        ) : isRoomTypeRow ? (
-          <span style={{ fontSize: 9.5, color: T.text4, marginTop: 2, display: 'block' }}>
-            ▶ Min stay / détail
-          </span>
-        ) : null}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+            {avgPrice > 0 ? (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: T.text3,
+                  fontFamily: '"Geist Mono", monospace',
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: 3,
+                }}
+              >
+                <span>Moy: {avgPrice}</span>
+                <span style={{ fontSize: 8, fontWeight: 700, color: T.text4, letterSpacing: '0.04em' }}>
+                  {currency}
+                </span>
+                {!isRoomTypeRow && roomTypeCount > 1 ? (
+                  <span style={{ fontSize: 9, color: T.text4, marginLeft: 4 }}>
+                    · {roomTypeCount} types
+                  </span>
+                ) : null}
+              </span>
+            ) : isSingle && !isRoomTypeRow ? (
+              <span style={{ fontSize: 9.5, color: T.text4 }}>Tarif · ▶ Dispo / Min stay</span>
+            ) : !isRoomTypeRow && roomTypeCount > 1 ? (
+              <span style={{ fontSize: 9.5, color: T.text4 }}>
+                {roomTypeCount} types — ▶ types, puis ▶ Dispo / Min stay
+              </span>
+            ) : isRoomTypeRow ? (
+              <span style={{ fontSize: 9.5, color: T.text4 }}>▶ Dispo / Min stay</span>
+            ) : null}
+            {!isRoomTypeRow && onActivateCalendarImport ? (
+              <button
+                type="button"
+                title="Passer en mode Import calendrier — prix non modifiables, pas de push canal"
+                disabled={activatingCalendarImport}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onActivateCalendarImport();
+                }}
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 800,
+                  color: '#b91c1c',
+                  background: 'rgba(185,28,28,0.08)',
+                  border: '1px solid rgba(185,28,28,0.28)',
+                  borderRadius: 6,
+                  padding: '2px 7px',
+                  cursor: activatingCalendarImport ? 'wait' : 'pointer',
+                  lineHeight: 1.3,
+                }}
+              >
+                {activatingCalendarImport ? '…' : 'Mode Import'}
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
       {!isRoomTypeRow && (
       <Link
@@ -597,10 +694,11 @@ const ListingLabel = memo(function ListingLabel({
         }
         aria-label={`Prix dynamique ${dpEnabled ? 'ON' : 'OFF'} — ${listing.name}`}
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
         style={{
           flexShrink: 0,
-          width: 26,
-          height: 26,
+          width: 28,
+          height: 28,
           borderRadius: 7,
           display: 'inline-flex',
           alignItems: 'center',
@@ -613,6 +711,9 @@ const ListingLabel = memo(function ListingLabel({
           textDecoration: 'none',
           transition: 'background 0.15s, transform 0.12s',
           opacity: dpEnabled ? 1 : 0.75,
+          position: 'relative',
+          zIndex: 2,
+          pointerEvents: 'auto',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = dpEnabled
@@ -636,6 +737,8 @@ const ListingLabel = memo(function ListingLabel({
 function ListingRow({
   listing, inventories, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onPriceClick, onReservationClick, activeTip,
   onToggleDynamicPrice, dpEnabled = true, forceChevron = false, hideDetailCollapse = false,
+  onCalendarImportReviewFinished,
+  onCalendarImportReviewActivated,
 }) {
   const primaryCols = calendarPrimaryColumns(selectedColumns);
   const collapseColumns = calendarCollapseColumns(selectedColumns).filter((colId) => {
@@ -655,12 +758,47 @@ function ListingRow({
 
   /* ─── Audit jours bloqués sans réservation — modal résultat en tableau ─── */
   const [auditOpen, setAuditOpen] = useState(false);
-  const [auditResult, setAuditResult] = useState({ loading: false, error: null, roomTypes: [] });
+  const [auditResult, setAuditResult] = useState({
+    loading: false, error: null, roomTypes: [], postImportAudit: null,
+  });
+  const [finishingCalendarImport, setFinishingCalendarImport] = useState(false);
+  const [activatingCalendarImport, setActivatingCalendarImport] = useState(false);
+  const calendarReviewActive = !isRoomTypeRow && isCalendarImportReviewActive(listing);
 
   const handleAuditClick = useCallback(() => {
     setAuditOpen(true);
-    setAuditResult({ loading: true, error: null, roomTypes: [] });
+    setAuditResult({ loading: true, error: null, roomTypes: [], postImportAudit: null });
   }, []);
+
+  const handleFinishCalendarImport = useCallback(async () => {
+    if (!listing?._id || finishingCalendarImport) return;
+    setFinishingCalendarImport(true);
+    try {
+      await finishListingCalendarImportReview(String(listing._id));
+      onCalendarImportReviewFinished?.(String(listing._id));
+    } catch (err) {
+      window.alert(err?.message || 'Impossible de finir l’import calendrier');
+    } finally {
+      setFinishingCalendarImport(false);
+    }
+  }, [listing?._id, finishingCalendarImport, onCalendarImportReviewFinished]);
+
+  const handleActivateCalendarImport = useCallback(async () => {
+    if (!listing?._id || activatingCalendarImport) return;
+    const ok = window.confirm(
+      'Passer en mode Import calendrier ?\n\n• Prix non modifiables\n• Pas de publication canaux tant que vous n’avez pas fini l’import',
+    );
+    if (!ok) return;
+    setActivatingCalendarImport(true);
+    try {
+      const data = await activateListingCalendarImportReview(String(listing._id));
+      onCalendarImportReviewActivated?.(String(listing._id), data);
+    } catch (err) {
+      window.alert(err?.response?.data?.error || err?.message || 'Impossible d’activer le mode Import');
+    } finally {
+      setActivatingCalendarImport(false);
+    }
+  }, [listing?._id, activatingCalendarImport, onCalendarImportReviewActivated]);
 
   useEffect(() => {
     if (!auditOpen || !auditResult.loading) return;
@@ -669,9 +807,23 @@ function ListingRow({
     (async () => {
       try {
         const result = await calendarService.auditBlockedDays(listing._id, roomTypeId);
-        if (!cancelled) setAuditResult({ loading: false, error: null, roomTypes: result.roomTypes });
+        if (!cancelled) {
+          setAuditResult({
+            loading: false,
+            error: null,
+            roomTypes: result.roomTypes,
+            postImportAudit: result.postImportAudit || null,
+          });
+        }
       } catch (err) {
-        if (!cancelled) setAuditResult({ loading: false, error: err?.message || 'Erreur inconnue', roomTypes: [] });
+        if (!cancelled) {
+          setAuditResult({
+            loading: false,
+            error: err?.message || 'Erreur inconnue',
+            roomTypes: [],
+            postImportAudit: null,
+          });
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -706,6 +858,18 @@ function ListingRow({
           onToggle={onToggle}
           avgPrice={avgPrice}
           dpEnabled={dpEnabled}
+          onFinishCalendarImport={
+            !isRoomTypeRow && isCalendarImportReviewActive(listing)
+              ? handleAuditClick
+              : undefined
+          }
+          finishingCalendarImport={false}
+          onActivateCalendarImport={
+            !isRoomTypeRow && !isCalendarImportReviewActive(listing)
+              ? handleActivateCalendarImport
+              : undefined
+          }
+          activatingCalendarImport={activatingCalendarImport}
         />
 
         {days.map(d => {
@@ -807,7 +971,7 @@ function ListingRow({
                   }
                   onMouseEnter={draggable ? () => onMouseEnter(cellMeta) : undefined}
                   onPriceClick={onPriceClick}
-                  onToggleDynamicPrice={onToggleDynamicPrice}
+                  onToggleDynamicPrice={calendarReviewActive ? undefined : onToggleDynamicPrice}
                   tipOpen={
                     colId === 'rate' &&
                     activeTip?.listingId === listing._id &&
@@ -835,6 +999,10 @@ function ListingRow({
         loading={auditResult.loading}
         error={auditResult.error}
         roomTypes={auditResult.roomTypes}
+        postImportAudit={auditResult.postImportAudit}
+        calendarReviewActive={calendarReviewActive}
+        onFinishCalendarImport={calendarReviewActive ? handleFinishCalendarImport : undefined}
+        finishingCalendarImport={finishingCalendarImport}
         onRelease={async (range) => {
           const roomTypeId = range.roomTypeId || listing.roomTypeId || listing.roomTypes?.[0]?._id;
           if (!roomTypeId) throw new Error('Room type introuvable');
@@ -845,16 +1013,49 @@ function ListingRow({
             listingName: listing.name || '',
             roomTypeName: range.roomTypeName || '',
           };
-          // Single : stock 1. Multi : revenir au roomNumber du type (pas hardcode 1).
           const isMulti = listing.propertyUnit === 'Multi';
           const capacity = isMulti
             ? Math.max(1, Number(range.roomNumber ?? listing.roomNumber ?? 1))
             : 1;
+          // Dispo : calendrier + RU (même en revue import)
           await calendarService.updateCalendar([
             { ...base, type: 'availability', availableRoom: capacity },
             { ...base, type: 'stopSell', stopSell: false },
           ]);
           setAuditResult((s) => ({ ...s, loading: true }));
+        }}
+        onBlockForReservation={async (range) => {
+          const roomTypeId = range.roomTypeId || listing.roomTypeId || listing.roomTypes?.[0]?._id;
+          if (!roomTypeId) throw new Error('Room type introuvable');
+          const base = {
+            roomTypeId: String(roomTypeId),
+            date_from: range.from,
+            date_to: range.to,
+            listingName: listing.name || '',
+            roomTypeName: range.roomTypeName || '',
+          };
+          // Résa ouverte encore dispo → bloquer inventaire + RU
+          await calendarService.updateCalendar([
+            { ...base, type: 'availability', availableRoom: 0 },
+            { ...base, type: 'stopSell', stopSell: false },
+          ]);
+          setAuditResult((s) => ({ ...s, loading: true }));
+        }}
+        onFixPrice={async (row) => {
+          const roomTypeId = row.roomTypeId || listing.roomTypeId || listing.roomTypes?.[0]?._id;
+          if (!roomTypeId) throw new Error('Room type introuvable');
+          // Prix : calendrier local seulement pendant revue (gate backend)
+          await calendarService.updateCalendar([
+            {
+              roomTypeId: String(roomTypeId),
+              date_from: row.date,
+              date_to: row.date,
+              listingName: listing.name || '',
+              roomTypeName: row.roomTypeName || '',
+              type: 'manualPrice',
+              price: Number(row.newPrice),
+            },
+          ]);
         }}
       />
     </div>
@@ -865,68 +1066,66 @@ function ListingRow({
  * Contexte : les dates fermées côté canal sont importées dans l'inventaire avec
  * availableRoom=0 (et stopSell=false), sans objet réservation Sojori. On les
  * distingue du stop-sell manuel pour l'affichage. */
-function blockedNoResaInfo(inv) {
+function blockedNoResaInfo(inv, block) {
   if (!inv || !hasInventoryData(inv)) return null;
   if ((inv.reservations?.length ?? 0) > 0) return null; // occupé par une résa → normal
   const ar = inv.availableRoom;
   const isStop = inv.stopSell === true;
   const isZero = ar != null && ar <= 0;
   if (!isStop && !isZero) return null;
+  // Bloc avec métadonnées (titre/note/auteur) → priorité sur la classification générique
+  if (block) {
+    const author = block.createdBy?.name ? ` · par ${block.createdBy.name}` : '';
+    const note = block.note ? `\n${block.note}` : '';
+    return {
+      kind: 'block',
+      color: 'rgba(220,38,38,0.9)',
+      title: block.title,
+      label: `« ${block.title} »${author}${note}`,
+    };
+  }
   if (isStop) {
     return {
       kind: 'stop',
-      color: T.error,
+      color: 'rgba(220,38,38,0.9)',
       label: 'Stop-sell — bloqué manuellement sur les canaux, aucune réservation Sojori.',
     };
   }
   return {
     kind: 'channel',
-    color: T.warning,
+    color: 'rgba(220,38,38,0.9)',
     label: 'Bloqué côté canal — date fermée à l’import, sans réservation Sojori. Ne pas rouvrir sans vérifier le canal (risque de sur-réservation).',
   };
 }
 
-/* ─── Ligne principale : bandeau Excel (gauche) · prix clic détail (droite) ─── */
+/* ─── Ligne principale : bandeau Excel (+) · prix clic · M/D (pas de 0/1 Single) ─── */
 function PrimaryInventoryCell({
   day, inv, listing, showRate, showDispo, isSelected, onMouseDown, onMouseEnter, onPriceClick,
   listingId, roomTypeId, draggable, tipOpen, dpEnabled = true,
 }) {
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
+  const isSingle = listing.propertyUnit === 'Single' || Boolean(listing._isRoomTypeRow);
   const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
   const rate = formatInventoryRateLabel(state, inv);
   const archived = state === 'archive';
   const noData = state === 'out_of_window' || state === 'missing';
-  const isDynamic = dpEnabled && hasInventoryData(inv) && resolvePriceMode(inv) === 'dynamic';
-  const isStop = hasInventoryData(inv) && !!inv.stopSell;
-  const isBooked = (inv?.reservations?.length ?? 0) > 0;
-  const isWeekend = day.isWeekend;
   const mode = resolvePriceMode(inv);
-  const modeColor =
-    !dpEnabled
-      ? (mode === 'manual' ? T.warning : T.text)
-      : mode === 'manual'
-        ? T.warning
-        : mode === 'dynamic'
-          ? T.ai
-          : T.text;
+  const modeLetter = mode === 'dynamic' ? 'D' : mode === 'manual' ? 'M' : null;
   const canInteract = draggable && !archived;
   const canPriceClick = canInteract && showRate && hasInventoryData(inv) && !noData;
 
-  let background = T.bg1;
-  if (state === 'out_of_window') background = OUT_OF_WINDOW_CELL_BG;
-  else if (archived) background = ARCHIVE_CELL_BG;
-  else if (noData) background = T.bg2;
-  else if (isStop) background = 'rgba(200,30,30,0.05)';
-  else if (isBooked) background = 'rgba(6,115,179,0.06)';
-  else if (isWeekend) background = T.bg2;
-  else if (day.isToday) background = 'rgba(184,133,26,0.04)';
-  else if (isDynamic) background = 'rgba(124,58,237,0.04)';
+  const blocksById = useContext(CalendarBlocksContext);
+  const dayBlock = inv?.blockId ? blocksById[String(inv.blockId)] : null;
+  const blockInfo = state === 'data' ? blockedNoResaInfo(inv, dayBlock) : null;
+  // Fond = uniquement réservé / dispo / bloqué (jamais M/D)
+  const background = inventoryStatusBackground(state, inv);
 
   const dash = '—';
+  // Single : jamais 0/1 sur la ligne principale (dispo → collapse). Multi : compteur si filtre Dispo actif.
+  const showDispoNumber = showDispo && !isSingle;
   const dispoVal = inv?.stopSell ? '🚫' : (inv?.availableRoom != null ? inv.availableRoom : dash);
-  const blockInfo = state === 'data' ? blockedNoResaInfo(inv) : null;
-  const dispoColor = inv?.stopSell ? T.error : (blockInfo?.kind === 'channel' ? T.warning : T.text2);
+  const dispoColor = inv?.stopSell || blockInfo ? 'rgba(220,38,38,0.95)' : T.text2;
 
   const rateMeta = { listingId, roomTypeId, dateStr: day.iso, column: 'rate' };
   const dispoMeta = { listingId, roomTypeId, dateStr: day.iso, column: 'availableRoom' };
@@ -956,7 +1155,7 @@ function PrimaryInventoryCell({
         fontFamily: '"Geist Mono", monospace',
         background: anySelected ? T.primaryTint3 : background,
         userSelect: 'none',
-        gap: 1,
+        gap: 2,
       }}
     >
       {blockInfo && (
@@ -973,16 +1172,27 @@ function PrimaryInventoryCell({
       {hasExcelZone && hasPriceZone && (
         <div
           {...bindExcel(excelMeta)}
-          aria-hidden
+          title="Sélection Excel"
+          aria-label="Sélection Excel"
           style={{
-            flex: '0 0 6px',
+            flex: '0 0 14px',
             minHeight: 26,
             borderRadius: '4px 0 0 4px',
             cursor: archived ? 'not-allowed' : canInteract ? 'cell' : 'default',
             boxShadow: excelSelected ? `inset 0 0 0 2px ${T.primary}` : 'none',
-            background: excelSelected ? T.primaryTint3 : 'rgba(20,17,10,0.06)',
+            background: excelSelected ? T.primaryTint3 : 'rgba(20,17,10,0.07)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: excelSelected ? T.primaryDeep : T.text4,
+            fontSize: 11,
+            fontWeight: 800,
+            lineHeight: 1,
+            zIndex: 1,
           }}
-        />
+        >
+          +
+        </div>
       )}
 
       {hasExcelZone && !hasPriceZone && (
@@ -1000,7 +1210,7 @@ function PrimaryInventoryCell({
             background: excelSelected ? T.primaryTint3 : 'transparent',
           }}
         >
-          {showDispo && (
+          {showDispoNumber && (
             <span style={{ fontSize: 10, fontWeight: 700, color: dispoColor, whiteSpace: 'nowrap' }}>
               {dispoVal}
             </span>
@@ -1016,7 +1226,7 @@ function PrimaryInventoryCell({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 4,
+            gap: 3,
             minWidth: 0,
             minHeight: 26,
             borderRadius: 4,
@@ -1026,14 +1236,11 @@ function PrimaryInventoryCell({
             position: 'relative',
           }}
         >
-          {isDynamic && state === 'data' && (
-            <span style={{ position: 'absolute', top: 1, right: 2, fontSize: 8, color: T.ai, lineHeight: 1 }}>⚡</span>
-          )}
           <span
             style={{
               fontSize: state === 'data' ? 12 : 11,
               fontWeight: 700,
-              color: archived ? ARCHIVE_CELL_TEXT : noData ? T.text4 : isDynamic ? T.ai : modeColor,
+              color: archived ? ARCHIVE_CELL_TEXT : noData ? T.text4 : T.text,
               letterSpacing: '-0.01em',
               whiteSpace: 'nowrap',
             }}
@@ -1043,7 +1250,21 @@ function PrimaryInventoryCell({
               <span style={{ fontSize: 8, color: T.text3, fontWeight: 600, marginLeft: 2 }}>{currency}</span>
             )}
           </span>
-          {showDispo && (
+          {modeLetter && state === 'data' && !archived && (
+            <span
+              title={PRICE_MODE_LABEL[mode]}
+              style={{
+                fontSize: 9,
+                fontWeight: 800,
+                color: mode === 'dynamic' ? T.ai : T.warning,
+                letterSpacing: '0.02em',
+                opacity: 0.9,
+              }}
+            >
+              {modeLetter}
+            </span>
+          )}
+          {showDispoNumber && (
             <>
               <span style={{ color: T.text4, fontSize: 9, fontWeight: 600 }}>·</span>
               <span style={{ fontSize: 10, fontWeight: 700, color: dispoColor, whiteSpace: 'nowrap' }}>
@@ -1059,6 +1280,8 @@ function PrimaryInventoryCell({
 
 /* ─── Collapse cell — tarif : + Excel · prix clic ; autres : cellule Excel ─── */
 function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown, onMouseEnter, onReservationClick, tipOpen, onPriceClick, onToggleDynamicPrice, dpEnabled = true }) {
+  const blocksById = useContext(CalendarBlocksContext);
+  const dayBlock = inv?.blockId ? blocksById[String(inv.blockId)] : null;
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
 
@@ -1066,29 +1289,9 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
   const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
   const noData = state === 'out_of_window' || state === 'missing';
   const archived = state === 'archive';
-  const isStopSell = hasInventoryData(inv) && !!inv.stopSell;
-  const isBooked = (inv?.reservations?.length ?? 0) > 0;
-  const isDynamic = hasInventoryData(inv) && resolvePriceMode(inv) === 'dynamic';
-  const isWeekend = day.isWeekend;
-
-  let background = 'transparent';
-  if (state === 'out_of_window') {
-    background = OUT_OF_WINDOW_CELL_BG;
-  } else if (archived) {
-    background = ARCHIVE_CELL_BG;
-  } else if (noData) {
-    background = T.bg2;
-  } else if (selected) {
-    background = T.primaryTint3;
-  } else if (isStopSell) {
-    background = 'rgba(200,30,30,0.05)'; // Rouge très léger
-  } else if (isBooked) {
-    background = 'rgba(6,115,179,0.06)'; // Bleu léger
-  } else if (isWeekend) {
-    background = T.bg2; // Gris clair
-  } else if (isDynamic) {
-    background = 'rgba(124,58,237,0.04)'; // Violet très léger
-  }
+  // Fond = uniquement réservé / dispo / bloqué (jamais M/D)
+  let background = inventoryStatusBackground(state, inv);
+  if (selected) background = T.primaryTint3;
 
   const dash = '—';
   let content = null;
@@ -1098,12 +1301,16 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
   else if (col.id === 'rate') {
     const rate = formatInventoryRateLabel(state, inv);
     const mode = resolvePriceMode(inv);
-    const modeColor = mode === 'manual' ? T.warning : mode === 'dynamic' ? T.ai : T.text;
     content = rate.showCurrency
       ? (
-        <span style={{ color: modeColor }} title={`Mode: ${PRICE_MODE_LABEL[mode]}`}>
+        <span style={{ color: T.text }} title={`Mode: ${PRICE_MODE_LABEL[mode]}`}>
           {rate.main}
           <span style={{ fontSize: 9, color: T.text3, marginLeft: 2 }}>{currency}</span>
+          {(mode === 'manual' || mode === 'dynamic') && (
+            <span style={{ fontSize: 9, fontWeight: 800, marginLeft: 3, color: mode === 'dynamic' ? T.ai : T.warning }}>
+              {PRICE_MODE_LETTER[mode]}
+            </span>
+          )}
         </span>
       )
       : <span style={{ color: T.text4 }}>{rate.main}</span>;
@@ -1134,22 +1341,22 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
           });
         }}
         disabled={!canToggle}
-        title={isDyn ? 'Prix dynamique ON — cliquer pour OFF' : 'Prix dynamique OFF — cliquer pour ON'}
+        title={isDyn ? 'D = dynamique — cliquer pour Manuel (M)' : 'M = manuel — cliquer pour Dynamique (D)'}
         style={{
           border: 0,
           cursor: canToggle ? 'pointer' : 'default',
-          color: isDyn ? T.ai : T.text3,
-          fontSize: 10,
+          color: isDyn ? T.ai : T.warning,
+          fontSize: 11,
           fontWeight: 800,
-          background: isDyn ? 'rgba(124,58,237,0.14)' : 'rgba(20,17,10,0.05)',
-          padding: '1px 6px',
+          background: isDyn ? 'rgba(124,58,237,0.14)' : 'rgba(184,133,26,0.12)',
+          padding: '1px 7px',
           borderRadius: 99,
           letterSpacing: '0.04em',
           fontFamily: '"Geist Mono", monospace',
           opacity: canToggle ? 1 : 0.55,
         }}
       >
-        {isDyn ? 'ON' : 'OFF'}
+        {isDyn ? 'D' : 'M'}
       </button>
     );
   }
@@ -1157,8 +1364,8 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
     const mode = resolvePriceMode(inv);
     const color = mode === 'manual' ? T.warning : mode === 'dynamic' ? T.ai : T.text3;
     content = (
-      <span style={{ color, fontSize: 11, fontWeight: 600 }}>
-        {PRICE_MODE_LABEL[mode]}
+      <span style={{ color, fontSize: 12, fontWeight: 800 }} title={PRICE_MODE_LABEL[mode]}>
+        {PRICE_MODE_LETTER[mode]}
       </span>
     );
   }
@@ -1175,13 +1382,13 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
       cursor: 'pointer', fontFamily: '"Geist Mono", monospace',
     };
     if (n === 0) {
-      const blockInfo = state === 'data' ? blockedNoResaInfo(inv) : null;
+      const blockInfo = state === 'data' ? blockedNoResaInfo(inv, dayBlock) : null;
       content = blockInfo ? (
         <span
           title={blockInfo.label}
           style={{ color: blockInfo.color, fontSize: 12, fontWeight: 800, cursor: 'help', lineHeight: 1 }}
         >
-          {blockInfo.kind === 'stop' ? '🚫' : '⧗'}
+          {blockInfo.kind === 'stop' || blockInfo.kind === 'block' ? '🚫' : '⧗'}
         </span>
       ) : '—';
     } else {
@@ -1232,15 +1439,26 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
         <div
           onMouseDown={canInteract ? onMouseDown : undefined}
           onMouseEnter={canInteract ? onMouseEnter : undefined}
-          aria-hidden
+          title="Sélection Excel"
+          aria-label="Sélection Excel"
           style={{
-            flex: '0 0 6px',
+            flex: '0 0 14px',
             cursor: canInteract ? 'cell' : 'not-allowed',
             boxShadow: selected ? `inset 0 0 0 2px ${T.primary}` : 'none',
-            background: selected ? T.primaryTint3 : 'rgba(20,17,10,0.06)',
+            background: selected ? T.primaryTint3 : 'rgba(20,17,10,0.07)',
             borderRadius: '4px 0 0 4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: selected ? T.primaryDeep : T.text4,
+            fontSize: 11,
+            fontWeight: 800,
+            lineHeight: 1,
+            zIndex: 1,
           }}
-        />
+        >
+          +
+        </div>
         <div
           onClick={canPriceClick ? (e) => onPriceClick(rateMeta, e) : undefined}
           style={{

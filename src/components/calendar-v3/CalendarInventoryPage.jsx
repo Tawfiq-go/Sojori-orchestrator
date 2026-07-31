@@ -15,6 +15,7 @@ import ReservationCalendarDrawer from './ReservationCalendarDrawer';
 import { useCalendarBreakpoint } from '../../hooks/useCalendarBreakpoint';
 import { normalizeCalendarReservation, reservationRouteId } from './reservationCalendarUtils';
 import reservationsService from '../../services/reservationsService';
+import { isCalendarImportReviewActive } from '../../services/calendarImportReviewService';
 import {
   MULTI_VISIBLE_DAYS,
   INVENTORY_PAST_RETENTION_DAYS,
@@ -37,6 +38,7 @@ export default function CalendarInventoryPage({
   listings: listingsProp,
   inventoriesByListing = {},
   inventoryData = {},
+  calendarBlocksById = {},
   inventoryLoading = false,
   onUpdateInventory,
   onDateChange,
@@ -46,6 +48,8 @@ export default function CalendarInventoryPage({
   dpSyncSummary = null,
   dpSyncLoading = false,
   listingNameById = {},
+  onCalendarImportReviewFinished,
+  onCalendarImportReviewActivated,
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsProp || [];
 
@@ -137,8 +141,8 @@ export default function CalendarInventoryPage({
   }, [viewFromUrl]);
 
   const [selectedColumns, setSelectedColumns] = useState([
-    'availableRoom',
     'rate',
+    'availableRoom',
     'minStay',
     'dynamicPrice',
   ]);
@@ -572,14 +576,18 @@ export default function CalendarInventoryPage({
           dpEnabledByListing={dpEnabledByListing}
           inventoriesByListing={inventoriesByListing}
           inventoryData={inventoryData}
+          calendarBlocksById={calendarBlocksById}
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
           onCellsSelected={canWrite ? setModalCells : undefined}
           onOpenReservation={openReservationDrawer}
+          onCalendarImportReviewFinished={onCalendarImportReviewFinished}
+          onCalendarImportReviewActivated={onCalendarImportReviewActivated}
           onToggleDynamicPrice={
             canWrite
               ? async ({ listingId, roomTypeId, dateStr, enable }) => {
                   const listing = listings.find((l) => String(l._id) === String(listingId));
+                  if (isCalendarImportReviewActive(listing)) return;
                   const rtId = roomTypeId || listing?.roomTypeId || listing?.roomTypes?.[0]?._id;
                   if (!rtId || !dateStr) return;
                   const base = {
@@ -633,8 +641,11 @@ export default function CalendarInventoryPage({
           onLoadMoreMonths={onLoadMoreMonths}
           inventoryLoading={inventoryLoading}
           inventories={simpleInventories}
+          calendarBlocksById={calendarBlocksById}
           onCellsSelected={canWrite ? setModalCells : undefined}
           onOpenReservation={openReservationDrawer}
+          onCalendarImportReviewFinished={onCalendarImportReviewFinished}
+          onCalendarImportReviewActivated={onCalendarImportReviewActivated}
         />
       )}
       {view === 'simple' && !selectedListing && (

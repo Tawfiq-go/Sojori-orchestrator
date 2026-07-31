@@ -309,6 +309,64 @@ class CalendarService {
         roomNumber?: number;
       }>;
     }>;
+    postImportAudit?: {
+      summary: {
+        activeReservations: number;
+        reservedNights: number;
+        blockedWithoutReservationDays: number;
+        openReservationDays: number;
+        priceVariationDays: number;
+        criticalOverbookingDays: number;
+        unmappedReservations: number;
+      };
+      reservations: Array<{
+        reservationNumber: string;
+        guestName: string;
+        channelName: string;
+        roomTypeId: string | null;
+        from: string;
+        to: string;
+        nights: number;
+        status: string;
+      }>;
+      overbookingRisks: Array<{
+        date: string;
+        roomTypeId: string;
+        roomTypeName: string;
+        capacity: number;
+        reservationCount: number;
+        reservationNumbers: string[];
+        severity: 'critical';
+      }>;
+      priceVariations: Array<{
+        date: string;
+        roomTypeId: string;
+        roomTypeName: string;
+        basePrice: number;
+        currentPrice: number;
+        difference: number;
+        percent: number;
+      }>;
+      priceDays?: Array<{
+        date: string;
+        roomTypeId: string;
+        roomTypeName: string;
+        inventoryBasePrice: number | null;
+        roomTypeBasePrice: number | null;
+        currentPrice: number;
+      }>;
+      suggestedBasePrice?: number | null;
+      unmappedReservations: Array<{
+        reservationNumber: string;
+        guestName: string;
+        channelName: string;
+        roomTypeId: null;
+        from: string;
+        to: string;
+        nights: number;
+        status: string;
+      }>;
+    };
   }> {
     try {
       const params: Record<string, string> = { listingId };
@@ -323,6 +381,7 @@ class CalendarService {
         from: string;
         to: string;
         roomTypes: any[];
+        postImportAudit?: any;
       }>(`${CALENDAR_BASE}/inventory/audit-blocked-days`, { params });
 
       const result = response.data;
@@ -334,11 +393,80 @@ class CalendarService {
         from: result.from,
         to: result.to,
         roomTypes: result.roomTypes || [],
+        postImportAudit: result.postImportAudit,
       };
     } catch (error) {
       console.error('Error auditing blocked days:', error);
       throw error;
     }
+  }
+
+  /**
+   * POST /api/v1/calendar/calendar-blocks
+   * Crée la métadonnée d'un blocage (titre/note/auteur) — couche affichage.
+   * ⚠️ Ne bloque PAS la dispo : appeler updateCalendar (stopSell/availability)
+   * AVANT, via le chemin existant qui pousse RU/Channex. Si cet appel échoue,
+   * la dispo reste bloquée (jour "Bloqué" générique) — ne pas rollback.
+   */
+  async createCalendarBlock(params: {
+    roomTypeId: string;
+    dateFrom: string; // YYYY-MM-DD
+    dateTo: string;
+    title: string;
+    note: string;
+  }): Promise<CalendarBlockDto> {
+    const response = await apiClient.post<{ success: boolean; data?: CalendarBlockDto; message?: string }>(
+      `${CALENDAR_BASE}/calendar-blocks`,
+      params,
+    );
+    if (!response.data?.success || !response.data.data) {
+      throw new Error(response.data?.message || 'Failed to create calendar block');
+    }
+    return response.data.data;
+  }
+
+  /**
+   * GET /api/v1/calendar/calendar-blocks?listingIds[]=&from=&to=&status=
+   * Blocs chevauchant la période (calendriers + planning).
+   * Retourne [] en cas d'erreur : l'affichage se dégrade en "Bloqué" générique.
+   */
+  async getCalendarBlocks(
+    listingIds: string[],
+    from: string,
+    to: string,
+    status: 'active' | 'released' | 'all' = 'active',
+  ): Promise<CalendarBlockDto[]> {
+    try {
+      const response = await apiClient.get<{ success: boolean; data?: CalendarBlockDto[] }>(
+        `${CALENDAR_BASE}/calendar-blocks`,
+        { params: { listingIds, from, to, status } },
+      );
+      if (!response.data?.success || !Array.isArray(response.data.data)) return [];
+      return response.data.data;
+    } catch (error) {
+      console.error('Error fetching calendar blocks (non-blocking):', error);
+      return [];
+    }
+  }
+
+  /**
+   * PUT /api/v1/calendar/calendar-blocks/:id/release
+   * Libère tout le bloc (sans body) ou une sous-période {dateFrom, dateTo}.
+   * ⚠️ Ne rouvre PAS la dispo : appeler updateCalendar (stopSell:false +
+   * availability) séparément via le chemin existant.
+   */
+  async releaseCalendarBlock(
+    blockId: string,
+    range?: { dateFrom: string; dateTo: string },
+  ): Promise<CalendarBlockDto> {
+    const response = await apiClient.put<{ success: boolean; data?: CalendarBlockDto; message?: string }>(
+      `${CALENDAR_BASE}/calendar-blocks/${blockId}/release`,
+      range ?? {},
+    );
+    if (!response.data?.success || !response.data.data) {
+      throw new Error(response.data?.message || 'Failed to release calendar block');
+    }
+    return response.data.data;
   }
 
   /** GET /api/v1/calendar/dynamic-price/get?listingId= */
@@ -387,6 +515,24 @@ class CalendarService {
 export const calendarService = new CalendarService();
 export default calendarService;
 
+
+/* ─── Blocages calendrier (métadonnées titre/note/auteur) ──────── */
+export interface CalendarBlockDto {
+  _id: string;
+  listingId: string;
+  roomTypeId: string;
+  dateFrom: string;
+  dateTo: string;
+  title: string;
+  note: string;
+  type: 'manual' | 'import_airbnb' | 'import_booking' | 'import_ru' | 'cancelled_reservation';
+  status: 'active' | 'released';
+  createdBy: { userId?: string; name: string; email?: string };
+  releasedDays: string[];
+  releasedBy?: { userId?: string; name: string; releasedAt: string };
+  createdAt: string;
+  updatedAt: string;
+}
 
 /* ─── Performance par bien (Dashboard) ─────────────────────────── */
 export interface ListingPerformanceMonth {

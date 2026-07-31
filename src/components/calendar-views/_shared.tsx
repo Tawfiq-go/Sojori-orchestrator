@@ -485,6 +485,13 @@ export interface ReservationRow {
   lastWa?: CommsChannelMeta & { exists?: boolean };
   /** Enreg / heure arr·dép / déclaré — pastilles sous barre. */
   stayOps?: StayOpsMeta;
+  /**
+   * 'block' = blocage calendrier (CalendarBlock, pas une résa) : barre grise/rouge,
+   * guestName porte le titre du bloc, blockNote/blockAuthor pour le détail.
+   */
+  kind?: 'reservation' | 'block';
+  blockNote?: string;
+  blockAuthor?: string;
 }
 
 export type PlanningRoomTypeRef = { id: string; name: string };
@@ -2297,6 +2304,9 @@ export function GanttBar({
   roomTypeName,
   roomName,
   listingName,
+  isBlock = false,
+  blockNote,
+  blockAuthor,
 }: {
   channel: Channel;
   guestName: string;
@@ -2319,8 +2329,14 @@ export function GanttBar({
   /** Unité inventaire Mews (101) — prioritaire sur la barre. */
   roomName?: string;
   listingName?: string;
+  /** Blocage calendrier (CalendarBlock) : barre neutre rouge, tooltip titre/note/auteur. */
+  isBlock?: boolean;
+  blockNote?: string;
+  blockAuthor?: string;
 }) {
-  const ch = CHANNEL_COCKPIT[channel];
+  const ch = isBlock
+    ? { color: '#b91c1c', wash: 'rgba(220,38,38,0.09)' }
+    : CHANNEL_COCKPIT[channel];
   const channelLabel = { airbnb: 'Airbnb', booking: 'Booking', vrbo: 'Vrbo', direct: 'Direct' }[channel];
   const barH = compact ? STAY_COMPACT.RES_BAR_HEIGHT : STAY.RES_BAR_HEIGHT;
   const barTop = compact ? STAY_COMPACT.RES_BAR_TOP : STAY.RES_BAR_TOP;
@@ -2345,7 +2361,20 @@ export function GanttBar({
 
   return (
     <Tooltip
-      title={(
+      title={isBlock ? (
+        <Box sx={{ p: 0.5, maxWidth: 260 }}>
+          <Box sx={{ fontSize: 12.5, fontWeight: 800, mb: 0.3 }}>🚫 {guestName}</Box>
+          {blockNote ? (
+            <Box sx={{ fontSize: 11.5, lineHeight: 1.45, whiteSpace: 'pre-wrap', mb: 0.3 }}>
+              {blockNote}
+            </Box>
+          ) : null}
+          <Box sx={{ fontSize: 10.5, opacity: 0.8 }}>
+            Bloqué{blockAuthor ? ` par ${blockAuthor}` : ''}
+            {nights != null && nights > 0 ? ` · ${nights} nuit(s)` : ''}
+          </Box>
+        </Box>
+      ) : (
         <ReservationHoverContent
           guestName={guestName}
           reservationNumber={reservationNumber}
@@ -2412,7 +2441,7 @@ export function GanttBar({
             <Box component="span" sx={{ fontSize: 9, color: T.warning, flexShrink: 0 }}>⏳</Box>
           )}
           <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
-            {guestName}
+            {isBlock ? '🚫 ' : ''}{guestName}
             {barSuffix && !compact ? (
               <Box
                 component="span"
