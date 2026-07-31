@@ -486,7 +486,7 @@ export default function UpdateInventoryModal({
         padding: 16,
         pointerEvents: 'none',
       }}>
-        <div style={{
+        <div role="dialog" aria-modal="true" style={{
           pointerEvents: 'auto',
           background: T.bg1,
           borderRadius: 18,
