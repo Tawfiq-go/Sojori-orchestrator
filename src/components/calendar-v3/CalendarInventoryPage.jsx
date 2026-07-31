@@ -15,6 +15,7 @@ import ReservationCalendarDrawer from './ReservationCalendarDrawer';
 import { useCalendarBreakpoint } from '../../hooks/useCalendarBreakpoint';
 import { normalizeCalendarReservation, reservationRouteId } from './reservationCalendarUtils';
 import reservationsService from '../../services/reservationsService';
+import calendarService from '../../services/calendarService';
 import { isCalendarImportReviewActive } from '../../services/calendarImportReviewService';
 import {
   MULTI_VISIBLE_DAYS,
@@ -644,6 +645,35 @@ export default function CalendarInventoryPage({
           calendarBlocksById={calendarBlocksById}
           onCellsSelected={canWrite ? setModalCells : undefined}
           onOpenReservation={openReservationDrawer}
+          onReleaseBlock={
+            canWrite
+              ? async (block, fromIso, toIso) => {
+                  // 1. Métadonnée d'abord (retire blockId des jours) — si échec, on s'arrête
+                  //    et la dispo n'est pas touchée.
+                  await calendarService.releaseCalendarBlock(String(block._id), {
+                    dateFrom: fromIso,
+                    dateTo: toIso,
+                  });
+                  // 2. Réouverture dispo via le chemin existant (→ RU U=1, Channex) + refetch.
+                  await onUpdateInventory?.([
+                    {
+                      roomTypeId: String(block.roomTypeId),
+                      date_from: fromIso,
+                      date_to: toIso,
+                      type: 'availability',
+                      availableRoom: 1,
+                    },
+                    {
+                      roomTypeId: String(block.roomTypeId),
+                      date_from: fromIso,
+                      date_to: toIso,
+                      type: 'stopSell',
+                      stopSell: false,
+                    },
+                  ]);
+                }
+              : undefined
+          }
           onCalendarImportReviewFinished={onCalendarImportReviewFinished}
           onCalendarImportReviewActivated={onCalendarImportReviewActivated}
         />
