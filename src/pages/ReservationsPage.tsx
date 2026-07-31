@@ -979,9 +979,30 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
   onStayUpdate?: (reservationId: string, patch: StayFieldPatch) => void;
   onRegistrationUpdate?: (reservationId: string, patch: RegistrationFieldPatch) => void;
 }) {
+  /**
+   * Élévation de la colonne épinglée (pattern Material) : à plat au repos,
+   * ombre marquée dès qu'on scrolle — les autres colonnes passent visuellement
+   * SOUS la colonne Voyageur.
+   */
+  const [hScrolled, setHScrolled] = useState(false);
+  const scrollHostRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = scrollHostRef.current;
+    if (!el) return undefined;
+    const onScroll = () => {
+      const scrolled = el.scrollLeft > 2;
+      setHScrolled((prev) => (prev === scrolled ? prev : scrolled));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+  const pinnedShadow = hScrolled
+    ? '6px 0 12px -2px rgba(20,17,10,0.20), 1px 0 0 rgba(20,17,10,0.10)'
+    : '2px 0 4px rgba(20,17,10,0.06)';
+
   return (
     <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.5, overflow: 'hidden' }}>
-      <Box sx={{ overflowX: 'auto' }}>
+      <Box ref={scrollHostRef} sx={{ overflowX: 'auto' }}>
         <Box component="table" sx={{ width: '100%', minWidth: 1520, borderCollapse: 'collapse', fontSize: 12.5 }}>
           <Box component="thead">
             <Box component="tr" sx={{
@@ -1000,7 +1021,8 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                   ...(h === 'Voyageur' && {
                     position: 'sticky', left: 0, zIndex: 4,
                     bgcolor: T.bg2, minWidth: 185,
-                    boxShadow: '2px 0 4px rgba(20,17,10,0.06)',
+                    boxShadow: pinnedShadow,
+                    transition: 'box-shadow 0.15s ease',
                   }),
                 }}>{h}</Box>
               ))}
@@ -1025,7 +1047,8 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                     '& > td:first-of-type': {
                       position: 'sticky', left: 0, zIndex: 2,
                       bgcolor: unacknowledged ? '#fdf3d0' : T.bg1,
-                      boxShadow: '2px 0 4px rgba(20,17,10,0.06)',
+                      boxShadow: pinnedShadow,
+                      transition: 'box-shadow 0.15s ease',
                     },
                     '&:hover > td:first-of-type': {
                       bgcolor: unacknowledged ? '#fbeeb9' : T.bg2,
