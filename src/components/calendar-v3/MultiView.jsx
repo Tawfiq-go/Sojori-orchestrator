@@ -283,12 +283,7 @@ export default function MultiView({
       if (syncing.current) return;
       // Header overflow:hidden : si pas de overflow réel, scrollLeft reste 0
       // et réécraserait body → casse le scroll hori (souvent collapse fermé).
-      if (h.scrollWidth - h.clientWidth <= 1) {
-        console.warn('[cal-hscroll] header cannot scroll — ignore onHead', {
-          hsw: h.scrollWidth, hcw: h.clientWidth, bsl: b.scrollLeft,
-        });
-        return;
-      }
+      if (h.scrollWidth - h.clientWidth <= 1) return;
       syncing.current = true;
       b.scrollLeft = h.scrollLeft;
       requestAnimationFrame(() => { syncing.current = false; });
@@ -306,26 +301,15 @@ export default function MultiView({
     const body = bodyRef.current;
     const header = headerRef.current;
     const root = body?.parentElement;
-    if (!body || !root) {
-      console.warn('[cal-hscroll] mount skip', { body: !!body, root: !!root, header: !!header });
-      return undefined;
-    }
-
-    console.info('[cal-hscroll] listener ON', {
-      leftW: LEFT_W,
-      scrollWidth: body.scrollWidth,
-      clientWidth: body.clientWidth,
-      scrollHeight: body.scrollHeight,
-      clientHeight: body.clientHeight,
-    });
+    if (!body || !root) return undefined;
 
     const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-    let logCount = 0;
 
     const onWheel = (e) => {
       if (e.ctrlKey) return; // pinch-zoom navigateur
       const maxX = body.scrollWidth - body.clientWidth;
       const maxY = body.scrollHeight - body.clientHeight;
+      if (maxX <= 1 && maxY <= 1) return;
 
       const bodyRect = body.getBoundingClientRect();
       const headerRect = header?.getBoundingClientRect();
@@ -341,78 +325,31 @@ export default function MultiView({
         body.contains(/** @type {Node} */ (e.target)) ||
         (e.clientX >= bodyRect.left && e.clientX <= bodyRect.right &&
           e.clientY >= bodyRect.top && e.clientY <= bodyRect.bottom);
+      if (!overHeader && !overBody) return;
 
       const originLeft = overHeader ? (headerRect?.left ?? bodyRect.left) : bodyRect.left;
       const localX = e.clientX - originLeft;
       const overLeftCol = localX < LEFT_W;
-      const collapseOpen = !!body.querySelector('[style*="dashed"]'); // lignes Dispo/Min stay
-
-      const wantLog = logCount < 40 || e.shiftKey;
-      const log = (phase, extra = {}) => {
-        if (!wantLog) return;
-        logCount += 1;
-        console.log(`[cal-hscroll] #${logCount} ${phase}`, {
-          deltaX: e.deltaX,
-          deltaY: e.deltaY,
-          overHeader,
-          overBody,
-          overLeftCol,
-          localX: Math.round(localX),
-          LEFT_W,
-          maxX,
-          maxY,
-          scrollLeft: body.scrollLeft,
-          headerScrollLeft: header?.scrollLeft,
-          collapseOpen,
-          target: e.target?.className || e.target?.tagName,
-          ...extra,
-        });
-      };
-
-      if (maxX <= 1 && maxY <= 1) {
-        log('skip:no-overflow');
-        return;
-      }
-      if (!overHeader && !overBody) {
-        log('skip:outside');
-        return;
-      }
 
       // Colonne noms : scroll vertical des listings (si débordement)
       if (overLeftCol && !overHeader && !e.shiftKey && maxY > 1 && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
-        if (!e.deltaY) {
-          log('skip:left-col-no-dy');
-          return;
-        }
+        if (!e.deltaY) return;
         const next = clamp(body.scrollTop + e.deltaY, 0, maxY);
-        if (next === body.scrollTop) {
-          log('skip:left-col-at-edge', { scrollTop: body.scrollTop });
-          return;
-        }
+        if (next === body.scrollTop) return;
         body.scrollTop = next;
         e.preventDefault();
         e.stopPropagation();
-        log('vertical', { scrollTop: next });
         return;
       }
 
       // Header dates + cellules prix/dispo : toujours horizontal (collapse ouvert ou fermé)
-      if (maxX <= 1) {
-        log('skip:maxX=0');
-        return;
-      }
+      if (maxX <= 1) return;
       const delta =
         (Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : 0) || e.deltaY || e.deltaX;
-      if (!delta) {
-        log('skip:delta=0');
-        return;
-      }
+      if (!delta) return;
       const prev = body.scrollLeft;
       const next = clamp(prev + delta, 0, maxX);
-      if (next === prev) {
-        log('skip:h-at-edge', { prev, delta, maxX });
-        return;
-      }
+      if (next === prev) return;
       // Bloquer le sync inverse header→body pendant l'application
       syncing.current = true;
       body.scrollLeft = next;
@@ -420,24 +357,60 @@ export default function MultiView({
       requestAnimationFrame(() => { syncing.current = false; });
       e.preventDefault();
       e.stopPropagation();
-      log('horizontal', {
-        prev,
-        next,
-        delta,
-        applied: body.scrollLeft,
-        headerApplied: header?.scrollLeft,
-        headerMax: header ? header.scrollWidth - header.clientWidth : null,
-        bodySw: body.scrollWidth,
-        bodyCw: body.clientWidth,
-      });
     };
 
     root.addEventListener('wheel', onWheel, { passive: false, capture: true });
     return () => {
-      console.info('[cal-hscroll] listener OFF');
       root.removeEventListener('wheel', onWheel, { capture: true });
     };
   }, [LEFT_W]);
+
+  /* ─── Flèches clavier ← / → : scroll horizontal de la grille (Shift = 7 jours) ───
+   * Actives dès le chargement, sans clic ni survol préalable (la grille multi est
+   * la seule zone scrollable horizontalement de la page). Le handler s'efface si :
+   * un champ de saisie a le focus, un modal (aria-modal) est ouvert, ou un
+   * raccourci navigateur (Cmd/Ctrl/Alt) est utilisé. */
+  useEffect(() => {
+    const body = bodyRef.current;
+    const header = headerRef.current;
+    if (!body) return undefined;
+
+    const onKeyDown = (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const ae = document.activeElement;
+      if (
+        ae &&
+        (ae.tagName === 'INPUT' ||
+          ae.tagName === 'TEXTAREA' ||
+          ae.tagName === 'SELECT' ||
+          ae.isContentEditable)
+      ) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+
+      const maxX = body.scrollWidth - body.clientWidth;
+      if (maxX <= 1) return;
+
+      const step = CELL_W * (e.shiftKey ? 7 : 1);
+      const next = Math.max(
+        0,
+        Math.min(maxX, body.scrollLeft + (e.key === 'ArrowRight' ? step : -step)),
+      );
+      // La flèche appartient à la grille même en butée — pas de scroll page derrière.
+      e.preventDefault();
+      if (next === body.scrollLeft) return;
+
+      syncing.current = true;
+      body.scrollLeft = next;
+      if (header) header.scrollLeft = next;
+      requestAnimationFrame(() => { syncing.current = false; });
+    };
+
+    document.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, { capture: true });
+    };
+  }, [CELL_W]);
 
   /* ─── Popover rotations / clic résa ─── */
   const [popover, setPopover] = useState(null);
@@ -957,10 +930,15 @@ function ListingRow({
   const handleFinishCalendarImport = useCallback(async () => {
     if (!listing?._id || finishingCalendarImport) return;
     setFinishingCalendarImport(true);
+    console.log('[MultiView] Terminer import — début', { listingId: String(listing._id) });
     try {
       await finishListingCalendarImportReview(String(listing._id));
+      // Publication lancée côté serveur (arrière-plan) — on ferme la modal tout de suite.
+      console.log('[MultiView] Terminer import — OK, fermeture modal', { listingId: String(listing._id) });
+      setAuditOpen(false);
       onCalendarImportReviewFinished?.(String(listing._id));
     } catch (err) {
+      console.error('[MultiView] Terminer import — échec', err);
       window.alert(err?.message || 'Impossible de finir l’import calendrier');
     } finally {
       setFinishingCalendarImport(false);
