@@ -12,25 +12,59 @@ import {
 } from './_shared';
 
 /** Fonds soft — uniquement statut inventaire (jamais M/D). */
-const CELL_BG = {
-  reserved: 'rgba(22, 163, 74, 0.14)',   // vert = réservé
-  available: 'rgba(37, 99, 235, 0.12)',  // bleu = disponible
-  blocked: 'rgba(220, 38, 38, 0.14)',    // rouge = bloqué
+/** Couleurs par canal de résa — repères familiers Airbnb/Booking + or brand Sojori. */
+const CHANNEL_COLORS = {
+  airbnb:  { bg: 'rgba(255,90,95,0.16)',  accent: '#FF5A5F' },
+  booking: { bg: 'rgba(0,113,194,0.14)',  accent: '#0071C2' },
+  sojori:  { bg: 'rgba(184,133,26,0.18)', accent: '#b8851a' },
+  other:   { bg: 'rgba(124,58,237,0.13)', accent: '#7C3AED' },
 };
 
-/** Couleur de fond cellule selon réservé / dispo / bloqué — pas selon M/D. */
+const CELL_BG = {
+  available: '#ffffff',                   // neutre = vendable (comme Airbnb)
+  // hachures grises = bloqué (code visuel Airbnb pour indisponible)
+  blocked: 'repeating-linear-gradient(-45deg, rgba(136,135,128,0.22), rgba(136,135,128,0.22) 3px, transparent 3px, transparent 6px)',
+};
+
+function reservationChannelKind(channelName) {
+  const n = String(channelName || '').toLowerCase();
+  if (n.includes('airbnb')) return 'airbnb';
+  if (n.includes('booking')) return 'booking';
+  if (n.includes('sojori')) return 'sojori';
+  return 'other';
+}
+
+/** Canal du jour — si départ + arrivée le même jour, la couleur suit la résa qui arrive. */
+function dayChannelColors(inv) {
+  const resas = inv?.reservations || [];
+  if (resas.length === 0) return null;
+  let pick = resas[0];
+  for (const r of resas) {
+    if (String(r?.arrivalDate || '') > String(pick?.arrivalDate || '')) pick = r;
+  }
+  return CHANNEL_COLORS[reservationChannelKind(pick?.channelName)];
+}
+
+/** Couleur de fond cellule selon canal résa / dispo / bloqué — pas selon M/D. */
 function inventoryStatusBackground(state, inv) {
   if (state === 'out_of_window') return OUT_OF_WINDOW_CELL_BG;
   if (state === 'archive') return ARCHIVE_CELL_BG;
   if (state === 'missing' || !hasInventoryData(inv)) return T.bg2;
-  const isBooked = (inv?.reservations?.length ?? 0) > 0;
-  if (isBooked) return CELL_BG.reserved;
+  const chan = dayChannelColors(inv);
+  if (chan) return chan.bg;
   const isStop = inv?.stopSell === true;
   const ar = inv?.availableRoom;
   const isZero = ar != null && Number(ar) <= 0;
   const isClosed = inv?.available === false;
   if (isStop || isZero || isClosed) return CELL_BG.blocked;
   return CELL_BG.available;
+}
+
+/** Barre d'accent (haut de cellule) couleur canal quand le jour est réservé. */
+function channelAccentShadow(state, inv) {
+  if (state !== 'data' && state !== 'archive') return undefined;
+  const chan = dayChannelColors(inv);
+  return chan ? `inset 0 2px 0 ${chan.accent}` : undefined;
 }
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
@@ -454,9 +488,12 @@ export default function MultiView({
           Légende
         </span>
         <div style={{ display: 'flex', gap: 12, fontSize: 10.5, color: T.text2, fontWeight: 600, flexWrap: 'wrap' }}>
-          <Legend dot="rgba(22,163,74,0.85)" label="Réservé" />
-          <Legend dot="rgba(37,99,235,0.85)" label="Disponible" />
-          <Legend dot="rgba(220,38,38,0.85)" label="Bloqué" />
+          <Legend dot={CHANNEL_COLORS.airbnb.accent} label="Résa Airbnb" />
+          <Legend dot={CHANNEL_COLORS.booking.accent} label="Résa Booking" />
+          <Legend dot={CHANNEL_COLORS.sojori.accent} label="Résa Sojori" />
+          <Legend dot={CHANNEL_COLORS.other.accent} label="Autre canal" />
+          <Legend dot="repeating-linear-gradient(-45deg, rgba(136,135,128,0.6), rgba(136,135,128,0.6) 2px, transparent 2px, transparent 4px)" label="Bloqué" />
+          <Legend dot="#fff" dotBorder label="Disponible" />
           <Legend dot="#b91c1c" label="Import calendrier à finir" />
           <span style={{ color: T.text3, fontWeight: 600 }}>Lettres : M = manuel · D = dynamique</span>
           <Legend dot={ARCHIVE_CELL_BG} label="Historique (lecture seule)" />
@@ -1303,8 +1340,9 @@ function PrimaryInventoryCell({
   const blocksById = useContext(CalendarBlocksContext);
   const dayBlock = inv?.blockId ? blocksById[String(inv.blockId)] : null;
   const blockInfo = state === 'data' ? blockedNoResaInfo(inv, dayBlock) : null;
-  // Fond = uniquement réservé / dispo / bloqué (jamais M/D)
+  // Fond = uniquement canal résa / dispo / bloqué (jamais M/D)
   const background = inventoryStatusBackground(state, inv);
+  const accentShadow = channelAccentShadow(state, inv);
 
   const dash = '—';
   // Single : jamais 0/1 sur la ligne principale (dispo → collapse). Multi : compteur si filtre Dispo actif.
@@ -1339,20 +1377,11 @@ function PrimaryInventoryCell({
         position: 'relative',
         fontFamily: '"Geist Mono", monospace',
         background: anySelected ? T.primaryTint3 : background,
+        boxShadow: anySelected ? undefined : accentShadow,
         userSelect: 'none',
         gap: 2,
       }}
     >
-      {blockInfo && (
-        <span
-          aria-hidden
-          title={blockInfo.label}
-          style={{
-            position: 'absolute', top: 3, left: 3, width: 5, height: 5,
-            borderRadius: '50%', background: blockInfo.color, lineHeight: 1, zIndex: 2,
-          }}
-        />
-      )}
 
       {hasExcelZone && hasPriceZone && (
         <div
@@ -1474,8 +1503,9 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
   const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
   const noData = state === 'out_of_window' || state === 'missing';
   const archived = state === 'archive';
-  // Fond = uniquement réservé / dispo / bloqué (jamais M/D)
+  // Fond = uniquement canal résa / dispo / bloqué (jamais M/D)
   let background = inventoryStatusBackground(state, inv);
+  const accentShadow = selected ? undefined : channelAccentShadow(state, inv);
   if (selected) background = T.primaryTint3;
 
   const dash = '—';
@@ -1561,9 +1591,10 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
   else if (col.id === 'closedDeparture') content = inv.closedDeparture ? <span style={{ color: T.error }}>⛔</span> : <span style={{ color: T.success }}>✅</span>;
   else if (col.id === 'reservations') {
     const n = inv.reservations?.length ?? 0;
+    const chan = dayChannelColors(inv);
     const resaBadgeStyle = {
-      fontSize: 10, fontWeight: 700, color: T.primaryDeep,
-      background: T.primaryTint, padding: '1px 6px', borderRadius: 99,
+      fontSize: 10, fontWeight: 700, color: '#fff',
+      background: chan?.accent || T.primaryDeep, padding: '1px 6px', borderRadius: 99,
       cursor: 'pointer', fontFamily: '"Geist Mono", monospace',
     };
     if (n === 0) {
@@ -1618,6 +1649,7 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
           fontSize: 12,
           fontWeight: 600,
           background: selected ? T.primaryTint3 : background,
+          boxShadow: accentShadow,
           color: selected ? T.primaryDeep : T.text,
         }}
       >
@@ -1675,7 +1707,7 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
         fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 600,
         cursor: archived ? 'not-allowed' : draggable ? 'cell' : 'default',
         background: tipOpen ? T.primaryTint : background,
-        boxShadow: selected || tipOpen ? `inset 0 0 0 2px ${T.primary}` : 'none',
+        boxShadow: selected || tipOpen ? `inset 0 0 0 2px ${T.primary}` : (accentShadow || 'none'),
         color: selected ? T.primaryDeep : T.text,
         transition: 'background 0.1s',
       }}>
@@ -1685,10 +1717,13 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
 }
 
 /* ─── Legend item (dot + label) ─── */
-function Legend({ dot, label }) {
+function Legend({ dot, label, dotBorder }) {
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <i style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+      <i style={{
+        width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0,
+        border: dotBorder ? `1px solid ${T.borderStrong}` : 'none',
+      }} />
       {label}
     </span>
   );

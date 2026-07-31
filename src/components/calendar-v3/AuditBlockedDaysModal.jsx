@@ -81,7 +81,7 @@ function RowAction({ st, onFix, label = 'Modifier' }) {
           <span className="spin" />
           Correction…
         </button>
-        <span className="loc">Correction locale — aucun envoi RU</span>
+        <span className="loc">Correction locale — aucun envoi vers les canaux</span>
       </div>
     );
   }
@@ -104,7 +104,7 @@ function RowAction({ st, onFix, label = 'Modifier' }) {
       <button type="button" className="b b-o" onClick={onFix}>
         {label}
       </button>
-      <span className="loc">Correction locale — aucun envoi RU</span>
+      <span className="loc">Correction locale — aucun envoi vers les canaux</span>
     </div>
   );
 }
@@ -181,7 +181,7 @@ function PriceRow({ row, st, draft, onDraft, onFix, min, max }) {
               <span className="spin" />
               Correction…
             </button>
-            <span className="loc">Correction locale — aucun envoi RU</span>
+            <span className="loc">Correction locale — aucun envoi vers les canaux</span>
           </div>
         ) : (
           <div>
@@ -219,7 +219,7 @@ function PriceRow({ row, st, draft, onDraft, onFix, min, max }) {
                   {String(st)}
                 </span>
               ) : (
-                <span className="loc">Correction locale — aucun envoi RU</span>
+                <span className="loc">Correction locale — aucun envoi vers les canaux</span>
               )}
             </div>
           </div>
@@ -411,8 +411,13 @@ export default function AuditBlockedDaysModal({
   };
 
   const runFinish = async () => {
+    console.log('[AuditModal] clic « Oui, publier 365 jours »', {
+      hasHandler: Boolean(onFinishCalendarImport),
+      finishingCalendarImport,
+    });
     if (!onFinishCalendarImport) return;
     await onFinishCalendarImport();
+    console.log('[AuditModal] onFinishCalendarImport terminé');
   };
 
   return (
@@ -462,7 +467,7 @@ export default function AuditBlockedDaysModal({
                   </span>
                   <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--ink2)' }}>
                     <b style={{ color: 'var(--ink)' }}>Rien ne quitte Sojori pendant cette revue.</b> Chaque correction
-                    reste locale. L’envoi vers RU et les canaux n’a lieu qu’au moment où vous cliquez sur{' '}
+                    reste locale. L’envoi vers les canaux n’a lieu qu’au moment où vous cliquez sur{' '}
                     <b style={{ color: 'var(--ink)' }}>Terminer import</b>.
                   </div>
                 </div>
@@ -597,7 +602,7 @@ export default function AuditBlockedDaysModal({
                         Capacité dépassée sur une nuit. À trancher avant publication — aucune action auto ici.
                       </div>
                       {overbookingRisks.length === 0 ? (
-                        <AllClear>Aucun overbooking. Rien n’a encore été envoyé vers RU.</AllClear>
+                        <AllClear>Aucun overbooking. Rien n’a encore été envoyé vers les canaux.</AllClear>
                       ) : (
                         <>
                           <div className="hd r-ob">
@@ -640,10 +645,10 @@ export default function AuditBlockedDaysModal({
                       />
                       <div className="secsub">
                         Jours fermés sans réservation, ou ouverts alors qu’un séjour les couvre. « Modifier » aligne la
-                        disponibilité localement — sans push RU.
+                        disponibilité localement — sans envoi vers les canaux.
                       </div>
                       {allRanges.length === 0 ? (
-                        <AllClear>Toutes les disponibilités sont cohérentes. Rien n’a encore été envoyé vers RU.</AllClear>
+                        <AllClear>Toutes les disponibilités sont cohérentes. Rien n’a encore été envoyé vers les canaux.</AllClear>
                       ) : (
                         <>
                           <div className="hd r-bl">
@@ -773,7 +778,7 @@ export default function AuditBlockedDaysModal({
                         </div>
                       </div>
                       {outOfRange.length === 0 ? (
-                        <AllClear>Tous les prix sont dans les bornes. Rien n’a encore été envoyé vers RU.</AllClear>
+                        <AllClear>Tous les prix sont dans les bornes. Rien n’a encore été envoyé vers les canaux.</AllClear>
                       ) : (
                         <>
                           <div className="hd r-pr">
@@ -910,9 +915,9 @@ export default function AuditBlockedDaysModal({
                 </div>
               ) : (
                 <div className="confirm">
-                  <h3>Publier vers RU et les canaux ?</h3>
+                  <h3>Publier vers les canaux ?</h3>
                   <p>
-                    Cette action publiera les prix et disponibilités des 365 prochains jours vers RU et les canaux.
+                    Cette action publiera les prix et disponibilités des 365 prochains jours vers les canaux.
                   </p>
                   {critOpen > 0 ? (
                     <div className="warnline">

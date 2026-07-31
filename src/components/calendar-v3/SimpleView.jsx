@@ -167,10 +167,15 @@ export default function SimpleView({
   const handleFinishCalendarImport = async () => {
     if (!listing?._id || finishingCalendarImport) return;
     setFinishingCalendarImport(true);
+    console.log('[SimpleView] Terminer import — début', { listingId: String(listing._id) });
     try {
       await finishListingCalendarImportReview(String(listing._id));
+      // Publication lancée côté serveur (arrière-plan) — on ferme la modal tout de suite.
+      console.log('[SimpleView] Terminer import — OK, fermeture modal', { listingId: String(listing._id) });
+      setAuditOpen(false);
       onCalendarImportReviewFinished?.(String(listing._id));
     } catch (err) {
+      console.error('[SimpleView] Terminer import — échec', err);
       window.alert(err?.message || 'Impossible de finir l’import calendrier');
     } finally {
       setFinishingCalendarImport(false);

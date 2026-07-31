@@ -39,8 +39,24 @@ export async function activateListingCalendarImportReview(
 export async function finishListingCalendarImportReview(
   listingId: string,
 ): Promise<ListingCalendarImportReviewState> {
-  const res = await apiClient.post(
-    `${LISTING_API_BASE_URL}/listings/${listingId}/calendar-import-review/finish`,
-  );
-  return res.data?.data ?? { active: false };
+  const url = `${LISTING_API_BASE_URL}/listings/${listingId}/calendar-import-review/finish`;
+  const t0 = Date.now();
+  console.log('[calendarImportReview] finish → POST', url);
+  try {
+    const res = await apiClient.post(url);
+    console.log('[calendarImportReview] finish ← réponse', {
+      ms: Date.now() - t0,
+      status: res.status,
+      data: res.data,
+    });
+    return res.data?.data ?? { active: false };
+  } catch (err) {
+    console.error('[calendarImportReview] finish ✗ échec', {
+      ms: Date.now() - t0,
+      status: (err as { response?: { status?: number } })?.response?.status,
+      message: (err as Error)?.message,
+      data: (err as { response?: { data?: unknown } })?.response?.data,
+    });
+    throw err;
+  }
 }
