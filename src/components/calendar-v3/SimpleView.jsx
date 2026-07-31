@@ -24,16 +24,31 @@ import {
 const WEEKDAYS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
 const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
+/* Aligné sur la vue multi : corail Airbnb, bleu Booking, or brand Sojori, violet autres. */
 const RESA_BAR_COLORS = {
-  airbnb: { bg: '#FF5A5F', text: '#fff', label: 'Airbnb' },
-  booking: { bg: '#003580', text: '#fff', label: 'Booking.com' },
-  vrbo: { bg: '#3B82F6', text: '#fff', label: 'Vrbo' },
-  expedia: { bg: '#FEC10D', text: '#1a1a1a', label: 'Expedia' },
-  mews: { bg: '#0D9488', text: '#fff', label: 'Mews' },
-  direct: { bg: '#7C3AED', text: '#fff', label: 'Direct' },
-  pending: { bg: '#D97706', text: '#fff', label: 'En attente' },
-  default: { bg: '#64748B', text: '#fff', label: 'Autre' },
+  airbnb: { bg: '#FF5A5F', text: '#fff', label: 'Airbnb', tint: 'rgba(255,90,95,0.16)' },
+  booking: { bg: '#0071C2', text: '#fff', label: 'Booking.com', tint: 'rgba(0,113,194,0.14)' },
+  vrbo: { bg: '#3B82F6', text: '#fff', label: 'Vrbo', tint: 'rgba(59,130,246,0.14)' },
+  expedia: { bg: '#FEC10D', text: '#1a1a1a', label: 'Expedia', tint: 'rgba(254,193,13,0.18)' },
+  mews: { bg: '#0D9488', text: '#fff', label: 'Mews', tint: 'rgba(13,148,136,0.14)' },
+  direct: { bg: '#b8851a', text: '#fff', label: 'Sojori', tint: 'rgba(184,133,26,0.18)' },
+  pending: { bg: '#D97706', text: '#fff', label: 'En attente', tint: 'rgba(217,119,6,0.15)' },
+  default: { bg: '#7C3AED', text: '#fff', label: 'Autre canal', tint: 'rgba(124,58,237,0.13)' },
 };
+
+/* Hachures grises = bloqué (même code visuel que la vue multi / Airbnb). */
+const BLOCKED_HATCH_BG = 'repeating-linear-gradient(-45deg, rgba(136,135,128,0.22), rgba(136,135,128,0.22) 3px, transparent 3px, transparent 6px)';
+
+/** Teinte de fond du jour selon la résa — si départ + arrivée le même jour, suit celle qui arrive. */
+function dayReservationTint(inv) {
+  const resas = inv?.reservations || [];
+  if (resas.length === 0) return null;
+  let pick = resas[0];
+  for (const r of resas) {
+    if (String(r?.arrivalDate || '') > String(pick?.arrivalDate || '')) pick = r;
+  }
+  return reservationBarColors(pick).tint;
+}
 
 function reservationBarColors(res) {
   const status = String(res?.status || '').toLowerCase();
@@ -158,6 +173,7 @@ export default function SimpleView({
     loading: false, error: null, roomTypes: [], postImportAudit: null,
   });
   const [finishingCalendarImport, setFinishingCalendarImport] = useState(false);
+  const [publishingCalendar, setPublishingCalendar] = useState(false);
   const [activatingCalendarImport, setActivatingCalendarImport] = useState(false);
   const calendarReviewActive = isCalendarImportReviewActive(listing);
   const handleAuditClick = () => {
@@ -179,6 +195,21 @@ export default function SimpleView({
       window.alert(err?.message || 'Impossible de finir l’import calendrier');
     } finally {
       setFinishingCalendarImport(false);
+    }
+  };
+  const handlePublishCalendar = async () => {
+    if (!listing?._id || publishingCalendar) return;
+    setPublishingCalendar(true);
+    console.log('[SimpleView] Mise à jour calendrier 365j — début', { listingId: String(listing._id) });
+    try {
+      await calendarService.pushInventoryToChannels(String(listing._id));
+      console.log('[SimpleView] Mise à jour calendrier 365j — OK', { listingId: String(listing._id) });
+      setAuditOpen(false);
+    } catch (err) {
+      console.error('[SimpleView] Mise à jour calendrier 365j — échec', err);
+      window.alert(err?.response?.data?.message || err?.message || 'Impossible de publier le calendrier');
+    } finally {
+      setPublishingCalendar(false);
     }
   };
   const handleActivateCalendarImport = async () => {
@@ -243,6 +274,8 @@ export default function SimpleView({
 
   const currency = listing.currencyCode || listing.currency || 'MAD';
   const isRoomTypeRail = railMode === 'roomTypes';
+  /** Barres de résas masquées par défaut — le calendrier d'abord, toggle pour les voir. */
+  const [showResas, setShowResas] = useState(false);
   const headerTitle = isRoomTypeRail && listing.roomTypeName
     ? listing.roomTypeName
     : listing.name;
@@ -377,11 +410,29 @@ export default function SimpleView({
                 {calendarReviewActive ? '▶ revue cal.' : '▶ audit'}
               </button>
             </h3>
-            <div style={{ display: 'flex', gap: 14, fontSize: 10.5, color: T.text3, flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 14, fontSize: 10.5, color: T.text3, flexShrink: 0, alignItems: 'center' }}>
+              <button
+                type="button"
+                title={showResas ? 'Masquer les réservations' : 'Afficher les réservations'}
+                onClick={() => setShowResas((v) => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  fontSize: 10.5, fontWeight: 800, lineHeight: 1,
+                  padding: '4px 9px', borderRadius: 99, cursor: 'pointer',
+                  background: showResas ? T.primaryTint : 'transparent',
+                  color: showResas ? T.primaryDeep : T.text3,
+                  border: `1px solid ${showResas ? T.primary : T.border}`,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {showResas ? '👁 Résas ON' : '👁 Résas'}
+              </button>
               <Legend dot={RESA_BAR_COLORS.airbnb.bg} label="Airbnb" />
               <Legend dot={RESA_BAR_COLORS.booking.bg} label="Booking" />
+              <Legend dot={RESA_BAR_COLORS.direct.bg} label="Sojori" />
+              <Legend dot={RESA_BAR_COLORS.default.bg} label="Autre canal" />
               <Legend dot={RESA_BAR_COLORS.pending.bg} label="Attente" />
-              <Legend dot={T.error} label="Stop sell" />
+              <Legend dot={BLOCKED_HATCH_BG} label="Bloqué (stop sell)" />
               {dpEnabled ? <Legend dot={T.ai} label="Prix dynamique" /> : null}
               {inventoryLoading && <span style={{ fontWeight: 700 }}>Chargement…</span>}
             </div>
@@ -411,6 +462,7 @@ export default function SimpleView({
               todayIso={todayIso}
               currency={currency}
               selected={selected}
+              showReservations={showResas}
               onToggleDay={toggleDay}
               onOpenReservation={onOpenReservation}
             />
@@ -450,6 +502,8 @@ export default function SimpleView({
         calendarReviewActive={calendarReviewActive}
         onFinishCalendarImport={calendarReviewActive ? handleFinishCalendarImport : undefined}
         finishingCalendarImport={finishingCalendarImport}
+        onPublishCalendar={!calendarReviewActive ? handlePublishCalendar : undefined}
+        publishingCalendar={publishingCalendar}
         onRelease={async (range) => {
           const roomTypeId = range.roomTypeId || listing.roomTypeId || listing.roomTypes?.[0]?._id;
           if (!roomTypeId) throw new Error('Room type introuvable');
@@ -460,8 +514,33 @@ export default function SimpleView({
             listingName: listing.name || '',
             roomTypeName: range.roomTypeName || '',
           };
+          const isMulti = listing.propertyUnit === 'Multi';
+          const capacity = isMulti
+            ? Math.max(1, Number(range.roomNumber ?? listing.roomNumber ?? listing.roomTypes?.[0]?.roomNumber ?? 1))
+            : 1;
+          // Libérer d’abord les métadonnées CalendarBlock (bandeau Import initial / blocages)
+          try {
+            const blocks = await calendarService.getCalendarBlocks(
+              [String(listing._id)],
+              range.from,
+              range.to,
+              'active',
+            );
+            await Promise.all(
+              (blocks || [])
+                .filter((b) => String(b.roomTypeId) === String(roomTypeId))
+                .map((b) =>
+                  calendarService.releaseCalendarBlock(String(b._id), {
+                    dateFrom: range.from,
+                    dateTo: range.to,
+                  }),
+                ),
+            );
+          } catch (e) {
+            console.warn('[SimpleView] release CalendarBlocks (non bloquant)', e);
+          }
           await calendarService.updateCalendar([
-            { ...base, type: 'availability', availableRoom: 1 },
+            { ...base, type: 'availability', availableRoom: capacity },
             { ...base, type: 'stopSell', stopSell: false },
           ]);
           setAuditResult((s) => ({ ...s, loading: true }));
@@ -818,7 +897,7 @@ function MonthGrid({ year, month, inventories, todayIso, currency, selected, onT
         <WeekRow
           key={wi}
           week={week}
-          monthReservations={monthReservations}
+          monthReservations={showReservations ? monthReservations : []}
           selected={selected}
           currency={currency}
           onToggleDay={onToggleDay}
@@ -943,7 +1022,8 @@ function DayCell({ c, currency, selected, onToggle }) {
           c.isArchived ? ARCHIVE_CELL_BG :
           c.noInventory ? T.bg2 :
           selected ? T.primaryTint3 :
-          c.stopSell ? 'rgba(200,30,30,0.05)' :
+          c.booked ? (dayReservationTint(c.inv) || 'transparent') :
+          c.stopSell ? BLOCKED_HATCH_BG :
           'transparent',
         boxShadow: selected ? `inset 0 0 0 2px ${T.primary}` : 'none',
       }}
