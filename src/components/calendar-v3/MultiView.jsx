@@ -386,7 +386,12 @@ export default function MultiView({
           ae.tagName === 'SELECT' ||
           ae.isContentEditable)
       ) return;
-      if (document.querySelector('[aria-modal="true"]')) return;
+      // Modal réellement VISIBLE uniquement : un MUI Drawer fermé (keepMounted)
+      // reste dans le DOM avec aria-modal="true" mais 0 rect — ne doit pas bloquer.
+      const modalOpen = [...document.querySelectorAll('[aria-modal="true"]')].some(
+        (el) => el.getClientRects().length > 0,
+      );
+      if (modalOpen) return;
 
       const maxX = body.scrollWidth - body.clientWidth;
       if (maxX <= 1) return;
