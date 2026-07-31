@@ -34,6 +34,7 @@ const MAIN_SECTIONS: Array<{
   },
   { section: 'Mapping', label: 'Mapping', emoji: '🗺️', defaults: { mapSub: 'fields' } },
   { section: 'LogApiRU', label: 'LogApiRU', emoji: '🛰️' },
+  { section: 'LogApiMews', label: 'LogApiMews', emoji: '🏨' },
   { section: 'Debug', label: 'Debug', emoji: '🐛', defaults: { type: 'pull' } },
   { section: 'Cron', label: 'Cron', emoji: '⏰' },
 ];

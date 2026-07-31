@@ -470,6 +470,22 @@ export function CalendarInventoryPageV3() {
               agg[dateStr].basePrice = day.basePrice;
               agg[dateStr].calculatedPrice = day.calculatedPrice ?? day.basePrice;
             }
+            // Résas de TOUS les roomTypes sur la ligne hôtel (pas seulement le 1er),
+            // dédupliquées par _id (une résa multi-chambres ne compte qu'une fois).
+            const dayResas = (day.reservations as Array<{ _id?: string }> | undefined) || [];
+            if (dayResas.length > 0) {
+              const existing = (agg[dateStr].reservations as Array<{ _id?: string }> | undefined) || [];
+              const seen = new Set(existing.map((r) => String(r._id || '')));
+              const merged = [...existing];
+              dayResas.forEach((r) => {
+                const id = String(r._id || '');
+                if (!id || !seen.has(id)) {
+                  seen.add(id);
+                  merged.push(r);
+                }
+              });
+              agg[dateStr].reservations = merged;
+            }
           });
         });
         result[listing._id] = agg;

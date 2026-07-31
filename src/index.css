@@ -417,6 +417,33 @@ a:hover {
   min-height: 48px;
 }
 
+/* Calendrier V3 multi — scroll horizontal de la grille (barre visible + pas de swipe retour) */
+.calendar-multi-hscroll {
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin !important;
+  scrollbar-color: #e6b022 #f0eee8 !important;
+}
+
+.calendar-multi-hscroll::-webkit-scrollbar {
+  height: 12px;
+  width: 10px;
+  -webkit-appearance: none;
+}
+
+.calendar-multi-hscroll::-webkit-scrollbar-track {
+  background: #f0eee8 !important;
+  border-radius: 8px;
+}
+
+.calendar-multi-hscroll::-webkit-scrollbar-thumb {
+  background: #e6b022 !important;
+  border-radius: 8px;
+  border: 2px solid #f0eee8 !important;
+  min-width: 48px;
+  min-height: 48px;
+}
+
 .so-progress { height: 4px; background: var(--bg-deep); border-radius: 99px; overflow: hidden; }
 .so-progress-bar {
   height: 100%; border-radius: 99px;

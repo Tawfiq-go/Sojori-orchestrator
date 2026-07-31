@@ -30,6 +30,119 @@ function hasFailedTraceStep(message: Message): boolean {
   return Boolean(message.processingTrace?.steps?.some((step) => step.status === 'failed'));
 }
 
+/**
+ * Bulle OTA : FR principal + darija discret + original au clic.
+ * (WhatsApp n'utilise pas ces champs — auto-piloté IA.)
+ */
+function OtaTranslatedBody({
+  text,
+  translatedFr,
+  translatedAry,
+  originalText,
+  keyword,
+}: {
+  text: string;
+  translatedFr?: string | null;
+  translatedAry?: string | null;
+  originalText?: string | null;
+  keyword?: string;
+}) {
+  const [showOriginal, setShowOriginal] = useState(false);
+  const hasTranslation = Boolean(translatedFr || translatedAry);
+  const mainText = translatedFr || text;
+  const original = originalText || text;
+  const originalDiffers =
+    hasTranslation && original.trim() !== String(mainText || '').trim();
+  const kw = keyword?.trim() || '';
+
+  return (
+    <Box>
+      <Typography
+        component="div"
+        dir="auto"
+        sx={{
+          fontSize: 'inherit',
+          color: 'inherit',
+          lineHeight: 'inherit',
+          whiteSpace: 'pre-wrap',
+          overflowWrap: 'anywhere',
+          wordBreak: 'break-word',
+        }}
+      >
+        {kw ? highlightInboxKeyword(mainText, kw) : mainText}
+      </Typography>
+
+      {translatedAry ? (
+        <Box
+          dir="auto"
+          sx={{
+            mt: 0.75,
+            pt: 0.75,
+            borderTop: `1px dashed ${T.border}`,
+            fontSize: 11.5,
+            lineHeight: 1.6,
+            color: T.text3,
+            whiteSpace: 'pre-wrap',
+            overflowWrap: 'anywhere',
+            wordBreak: 'break-word',
+          }}
+        >
+          {translatedAry}
+        </Box>
+      ) : null}
+
+      {originalDiffers ? (
+        <Box sx={{ mt: 0.75 }}>
+          <Box
+            component="button"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowOriginal((v) => !v);
+            }}
+            sx={{
+              p: 0,
+              border: 0,
+              background: 'none',
+              cursor: 'pointer',
+              fontFamily: '"Geist Mono", monospace',
+              fontSize: 9.5,
+              letterSpacing: 0.3,
+              color: T.text4,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.5,
+              '&:hover': { color: T.text3, textDecoration: 'underline' },
+            }}
+          >
+            🌐 {showOriginal ? 'masquer l’original' : 'voir l’original'}
+          </Box>
+          {showOriginal ? (
+            <Box
+              dir="auto"
+              sx={{
+                mt: 0.5,
+                p: '6px 8px',
+                borderRadius: '6px',
+                bgcolor: T.bg2,
+                fontSize: 11.5,
+                lineHeight: 1.55,
+                color: T.text3,
+                fontStyle: 'italic',
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'anywhere',
+                wordBreak: 'break-word',
+              }}
+            >
+              {original}
+            </Box>
+          ) : null}
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
 interface ConversationThreadProps {
   thread: Thread;
   messages: Message[];
@@ -1117,19 +1230,29 @@ export default function ConversationThread({
                     🎧 Audio indisponible (expiré) — transcript ci-dessous
                   </Typography>
                 )}
-                <Typography
-                  component="div"
-                  sx={{
-                    fontSize: 'inherit',
-                    color: 'inherit',
-                    lineHeight: 'inherit',
-                    whiteSpace: 'pre-wrap',
-                    overflowWrap: 'anywhere',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {kw ? highlightInboxKeyword(message.text, kw) : message.text}
-                </Typography>
+                {isGuest && (message.translatedFr || message.translatedAry) ? (
+                  <OtaTranslatedBody
+                    text={message.text}
+                    translatedFr={message.translatedFr}
+                    translatedAry={message.translatedAry}
+                    originalText={message.originalText}
+                    keyword={kw}
+                  />
+                ) : (
+                  <Typography
+                    component="div"
+                    sx={{
+                      fontSize: 'inherit',
+                      color: 'inherit',
+                      lineHeight: 'inherit',
+                      whiteSpace: 'pre-wrap',
+                      overflowWrap: 'anywhere',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {kw ? highlightInboxKeyword(message.text, kw) : message.text}
+                  </Typography>
+                )}
               </Box>
               <Stack
                 direction="row"

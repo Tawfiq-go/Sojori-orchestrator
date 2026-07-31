@@ -53,6 +53,7 @@ import {
   invalidateOtaInboxCache,
   setCachedOtaInbox,
 } from '../../utils/otaInboxCache';
+import { openOtaPlatformExternal } from '../../utils/otaPlatformLinks';
 import { last9Phone, otaInboxUrl, waInboxUrl } from '../../utils/commsDeepLinks';
 
 const OTA_VIEW_CHIPS: Array<{
@@ -148,6 +149,8 @@ export default function MessagesOTATabV2() {
   const [initiatingWhatsApp, setInitiatingWhatsApp] = useState(false);
 
   const inbox = useInboxOTAConversation();
+  /* Référence stable : `inbox` change à chaque render et relancerait l'effet deep link. */
+  const { selectOtaThread } = inbox;
 
   const loadInbox = useCallback(async (opts?: { skipCache?: boolean }) => {
     if (!scopeFetchReady) {
@@ -1010,7 +1013,7 @@ export default function MessagesOTATabV2() {
     // Marquer le deep-link avant navigate — évite un 2e selectOtaThread (clignotement).
     const linkKey = `thread:${String(row.threadId).trim()}`;
     otaDeepLinkedRef.current = linkKey;
-    await inbox.selectOtaThread(row);
+    await selectOtaThread(row);
     navigate(
       otaInboxUrl({
         threadId: row.threadId,
@@ -1047,7 +1050,7 @@ export default function MessagesOTATabV2() {
         otaDeepLinkedRef.current = linkKey;
         setComposerDraft('');
         setAiSourceDraft('');
-        void inbox.selectOtaThread(fromList);
+        void selectOtaThread(fromList);
         return;
       }
 
@@ -1071,7 +1074,8 @@ export default function MessagesOTATabV2() {
           });
           setComposerDraft('');
           setAiSourceDraft('');
-          await inbox.selectOtaThread(row);
+          // `res` contient déjà les messages : on les réutilise au lieu de refetcher.
+          await selectOtaThread(row, { preloadedResponse: res });
         } catch (err) {
           console.warn('[OTA] deep link: thread introuvable', key, err);
           otaDeepLinkFetchRef.current = null;
@@ -1081,7 +1085,7 @@ export default function MessagesOTATabV2() {
             otaDeepLinkedRef.current = linkKey;
             setComposerDraft('');
             setAiSourceDraft('');
-            void inbox.selectOtaThread(byRes);
+            void selectOtaThread(byRes);
           }
         }
       })();
@@ -1095,7 +1099,7 @@ export default function MessagesOTATabV2() {
     otaDeepLinkedRef.current = linkKey;
     setComposerDraft('');
     setAiSourceDraft('');
-    void inbox.selectOtaThread(byRes);
+    void selectOtaThread(byRes);
   }, [
     deepLinkThread,
     deepLinkReservation,
@@ -1103,7 +1107,7 @@ export default function MessagesOTATabV2() {
     inboxRows,
     loading,
     scopeFetchReady,
-    inbox,
+    selectOtaThread,
   ]);
 
   const otaThreadContext = useMemo(
@@ -1299,7 +1303,16 @@ export default function MessagesOTATabV2() {
               initiatingWhatsApp={initiatingWhatsApp}
               onAction={(action) => {
                 if (action === 'view-platform') {
-                  console.log('Ouvrir sur', otaPlatform);
+                  const opened = openOtaPlatformExternal({
+                    platform: otaPlatform || inbox.reservation?.otaPlatform || inbox.activeRow?.channel,
+                    otaCode: inbox.reservation?.otaCode || inbox.activeRow?.otaCode,
+                    reservationNumber:
+                      inbox.reservation?.reservationNumber || inbox.activeRow?.reservationNumber,
+                    threadId: inbox.activeRow?.threadId,
+                  });
+                  if (!opened) {
+                    console.warn('[MessagesOTA] no external OTA URL for', otaPlatform);
+                  }
                 }
               }}
             />

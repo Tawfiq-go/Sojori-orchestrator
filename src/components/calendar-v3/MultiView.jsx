@@ -84,6 +84,10 @@ export default function MultiView({
   onToggleDynamicPrice,
   onCalendarImportReviewFinished,
   onCalendarImportReviewActivated,
+  /** Admin only — passer un listing en revue import (jamais Owner). */
+  canActivateCalendarImport = false,
+  /** Plein écran : grille occupe presque tout le viewport. */
+  fillViewport = false,
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsLegacy || [];
   const { isMobile } = useCalendarBreakpoint();
@@ -269,46 +273,171 @@ export default function MultiView({
   useEffect(() => {
     const h = headerRef.current, b = bodyRef.current;
     if (!h || !b) return;
-    const onBody = () => { if (syncing.current) return; syncing.current = true; h.scrollLeft = b.scrollLeft; requestAnimationFrame(() => syncing.current = false); };
-    const onHead = () => { if (syncing.current) return; syncing.current = true; b.scrollLeft = h.scrollLeft; requestAnimationFrame(() => syncing.current = false); };
+    const onBody = () => {
+      if (syncing.current) return;
+      syncing.current = true;
+      h.scrollLeft = b.scrollLeft;
+      requestAnimationFrame(() => { syncing.current = false; });
+    };
+    const onHead = () => {
+      if (syncing.current) return;
+      // Header overflow:hidden : si pas de overflow réel, scrollLeft reste 0
+      // et réécraserait body → casse le scroll hori (souvent collapse fermé).
+      if (h.scrollWidth - h.clientWidth <= 1) {
+        console.warn('[cal-hscroll] header cannot scroll — ignore onHead', {
+          hsw: h.scrollWidth, hcw: h.clientWidth, bsl: b.scrollLeft,
+        });
+        return;
+      }
+      syncing.current = true;
+      b.scrollLeft = h.scrollLeft;
+      requestAnimationFrame(() => { syncing.current = false; });
+    };
     b.addEventListener('scroll', onBody, { passive: true });
     h.addEventListener('scroll', onHead, { passive: true });
     return () => { b.removeEventListener('scroll', onBody); h.removeEventListener('scroll', onHead); };
   }, []);
 
-  /* ─── Scroll horizontal molette / trackpad (pattern docs/scroll : wheel non passif) ───
-   * Sans ça, sur Mac le geste horizontal part en navigation arrière et la molette
-   * verticale ne fait rien quand la grille n'a pas de débordement vertical.
-   * Marche partout sur la grille (en-tête inclus) — aucun rapport avec la sélection Excel. */
+  /* ─── Scroll horizontal molette / trackpad (pattern docs/scroll : capture + passive:false) ───
+   * Zone dates (header + cellules) → toujours horizontal, collapse ouvert ou fermé.
+   * Colonne Listing seule → vertical si la liste déborde.
+   * capture:true : rien dans les cellules (Excel, tips) ne peut avaler le wheel. */
   useEffect(() => {
     const body = bodyRef.current;
     const header = headerRef.current;
-    if (!body) return undefined;
+    const root = body?.parentElement;
+    if (!body || !root) {
+      console.warn('[cal-hscroll] mount skip', { body: !!body, root: !!root, header: !!header });
+      return undefined;
+    }
+
+    console.info('[cal-hscroll] listener ON', {
+      leftW: LEFT_W,
+      scrollWidth: body.scrollWidth,
+      clientWidth: body.clientWidth,
+      scrollHeight: body.scrollHeight,
+      clientHeight: body.clientHeight,
+    });
+
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    let logCount = 0;
 
     const onWheel = (e) => {
       if (e.ctrlKey) return; // pinch-zoom navigateur
-      const maxScrollLeft = body.scrollWidth - body.clientWidth;
-      if (maxScrollLeft <= 1) return;
+      const maxX = body.scrollWidth - body.clientWidth;
+      const maxY = body.scrollHeight - body.clientHeight;
 
-      const canScrollY = body.scrollHeight - body.clientHeight > 1;
-      const horizontalGesture = Math.abs(e.deltaX) > Math.abs(e.deltaY);
-      // Molette verticale → horizontal seulement si la grille ne scrolle pas verticalement
-      const delta = horizontalGesture || e.shiftKey ? (e.deltaX || e.deltaY) : (canScrollY ? 0 : e.deltaY);
-      if (!delta) return;
+      const bodyRect = body.getBoundingClientRect();
+      const headerRect = header?.getBoundingClientRect();
+      const overHeader = !!(
+        header && (
+          header.contains(/** @type {Node} */ (e.target)) ||
+          (headerRect &&
+            e.clientX >= headerRect.left && e.clientX <= headerRect.right &&
+            e.clientY >= headerRect.top && e.clientY <= headerRect.bottom)
+        )
+      );
+      const overBody =
+        body.contains(/** @type {Node} */ (e.target)) ||
+        (e.clientX >= bodyRect.left && e.clientX <= bodyRect.right &&
+          e.clientY >= bodyRect.top && e.clientY <= bodyRect.bottom);
 
-      const next = Math.max(0, Math.min(maxScrollLeft, body.scrollLeft + delta));
-      if (next === body.scrollLeft) return;
-      e.preventDefault();
+      const originLeft = overHeader ? (headerRect?.left ?? bodyRect.left) : bodyRect.left;
+      const localX = e.clientX - originLeft;
+      const overLeftCol = localX < LEFT_W;
+      const collapseOpen = !!body.querySelector('[style*="dashed"]'); // lignes Dispo/Min stay
+
+      const wantLog = logCount < 40 || e.shiftKey;
+      const log = (phase, extra = {}) => {
+        if (!wantLog) return;
+        logCount += 1;
+        console.log(`[cal-hscroll] #${logCount} ${phase}`, {
+          deltaX: e.deltaX,
+          deltaY: e.deltaY,
+          overHeader,
+          overBody,
+          overLeftCol,
+          localX: Math.round(localX),
+          LEFT_W,
+          maxX,
+          maxY,
+          scrollLeft: body.scrollLeft,
+          headerScrollLeft: header?.scrollLeft,
+          collapseOpen,
+          target: e.target?.className || e.target?.tagName,
+          ...extra,
+        });
+      };
+
+      if (maxX <= 1 && maxY <= 1) {
+        log('skip:no-overflow');
+        return;
+      }
+      if (!overHeader && !overBody) {
+        log('skip:outside');
+        return;
+      }
+
+      // Colonne noms : scroll vertical des listings (si débordement)
+      if (overLeftCol && !overHeader && !e.shiftKey && maxY > 1 && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+        if (!e.deltaY) {
+          log('skip:left-col-no-dy');
+          return;
+        }
+        const next = clamp(body.scrollTop + e.deltaY, 0, maxY);
+        if (next === body.scrollTop) {
+          log('skip:left-col-at-edge', { scrollTop: body.scrollTop });
+          return;
+        }
+        body.scrollTop = next;
+        e.preventDefault();
+        e.stopPropagation();
+        log('vertical', { scrollTop: next });
+        return;
+      }
+
+      // Header dates + cellules prix/dispo : toujours horizontal (collapse ouvert ou fermé)
+      if (maxX <= 1) {
+        log('skip:maxX=0');
+        return;
+      }
+      const delta =
+        (Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : 0) || e.deltaY || e.deltaX;
+      if (!delta) {
+        log('skip:delta=0');
+        return;
+      }
+      const prev = body.scrollLeft;
+      const next = clamp(prev + delta, 0, maxX);
+      if (next === prev) {
+        log('skip:h-at-edge', { prev, delta, maxX });
+        return;
+      }
+      // Bloquer le sync inverse header→body pendant l'application
+      syncing.current = true;
       body.scrollLeft = next;
+      if (header) header.scrollLeft = next;
+      requestAnimationFrame(() => { syncing.current = false; });
+      e.preventDefault();
+      e.stopPropagation();
+      log('horizontal', {
+        prev,
+        next,
+        delta,
+        applied: body.scrollLeft,
+        headerApplied: header?.scrollLeft,
+        headerMax: header ? header.scrollWidth - header.clientWidth : null,
+        bodySw: body.scrollWidth,
+        bodyCw: body.clientWidth,
+      });
     };
 
-    body.addEventListener('wheel', onWheel, { passive: false });
-    header?.addEventListener('wheel', onWheel, { passive: false });
+    root.addEventListener('wheel', onWheel, { passive: false, capture: true });
     return () => {
-      body.removeEventListener('wheel', onWheel);
-      header?.removeEventListener('wheel', onWheel);
+      console.info('[cal-hscroll] listener OFF');
+      root.removeEventListener('wheel', onWheel, { capture: true });
     };
-  }, []);
+  }, [LEFT_W]);
 
   /* ─── Popover rotations / clic résa ─── */
   const [popover, setPopover] = useState(null);
@@ -331,7 +460,10 @@ export default function MultiView({
       overflow: 'hidden', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
       userSelect: isDragging ? 'none' : 'auto',
       maxWidth: '100%',
-      maxHeight: 'calc(100vh - 150px)',
+      width: '100%',
+      minWidth: 0,
+      maxHeight: fillViewport ? 'calc(100dvh - 72px)' : 'calc(100vh - 150px)',
+      height: fillViewport ? 'calc(100dvh - 72px)' : undefined,
       display: 'flex',
       flexDirection: 'column',
     }}>
@@ -359,20 +491,23 @@ export default function MultiView({
         position: 'sticky', top: 0, zIndex: 5,
         background: T.bg2, borderBottom: `1px solid ${T.borderStrong}`,
         overflowX: 'hidden', overflowY: 'hidden',
+        minWidth: 0, // flex: sinon largeur intrinsèque = pas de scroll hori
+        width: '100%',
       }}>
         <div style={{
           display: 'grid',
           gridTemplateColumns: `${LEFT_W}px repeat(${days.length}, ${CELL_W}px)`,
           minWidth: 'max-content',
+          width: LEFT_W + days.length * CELL_W,
         }}>
           <div style={{
             padding: '7px 12px', display: 'flex', alignItems: 'center',
             fontSize: 11, fontWeight: 700, color: T.text3,
             letterSpacing: '0.08em', textTransform: 'uppercase',
             borderRight: `1px solid ${T.border}`,
-            position: 'sticky', left: 0, zIndex: 10,
+            position: 'sticky', left: 0, zIndex: 12,
             background: T.bg2,
-            boxShadow: '2px 0 4px rgba(0,0,0,0.04)',
+            boxShadow: '2px 0 6px rgba(0,0,0,0.08)',
           }}>Listing</div>
           {days.map(d => (
             <DayHeader key={d.iso} day={d} loading={inventoryLoading} />
@@ -384,7 +519,15 @@ export default function MultiView({
       <div
         ref={bodyRef}
         className="calendar-multi-hscroll"
-        style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, position: 'relative' }}
+        style={{
+          overflowX: 'auto',
+          overflowY: 'auto',
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0, // critique flex column : active overflow-x
+          width: '100%',
+          position: 'relative',
+        }}
       >
         {inventoryLoading && (
           <div
@@ -436,6 +579,7 @@ export default function MultiView({
                   }
                   onCalendarImportReviewFinished={onCalendarImportReviewFinished}
                   onCalendarImportReviewActivated={onCalendarImportReviewActivated}
+                  canActivateCalendarImport={canActivateCalendarImport}
                 />
                 {isOpen && isMultiHotel
                   ? roomTypes.map((rt) => {
@@ -563,6 +707,8 @@ const ListingLabel = memo(function ListingLabel({
   const dpHref = `/dynamic-pricing/bien/${listing._id}`;
   const roomTypeCount = Number(listing.roomTypeCount) || 0;
   const reviewActive = !isRoomTypeRow && isCalendarImportReviewActive(listing);
+  // Fond OPAQUE obligatoire : sticky left laisse passer les cellules dates si rgba translucide
+  const labelBg = reviewActive ? '#fef2f2' : (isRoomTypeRow ? T.bg2 : T.bg1);
   const simpleHref =
     isRoomTypeRow && listing.roomTypeId
       ? `/calendar?view=simple&listing=${encodeURIComponent(String(listing._id))}&roomType=${encodeURIComponent(String(listing.roomTypeId))}`
@@ -575,14 +721,14 @@ const ListingLabel = memo(function ListingLabel({
         display: 'flex',
         alignItems: 'center',
         gap: 9,
-        background: reviewActive ? 'rgba(185,28,28,0.06)' : (isRoomTypeRow ? T.bg2 : T.bg1),
+        background: labelBg,
         borderRight: `1px solid ${T.border}`,
         cursor: showChevron ? 'pointer' : 'default',
         transition: 'background 0.15s',
         position: 'sticky',
         left: 0,
-        zIndex: 4,
-        boxShadow: '2px 0 4px rgba(0,0,0,0.04)',
+        zIndex: 12,
+        boxShadow: '2px 0 6px rgba(0,0,0,0.08)',
       }}
     >
       {showChevron && (
@@ -697,7 +843,7 @@ const ListingLabel = memo(function ListingLabel({
             {!isRoomTypeRow && onActivateCalendarImport ? (
               <button
                 type="button"
-                title="Passer en mode Import calendrier — prix non modifiables, pas de push canal"
+                title="Admin : passer en mode Import (sinon activé à l’import listing)"
                 disabled={activatingCalendarImport}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -776,6 +922,7 @@ function ListingRow({
   onToggleDynamicPrice, dpEnabled = true, forceChevron = false, hideDetailCollapse = false,
   onCalendarImportReviewFinished,
   onCalendarImportReviewActivated,
+  canActivateCalendarImport = false,
 }) {
   const primaryCols = calendarPrimaryColumns(selectedColumns);
   const collapseColumns = calendarCollapseColumns(selectedColumns).filter((colId) => {
@@ -902,7 +1049,9 @@ function ListingRow({
           }
           finishingCalendarImport={false}
           onActivateCalendarImport={
-            !isRoomTypeRow && !isCalendarImportReviewActive(listing)
+            canActivateCalendarImport &&
+            !isRoomTypeRow &&
+            !isCalendarImportReviewActive(listing)
               ? handleActivateCalendarImport
               : undefined
           }
@@ -963,9 +1112,9 @@ function ListingRow({
               fontSize: 11, fontWeight: 600, color: T.text2,
               fontFamily: '"Geist Mono", monospace', letterSpacing: '0.02em',
               borderRight: `1px solid ${T.border}`,
-              position: 'sticky', left: 0, zIndex: 3,
+              position: 'sticky', left: 0, zIndex: 11,
               background: T.bg2,
-              boxShadow: '2px 0 4px rgba(0,0,0,0.04)',
+              boxShadow: '2px 0 6px rgba(0,0,0,0.08)',
             }}>
               {col.short}
               {colId === 'availableRoom' && (
@@ -1112,6 +1261,22 @@ function blockedNoResaInfo(inv, block) {
   if (!isStop && !isZero) return null;
   // Bloc avec métadonnées (titre/note/auteur) → priorité sur la classification générique
   if (block) {
+    const isImport =
+      block.type === 'import_ru' || block.type === 'import_airbnb' || block.type === 'import_booking';
+    if (isImport) {
+      const who = block.createdBy?.name || '—';
+      const when = block.createdAt
+        ? new Date(block.createdAt).toLocaleDateString('fr-FR')
+        : '';
+      return {
+        kind: 'block',
+        color: 'rgba(220,38,38,0.9)',
+        title: 'Import initial',
+        label: when
+          ? `Import initial · réalisé par ${who} · le ${when}`
+          : `Import initial · réalisé par ${who}`,
+      };
+    }
     const author = block.createdBy?.name ? ` · par ${block.createdBy.name}` : '';
     const note = block.note ? `\n${block.note}` : '';
     return {

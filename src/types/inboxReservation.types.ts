@@ -29,6 +29,8 @@ export interface InboxReservationData {
   netHost?: number;
   commission?: number;
   otaPlatform?: string;
+  /** Code confirmation canal (Airbnb HM…, Booking, etc.) — lien « Ouvrir sur … » */
+  otaCode?: string;
   /** Lead / demande */
   leadStatus?: string;
   /** Avis */

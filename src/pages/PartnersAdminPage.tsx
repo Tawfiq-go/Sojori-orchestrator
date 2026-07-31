@@ -7,8 +7,11 @@ import {
   type Partner,
   type PartnerService,
   type PartnerServiceFormule,
+  type PartnerServicePayment,
   type PartnerServiceSchedule,
+  type PaymentMethod,
   DEFAULT_SCHEDULE,
+  DEFAULT_PAYMENT,
 } from '../services/partnersApi';
 import { postFormDataAsMultipart } from '../utils/upload/postFormData';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
@@ -40,6 +43,7 @@ type ServiceDraft = {
   photos: string[];
   formules: PartnerServiceFormule[];
   schedule: PartnerServiceSchedule;
+  payment: PartnerServicePayment;
   keywords: string[];
   commissionType: '' | CommissionType;
   commissionPercent: string;
@@ -55,6 +59,12 @@ const CATS = [
   { v: 'Culture & nature', l: 'Culture & nature' },
   { v: 'Mobilité', l: 'Mobilité' },
   { v: 'Soirée', l: 'Soirée' },
+];
+
+const PAY_METHODS: { v: PaymentMethod; l: string }[] = [
+  { v: 'card', l: 'Carte' },
+  { v: 'cash', l: 'Cash' },
+  { v: 'transfer', l: 'Virement' },
 ];
 
 const inpBase: React.CSSProperties = {
@@ -99,6 +109,7 @@ function emptyService(): ServiceDraft {
     photos: [],
     formules: [{ label: '', priceMad: 0 }],
     schedule: { ...DEFAULT_SCHEDULE },
+    payment: { ...DEFAULT_PAYMENT, methods: [...DEFAULT_PAYMENT.methods] },
     keywords: [],
     commissionType: '',
     commissionPercent: '',
@@ -128,6 +139,7 @@ function serviceToDraft(s: PartnerService): ServiceDraft {
     Array.isArray(s.formules) && s.formules.length
       ? s.formules.map((f) => ({ label: f.label || '', priceMad: Number(f.priceMad) || 0 }))
       : [{ label: '', priceMad: 0 }];
+  const pay = s.payment || DEFAULT_PAYMENT;
   return {
     category: s.category || '',
     subCategory: s.subCategory || '',
@@ -148,6 +160,11 @@ function serviceToDraft(s: PartnerService): ServiceDraft {
       }
       return base;
     })(),
+    payment: {
+      methods: Array.isArray(pay.methods) && pay.methods.length ? [...pay.methods] : ['cash'],
+      collection: pay.collection === 'deposit' ? 'deposit' : 'full',
+      depositPercent: pay.depositPercent ?? null,
+    },
     keywords: Array.isArray(s.keywords) ? [...s.keywords] : [],
     commissionType: (s.commissionType as CommissionType) || '',
     commissionPercent: s.commissionPercent == null ? '' : String(s.commissionPercent),
@@ -906,6 +923,20 @@ export function PartnersAdminPage() {
         photos: serviceDraft.photos.slice(0, 3),
         formules,
         schedule: serviceDraft.schedule,
+        payment: (() => {
+          const methods = serviceDraft.payment.methods.length
+            ? serviceDraft.payment.methods
+            : (['cash'] as PaymentMethod[]);
+          const needsRemote = methods.some((m) => m === 'card' || m === 'transfer');
+          return {
+            methods,
+            collection: needsRemote && serviceDraft.payment.collection === 'deposit' ? 'deposit' : 'full',
+            depositPercent:
+              needsRemote && serviceDraft.payment.collection === 'deposit'
+                ? Number(serviceDraft.payment.depositPercent) || 30
+                : null,
+          } satisfies PartnerServicePayment;
+        })(),
         keywords: serviceDraft.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean),
         commissionType: serviceDraft.commissionType || null,
         commissionPercent:
@@ -952,15 +983,34 @@ export function PartnersAdminPage() {
 
   const onUploadPhotos = async (files: FileList | null) => {
     if (!files?.length) return;
-    const list = Array.from(files).slice(0, 3 - serviceDraft.photos.length);
-    if (!list.length) {
+    const slots = 3 - serviceDraft.photos.length;
+    if (slots <= 0) {
       toast.info('Maximum 3 photos');
       return;
     }
+    const allowedMime = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    const allowedExt = /\.(jpe?g|png|webp)$/i;
+    const maxBytes = 1 * 1024 * 1024;
+    const picked = Array.from(files).slice(0, slots);
+    const valid: File[] = [];
+    for (const file of picked) {
+      const mimeOk = allowedMime.has(file.type) || (!file.type && allowedExt.test(file.name));
+      const extOk = allowedExt.test(file.name) || allowedMime.has(file.type);
+      if (!mimeOk || !extOk) {
+        toast.error(`${file.name} : formats acceptés JPEG, PNG ou WebP`);
+        continue;
+      }
+      if (file.size > maxBytes) {
+        toast.error(`${file.name} : max 1 Mo`);
+        continue;
+      }
+      valid.push(file);
+    }
+    if (!valid.length) return;
     setUploading(true);
     try {
       const formData = new FormData();
-      list.forEach((file) => formData.append('media', file));
+      valid.forEach((file) => formData.append('media', file));
       formData.append('type', 'partner-services');
       formData.append('name', `partner-${Date.now()}`);
       const { data } = await postFormDataAsMultipart(
@@ -1008,7 +1058,7 @@ export function PartnersAdminPage() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13 }}>
-          <h2 className="pa-d" style={{ fontSize: 19, margin: 0 }}>Partenaires</h2>
+          <h2 className="pa-d" style={{ fontSize: 19, margin: 0 }}>Fiches</h2>
           {partners.length ? (
             <span className="pa-mono" style={{ fontSize: 11, color: 'var(--pa-ink3)' }}>
               {partners.length}
@@ -1283,14 +1333,14 @@ export function PartnersAdminPage() {
     <div className="pa-root">
       <header style={{ flexShrink: 0, background: 'var(--pa-surface)', borderBottom: '1px solid var(--pa-line)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '14px 22px 0' }}>
-          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-.03em' }}>Conciergerie partenaires</span>
+          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-.03em' }}>Expériences</span>
           <div style={{ flex: 1 }} />
         </div>
         <div style={{ display: 'flex', gap: 2, padding: '10px 22px 0' }}>
           {(
             [
-              ['partners', 'Partenaires'],
-              ['concierge', 'Conciergerie · services'],
+              ['partners', 'Fiches'],
+              ['concierge', 'Catalogue'],
             ] as const
           ).map(([k, l]) => {
             const on = tab === k;
@@ -1577,7 +1627,7 @@ export function PartnersAdminPage() {
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                   multiple
                   hidden
                   onChange={(e) => {
@@ -2168,6 +2218,94 @@ export function PartnersAdminPage() {
                       confirmée à la réservation.
                     </Constraint>
                   </div>
+                </Section>
+
+                <Section label="Règlement" title="Paiement">
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                    {PAY_METHODS.map((m) => {
+                      const on = serviceDraft.payment.methods.includes(m.v);
+                      return (
+                        <Btn
+                          key={m.v}
+                          variant={on ? 'gold' : 'outline'}
+                          size="sm"
+                          onClick={() =>
+                            setServiceDraft((d) => {
+                              const has = d.payment.methods.includes(m.v);
+                              const methods = has
+                                ? d.payment.methods.filter((x) => x !== m.v)
+                                : [...d.payment.methods, m.v];
+                              return {
+                                ...d,
+                                payment: {
+                                  ...d.payment,
+                                  methods: methods.length ? methods : ['cash'],
+                                },
+                              };
+                            })
+                          }
+                        >
+                          {m.l}
+                        </Btn>
+                      );
+                    })}
+                  </div>
+                  {serviceDraft.payment.methods.some((m) => m === 'card' || m === 'transfer') ? (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 160px',
+                        gap: 12,
+                        maxWidth: 420,
+                        alignItems: 'end',
+                      }}
+                    >
+                      <label>
+                        <div className="pa-lbl" style={{ marginBottom: 7 }}>
+                          Carte / virement
+                        </div>
+                        <select
+                          className="pa-in"
+                          style={inpBase}
+                          value={serviceDraft.payment.collection}
+                          onChange={(e) =>
+                            setServiceDraft((d) => ({
+                              ...d,
+                              payment: {
+                                ...d.payment,
+                                collection: e.target.value === 'deposit' ? 'deposit' : 'full',
+                              },
+                            }))
+                          }
+                        >
+                          <option value="full">Total</option>
+                          <option value="deposit">Acompte %</option>
+                        </select>
+                      </label>
+                      {serviceDraft.payment.collection === 'deposit' ? (
+                        <Field
+                          label="% acompte"
+                          value={String(serviceDraft.payment.depositPercent ?? 30)}
+                          onChange={(v) =>
+                            setServiceDraft((d) => ({
+                              ...d,
+                              payment: {
+                                ...d.payment,
+                                depositPercent: Number(v) || 30,
+                              },
+                            }))
+                          }
+                          mono
+                          prefix="%"
+                          ph="30"
+                        />
+                      ) : (
+                        <div />
+                      )}
+                    </div>
+                  ) : (
+                    <Constraint>Cash seul → règlement sur place (pas d’acompte en ligne).</Constraint>
+                  )}
                 </Section>
 
                 <Section

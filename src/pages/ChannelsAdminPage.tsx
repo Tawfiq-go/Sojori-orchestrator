@@ -10,6 +10,7 @@ import { DebugTab } from '../components/channels/DebugTab';
 import { CronTab } from '../components/channels/CronTab';
 import { MappingTab } from '../components/channels/MappingTab';
 import { LogApiRuTab } from '../components/logapiru/LogApiRuTab';
+import { LogApiMewsTab } from '../components/logapimews/LogApiMewsTab';
 import {
   canonicalSectionTab,
   migrateLegacyChannelsSearchParams,
@@ -21,6 +22,7 @@ const SECTION_HINTS: Record<string, string> = {
   Business: 'Appels API vers RU et webhooks entrants parsés.',
   Mapping: 'Correspondances champs RU et listes de référence.',
   LogApiRU: 'Échanges Rental United enrichis — synthèse par API, journal, XML brut.',
+  LogApiMews: 'Échanges Mews Connector — synthèse, journal, JSON (tokens redactés).',
   Debug: 'Audit technique — Pull/Push/OAuth/Webhooks/REST RU + HTTP brut (logapis).',
   Cron: 'Jobs planifiés channels.',
 };
@@ -60,6 +62,7 @@ export function ChannelsAdminPage() {
             {sectionTab === 'Sum' && <SummaryTab />}
             {sectionTab === 'Business' && <BusinessTab />}
             {sectionTab === 'LogApiRU' && <LogApiRuTab />}
+            {sectionTab === 'LogApiMews' && <LogApiMewsTab />}
             {sectionTab === 'Debug' && <DebugTab />}
             {sectionTab === 'Cron' && <CronTab />}
             {sectionTab === 'Mapping' && <MappingTab />}

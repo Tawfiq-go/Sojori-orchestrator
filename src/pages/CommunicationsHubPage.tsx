@@ -5,6 +5,7 @@ import { DashboardWrapper } from '../components/DashboardWrapper';
 import { DASHBOARD_PAGE_FILL_SX } from '../constants/dashboardLayout';
 import WhatsAppTabV2 from '../components/communications/WhatsAppTabV2';
 import BookingWhatsAppTabV2 from '../components/communications/BookingWhatsAppTabV2';
+import ConversationsResaTabV2 from '../components/communications/ConversationsResaTabV2';
 import StaffWhatsAppTabV2 from '../components/communications/StaffWhatsAppTabV2';
 import MessagesOTATabV2 from '../components/communications/MessagesOTATabV2';
 import LeadsTabV2 from '../components/communications/LeadsTabV2';
@@ -67,11 +68,13 @@ export default function CommunicationsHubPage() {
     const needsSection = !searchParams.get('section');
     const legacyTemplates = tabParam === 'templates';
     const wrongTab = tabParam != null && tabParam !== activeTab;
-    const bookingForbidden = activeTab === 'booking' && !isPlatformAdmin;
-    if (needsSection || legacyTemplates || wrongTab || bookingForbidden) {
+    // Onglets réservés à l'admin plateforme (Inbox Resa + Conversations Résa)
+    const adminOnlyForbidden =
+      (activeTab === 'booking' || activeTab === 'conversations') && !isPlatformAdmin;
+    if (needsSection || legacyTemplates || wrongTab || adminOnlyForbidden) {
       const params = new URLSearchParams(searchParams);
-      params.set('section', bookingForbidden ? 'staff' : section);
-      params.set('tab', bookingForbidden ? 'admin' : activeTab);
+      params.set('section', adminOnlyForbidden ? 'staff' : section);
+      params.set('tab', adminOnlyForbidden ? 'admin' : activeTab);
       navigate(`/communications?${params.toString()}`, { replace: true });
     }
   }, [searchParams, tabParam, section, activeTab, navigate, isPlatformAdmin]);
@@ -257,6 +260,7 @@ export default function CommunicationsHubPage() {
           <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {activeTab === 'whatsapp' && <WhatsAppTabV2 />}
             {activeTab === 'booking' && isPlatformAdmin && <BookingWhatsAppTabV2 />}
+            {activeTab === 'conversations' && isPlatformAdmin && <ConversationsResaTabV2 />}
             {activeTab === 'staff' && <StaffWhatsAppTabV2 inboxParty="staff" />}
             {activeTab === 'admin' && <StaffWhatsAppTabV2 inboxParty="admin" />}
             {activeTab === 'ota' && <MessagesOTATabV2 />}

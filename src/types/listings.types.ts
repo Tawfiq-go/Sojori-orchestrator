@@ -133,6 +133,18 @@ export interface Listing {
   name: string;
   propertyUnit: string;
   active: boolean;
+  city?: string;
+  currencyCode?: string;
+  currency?: string;
+  coverImageUrl?: string;
+  photoColor?: string;
+  photoColorDeep?: string;
+  /** Revue calendrier post-import — distinct de l’orchestration. */
+  calendarImportReview?: {
+    active?: boolean;
+    startedAt?: string | null;
+    completedAt?: string | null;
+  } | null;
   calendarData?: CalendarDayData[];
   roomTypes?: Array<{
     id: string;

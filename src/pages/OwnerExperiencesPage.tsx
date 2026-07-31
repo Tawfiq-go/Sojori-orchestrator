@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import {
   partnersApi,
+  type Partner,
   type PartnerService,
   type PartnerServiceFormule,
   type PartnerServicePayment,
@@ -141,8 +142,29 @@ function toDraft(s: PartnerService): Draft {
   };
 }
 
+/** Clé provider (fiche Partner liée à l’owner de l’expérience). */
+function experienceProviderKey(s: PartnerService): string {
+  if (s.providerId) return String(s.providerId);
+  if (s.partnerId) return String(s.partnerId);
+  if (s.ownerId) return `owner:${String(s.ownerId)}`;
+  return 'owner';
+}
+
+function experienceProviderLabel(
+  s: PartnerService,
+  partnersByOwner: Map<string, string>,
+): string {
+  if (s.providerName) return String(s.providerName);
+  if (s.partnerId) return 'Sojori';
+  if (s.ownerId) {
+    return partnersByOwner.get(String(s.ownerId)) || 'Mes expériences';
+  }
+  return 'Mes expériences';
+}
+
 export function OwnerExperiencesPage() {
   const [rows, setRows] = useState<PartnerService[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
   const [cities, setCities] = useState<Array<{ _id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -150,15 +172,18 @@ export function OwnerExperiencesPage() {
   const [isNew, setIsNew] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
   const [q, setQ] = useState('');
+  const [providerFilter, setProviderFilter] = useState('all');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [list, citiesRes] = await Promise.all([
+      const [list, partnersList, citiesRes] = await Promise.all([
         partnersApi.listExperiences(),
+        partnersApi.list({ includePlatform: false }).catch(() => [] as Partner[]),
         listingsService.getCities({ limit: 200 }).catch(() => null),
       ]);
       setRows(list);
+      setPartners(Array.isArray(partnersList) ? partnersList : []);
       const cityList = (citiesRes?.data?.cities ?? citiesRes?.data ?? citiesRes ?? []) as Array<{
         _id: string;
         name: string;
@@ -175,16 +200,51 @@ export function OwnerExperiencesPage() {
     void load();
   }, [load]);
 
+  const partnersByOwner = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of partners) {
+      if (!p.ownerId || !p.name) continue;
+      const oid = String(p.ownerId);
+      if (!map.has(oid) || p.active !== false) {
+        map.set(oid, p.name);
+      }
+    }
+    return map;
+  }, [partners]);
+
+  const providers = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of rows) {
+      const id = experienceProviderKey(r);
+      const name = experienceProviderLabel(r, partnersByOwner);
+      map.set(id, name);
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [rows, partnersByOwner]);
+
+  useEffect(() => {
+    if (providerFilter === 'all') return;
+    if (providers.some((p) => p.id === providerFilter)) return;
+    setProviderFilter('all');
+  }, [providers, providerFilter]);
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return rows;
-    return rows.filter(
-      (r) =>
+    return rows.filter((r) => {
+      const pid = experienceProviderKey(r);
+      if (providerFilter !== 'all' && pid !== providerFilter) return false;
+      if (!needle) return true;
+      const provider = experienceProviderLabel(r, partnersByOwner);
+      return (
         r.title.toLowerCase().includes(needle) ||
         r.category.toLowerCase().includes(needle) ||
-        (r.description || '').toLowerCase().includes(needle),
-    );
-  }, [rows, q]);
+        (r.description || '').toLowerCase().includes(needle) ||
+        provider.toLowerCase().includes(needle)
+      );
+    });
+  }, [rows, q, providerFilter, partnersByOwner]);
 
   const cityName = useCallback(
     (id: string) => cities.find((c) => c._id === id)?.name || id,
@@ -422,13 +482,38 @@ export function OwnerExperiencesPage() {
               ))}
             </div>
           ) : null}
-          <input
-            className="pa-in"
-            style={{ ...inpBase, marginBottom: 12 }}
-            placeholder="Rechercher…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: providers.length > 0 ? 'minmax(160px, 1fr) 1.4fr' : '1fr',
+              gap: 10,
+              marginBottom: 12,
+            }}
+          >
+            {providers.length > 0 ? (
+              <select
+                className="pa-in"
+                style={inpBase}
+                value={providerFilter}
+                onChange={(e) => setProviderFilter(e.target.value)}
+                aria-label="Filtrer par provider"
+              >
+                <option value="all">Tous les providers</option>
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <input
+              className="pa-in"
+              style={inpBase}
+              placeholder="Rechercher… (titre, catégorie, provider)"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
           {loading ? (
             <div style={{ color: 'var(--pa-ink3)', padding: 12 }}>Chargement…</div>
           ) : filtered.length === 0 ? (
@@ -441,10 +526,18 @@ export function OwnerExperiencesPage() {
                 background: 'var(--pa-surface)',
               }}
             >
-              Aucune expérience. Créez la première.
+              {rows.length === 0
+                ? 'Aucune expérience. Créez la première.'
+                : 'Aucun résultat pour ces filtres.'}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {providerFilter !== 'all' || q.trim() ? (
+                <div style={{ fontSize: 12, color: 'var(--pa-ink3)', marginTop: -4 }}>
+                  {filtered.length} résultat{filtered.length !== 1 ? 's' : ''}
+                  {rows.length !== filtered.length ? ` · sur ${rows.length}` : ''}
+                </div>
+              ) : null}
               {groupedByCity.map((group) => (
                 <div key={group.key} id={`exp-city-${group.key}`}>
                   <div
@@ -459,6 +552,7 @@ export function OwnerExperiencesPage() {
                       const prices = (s.formules || []).map((f) => Number(f.priceMad) || 0);
                       const min = prices.length ? Math.min(...prices) : 0;
                       const active = selectedId === s.id && !isNew;
+                      const provider = experienceProviderLabel(s, partnersByOwner);
                       return (
                         <div
                           key={`${group.key}-${s.id}`}
@@ -485,7 +579,8 @@ export function OwnerExperiencesPage() {
                           >
                             <div style={{ fontWeight: 600, fontSize: 14 }}>{s.title}</div>
                             <div style={{ fontSize: 12, color: 'var(--pa-ink3)', marginTop: 4 }}>
-                              {s.category}
+                              <span style={{ fontWeight: 700, color: 'var(--pa-ink2)' }}>{provider}</span>
+                              {` · ${s.category}`}
                               {min > 0 ? ` · dès ${money(min)} MAD` : ''}
                               {!s.active ? ' · inactif' : ''}
                             </div>

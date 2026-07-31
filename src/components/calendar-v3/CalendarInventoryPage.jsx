@@ -2,6 +2,7 @@
 // CalendarInventoryPage.jsx — wrapper toolbar + Multi/Simple toggle
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { T, resolveSelectionCurrency } from './_shared';
 import MultiView from './MultiView';
@@ -154,10 +155,26 @@ export default function CalendarInventoryPage({
   const [limitHint, setLimitHint] = useState(null);
   const [drawerReservation, setDrawerReservation] = useState(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
+  /** Plein écran grille — même geste ⛶ que planning / inbox (mobile + web). */
+  const [calendarFullscreen, setCalendarFullscreen] = useState(false);
 
   const { showLandscapeHint } = useCalendarBreakpoint();
   const { maxPivotStart, horizonEnd } = useMemo(() => getCalendarWindowBounds(), []);
   const atHorizonEnd = isAtHorizonEnd(pivotDate);
+
+  useEffect(() => {
+    if (!calendarFullscreen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setCalendarFullscreen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [calendarFullscreen]);
 
   const windowStart = useMemo(() => startOfDay(pivotDate), [pivotDate]);
 
@@ -379,18 +396,32 @@ export default function CalendarInventoryPage({
     setDrawerLoading(false);
   }, []);
 
-  return (
-    <div
-      style={{
+  const pageShellStyle = calendarFullscreen
+    ? {
+        padding: view === 'simple' ? '6px 10px 12px' : '8px 12px 12px',
+        maxWidth: '100%',
+        margin: 0,
+        width: '100%',
+        height: '100%',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        background: '#f6f5f1',
+      }
+    : {
         padding: view === 'simple' ? '8px 24px 40px' : '10px 28px 36px',
         maxWidth: '100%',
         margin: '0 auto',
         width: '100%',
         // overflow hidden casse position:sticky (rail vignettes) — nécessaire seulement en vue multi
         overflow: view === 'simple' ? 'visible' : 'hidden',
-      }}
-    >
-      {showLandscapeHint && <CalendarLandscapeHint />}
+      };
+
+  const calendarPage = (
+    <div style={pageShellStyle}>
+      {showLandscapeHint && !calendarFullscreen && <CalendarLandscapeHint />}
       <div
         style={{
           display: 'flex',
@@ -404,6 +435,7 @@ export default function CalendarInventoryPage({
           boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
           flexWrap: 'wrap',
           overflow: 'visible',
+          flexShrink: 0,
         }}
       >
         {view === 'multi' && (
@@ -526,6 +558,37 @@ export default function CalendarInventoryPage({
           </NavBtn>
         </div>
 
+        {!calendarFullscreen && (
+          <button
+            type="button"
+            title="Calendrier plein écran"
+            aria-label="Calendrier plein écran"
+            onClick={() => setCalendarFullscreen(true)}
+            style={{
+              boxSizing: 'border-box',
+              flexShrink: 0,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 30,
+              height: 28,
+              borderRadius: 6,
+              border: `1px solid ${T.borderStrong || T.border}`,
+              background: T.bg1,
+              color: T.text2,
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              lineHeight: 1,
+              boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
+              marginLeft: 2,
+            }}
+          >
+            ⛶
+          </button>
+        )}
+
         <CalendarDatePicker
           anchorEl={pickerAnchor}
           open={pickerOpen}
@@ -575,7 +638,7 @@ export default function CalendarInventoryPage({
           </span>
         )}
 
-        {view !== 'simple' && (
+        {view !== 'simple' && !calendarFullscreen && (
           <span
             style={{
               fontSize: 10.5,
@@ -600,6 +663,13 @@ export default function CalendarInventoryPage({
 
       </div>
 
+      <div
+        style={
+          calendarFullscreen
+            ? { flex: 1, minHeight: 0, overflow: 'auto' }
+            : undefined
+        }
+      >
       {view === 'multi' && (
         <MultiView
           startDate={windowStart}
@@ -611,10 +681,12 @@ export default function CalendarInventoryPage({
           calendarBlocksById={calendarBlocksById}
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
+          fillViewport={calendarFullscreen}
           onCellsSelected={canWrite ? setModalCells : undefined}
           onOpenReservation={openReservationDrawer}
           onCalendarImportReviewFinished={onCalendarImportReviewFinished}
           onCalendarImportReviewActivated={onCalendarImportReviewActivated}
+          canActivateCalendarImport={isPlatformAdmin}
           onToggleDynamicPrice={
             canWrite
               ? async ({ listingId, roomTypeId, dateStr, enable }) => {
@@ -679,6 +751,7 @@ export default function CalendarInventoryPage({
           onReleaseBlock={canWrite ? releaseBlock : undefined}
           onCalendarImportReviewFinished={onCalendarImportReviewFinished}
           onCalendarImportReviewActivated={onCalendarImportReviewActivated}
+          canActivateCalendarImport={isPlatformAdmin}
         />
       )}
       {view === 'simple' && !selectedListing && (
@@ -703,6 +776,7 @@ export default function CalendarInventoryPage({
           </div>
         </div>
       )}
+      </div>
 
       <UpdateInventoryModal
         open={!!modalCells}
@@ -728,6 +802,66 @@ export default function CalendarInventoryPage({
         />
       )}
     </div>
+  );
+
+  const fullscreenLayer =
+    calendarFullscreen && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Calendrier plein écran"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              background: '#f6f5f1',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: 6,
+              boxSizing: 'border-box',
+            }}
+          >
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              {calendarPage}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCalendarFullscreen(false)}
+              title="Quitter le plein écran (Échap)"
+              aria-label="Quitter le plein écran"
+              style={{
+                position: 'fixed',
+                right: 14,
+                bottom: 14,
+                zIndex: 10000,
+                width: 36,
+                height: 36,
+                borderRadius: 99,
+                border: '1px solid rgba(20,17,10,0.12)',
+                background: 'rgba(255,255,255,0.94)',
+                boxShadow: '0 4px 16px rgba(20,17,10,0.14)',
+                color: '#7a756c',
+                fontSize: 22,
+                fontWeight: 300,
+                lineHeight: 1,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                padding: 0,
+              }}
+            >
+              ×
+            </button>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <>
+      {!calendarFullscreen && calendarPage}
+      {fullscreenLayer}
+    </>
   );
 }
 

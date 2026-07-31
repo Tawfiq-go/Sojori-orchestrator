@@ -110,6 +110,16 @@ export interface Message {
   audioCaption?: string | null;
   /** Index exchange Inbox Resa (pour panneau détail) */
   bookingExchangeIndex?: number;
+  /**
+   * Traduction opérateur (inbox OTA uniquement — WhatsApp est auto-piloté par l'IA).
+   * Produite côté backend, stockée en base, jamais recalculée à l'affichage.
+   * `translatedAry` = darija en script arabe.
+   * Optionnels : un message sans traduction s'affiche exactement comme avant.
+   */
+  translatedFr?: string | null;
+  translatedAry?: string | null;
+  /** Texte d'origine, conservé quand une traduction prend sa place dans la bulle. */
+  originalText?: string | null;
 }
 
 export interface QuickTemplate {
