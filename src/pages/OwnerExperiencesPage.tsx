@@ -142,22 +142,31 @@ function toDraft(s: PartnerService): Draft {
   };
 }
 
-/** Clé provider (fiche Partner liée à l’owner de l’expérience). */
-function experienceProviderKey(s: PartnerService): string {
+/** Clé provider : fiche Partner (Dreams / NOMMOS…) plutôt que owner:… générique. */
+function experienceProviderKey(
+  s: PartnerService,
+  partnersByOwnerId?: Map<string, { id: string; name: string }>,
+): string {
   if (s.providerId) return String(s.providerId);
   if (s.partnerId) return String(s.partnerId);
-  if (s.ownerId) return `owner:${String(s.ownerId)}`;
+  if (s.ownerId) {
+    const fiche = partnersByOwnerId?.get(String(s.ownerId));
+    if (fiche?.id) return fiche.id;
+    return `owner:${String(s.ownerId)}`;
+  }
   return 'owner';
 }
 
 function experienceProviderLabel(
   s: PartnerService,
-  partnersByOwner: Map<string, string>,
+  partnersById: Map<string, string>,
+  partnersByOwnerId: Map<string, { id: string; name: string }>,
 ): string {
   if (s.providerName) return String(s.providerName);
-  if (s.partnerId) return 'Sojori';
+  if (s.partnerId) return partnersById.get(String(s.partnerId)) || 'Sojori';
+  if (s.providerId) return partnersById.get(String(s.providerId)) || String(s.providerId);
   if (s.ownerId) {
-    return partnersByOwner.get(String(s.ownerId)) || 'Mes expériences';
+    return partnersByOwnerId.get(String(s.ownerId))?.name || 'Mes expériences';
   }
   return 'Mes expériences';
 }
@@ -177,13 +186,29 @@ export function OwnerExperiencesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [list, partnersList, citiesRes] = await Promise.all([
+      const [ownList, partnersList, citiesRes] = await Promise.all([
         partnersApi.listExperiences(),
-        partnersApi.list({ includePlatform: false }).catch(() => [] as Partner[]),
+        // Inclure les fiches plateforme (NOMMOS) + fiche owner (Dreams)
+        partnersApi.list({ includePlatform: true }).catch(() => [] as Partner[]),
         listingsService.getCities({ limit: 200 }).catch(() => null),
       ]);
-      setRows(list);
-      setPartners(Array.isArray(partnersList) ? partnersList : []);
+      const partnersArr = Array.isArray(partnersList) ? partnersList : [];
+      setPartners(partnersArr);
+
+      // Services liés à une fiche Partner (ex. NOMMOS) — absents de /experiences (partnerId null)
+      const platformPartners = partnersArr.filter((p) => !p.ownerId);
+      const partnerServiceLists = await Promise.all(
+        platformPartners.map((p) =>
+          partnersApi.listServices(p.id).catch(() => [] as PartnerService[]),
+        ),
+      );
+      const byId = new Map<string, PartnerService>();
+      for (const s of ownList || []) byId.set(s.id, s);
+      for (const list of partnerServiceLists) {
+        for (const s of list || []) byId.set(s.id, s);
+      }
+      setRows(Array.from(byId.values()));
+
       const cityList = (citiesRes?.data?.cities ?? citiesRes?.data ?? citiesRes ?? []) as Array<{
         _id: string;
         name: string;
@@ -200,13 +225,21 @@ export function OwnerExperiencesPage() {
     void load();
   }, [load]);
 
-  const partnersByOwner = useMemo(() => {
+  const partnersById = useMemo(() => {
     const map = new Map<string, string>();
     for (const p of partners) {
-      if (!p.ownerId || !p.name) continue;
+      if (p.id && p.name) map.set(String(p.id), p.name);
+    }
+    return map;
+  }, [partners]);
+
+  const partnersByOwnerId = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    for (const p of partners) {
+      if (!p.ownerId || !p.name || !p.id) continue;
       const oid = String(p.ownerId);
       if (!map.has(oid) || p.active !== false) {
-        map.set(oid, p.name);
+        map.set(oid, { id: String(p.id), name: p.name });
       }
     }
     return map;
@@ -214,15 +247,19 @@ export function OwnerExperiencesPage() {
 
   const providers = useMemo(() => {
     const map = new Map<string, string>();
+    // Toujours lister les fiches connues (Dreams + NOMMOS), même sans activité
+    for (const p of partners) {
+      if (p.id && p.name) map.set(String(p.id), p.name);
+    }
     for (const r of rows) {
-      const id = experienceProviderKey(r);
-      const name = experienceProviderLabel(r, partnersByOwner);
-      map.set(id, name);
+      const id = experienceProviderKey(r, partnersByOwnerId);
+      const name = experienceProviderLabel(r, partnersById, partnersByOwnerId);
+      if (!map.has(id)) map.set(id, name);
     }
     return Array.from(map.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
-  }, [rows, partnersByOwner]);
+  }, [rows, partners, partnersById, partnersByOwnerId]);
 
   useEffect(() => {
     if (providerFilter === 'all') return;
@@ -233,10 +270,10 @@ export function OwnerExperiencesPage() {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
-      const pid = experienceProviderKey(r);
+      const pid = experienceProviderKey(r, partnersByOwnerId);
       if (providerFilter !== 'all' && pid !== providerFilter) return false;
       if (!needle) return true;
-      const provider = experienceProviderLabel(r, partnersByOwner);
+      const provider = experienceProviderLabel(r, partnersById, partnersByOwnerId);
       return (
         r.title.toLowerCase().includes(needle) ||
         r.category.toLowerCase().includes(needle) ||
@@ -244,7 +281,7 @@ export function OwnerExperiencesPage() {
         provider.toLowerCase().includes(needle)
       );
     });
-  }, [rows, q, providerFilter, partnersByOwner]);
+  }, [rows, q, providerFilter, partnersById, partnersByOwnerId]);
 
   const cityName = useCallback(
     (id: string) => cities.find((c) => c._id === id)?.name || id,
@@ -337,11 +374,16 @@ export function OwnerExperiencesPage() {
     };
     setSaving(true);
     try {
+      const existing = !isNew && selectedId ? rows.find((r) => r.id === selectedId) : null;
       if (isNew) {
         const created = await partnersApi.createExperience(body);
         toast.success('Expérience créée');
         await load();
         openEdit(created);
+      } else if (selectedId && existing?.partnerId) {
+        await partnersApi.updateService(String(existing.partnerId), selectedId, body);
+        toast.success('Enregistré');
+        await load();
       } else if (selectedId) {
         await partnersApi.updateExperience(selectedId, body);
         toast.success('Enregistré');
@@ -359,7 +401,12 @@ export function OwnerExperiencesPage() {
     if (!window.confirm('Supprimer cette expérience ?')) return;
     setSaving(true);
     try {
-      await partnersApi.removeExperience(selectedId);
+      const existing = rows.find((r) => r.id === selectedId);
+      if (existing?.partnerId) {
+        await partnersApi.removeService(String(existing.partnerId), selectedId);
+      } else {
+        await partnersApi.removeExperience(selectedId);
+      }
       toast.success('Supprimée');
       closeEditor();
       await load();
@@ -552,7 +599,7 @@ export function OwnerExperiencesPage() {
                       const prices = (s.formules || []).map((f) => Number(f.priceMad) || 0);
                       const min = prices.length ? Math.min(...prices) : 0;
                       const active = selectedId === s.id && !isNew;
-                      const provider = experienceProviderLabel(s, partnersByOwner);
+                      const provider = experienceProviderLabel(s, partnersById, partnersByOwnerId);
                       return (
                         <div
                           key={`${group.key}-${s.id}`}
