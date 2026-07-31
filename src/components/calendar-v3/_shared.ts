@@ -280,6 +280,12 @@ export const ALL_COLUMNS: ColumnDef[] = [
     excelSelectable: false,
   },
   {
+    id: 'audit',
+    label: 'Audit calendrier (bouton sur le bien)',
+    short: 'Audit',
+    excelSelectable: false,
+  },
+  {
     id: 'stopSell',
     label: 'Arrêt des ventes',
     short: 'Stop',
@@ -348,10 +354,19 @@ export function calendarDetailColumns(selectedColumns: string[]): string[] {
   return sortCalendarColumns(effectiveCalendarColumns(selectedColumns));
 }
 
+/** Colonnes « UI only » : pas de ligne collapse ni cellules dates. */
+const UI_ONLY_COLUMN_IDS = new Set(['audit']);
+
+export function isCalendarAuditFilterOn(selectedColumns: string[]): boolean {
+  return effectiveCalendarColumns(selectedColumns).includes('audit');
+}
+
 /** Colonnes du collapse Multi (hors ligne principale prix/dispo) — Min stay, Prix dyn., etc. */
 export function calendarCollapseColumns(selectedColumns: string[]): string[] {
   return sortCalendarColumns(
-    effectiveCalendarColumns(selectedColumns).filter((id) => !PRIMARY_ROW_SET.has(id)),
+    effectiveCalendarColumns(selectedColumns).filter(
+      (id) => !PRIMARY_ROW_SET.has(id) && !UI_ONLY_COLUMN_IDS.has(id),
+    ),
   );
 }
 

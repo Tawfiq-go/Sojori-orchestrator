@@ -469,6 +469,21 @@ class CalendarService {
     return response.data.data;
   }
 
+  /**
+   * POST /api/v1/calendar/rentals/push-inventory-to-ru
+   * Publie prix + dispo du listing vers les canaux (plage défaut ~365 j. / inventaire).
+   * Audit libre (hors mode Import) — ne touche PAS calendarImportReview.
+   */
+  async pushInventoryToChannels(listingId: string): Promise<void> {
+    const response = await apiClient.post<{ success: boolean; message?: string }>(
+      `${CALENDAR_BASE}/rentals/push-inventory-to-ru`,
+      { listingIds: [String(listingId)] },
+    );
+    if (!response.data?.success) {
+      throw new Error(response.data?.message || 'Échec publication calendrier vers les canaux');
+    }
+  }
+
   /** GET /api/v1/calendar/dynamic-price/get?listingId= */
   async getDynamicPricingRule(listingId: string): Promise<Record<string, unknown> | null> {
     const response = await apiClient.get<{ success: boolean; rule?: Record<string, unknown> }>(
