@@ -64,6 +64,10 @@ interface WaMessage {
   data?: {
     direction?: string;
     template?: string;
+    display_name?: string;
+    flow_id?: string;
+    flow_cta?: string;
+    screen?: string;
     error_message?: string;
     error_code?: string;
     raw_error_message?: string;
@@ -76,20 +80,56 @@ interface WaMessage {
   };
 }
 
+/** Guest/recipient phone: outbound → `to`, inbound → `from`. Never prefer WABA phone_number_id. */
+function recipientPhone(msg: WaMessage): string | undefined {
+  const d = msg.data;
+  if (!d) return undefined;
+  if (d.direction === 'inbound') return d.from || d.to;
+  return d.to || d.from;
+}
+
+/** Show country + last 6 digits so you can recognize your test number. */
+function formatGuestPhone(value?: string) {
+  if (!value) return '—';
+  const digits = value.replace(/\D/g, '');
+  if (digits.length <= 6) return digits || value;
+  const last6 = digits.slice(-6);
+  const cc = digits.length > 9 ? `+${digits.slice(0, digits.length - 9)}` : '+';
+  // Prefer readable: +212····8284 style when long enough
+  if (digits.length >= 10) {
+    return `+${digits.slice(0, digits.length - 6)}····${last6}`;
+  }
+  return `****${last6}`;
+}
+
+function messageDisplayName(msg: WaMessage): string {
+  const d = msg.data;
+  if (!d) return '—';
+  if (d.display_name) return d.display_name;
+  if (d.template && d.template !== 'flow') return d.template;
+  if (d.flow_id) return `flow:${d.flow_id}`;
+  if (d.message_type === 'flow') return 'flow';
+  return d.template || d.message_type || '—';
+}
+
 function MessageDetailTooltip({ msg, children }: { msg: WaMessage; children: ReactElement }) {
   const d = msg.data || {};
   const { label: codeLabel } = errorCodeInfo(d.error_code);
   const status = d.whatsapp_status || '—';
+  const guest = recipientPhone(msg);
   const lines: Array<{ k: string; v: string }> = [
     { k: 'Statut', v: status },
     { k: 'Service', v: serviceLabel(msg.service) },
     { k: 'Type', v: d.message_type || '—' },
+    { k: 'Nom', v: messageDisplayName(msg) },
     { k: 'Template', v: d.template || '—' },
+    { k: 'Flow ID', v: d.flow_id || '—' },
+    { k: 'CTA', v: d.flow_cta || '—' },
+    { k: 'Screen', v: d.screen || '—' },
     { k: 'Direction', v: d.direction || '—' },
+    { k: 'Invité (récepteur)', v: guest || '—' },
     { k: 'Message ID', v: d.message_id || '—' },
-    { k: 'De', v: d.from || '—' },
-    { k: 'Vers', v: d.to || '—' },
-    { k: 'Phone ID', v: d.phone_number_id || '—' },
+    { k: 'WABA phone_id', v: d.phone_number_id || '—' },
     { k: 'Date', v: msg.timestamp ? formatCasablancaDate(msg.timestamp) : '—' },
   ];
   if (d.error_code) lines.push({ k: 'Code erreur', v: codeLabel });
@@ -271,13 +311,6 @@ function formatRate(value?: number | null) {
   return `${Math.round(value * 1000) / 10}%`;
 }
 
-function maskPhone(value?: string) {
-  if (!value) return 'masked';
-  const digits = value.replace(/\D/g, '');
-  if (digits.length <= 4) return '****';
-  return `****${digits.slice(-4)}`;
-}
-
 function errorCodeInfo(code?: string): { label: string; color: string } {
   if (!code) return { label: '—', color: t.text3 };
   const codeNum = Number(code);
@@ -428,32 +461,39 @@ function MessagesTable({
               label: 'Template / Flow',
               render: (row: WaMessage & { id: string }) => (
                 <MessageDetailTooltip msg={row}>
-                  <Typography
-                    sx={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      fontFamily: 'monospace',
-                      color: row.data?.template ? t.text : t.text3,
-                      cursor: 'help',
-                      maxWidth: 220,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                    title={row.data?.template || undefined}
-                  >
-                    {row.data?.template || '—'}
-                  </Typography>
+                  <Box sx={{ cursor: 'help', maxWidth: 260 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        fontFamily: 'monospace',
+                        color: messageDisplayName(row) !== '—' ? t.text : t.text3,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {messageDisplayName(row)}
+                    </Typography>
+                    {row.data?.flow_id ? (
+                      <Typography sx={{ fontSize: 10, color: t.text3, fontFamily: 'monospace' }}>
+                        id:{row.data.flow_id}
+                        {row.data.flow_cta ? ` · CTA:${row.data.flow_cta}` : ''}
+                      </Typography>
+                    ) : null}
+                  </Box>
                 </MessageDetailTooltip>
               ),
             },
             {
               key: 'phone',
-              label: 'Téléphone',
+              label: 'Invité (récepteur)',
               render: (row: WaMessage & { id: string }) => (
-                <Typography sx={{ fontSize: 12, color: t.text2, fontFamily: 'monospace' }}>
-                  {maskPhone(row.data?.from || row.data?.to)}
-                </Typography>
+                <MessageDetailTooltip msg={row}>
+                  <Typography sx={{ fontSize: 12, color: t.text2, fontFamily: 'monospace', cursor: 'help' }}>
+                    {formatGuestPhone(recipientPhone(row))}
+                  </Typography>
+                </MessageDetailTooltip>
               ),
             },
             {
@@ -1412,9 +1452,16 @@ function WhatsAppMonitoringPageContent() {
                     label: 'Template / Flow',
                     render: (row: WaMessage & { id: string }) => (
                       <MessageDetailTooltip msg={row}>
-                        <Typography sx={{ fontSize: 12, fontWeight: 600, fontFamily: 'monospace', cursor: 'help' }}>
-                          {row.data?.template || row.data?.message_type || '—'}
-                        </Typography>
+                        <Box sx={{ cursor: 'help', maxWidth: 240 }}>
+                          <Typography sx={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace' }}>
+                            {messageDisplayName(row)}
+                          </Typography>
+                          {row.data?.flow_id ? (
+                            <Typography sx={{ fontSize: 10, color: t.text3, fontFamily: 'monospace' }}>
+                              id:{row.data.flow_id}
+                            </Typography>
+                          ) : null}
+                        </Box>
                       </MessageDetailTooltip>
                     ),
                   },
@@ -1453,10 +1500,10 @@ function WhatsAppMonitoringPageContent() {
                   },
                   {
                     key: 'phone',
-                    label: 'Tél.',
+                    label: 'Invité',
                     render: (row: WaMessage & { id: string }) => (
                       <Typography sx={{ fontSize: 11, fontFamily: 'monospace', color: t.text3 }}>
-                        {maskPhone(row.data?.from || row.data?.to)}
+                        {formatGuestPhone(recipientPhone(row))}
                       </Typography>
                     ),
                   },
