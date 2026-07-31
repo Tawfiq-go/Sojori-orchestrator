@@ -72,6 +72,8 @@ export interface OtaThreadRow {
   currency?: string;
   status?: string;
   reservationCreatedAt?: string;
+  /** Code confirmation OTA (Airbnb HM…, etc.) */
+  otaCode?: string;
   preloadedMessages?: any[];
   /** Recherche avancée « mot-clé dans les messages » */
   messageMatchCount?: number;
@@ -332,6 +334,13 @@ export function mapApiItemToOtaThread(item: any): OtaThreadRow {
     currency: reservation.currency || 'EUR',
     status: reservation.status || threadData.status,
     reservationCreatedAt: reservation.createdAt || reservation.reservationDate,
+    otaCode: (() => {
+      const mappingId =
+        reservation.mapping && typeof reservation.mapping === 'object'
+          ? String((reservation.mapping as { ReservationID?: string }).ReservationID || '')
+          : '';
+      return String(reservation.otaCode || mappingId || '').trim() || undefined;
+    })(),
     preloadedMessages: item.messages || [],
     messageMatchCount:
       typeof threadData.messageMatchCount === 'number' ? threadData.messageMatchCount : undefined,
@@ -453,6 +462,7 @@ export function mapOtaRowToReservation(row: OtaThreadRow): InboxReservationData 
     commission,
     reservationCreatedAt: row.reservationCreatedAt,
     reservationCreatedDisplay: formatReservationCreatedDisplay(row.reservationCreatedAt),
+    otaCode: row.otaCode,
   };
 }
 
@@ -559,6 +569,17 @@ export function stripOtaSentViaFooter(text: string): string {
     .trim();
 }
 
+/**
+ * Traduction exploitable, ou null. Le backend peut renvoyer null, une chaîne vide,
+ * ou un placeholder si le modèle a échoué — on ne veut pas d'une bulle vide.
+ */
+function cleanTranslation(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const v = value.trim();
+  if (!v || v === '-' || v === 'null' || v === 'undefined') return null;
+  return v;
+}
+
 export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Message[] {
   // Chrono croissant : ancien en haut, récent en bas (comme WhatsApp).
   const sorted = [...messages].sort((a, b) => {
@@ -616,6 +637,12 @@ export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Me
           isAutomation: msg.isAutomation,
           body: rawBody,
         });
+    // Traductions opérateur (backend: Message.translatedFr / translatedAry).
+    // Seulement sur les messages VOYAGEUR : les réponses host sont écrites par
+    // l'opérateur lui-même, il n'a pas besoin de les relire traduites.
+    const translatedFr = isIncoming ? cleanTranslation(msg.translatedFr) : null;
+    const translatedAry = isIncoming ? cleanTranslation(msg.translatedAry) : null;
+
     out.push({
       id: msg._id || msg.messageId || `m-${index}`,
       from: isIncoming ? 'guest' : 'you',
@@ -625,6 +652,11 @@ export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Me
         : '',
       status: !isIncoming ? msg.status : undefined,
       ...(originTag && !isIncoming ? { tags: [originTag] } : {}),
+      ...(translatedFr ? { translatedFr } : {}),
+      ...(translatedAry ? { translatedAry } : {}),
+      // `body` reste la source de vérité affichable ; on garde l'original pour le
+      // révéler sous la traduction (bouton 🌐).
+      ...(translatedFr || translatedAry ? { originalText: body } : {}),
     });
     return out;
   });

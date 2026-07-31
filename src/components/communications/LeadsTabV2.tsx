@@ -25,6 +25,7 @@ import {
 } from '../../services/communicationsAi.helpers';
 import { formatThreadWhen, nightsBetween, normalizeBookingSource } from '../unified-inbox/inboxFormat';
 import { T } from '../unified-inbox/_tokens';
+import { openOtaPlatformExternal } from '../../utils/otaPlatformLinks';
 
 const LEAD_FILTERS = [
   { id: 'all', label: 'Tout' },
@@ -51,6 +52,7 @@ interface LeadRow {
   numberOfGuests?: number;
   totalPrice?: number;
   currency?: string;
+  otaCode?: string;
 }
 
 export default function LeadsTabV2() {
@@ -107,6 +109,7 @@ export default function LeadsTabV2() {
           numberOfGuests: reservation.numberOfGuests,
           totalPrice: reservation.totalPrice,
           currency: reservation.currency || 'EUR',
+          otaCode: String(reservation.otaCode || '').trim() || undefined,
         };
       });
       setLeads(rows);
@@ -458,7 +461,16 @@ export default function LeadsTabV2() {
               thread={activeThread}
               type="leads"
               reservation={reservation}
-              onAction={() => {}}
+              onAction={(action) => {
+                if (action === 'view-platform') {
+                  openOtaPlatformExternal({
+                    platform: otaPlatform || reservation?.otaPlatform || active?.channel,
+                    otaCode: reservation?.otaCode || active?.otaCode,
+                    reservationNumber: reservation?.reservationNumber || active?.reservationNumber,
+                    threadId: active?.threadId,
+                  });
+                }
+              }}
             />
           </>
         ) : (

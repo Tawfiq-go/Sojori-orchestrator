@@ -181,6 +181,12 @@ export function useDashboardChrome() {
       return 'admin/channels/business';
     }
 
+    if (path.startsWith('/providers')) {
+      return 'providers';
+    }
+    if (path.startsWith('/experiences')) {
+      return 'experiences';
+    }
     if (path.startsWith('/admin/pm-lifecycle')) {
       return 'admin/pm-lifecycle';
     }

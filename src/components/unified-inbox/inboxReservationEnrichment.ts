@@ -195,6 +195,7 @@ export function mapReservationToInboxData(
     netHost,
     commission,
     otaPlatform: source,
+    otaCode: String(r.otaCode || '').trim() || undefined,
     ...stayOps,
   };
 }

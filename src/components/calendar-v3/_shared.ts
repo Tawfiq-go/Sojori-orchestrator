@@ -113,6 +113,13 @@ export const PRICE_MODE_LABEL: Record<PriceDisplayMode, string> = {
   base: 'Base',
 };
 
+/** Affichage compact calendrier : M = manuel, D = dynamique. */
+export const PRICE_MODE_LETTER: Record<PriceDisplayMode, string> = {
+  manual: 'M',
+  dynamic: 'D',
+  base: 'B',
+};
+
 /** Mode d'affichage — priceMode API ou flags legacy. */
 export function resolvePriceMode(inv?: InventoryDay): PriceDisplayMode {
   if (!inv) return 'base';
@@ -298,21 +305,21 @@ export const ALL_COLUMNS: ColumnDef[] = [
   },
 ];
 
-/** Colonnes affichées sur la ligne principale (prix + dispo). */
-export const CALENDAR_PRIMARY_ROW_COLUMNS = ['availableRoom', 'rate'] as const;
+/** Colonnes affichées sur la ligne principale (prix seul — dispo dans le collapse). */
+export const CALENDAR_PRIMARY_ROW_COLUMNS = ['rate'] as const;
 
-/** Sélection colonnes par défaut (vue multi) — Min stay + prix dyn. dans le collapse. */
+/** Sélection colonnes par défaut (vue multi) — Dispo puis Min stay dans le collapse. */
 export const CALENDAR_DEFAULT_COLUMNS = [
-  'availableRoom',
   'rate',
+  'availableRoom',
   'minStay',
   'dynamicPrice',
 ] as const;
 
-/** Colonnes prioritaires — ordre filtre + ligne principale */
+/** Colonnes prioritaires — ordre filtre + collapse (Dispo avant Min). */
 export const CALENDAR_COLUMN_PRIORITY = [
-  'availableRoom',
   'rate',
+  'availableRoom',
   'minStay',
   'dynamicPrice',
 ] as const;

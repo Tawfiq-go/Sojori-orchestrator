@@ -21,6 +21,14 @@ type CachedThread = {
   total: number;
 };
 
+export type SelectOtaThreadOptions = {
+  /**
+   * Réponse `getOTAMessages` déjà récupérée par l'appelant (deep link `?thread=`).
+   * Évite un second appel identique — sinon le fil se charge visiblement deux fois.
+   */
+  preloadedResponse?: unknown;
+};
+
 /** Cache session — ouverture style WhatsApp Web (instant si déjà vu). */
 const otaMessagesCache = new Map<string, CachedThread>();
 
@@ -106,11 +114,13 @@ export function useInboxOTAConversation() {
     }
   }, [activeRow]);
 
-  const selectOtaThread = useCallback(async (row: OtaThreadRow) => {
+  const selectOtaThread = useCallback(async (row: OtaThreadRow, opts?: SelectOtaThreadOptions) => {
     const threadKey = String(row.threadId);
     const sameThread = activeThreadIdRef.current === threadKey;
     const gen = ++selectGenRef.current;
     const cached = otaMessagesCache.get(threadKey);
+    const preloaded = opts?.preloadedResponse;
+    const hasPreloaded = preloaded != null;
 
     activeThreadIdRef.current = threadKey;
     setActiveRow(row);
@@ -124,22 +134,20 @@ export function useInboxOTAConversation() {
         // WhatsApp Web : cache → affichage immédiat, refresh silencieux
         setMessages(cached.messages);
         setMessagesTotal(cached.total);
-        setLoadingMessages(true);
       } else {
         // Pas de cache → panneau vide + spinner (pas d’aperçu partiel)
         setMessages([]);
         setMessagesTotal(0);
-        setLoadingMessages(true);
       }
-    } else {
-      setLoadingMessages(true);
     }
+    // Messages déjà en main (deep link) : pas de spinner, le fil s'affiche d'un coup.
+    setLoadingMessages(!hasPreloaded);
     setLoadingTasks(true);
 
     const resaNum = row.reservationNumber?.trim();
 
     try {
-      const msgRes = await messagesService.getOTAMessages(threadKey);
+      const msgRes = hasPreloaded ? preloaded : await messagesService.getOTAMessages(threadKey);
       if (gen !== selectGenRef.current) return;
 
       const rawMessages = extractOtaMessagesFromApiResponse(msgRes);

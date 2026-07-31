@@ -406,20 +406,34 @@ function DayContextBlock({ inv, block }) {
           }}>
             Blocage
           </div>
-          <div style={{ fontSize: 11.5, fontWeight: 800, color: T.text }}>🚫 {block.title}</div>
-          {block.note ? (
-            <div style={{ fontSize: 10.5, color: T.text2, lineHeight: 1.4, marginTop: 2, whiteSpace: 'pre-wrap' }}>
-              {block.note}
-            </div>
-          ) : null}
-          <div style={{ fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace', marginTop: 3 }}>
-            {fmtD(block.dateFrom)} → {fmtD(block.dateTo)}
-            {block.createdBy?.name ? ` · par ${block.createdBy.name}` : ''}
-          </div>
+          {block.type === 'import_ru' || block.type === 'import_airbnb' || block.type === 'import_booking' ? (
+            <>
+              <div style={{ fontSize: 11.5, fontWeight: 800, color: T.text }}>🚫 Import initial</div>
+              <div style={{ fontSize: 10.5, color: T.text2, marginTop: 2 }}>
+                Réalisé par {block.createdBy?.name || '—'}
+                {block.createdAt
+                  ? ` · le ${new Date(block.createdAt).toLocaleDateString('fr-FR')}`
+                  : ''}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 11.5, fontWeight: 800, color: T.text }}>🚫 {block.title}</div>
+              {block.note ? (
+                <div style={{ fontSize: 10.5, color: T.text2, lineHeight: 1.4, marginTop: 2, whiteSpace: 'pre-wrap' }}>
+                  {block.note}
+                </div>
+              ) : null}
+              <div style={{ fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace', marginTop: 3 }}>
+                {fmtD(block.dateFrom)} → {fmtD(block.dateTo)}
+                {block.createdBy?.name ? ` · par ${block.createdBy.name}` : ''}
+              </div>
+            </>
+          )}
         </>
       ) : (
         <div style={{ fontSize: 10.5, color: T.error, fontWeight: 700 }}>
-          🚫 Bloqué — sans motif enregistré (import canal ou blocage antérieur)
+          🚫 Bloqué — sans motif enregistré (Import initial ou blocage antérieur)
         </div>
       )}
     </div>

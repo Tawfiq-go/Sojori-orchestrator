@@ -78,6 +78,8 @@ export default function SimpleView({
   onReleaseBlock,
   onCalendarImportReviewFinished,
   onCalendarImportReviewActivated,
+  /** Admin only — jamais Owner. */
+  canActivateCalendarImport = false,
 }) {
   const todayIso = toIso(new Date());
 
@@ -304,10 +306,10 @@ export default function SimpleView({
                 >
                   Revue import
                 </button>
-              ) : (
+              ) : canActivateCalendarImport ? (
                 <button
                   type="button"
-                  title="Passer en mode Import calendrier — prix non modifiables, pas de push canal"
+                  title="Admin : passer en mode Import calendrier (sinon activé à l’import listing)"
                   disabled={activatingCalendarImport}
                   onClick={handleActivateCalendarImport}
                   style={{
@@ -324,7 +326,7 @@ export default function SimpleView({
                 >
                   {activatingCalendarImport ? '…' : 'Mode Import'}
                 </button>
-              )}
+              ) : null}
               {isRoomTypeRail ? (
                 <a
                   href={`/calendar?view=multi`}
@@ -1158,18 +1160,29 @@ function DaySidePanel({ selected, focusIso, inventories, calendarBlocksById = {}
                   background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.25)',
                 }}>
                   <div style={{ fontSize: 12, fontWeight: 800, color: T.error, marginBottom: 2 }}>
-                    🚫 {dayBlock.title}
+                    🚫 {(dayBlock.type === 'import_ru' || dayBlock.type === 'import_airbnb' || dayBlock.type === 'import_booking')
+                      ? 'Import initial'
+                      : dayBlock.title}
                   </div>
-                  {dayBlock.note ? (
-                    <div style={{ fontSize: 11.5, color: T.text2, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
-                      {dayBlock.note}
+                  {(dayBlock.type === 'import_ru' || dayBlock.type === 'import_airbnb' || dayBlock.type === 'import_booking') ? (
+                    <div style={{ fontSize: 11.5, color: T.text2, marginTop: 2 }}>
+                      Réalisé par {dayBlock.createdBy?.name || '—'}
+                      {dayBlock.createdAt ? ` · le ${new Date(dayBlock.createdAt).toLocaleDateString('fr-FR')}` : ''}
                     </div>
-                  ) : null}
-                  <div style={{ fontSize: 10.5, color: T.text3, marginTop: 4 }}>
-                    Bloqué par {dayBlock.createdBy?.name || '—'}
-                    {dayBlock.createdAt ? ` · ${new Date(dayBlock.createdAt).toLocaleDateString('fr-FR')}` : ''}
-                    {` · ${bFrom} → ${bTo}`}
-                  </div>
+                  ) : (
+                    <>
+                      {dayBlock.note ? (
+                        <div style={{ fontSize: 11.5, color: T.text2, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
+                          {dayBlock.note}
+                        </div>
+                      ) : null}
+                      <div style={{ fontSize: 10.5, color: T.text3, marginTop: 4 }}>
+                        Bloqué par {dayBlock.createdBy?.name || '—'}
+                        {dayBlock.createdAt ? ` · ${new Date(dayBlock.createdAt).toLocaleDateString('fr-FR')}` : ''}
+                        {` · ${bFrom} → ${bTo}`}
+                      </div>
+                    </>
+                  )}
                   {onReleaseBlock ? (
                     <>
                       {isPartialSelection ? (

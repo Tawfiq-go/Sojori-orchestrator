@@ -98,6 +98,7 @@ export function ChannelsHubToolbar({ sectionHint, sectionTab: sectionTabProp }: 
     Business: 'Business',
     Mapping: 'Mapping',
     LogApiRU: 'LogApiRU',
+    LogApiMews: 'LogApiMews',
     Debug: 'Debug',
     Cron: 'Cron',
   };
