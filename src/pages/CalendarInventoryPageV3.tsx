@@ -526,7 +526,7 @@ export function CalendarInventoryPageV3() {
 
   if (listingsLoading && listings.length === 0) {
     return (
-      <DashboardWrapper titleMeta={monthLabel}>
+      <DashboardWrapper titleMeta={simpleMode ? undefined : monthLabel}>
         <div style={{ padding: '40px', textAlign: 'center', color: '#7a756c' }}>
           Chargement des propriétés…
         </div>
@@ -535,7 +535,8 @@ export function CalendarInventoryPageV3() {
   }
 
   return (
-    <DashboardWrapper titleMeta={monthLabel}>
+    // Vue simple : pas de chip mois en haut — le mois est déjà dans le calendrier (verticalité).
+    <DashboardWrapper titleMeta={simpleMode ? undefined : monthLabel}>
       {listingsTotal > CALENDAR_LISTINGS_PAGE_SIZE ? (
         <Stack
           direction="row"
