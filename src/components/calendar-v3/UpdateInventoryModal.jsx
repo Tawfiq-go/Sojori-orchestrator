@@ -642,24 +642,35 @@ export default function UpdateInventoryModal({
 
               {isBlockingAction && (
                 <Section label="Motif du blocage · obligatoire">
-                  <FieldBox>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px',
+                    background: T.bg2, borderRadius: 9, minWidth: 0,
+                    border: `1px solid ${form.blockTitle.trim() ? T.border : T.error}`,
+                  }}>
+                    <style>{`input { flex: 1; min-width: 0; border: 0; background: transparent; outline: 0; font: inherit; font-size: 13px; font-family: 'Geist Mono', monospace; font-weight: 700; color: ${T.text}; }`}</style>
                     <input
-                      placeholder="Titre — affiché dans le planning (ex: Travaux salle de bain)"
+                      placeholder="Titre * — affiché dans le planning (ex: Travaux salle de bain)"
                       value={form.blockTitle}
                       maxLength={120}
                       onChange={e => upd('blockTitle', e.target.value)} />
-                  </FieldBox>
+                  </div>
                   <textarea
-                    placeholder="Note interne — détail du motif, contexte…"
+                    placeholder="Note interne * — détail du motif, contexte…"
                     value={form.blockNote}
                     maxLength={2000}
                     rows={3}
                     onChange={e => upd('blockNote', e.target.value)}
                     style={{
                       width: '100%', marginTop: 8, padding: '9px 12px', boxSizing: 'border-box',
-                      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 9,
+                      background: T.bg2, borderRadius: 9,
+                      border: `1px solid ${form.blockNote.trim() ? T.border : T.error}`,
                       font: 'inherit', fontSize: 13, color: T.text, outline: 0, resize: 'vertical',
                     }} />
+                  {(!form.blockTitle.trim() || !form.blockNote.trim()) && (
+                    <p style={{ fontSize: 11, color: T.error, margin: '6px 0 0', fontWeight: 700 }}>
+                      Titre et note obligatoires — l'enregistrement est bloqué tant qu'ils sont vides.
+                    </p>
+                  )}
                   <p style={{ fontSize: 11, color: T.text3, margin: '6px 0 0', lineHeight: 1.45 }}>
                     Le titre apparaîtra comme une réservation dans le planning ; la note et votre
                     nom seront visibles au clic sur le blocage.
@@ -796,7 +807,14 @@ export default function UpdateInventoryModal({
           {step === 'form' ? (
             <>
               <Btn ghost onClick={onClose}>Annuler</Btn>
-              <Btn prim disabled={changesSummary.length === 0} onClick={handleSubmit}>💾 Enregistrer</Btn>
+              <Btn
+                prim
+                disabled={
+                  changesSummary.length === 0 ||
+                  (isBlockingAction && (!form.blockTitle.trim() || !form.blockNote.trim()))
+                }
+                onClick={handleSubmit}
+              >💾 Enregistrer</Btn>
             </>
           ) : (
             <>
