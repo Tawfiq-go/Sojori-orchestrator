@@ -437,8 +437,9 @@ export function mapOtaRowToReservation(row: OtaThreadRow): InboxReservationData 
         : kind === 'vrbo'
           ? 'Vrbo'
           : normalizeBookingSource(row.channelNameRaw || row.channel);
+  // Sans Comments Airbnb sur la row OTA : on n’invente plus 10 %.
+  // Commission / net hôte viennent du détail résa (mapReservationToInboxData) quand dispo.
   const total = row.totalPrice;
-  const commission = total != null ? Math.round(total * 0.1) : undefined;
   const phone = String(row.guestPhone || '').trim() || undefined;
   return {
     reservationNumber: row.reservationNumber,
@@ -458,8 +459,8 @@ export function mapOtaRowToReservation(row: OtaThreadRow): InboxReservationData 
     guestsLabel: row.numberOfGuests ? `${row.numberOfGuests} voyageurs` : undefined,
     totalPrice: total,
     currency: row.currency,
-    netHost: total != null && commission != null ? total - commission : undefined,
-    commission,
+    netHost: undefined,
+    commission: undefined,
     reservationCreatedAt: row.reservationCreatedAt,
     reservationCreatedDisplay: formatReservationCreatedDisplay(row.reservationCreatedAt),
     otaCode: row.otaCode,

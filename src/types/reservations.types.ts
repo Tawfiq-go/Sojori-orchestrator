@@ -91,6 +91,12 @@ export interface Reservation {
   // Pricing
   totalPrice?: number;
   alreadyPaid?: number;
+  /** Commission OTA en MAD (Comments Airbnb exacts quand dispo). */
+  otaCommission?: number | string;
+  /** Comments RU / Airbnb / Booking NOTE — source de vérité finance. */
+  comments?: string;
+  /** Stay Comments RU (court) — complément finance. */
+  notes?: string;
   currency?: string;
   paymentMethod?: string | null;
   paymentType?: string | null;
