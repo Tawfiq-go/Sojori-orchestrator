@@ -8,7 +8,7 @@ import {
   T, ALL_COLUMNS, priceOf, cellKey, genDays, isArchiveDay, ARCHIVE_CELL_BG, ARCHIVE_CELL_TEXT,
   hasInventoryData, resolveInventoryCellState, formatInventoryRateLabel, OUT_OF_WINDOW_CELL_BG,
   resolvePriceMode, PRICE_MODE_LABEL, PRICE_MODE_LETTER,
-  calendarPrimaryColumns, calendarCollapseColumns,
+  calendarPrimaryColumns, calendarCollapseColumns, isCalendarAuditFilterOn,
 } from './_shared';
 
 /** Fonds soft — uniquement statut inventaire (jamais M/D). */
@@ -715,6 +715,7 @@ const ListingLabel = memo(function ListingLabel({
   listing, expanded, showChevron, onToggle, avgPrice, dpEnabled = true,
   onFinishCalendarImport, finishingCalendarImport = false,
   onActivateCalendarImport, activatingCalendarImport = false,
+  onAuditClick,
 }) {
   const isSingle = listing.propertyUnit === 'Single';
   const isRoomTypeRow = Boolean(listing._isRoomTypeRow);
@@ -855,6 +856,29 @@ const ListingLabel = memo(function ListingLabel({
             ) : isRoomTypeRow ? (
               <span style={{ fontSize: 9.5, color: T.text4 }}>▶ Dispo / Min stay</span>
             ) : null}
+            {!isRoomTypeRow && onAuditClick ? (
+              <button
+                type="button"
+                title="Audit calendrier — overbooking, disponibilités, prix min/max"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAuditClick();
+                }}
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 800,
+                  color: '#fff',
+                  background: T.primaryDeep || '#92400e',
+                  border: 0,
+                  borderRadius: 6,
+                  padding: '2px 8px',
+                  cursor: 'pointer',
+                  lineHeight: 1.3,
+                }}
+              >
+                Audit
+              </button>
+            ) : null}
             {!isRoomTypeRow && onActivateCalendarImport ? (
               <button
                 type="button"
@@ -961,6 +985,7 @@ function ListingRow({
     loading: false, error: null, roomTypes: [], postImportAudit: null,
   });
   const [finishingCalendarImport, setFinishingCalendarImport] = useState(false);
+  const [publishingCalendar, setPublishingCalendar] = useState(false);
   const [activatingCalendarImport, setActivatingCalendarImport] = useState(false);
   const calendarReviewActive = !isRoomTypeRow && isCalendarImportReviewActive(listing);
 
@@ -986,6 +1011,22 @@ function ListingRow({
       setFinishingCalendarImport(false);
     }
   }, [listing?._id, finishingCalendarImport, onCalendarImportReviewFinished]);
+
+  const handlePublishCalendar = useCallback(async () => {
+    if (!listing?._id || publishingCalendar) return;
+    setPublishingCalendar(true);
+    console.log('[MultiView] Mise à jour calendrier 365j — début', { listingId: String(listing._id) });
+    try {
+      await calendarService.pushInventoryToChannels(String(listing._id));
+      console.log('[MultiView] Mise à jour calendrier 365j — OK', { listingId: String(listing._id) });
+      setAuditOpen(false);
+    } catch (err) {
+      console.error('[MultiView] Mise à jour calendrier 365j — échec', err);
+      window.alert(err?.response?.data?.message || err?.message || 'Impossible de publier le calendrier');
+    } finally {
+      setPublishingCalendar(false);
+    }
+  }, [listing?._id, publishingCalendar]);
 
   const handleActivateCalendarImport = useCallback(async () => {
     if (!listing?._id || activatingCalendarImport) return;
@@ -1068,6 +1109,13 @@ function ListingRow({
               : undefined
           }
           finishingCalendarImport={false}
+          onAuditClick={
+            !isRoomTypeRow &&
+            !isCalendarImportReviewActive(listing) &&
+            isCalendarAuditFilterOn(selectedColumns)
+              ? handleAuditClick
+              : undefined
+          }
           onActivateCalendarImport={
             canActivateCalendarImport &&
             !isRoomTypeRow &&
@@ -1209,6 +1257,8 @@ function ListingRow({
         calendarReviewActive={calendarReviewActive}
         onFinishCalendarImport={calendarReviewActive ? handleFinishCalendarImport : undefined}
         finishingCalendarImport={finishingCalendarImport}
+        onPublishCalendar={!calendarReviewActive ? handlePublishCalendar : undefined}
+        publishingCalendar={publishingCalendar}
         onRelease={async (range) => {
           const roomTypeId = range.roomTypeId || listing.roomTypeId || listing.roomTypes?.[0]?._id;
           if (!roomTypeId) throw new Error('Room type introuvable');
@@ -1223,7 +1273,28 @@ function ListingRow({
           const capacity = isMulti
             ? Math.max(1, Number(range.roomNumber ?? listing.roomNumber ?? 1))
             : 1;
-          // En revue import, le backend conserve la correction localement.
+          // Libérer d’abord les métadonnées CalendarBlock (bandeau « Import initial », etc.)
+          try {
+            const blocks = await calendarService.getCalendarBlocks(
+              [String(listing._id)],
+              range.from,
+              range.to,
+              'active',
+            );
+            await Promise.all(
+              (blocks || [])
+                .filter((b) => String(b.roomTypeId) === String(roomTypeId))
+                .map((b) =>
+                  calendarService.releaseCalendarBlock(String(b._id), {
+                    dateFrom: range.from,
+                    dateTo: range.to,
+                  }),
+                ),
+            );
+          } catch (e) {
+            console.warn('[MultiView] release CalendarBlocks (non bloquant)', e);
+          }
+          // En revue import, le backend conserve la correction localement (pas de push canal).
           await calendarService.updateCalendar([
             { ...base, type: 'availability', availableRoom: capacity },
             { ...base, type: 'stopSell', stopSell: false },

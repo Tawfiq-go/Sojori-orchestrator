@@ -244,12 +244,16 @@ export default function AuditBlockedDaysModal({
   onFixPrice,
   onFinishCalendarImport,
   finishingCalendarImport = false,
+  /** Audit libre (hors import) : publier 365 j. sans finir le mode Import. */
+  onPublishCalendar,
+  publishingCalendar = false,
 }) {
   const [releaseState, setReleaseState] = React.useState({});
   const [blockState, setBlockState] = React.useState({});
   const [priceFixState, setPriceFixState] = React.useState({});
   const [priceDrafts, setPriceDrafts] = React.useState({});
   const [confirmFinish, setConfirmFinish] = React.useState(false);
+  const [confirmPublish, setConfirmPublish] = React.useState(false);
   const [minInput, setMinInput] = React.useState('');
   const [maxInput, setMaxInput] = React.useState('');
   const [priceCheck, setPriceCheck] = React.useState(null);
@@ -268,43 +272,38 @@ export default function AuditBlockedDaysModal({
       setPriceFixState({});
       setPriceDrafts({});
       setConfirmFinish(false);
+      setConfirmPublish(false);
       setPriceCheck(null);
       setMinInput('');
       setMaxInput('');
     }
   }, [open]);
 
-  React.useEffect(() => {
-    if (!open || loading) return;
-    const suggested = postImportAudit?.suggestedBasePrice;
-    if (suggested == null || !(Number(suggested) > 0)) return;
-    const base = Number(suggested);
-    setMinInput((prev) => (prev === '' ? String(Math.round(base * 0.8)) : prev));
-    setMaxInput((prev) => (prev === '' ? String(Math.round(base * 1.2)) : prev));
-  }, [open, loading, postImportAudit?.suggestedBasePrice]);
-
-  // Auto-vérifie min/max dès que les bornes + jours prix sont prêts
-  React.useEffect(() => {
-    if (!open || loading || priceCheck?.checked) return;
+  // Pas d’auto-remplissage ni d’audit prix tant que le client n’a pas choisi min ET max.
+  const runPriceAudit = React.useCallback(() => {
     const min = minInput.trim() === '' ? null : Number(minInput);
     const max = maxInput.trim() === '' ? null : Number(maxInput);
+    if (min == null || Number.isNaN(min) || max == null || Number.isNaN(max)) {
+      window.alert('Indiquez un prix minimum et un prix maximum pour lancer la vérification.');
+      return;
+    }
+    if (min > max) {
+      window.alert('Le minimum doit être inférieur ou égal au maximum.');
+      return;
+    }
     const days = postImportAudit?.priceDays || [];
-    if (days.length === 0) return;
-    if ((min == null || Number.isNaN(min)) && (max == null || Number.isNaN(max))) return;
-    if (min != null && max != null && min > max) return;
-
     const outOfRange = [];
     for (const day of days) {
       const price = Number(day.currentPrice);
       if (!(price > 0)) continue;
-      if (min != null && !Number.isNaN(min) && price < min) {
+      if (price < min) {
         outOfRange.push({ ...day, reason: `sous le min (${min})`, bound: 'min' });
-      } else if (max != null && !Number.isNaN(max) && price > max) {
+      } else if (price > max) {
         outOfRange.push({ ...day, reason: `au-dessus du max (${max})`, bound: 'max' });
       }
     }
     setPriceCheck({ min, max, outOfRange, checked: true });
-  }, [open, loading, minInput, maxInput, postImportAudit?.priceDays, priceCheck?.checked]);
+  }, [minInput, maxInput, postImportAudit?.priceDays]);
 
   if (!open) return null;
 
@@ -335,16 +334,24 @@ export default function AuditBlockedDaysModal({
     const st = r.classification === 'missing_reservation_block' ? blockState[key] : releaseState[key];
     return st !== 'done';
   }).length;
-  const outOfRange = priceCheck?.outOfRange || [];
+  const priceAuditDone = priceCheck?.checked === true;
+  const outOfRange = priceAuditDone ? priceCheck?.outOfRange || [] : [];
   const openPrices = outOfRange.filter((r) => priceFixState[priceRowKey(r)] !== 'done').length;
   const critOpen = openOverbooking + allRanges.filter((r) => r.classification === 'missing_reservation_block' && blockState[rangeKey(r)] !== 'done').length;
-  const warnOpen = openBlocked + openPrices;
+  // Les écarts de prix n’entrent dans le résumé qu’après choix min/max + vérification.
+  const warnOpen = openBlocked + (priceAuditDone ? openPrices : 0);
   const fixedCount =
     Object.values(releaseState).filter((v) => v === 'done').length +
     Object.values(blockState).filter((v) => v === 'done').length +
     Object.values(priceFixState).filter((v) => v === 'done').length;
-  const totalActions = allRanges.length + outOfRange.length + overbookingRisks.length;
-  const noAnomaly = !loading && !error && openOverbooking === 0 && openBlocked === 0 && openPrices === 0;
+  const totalActions =
+    allRanges.length + (priceAuditDone ? outOfRange.length : 0) + overbookingRisks.length;
+  const noAnomaly =
+    !loading &&
+    !error &&
+    openOverbooking === 0 &&
+    openBlocked === 0 &&
+    (!priceAuditDone || openPrices === 0);
 
   const jump = (k) => {
     const el = refs[k]?.current;
@@ -411,13 +418,24 @@ export default function AuditBlockedDaysModal({
   };
 
   const runFinish = async () => {
-    console.log('[AuditModal] clic « Oui, publier 365 jours »', {
+    console.log('[AuditModal] clic « Oui, publier 365 jours » (finish import)', {
       hasHandler: Boolean(onFinishCalendarImport),
       finishingCalendarImport,
     });
     if (!onFinishCalendarImport) return;
     await onFinishCalendarImport();
     console.log('[AuditModal] onFinishCalendarImport terminé');
+  };
+
+  const runPublish = async () => {
+    console.log('[AuditModal] clic « Mise à jour calendrier » (audit libre)', {
+      hasHandler: Boolean(onPublishCalendar),
+      publishingCalendar,
+    });
+    if (!onPublishCalendar) return;
+    await onPublishCalendar();
+    setConfirmPublish(false);
+    console.log('[AuditModal] onPublishCalendar terminé');
   };
 
   return (
@@ -448,14 +466,21 @@ export default function AuditBlockedDaysModal({
                     {calendarReviewActive ? 'Mode import · avant publication' : 'Audit calendrier'}
                   </div>
                   <h1 style={{ fontSize: 21, marginBottom: 5 }}>
-                    {listingName || 'Revue calendrier post-import'}
+                    {listingName || (calendarReviewActive ? 'Revue calendrier post-import' : 'Audit calendrier')}
                   </h1>
                   <p style={{ fontSize: 13, color: 'var(--ink2)', lineHeight: 1.5, maxWidth: 620 }}>
                     {roomTypeName ? `${roomTypeName} · ` : ''}
-                    Contrôlez ce que l’import a produit, corrigez ce qui doit l’être, puis publiez quand vous êtes prêt.
+                    {calendarReviewActive
+                      ? 'Contrôlez ce que l’import a produit, corrigez ce qui doit l’être, puis publiez quand vous êtes prêt.'
+                      : 'Contrôlez overbooking, disponibilités et prix. Les corrections restent locales jusqu’à une publication volontaire.'}
                   </p>
                 </div>
-                <button type="button" className="xbtn" onClick={onClose} aria-label="Fermer et rester en mode Import">
+                <button
+                  type="button"
+                  className="xbtn"
+                  onClick={onClose}
+                  aria-label={calendarReviewActive ? 'Fermer et rester en mode Import' : 'Fermer l’audit'}
+                >
                   <Ic n="x" s={17} />
                 </button>
               </div>
@@ -471,7 +496,18 @@ export default function AuditBlockedDaysModal({
                     <b style={{ color: 'var(--ink)' }}>Terminer import</b>.
                   </div>
                 </div>
-              ) : null}
+              ) : (
+                <div className="promise">
+                  <span style={{ color: 'var(--goldDeep)', marginTop: 1 }}>
+                    <Ic n="shield" s={18} />
+                  </span>
+                  <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--ink2)' }}>
+                    <b style={{ color: 'var(--ink)' }}>Audit calendrier.</b> Overbooking et disponibilités sont analysés
+                    tout de suite. Les écarts de prix n’apparaissent qu’après min/max + vérification. Puis{' '}
+                    <b style={{ color: 'var(--ink)' }}>Mise à jour calendrier</b> envoie les 365 jours vers les canaux.
+                  </div>
+                </div>
+              )}
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '14px 0 15px' }}>
                 <span
@@ -511,7 +547,10 @@ export default function AuditBlockedDaysModal({
                     ) : (
                       <span className="tag tag-ok">Aucun avertissement</span>
                     )}
-                    <span className="tag tag-n">{`${reservations.length} réservations importées`}</span>
+                    <span className="tag tag-n">{`${reservations.length} réservation${reservations.length > 1 ? 's' : ''}`}</span>
+                    {!priceAuditDone ? (
+                      <span className="tag tag-n">Prix : min/max non vérifiés</span>
+                    ) : null}
                     {fixedCount > 0 ? (
                       <span className="tag tag-ok">{`${fixedCount} / ${totalActions || fixedCount} corrigé${fixedCount > 1 ? 's' : ''} localement`}</span>
                     ) : null}
@@ -550,16 +589,27 @@ export default function AuditBlockedDaysModal({
                       <span className="tlab">Jours bloqués ou incohérents</span>
                       <span className="tmeta">{openBlocked ? 'À vérifier' : 'Résolu'}</span>
                     </button>
-                    <button type="button" className={`tcard ${openPrices ? 'warn' : 'done'}`} onClick={() => jump('pr')}>
-                      <span className="tnum" style={{ color: openPrices ? 'var(--warn)' : 'var(--ok)' }}>
-                        {openPrices}
+                    <button
+                      type="button"
+                      className={`tcard ${!priceAuditDone ? '' : openPrices ? 'warn' : 'done'}`}
+                      onClick={() => jump('pr')}
+                    >
+                      <span
+                        className="tnum"
+                        style={{
+                          color: !priceAuditDone ? 'var(--ink3)' : openPrices ? 'var(--warn)' : 'var(--ok)',
+                        }}
+                      >
+                        {priceAuditDone ? openPrices : '—'}
                       </span>
                       <span className="tlab">Prix hors min/max</span>
-                      <span className="tmeta">{openPrices ? 'À corriger' : 'Résolu'}</span>
+                      <span className="tmeta">
+                        {!priceAuditDone ? 'Choisir min/max' : openPrices ? 'À corriger' : 'Résolu'}
+                      </span>
                     </button>
                     <button type="button" className="tcard" onClick={() => jump('rs')}>
                       <span className="tnum">{reservations.length}</span>
-                      <span className="tlab">Réservations importées</span>
+                      <span className="tlab">Réservations</span>
                       <span className="tmeta">Inventaire</span>
                     </button>
                   </div>
@@ -584,7 +634,9 @@ export default function AuditBlockedDaysModal({
                         </div>
                         <h3 style={{ fontSize: 17, marginBottom: 8 }}>Aucune anomalie détectée</h3>
                         <p style={{ fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.55, maxWidth: 400, margin: '0 auto' }}>
-                          Les 365 prochains jours sont cohérents. Vous pouvez terminer l’import.
+                          {calendarReviewActive
+                            ? 'Overbooking et disponibilités sont cohérents. Vérifiez les prix (min/max) si besoin, puis terminez l’import.'
+                            : 'Overbooking et disponibilités sont cohérents. Vérifiez les prix (min/max) si vous avez un doute.'}
                         </p>
                       </div>
                     </div>
@@ -715,14 +767,22 @@ export default function AuditBlockedDaysModal({
                   <div ref={refs.pr}>
                     <div className="sec">
                       <SecHead
-                        tone={openPrices ? 'warn' : 'ok'}
+                        tone={!priceAuditDone ? 'none' : openPrices ? 'warn' : 'ok'}
                         title="Vérification des prix min/max"
-                        n={openPrices || outOfRange.length}
-                        unit={openPrices ? (openPrices > 1 ? 'jours' : 'jour') : 'résolu'}
+                        n={priceAuditDone ? openPrices || outOfRange.length : 0}
+                        unit={
+                          !priceAuditDone
+                            ? 'en attente'
+                            : openPrices
+                              ? openPrices > 1
+                                ? 'jours'
+                                : 'jour'
+                              : 'résolu'
+                        }
                       />
                       <div className="secsub">
-                        Seuls les jours <b>hors des bornes min/max</b> sont listés. Le prix de base est un repère, non
-                        une règle de comparaison.
+                        Choisissez d’abord un <b>min</b> et un <b>max</b>, puis lancez la vérification. Avant ça, aucun
+                        écart de prix n’est listé. Le prix de base est un repère, non une règle.
                       </div>
                       <div className="baseref">
                         <span
@@ -745,7 +805,7 @@ export default function AuditBlockedDaysModal({
                           <b>{referenceBase != null ? mad(referenceBase) : '—'}</b>
                           <span>{roomTypeName || listingName || 'Listing'}</span>
                         </span>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginLeft: 'auto', flexWrap: 'wrap' }}>
                           <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                             <span className="mono" style={{ fontSize: 9, color: 'var(--ink3)', letterSpacing: '.08em', textTransform: 'uppercase' }}>
                               Min
@@ -754,6 +814,7 @@ export default function AuditBlockedDaysModal({
                               className="pin"
                               style={{ padding: '6px 10px', maxWidth: 100, border: '1px solid var(--line)', borderRadius: 8 }}
                               type="number"
+                              placeholder={referenceBase != null ? String(Math.round(referenceBase * 0.8)) : 'min'}
                               value={minInput}
                               onChange={(e) => {
                                 setMinInput(e.target.value);
@@ -768,6 +829,7 @@ export default function AuditBlockedDaysModal({
                             <input
                               style={{ padding: '6px 10px', maxWidth: 100, border: '1px solid var(--line)', borderRadius: 8 }}
                               type="number"
+                              placeholder={referenceBase != null ? String(Math.round(referenceBase * 1.2)) : 'max'}
                               value={maxInput}
                               onChange={(e) => {
                                 setMaxInput(e.target.value);
@@ -775,16 +837,28 @@ export default function AuditBlockedDaysModal({
                               }}
                             />
                           </label>
+                          <button
+                            type="button"
+                            className="b b-gold"
+                            style={{ padding: '8px 12px', fontSize: 12 }}
+                            onClick={runPriceAudit}
+                          >
+                            Vérifier les prix
+                          </button>
                         </div>
                       </div>
-                      {outOfRange.length === 0 ? (
-                        <AllClear>Tous les prix sont dans les bornes. Rien n’a encore été envoyé vers les canaux.</AllClear>
+                      {!priceAuditDone ? (
+                        <AllClear>
+                          Indiquez min et max, puis cliquez sur « Vérifier les prix ». Aucun écart n’est affiché avant.
+                        </AllClear>
+                      ) : outOfRange.length === 0 ? (
+                        <AllClear>Tous les prix sont dans les bornes.</AllClear>
                       ) : (
                         <>
                           <div className="hd r-pr">
                             <span>Date</span>
                             <span>Room type</span>
-                            <span>Prix importé</span>
+                            <span>Prix actuel</span>
                             <span>Bornes</span>
                             <span>Nouveau prix</span>
                           </div>
@@ -815,10 +889,10 @@ export default function AuditBlockedDaysModal({
 
                   <div ref={refs.rs}>
                     <div className="sec">
-                      <SecHead tone="none" title="Réservations importées" n={reservations.length} unit="réservations" />
+                      <SecHead tone="none" title="Réservations" n={reservations.length} unit="réservations" />
                       <div className="secsub">
-                        Inventaire de ce que l’import a créé. Aucune action ici : les conflits se traitent dans Overbooking /
-                        Jours bloqués.
+                        Inventaire des réservations sur la période. Aucune action ici : les conflits se traitent dans
+                        Overbooking / Jours bloqués.
                       </div>
                       {reservations.length === 0 ? (
                         <AllClear>Aucune réservation active sur la période.</AllClear>
@@ -889,35 +963,12 @@ export default function AuditBlockedDaysModal({
             </div>
 
             <div className="mfoot">
-              {!confirmFinish ? (
-                <div className="footrow">
-                  <button type="button" className="b b-lg b-o" onClick={onClose}>
-                    Fermer — rester en mode Import
-                  </button>
-                  <p className="footnote">
-                    {critOpen > 0 ? (
-                      <>
-                        Il reste <b>{critOpen} risque{critOpen > 1 ? 's' : ''} critique{critOpen > 1 ? 's' : ''}</b> non
-                        corrigé{critOpen > 1 ? 's' : ''}.
-                      </>
-                    ) : (
-                      <>
-                        Prêt à publier. <b>365 jours</b> seront envoyés.
-                      </>
-                    )}
-                  </p>
-                  {calendarReviewActive && onFinishCalendarImport ? (
-                    <button type="button" className="b b-lg b-gold" onClick={() => setConfirmFinish(true)}>
-                      Terminer import
-                      <Ic n="arrow" s={17} />
-                    </button>
-                  ) : null}
-                </div>
-              ) : (
+              {confirmFinish ? (
                 <div className="confirm">
                   <h3>Publier vers les canaux ?</h3>
                   <p>
-                    Cette action publiera les prix et disponibilités des 365 prochains jours vers les canaux.
+                    Cette action publiera les prix et disponibilités des 365 prochains jours vers les canaux et
+                    terminera le mode Import.
                   </p>
                   {critOpen > 0 ? (
                     <div className="warnline">
@@ -951,6 +1002,82 @@ export default function AuditBlockedDaysModal({
                       )}
                     </button>
                   </div>
+                </div>
+              ) : confirmPublish ? (
+                <div className="confirm">
+                  <h3>Mise à jour calendrier — 365 jours ?</h3>
+                  <p>
+                    Cette action publiera les prix et disponibilités des 365 prochains jours vers les canaux. Le mode
+                    Import n’est pas concerné.
+                  </p>
+                  {critOpen > 0 ? (
+                    <div className="warnline">
+                      <Ic n="alert" s={15} style={{ marginTop: 1 }} />
+                      <span>
+                        <b>
+                          {critOpen} risque{critOpen > 1 ? 's' : ''} critique{critOpen > 1 ? 's' : ''}
+                        </b>{' '}
+                        non corrigé{critOpen > 1 ? 's' : ''}. La publication enverra le calendrier en l’état.
+                      </span>
+                    </div>
+                  ) : null}
+                  <div className="footrow" style={{ marginTop: 13 }}>
+                    <button type="button" className="b b-lg b-o" onClick={() => setConfirmPublish(false)}>
+                      Annuler
+                    </button>
+                    <div style={{ flex: 1 }} />
+                    <button
+                      type="button"
+                      className="b b-lg b-gold"
+                      disabled={publishingCalendar}
+                      onClick={() => void runPublish()}
+                    >
+                      {publishingCalendar ? (
+                        <>
+                          <span className="spin" style={{ borderTopColor: 'var(--goldDeep)' }} />
+                          Mise à jour 365 j.…
+                        </>
+                      ) : (
+                        'Oui, mettre à jour 365 jours'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="footrow">
+                  <button type="button" className="b b-lg b-o" onClick={onClose}>
+                    {calendarReviewActive ? 'Fermer — rester en mode Import' : 'Fermer'}
+                  </button>
+                  <p className="footnote">
+                    {calendarReviewActive ? (
+                      critOpen > 0 ? (
+                        <>
+                          Il reste <b>{critOpen} risque{critOpen > 1 ? 's' : ''} critique{critOpen > 1 ? 's' : ''}</b> non
+                          corrigé{critOpen > 1 ? 's' : ''}.
+                        </>
+                      ) : (
+                        <>
+                          Prêt à publier. <b>365 jours</b> seront envoyés.
+                        </>
+                      )
+                    ) : (
+                      <>
+                        Audit libre — vous pouvez corriger puis <b>mettre à jour le calendrier</b> (365 j.) vers les
+                        canaux.
+                      </>
+                    )}
+                  </p>
+                  {calendarReviewActive && onFinishCalendarImport ? (
+                    <button type="button" className="b b-lg b-gold" onClick={() => setConfirmFinish(true)}>
+                      Terminer import
+                      <Ic n="arrow" s={17} />
+                    </button>
+                  ) : !calendarReviewActive && onPublishCalendar ? (
+                    <button type="button" className="b b-lg b-gold" onClick={() => setConfirmPublish(true)}>
+                      Mise à jour calendrier
+                      <Ic n="arrow" s={17} />
+                    </button>
+                  ) : null}
                 </div>
               )}
             </div>
