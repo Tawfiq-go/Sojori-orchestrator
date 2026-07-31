@@ -11,6 +11,7 @@ import {
   stayStatusLabel,
 } from './inboxFormat';
 import { resolveListingName } from './inboxListingName';
+import { resolveChannelStayFinance } from '../../utils/reservationChannelFinance';
 
 export function getConversationReservationNumber(conv: Conversation): string | undefined {
   const raw = conv.reservation_number || conv.reservation_id;
@@ -161,14 +162,11 @@ export function mapReservationToInboxData(
   const checkIn = r.arrivalDate ? String(r.arrivalDate) : conv?.checkin_date;
   const checkOut = r.departureDate ? String(r.departureDate) : conv?.checkout_date;
   const nights = r.nights ?? nightsBetween(checkIn, checkOut);
-  const paidAmt = Number(r.alreadyPaid);
-  const total =
-    Number.isFinite(paidAmt) && paidAmt > 0
-      ? paidAmt
-      : r.totalPrice ?? undefined;
-  const commission =
-    total != null ? Math.round(total * 0.1) : undefined;
-  const netHost = total != null && commission != null ? total - commission : undefined;
+  // Aligné Airbnb Comments / ChannelTotal — plus de 10 % inventé.
+  const finance = resolveChannelStayFinance(r as unknown as Record<string, unknown>);
+  const total = finance.guestPaidMad > 0 ? finance.guestPaidMad : undefined;
+  const commission = finance.commissionMad > 0 ? finance.commissionMad : undefined;
+  const netHost = finance.netHostMad > 0 ? finance.netHostMad : undefined;
   const source = normalizeBookingSource(r.channelName || conv?.channel_name);
   const createdRaw = r.createdAt ?? r.reservationDate;
   const stayOps = stayOpsFromReservation(r);

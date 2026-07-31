@@ -233,9 +233,11 @@ export default function ConversationDetails({
             {r.totalPrice != null && (
               <DtCard title="Tarif" emoji="💰">
                 <PriceHero value={r.totalPrice} currency={r.currency} />
-                {r.netHost != null && <DtRow label="Net hôte">{`${r.netHost} ${r.currency || 'EUR'}`}</DtRow>}
+                {r.netHost != null && (
+                  <DtRow label="Net hôte">{`${r.netHost} ${r.currency || 'MAD'}`}</DtRow>
+                )}
                 {r.commission != null && (
-                  <DtRow label="Commission">{`${r.commission} ${r.currency || 'EUR'}`}</DtRow>
+                  <DtRow label="Commission">{`${r.commission} ${r.currency || 'MAD'}`}</DtRow>
                 )}
               </DtCard>
             )}
