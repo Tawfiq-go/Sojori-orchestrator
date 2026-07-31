@@ -988,13 +988,20 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
               bgcolor: T.bg2,
               background: `linear-gradient(180deg, ${T.bg1} 0%, ${T.bg2} 100%)`,
             }}>
-              {['Réservation', 'Source', 'Propriété', 'Voyageur', 'Pays', 'Créé', 'Check-in', 'Check-out', 'Nuits', 'Présence', 'Statut', 'Payé', 'Voyageurs', 'Paiement', 'Actions'].map((h) => (
+              {['Voyageur', 'Source', 'Propriété', 'Pays', 'Créé', 'Check-in', 'Check-out', 'Nuits', 'Présence', 'Statut', 'Payé', 'Voyageurs', 'Paiement', 'Actions'].map((h) => (
                 <Box component="th" key={h} sx={{
                   textAlign: h === 'Nuits' || h === 'Présence' || h === 'Voyageurs' || h === 'Actions' ? 'center' : 'left',
                   px: 1.5, py: 1.25,
                   fontSize: 10.75, fontWeight: 700,
                   letterSpacing: '0.08em', textTransform: 'uppercase',
                   color: T.text2, borderBottom: `2px solid ${T.borderStrong}`, whiteSpace: 'nowrap',
+                  // Colonne identité épinglée (pattern Mews) — même design que la colonne
+                  // listing du calendrier multi : sticky + fond opaque + ombre au scroll.
+                  ...(h === 'Voyageur' && {
+                    position: 'sticky', left: 0, zIndex: 4,
+                    bgcolor: T.bg2, minWidth: 185,
+                    boxShadow: '2px 0 4px rgba(20,17,10,0.06)',
+                  }),
                 }}>{h}</Box>
               ))}
             </Box>
@@ -1013,19 +1020,35 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                     bgcolor: unacknowledged ? 'rgba(250, 204, 21, 0.08)' : 'transparent',
                     '&:hover': { bgcolor: unacknowledged ? 'rgba(250, 204, 21, 0.15)' : T.bg2 },
                     '& > td': { borderBottom: `1px solid ${T.border}`, px: 1.5, py: 1.25, verticalAlign: 'middle' },
+                    // Cellule identité épinglée : fond OPAQUE obligatoire (sinon les
+                    // colonnes défilent visibles dessous) + ombre comme le calendrier.
+                    '& > td:first-of-type': {
+                      position: 'sticky', left: 0, zIndex: 2,
+                      bgcolor: unacknowledged ? '#fdf3d0' : T.bg1,
+                      boxShadow: '2px 0 4px rgba(20,17,10,0.06)',
+                    },
+                    '&:hover > td:first-of-type': {
+                      bgcolor: unacknowledged ? '#fbeeb9' : T.bg2,
+                    },
                   }}
                 >
                   <Box component="td">
                     <Box
                       onClick={() => onRowClick(r)}
                       sx={{
-                        cursor: 'pointer',
+                        cursor: 'pointer', minWidth: 0,
                         '&:hover': {
                           '& .reservation-number': { textDecoration: 'underline' }
                         }
                       }}
                     >
-                      <Typography className="reservation-number" sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 700, color: T.primaryDeep }}>
+                      <Typography sx={{
+                        fontSize: 12.5, fontWeight: 700, color: T.text,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 175,
+                      }} title={r.guestName || undefined}>
+                        {r.guestName || '—'}
+                      </Typography>
+                      <Typography className="reservation-number" sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 10.5, fontWeight: 700, color: T.primaryDeep }}>
                         {r.reservationNumber || '—'}
                       </Typography>
                     </Box>
@@ -1071,9 +1094,6 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                         ) : null}
                       </Box>
                     </Stack>
-                  </Box>
-                  <Box component="td">
-                    <Typography sx={{ fontSize: 12.5, fontWeight: 500, color: T.text }}>{r.guestName || '—'}</Typography>
                   </Box>
                   <Box component="td">
                     <GuestCountryCell
