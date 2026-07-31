@@ -345,7 +345,88 @@ export function TooltipBody({ inv, dateStr, currency }) {
   );
 }
 
-export default function TooltipBreakdown({ inv, dateStr, currency = 'MAD', anchorRef, open = false }) {
+/**
+ * Contexte du jour sous la cascade prix : info résa si réservé,
+ * info blocage (titre/note/auteur) si bloqué avec CalendarBlock,
+ * "Bloqué" générique sinon. Null si jour dispo sans résa.
+ */
+function DayContextBlock({ inv, block }) {
+  const resas = inv?.reservations || [];
+  const hasResa = resas.length > 0;
+  const ar = inv?.availableRoom;
+  const isBlocked = inv?.stopSell === true || (ar != null && ar <= 0);
+
+  if (!hasResa && !isBlocked) return null;
+
+  const fmtD = (v) => {
+    if (!v) return '?';
+    try { return new Date(v).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }); }
+    catch { return String(v).slice(0, 10); }
+  };
+
+  return (
+    <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
+      {hasResa ? (
+        <>
+          <div style={{
+            fontSize: 9, fontWeight: 800, color: T.success, marginBottom: 5,
+            fontFamily: '"Geist Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.04em',
+          }}>
+            Réservation
+          </div>
+          {resas.map((r, i) => {
+            const name = [r.guestFirstName, r.guestLastName].filter(Boolean).join(' ')
+              || r.guestName || `Résa ${r.reservationNumber || i + 1}`;
+            return (
+              <div key={r._id || r.reservationNumber || i} style={{ marginBottom: i < resas.length - 1 ? 6 : 0 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 800, color: T.text }}>
+                  {name}
+                  {r.numberOfGuests ? (
+                    <span style={{ fontWeight: 600, color: T.text3, marginLeft: 5, fontSize: 10.5 }}>
+                      {r.numberOfGuests}p
+                    </span>
+                  ) : null}
+                </div>
+                <div style={{
+                  fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace', marginTop: 1,
+                }}>
+                  {fmtD(r.arrivalDate)} → {fmtD(r.departureDate)}
+                  {r.reservationNumber ? ` · #${r.reservationNumber}` : ''}
+                  {r.status ? ` · ${r.status}` : ''}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      ) : block ? (
+        <>
+          <div style={{
+            fontSize: 9, fontWeight: 800, color: T.error, marginBottom: 5,
+            fontFamily: '"Geist Mono", monospace', textTransform: 'uppercase', letterSpacing: '0.04em',
+          }}>
+            Blocage
+          </div>
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: T.text }}>🚫 {block.title}</div>
+          {block.note ? (
+            <div style={{ fontSize: 10.5, color: T.text2, lineHeight: 1.4, marginTop: 2, whiteSpace: 'pre-wrap' }}>
+              {block.note}
+            </div>
+          ) : null}
+          <div style={{ fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace', marginTop: 3 }}>
+            {fmtD(block.dateFrom)} → {fmtD(block.dateTo)}
+            {block.createdBy?.name ? ` · par ${block.createdBy.name}` : ''}
+          </div>
+        </>
+      ) : (
+        <div style={{ fontSize: 10.5, color: T.error, fontWeight: 700 }}>
+          🚫 Bloqué — sans motif enregistré (import canal ou blocage antérieur)
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function TooltipBreakdown({ inv, dateStr, currency = 'MAD', anchorRef, open = false, block = null }) {
   const tipRef = useRef(null);
   const [coords, setCoords] = useState(null);
 
@@ -369,7 +450,7 @@ export default function TooltipBreakdown({ inv, dateStr, currency = 'MAD', ancho
       window.removeEventListener('scroll', reposition, true);
       window.removeEventListener('resize', reposition);
     };
-  }, [open, anchorRef, inv, dateStr, currency]);
+  }, [open, anchorRef, inv, dateStr, currency, block]);
 
   if (!open || !inv || !hasInventoryData(inv) || typeof document === 'undefined') return null;
 
@@ -397,6 +478,7 @@ export default function TooltipBreakdown({ inv, dateStr, currency = 'MAD', ancho
       }}
     >
       <TooltipBody inv={inv} dateStr={dateStr} currency={currency} />
+      <DayContextBlock inv={inv} block={block} />
     </div>
   );
 

@@ -276,6 +276,40 @@ export default function MultiView({
     return () => { b.removeEventListener('scroll', onBody); h.removeEventListener('scroll', onHead); };
   }, []);
 
+  /* ─── Scroll horizontal molette / trackpad (pattern docs/scroll : wheel non passif) ───
+   * Sans ça, sur Mac le geste horizontal part en navigation arrière et la molette
+   * verticale ne fait rien quand la grille n'a pas de débordement vertical.
+   * Marche partout sur la grille (en-tête inclus) — aucun rapport avec la sélection Excel. */
+  useEffect(() => {
+    const body = bodyRef.current;
+    const header = headerRef.current;
+    if (!body) return undefined;
+
+    const onWheel = (e) => {
+      if (e.ctrlKey) return; // pinch-zoom navigateur
+      const maxScrollLeft = body.scrollWidth - body.clientWidth;
+      if (maxScrollLeft <= 1) return;
+
+      const canScrollY = body.scrollHeight - body.clientHeight > 1;
+      const horizontalGesture = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      // Molette verticale → horizontal seulement si la grille ne scrolle pas verticalement
+      const delta = horizontalGesture || e.shiftKey ? (e.deltaX || e.deltaY) : (canScrollY ? 0 : e.deltaY);
+      if (!delta) return;
+
+      const next = Math.max(0, Math.min(maxScrollLeft, body.scrollLeft + delta));
+      if (next === body.scrollLeft) return;
+      e.preventDefault();
+      body.scrollLeft = next;
+    };
+
+    body.addEventListener('wheel', onWheel, { passive: false });
+    header?.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      body.removeEventListener('wheel', onWheel);
+      header?.removeEventListener('wheel', onWheel);
+    };
+  }, []);
+
   /* ─── Popover rotations / clic résa ─── */
   const [popover, setPopover] = useState(null);
 
@@ -304,12 +338,12 @@ export default function MultiView({
       {/* Légende des couleurs - au-dessus du header */}
       <div style={{
         padding: '4px 12px', background: T.bg0, borderBottom: `1px solid ${T.border}`,
-        display: 'flex', alignItems: 'center', gap: 16,
+        display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
       }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: T.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
           Légende
         </span>
-        <div style={{ display: 'flex', gap: 12, fontSize: 10.5, color: T.text2, fontWeight: 600 }}>
+        <div style={{ display: 'flex', gap: 12, fontSize: 10.5, color: T.text2, fontWeight: 600, flexWrap: 'wrap' }}>
           <Legend dot="rgba(22,163,74,0.85)" label="Réservé" />
           <Legend dot="rgba(37,99,235,0.85)" label="Disponible" />
           <Legend dot="rgba(220,38,38,0.85)" label="Bloqué" />
@@ -349,6 +383,7 @@ export default function MultiView({
       {/* Body scrollable — overlay chargement uniquement sur la zone dates */}
       <div
         ref={bodyRef}
+        className="calendar-multi-hscroll"
         style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, position: 'relative' }}
       >
         {inventoryLoading && (
@@ -451,6 +486,7 @@ export default function MultiView({
         const inv = inventoriesByListing[activeTip.listingId]?.[activeTip.dateStr];
         const listing = listings.find((l) => String(l._id) === String(activeTip.listingId));
         if (!inv || !listing || !hasInventoryData(inv)) return null;
+        const dayBlock = inv?.blockId ? calendarBlocksById[String(inv.blockId)] : null;
         return (
           <TooltipBreakdown
             open
@@ -458,6 +494,7 @@ export default function MultiView({
             inv={inv}
             dateStr={activeTip.dateStr}
             currency={listing.currencyCode || listing.currency || 'MAD'}
+            block={dayBlock}
           />
         );
       })()}
@@ -1017,7 +1054,7 @@ function ListingRow({
           const capacity = isMulti
             ? Math.max(1, Number(range.roomNumber ?? listing.roomNumber ?? 1))
             : 1;
-          // Dispo : calendrier + RU (même en revue import)
+          // En revue import, le backend conserve la correction localement.
           await calendarService.updateCalendar([
             { ...base, type: 'availability', availableRoom: capacity },
             { ...base, type: 'stopSell', stopSell: false },
@@ -1034,7 +1071,7 @@ function ListingRow({
             listingName: listing.name || '',
             roomTypeName: range.roomTypeName || '',
           };
-          // Résa ouverte encore dispo → bloquer inventaire + RU
+          // Résa ouverte encore dispo → corriger l'inventaire local.
           await calendarService.updateCalendar([
             { ...base, type: 'availability', availableRoom: 0 },
             { ...base, type: 'stopSell', stopSell: false },
