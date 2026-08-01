@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../../../components/DashboardWrapper';
+import {
+  PageFullscreenEnterBtn,
+  PageFullscreenLayer,
+  usePageFullscreen,
+} from '../../../components/page-fullscreen';
 import { FinancesModule, useFinancesAccess } from '../FinancesModule';
 import { listLandlords } from '../landlordApi';
 import { useFinancesOwnerScope } from '../useFinancesOwnerScope';
@@ -20,6 +25,8 @@ export function FinancesLandlordsPage() {
 }
 
 function FinancesLandlordsPageContent() {
+  const pageFs = usePageFullscreen();
+  const pageFullscreen = pageFs.fullscreen;
   const navigate = useNavigate();
   const { canWrite } = useFinancesAccess();
   const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
@@ -78,7 +85,7 @@ function FinancesLandlordsPageContent() {
   };
   const openEdit = (row: LandlordAccount) => navigate(`/finances/landlords/${row._id}`);
 
-  return (
+  const landlordsPage = (
     <>
         <div className="ph">
           <div>
@@ -116,11 +123,18 @@ function FinancesLandlordsPageContent() {
           </div>
         </div>
 
-        <div className="toolbar">
+        <div className="toolbar" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div className="search-in">
             <span>🔎</span>
             <input placeholder="Nom ou email…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
+          {!pageFullscreen && (
+            <PageFullscreenEnterBtn
+              onClick={pageFs.enter}
+              disabled={loading || rows.length === 0}
+              label="Propriétaires plein écran"
+            />
+          )}
         </div>
 
         <div className="card">
@@ -193,6 +207,19 @@ function FinancesLandlordsPageContent() {
             </table>
           )}
         </div>
+    </>
+  );
+
+  return (
+    <>
+      {!pageFullscreen && landlordsPage}
+      <PageFullscreenLayer
+        open={pageFullscreen}
+        onClose={pageFs.exit}
+        label="Propriétaires plein écran"
+      >
+        {landlordsPage}
+      </PageFullscreenLayer>
     </>
   );
 }

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Typography, CircularProgress, Chip, Stack } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
+import { InboxFullscreenLayer } from '../unified-inbox/InboxFullscreen';
+import { useInboxFullscreen } from '../unified-inbox/useInboxFullscreen';
 import ThreadsList from '../unified-inbox/ThreadsList';
 import ConversationThread from '../unified-inbox/ConversationThread';
 import BookingDemandDetail from './BookingDemandDetail';
@@ -80,6 +82,7 @@ export default function BookingWhatsAppTabV2() {
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [audioUrls, setAudioUrls] = useState<Record<string, string>>({});
+  const fullscreenCtl = useInboxFullscreen();
   const [recording, setRecording] = useState(false);
   const [sendingVoice, setSendingVoice] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -343,9 +346,8 @@ export default function BookingWhatsAppTabV2() {
     );
   }
 
-  return (
+  const inboxBody = (
     <>
-      <InboxLayout>
         <ThreadsList
           threads={formattedThreads}
           channels={[
@@ -361,6 +363,8 @@ export default function BookingWhatsAppTabV2() {
           mode="whatsapp"
           activeThreadId={activeThread?.id ?? null}
           searchTerm={searchTerm}
+          showFullscreenEnter={!fullscreenCtl.fullscreen}
+          onEnterFullscreen={fullscreenCtl.enter}
           onSelectThread={(thread) => {
             const conv = findConversationByThreadId(conversations, String(thread.id));
             if (conv) void selectConversation(conv);
@@ -464,7 +468,19 @@ export default function BookingWhatsAppTabV2() {
             </Typography>
           </Box>
         )}
-      </InboxLayout>
+    </>
+  );
+
+  return (
+    <>
+      {!fullscreenCtl.fullscreen && <InboxLayout>{inboxBody}</InboxLayout>}
+      <InboxFullscreenLayer
+        open={fullscreenCtl.fullscreen}
+        onClose={fullscreenCtl.exit}
+        label="Inbox Resa plein écran"
+      >
+        {inboxBody}
+      </InboxFullscreenLayer>
 
       <AISuggestionModal
         open={showAIModal}

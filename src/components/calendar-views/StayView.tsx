@@ -28,6 +28,15 @@ import {
 } from '../../utils/cleanlinessDisplay';
 import { PLANNING_VISIBLE_DAYS, getPlanningGridScrollLeft } from '../../utils/planningViewDates';
 import { DASHBOARD_PAGE, DASHBOARD_PAGE_FILL_SX } from '../../constants/dashboardLayout';
+import { normalizeCityKey } from '../../features/dynamic-pricing/cityScope';
+
+/** Ville planning : Marrakesh / Marrackech → Marrakech (regroupement UI). */
+function planningCityLabel(city: string | null | undefined): string {
+  const raw = (city || '').trim();
+  if (!raw) return 'Sans ville';
+  const key = normalizeCityKey(raw);
+  return key === '—' ? 'Sans ville' : key;
+}
 import ListingGroupMultiFilter from './ListingGroupMultiFilter';
 import {
   expandPlanningListingRows,
@@ -337,7 +346,7 @@ export default function StayView({
   const listingGroupOptions = useMemo(() => {
     const map = new Map<string, number>();
     listings.forEach((l) => {
-      const c = l.city || 'Sans ville';
+      const c = planningCityLabel(l.city);
       map.set(c, (map.get(c) || 0) + 1);
     });
     return Array.from(map.entries())
@@ -376,7 +385,7 @@ export default function StayView({
     let rows = displayListings;
     if (selectedCities.length > 0) {
       const set = new Set(selectedCities);
-      rows = rows.filter((l) => set.has(l.city || 'Sans ville'));
+      rows = rows.filter((l) => set.has(planningCityLabel(l.city)));
     }
     if (selectedListingIds.length > 0) {
       const set = new Set(selectedListingIds);
@@ -387,6 +396,7 @@ export default function StayView({
     const digits = q.replace(/\D/g, '');
     return rows.filter((l) => {
       if ((l.listingName || '').toLowerCase().includes(q)) return true;
+      if (planningCityLabel(l.city).toLowerCase().includes(q)) return true;
       if ((l.city || '').toLowerCase().includes(q)) return true;
       if ((l.listingId || '').toLowerCase().includes(q)) return true;
       return (l.reservations || []).some((r) => {
@@ -406,7 +416,7 @@ export default function StayView({
     let rows = listings;
     if (selectedCities.length > 0) {
       const set = new Set(selectedCities);
-      rows = rows.filter((l) => set.has(l.city || 'Sans ville'));
+      rows = rows.filter((l) => set.has(planningCityLabel(l.city)));
     }
     if (selectedListingIds.length > 0) {
       const set = new Set(selectedListingIds);
@@ -478,7 +488,7 @@ export default function StayView({
   const byCity = useMemo(() => {
     const map = new Map<string, ListingRow[]>();
     filteredByGroup.forEach((l) => {
-      const c = l.city || 'Sans ville';
+      const c = planningCityLabel(l.city);
       const rows = expandPlanningListingRows(l, Boolean(multiExpanded[l.listingId]));
       if (!map.has(c)) map.set(c, []);
       map.get(c)!.push(...rows);

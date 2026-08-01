@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import {
+  PageFullscreenEnterBtn,
+  PageFullscreenLayer,
+  usePageFullscreen,
+} from '../components/page-fullscreen';
 import StaffPageView from '../features/taskHub/staff-design/StaffPageView';
 import WhatsappAdminPageView from '../features/taskHub/staff-design/WhatsappAdminPageView';
 import type { Staff } from '../features/taskHub/staff-design/types';
@@ -104,6 +109,8 @@ function TasksStaffFulltaskPageInner() {
   const { user } = useAuth();
   const { requestOwnerId, owners, showOwnerFilter } = useAdminOwnerFilter();
   const scopeFetchReady = useAdminScopeFetchReady();
+  const pageFs = usePageFullscreen();
+  const pageFullscreen = pageFs.fullscreen;
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
   const filterOwnerId = useMemo(
     () =>
@@ -291,9 +298,15 @@ function TasksStaffFulltaskPageInner() {
     if (tab !== ONBOARDING_LEGACY_TAB && tab !== 'setup') setHubTab(hubTabFromParam(tab));
   }, [searchParams]);
 
-  return (
-    <DashboardWrapper breadcrumb={['Task', 'Équipe']}>
-      <div className="tasks-team-hub">
+  const teamPage = (
+      <div
+        className="tasks-team-hub"
+        style={
+          pageFullscreen
+            ? { height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto', boxSizing: 'border-box' }
+            : undefined
+        }
+      >
         <TeamOwnerScopeBar />
         <div className="tasks-team-tabs">
           <button
@@ -331,6 +344,11 @@ function TasksStaffFulltaskPageInner() {
           >
             Admin WhatsApp
           </button>
+          {!pageFullscreen && (
+            <span style={{ marginLeft: 'auto' }}>
+              <PageFullscreenEnterBtn onClick={pageFs.enter} label="Équipe plein écran" />
+            </span>
+          )}
         </div>
 
         {hubTab === 'planning' && (
@@ -520,6 +538,18 @@ function TasksStaffFulltaskPageInner() {
           />
         )}
       </div>
+  );
+
+  return (
+    <DashboardWrapper breadcrumb={['Task', 'Équipe']}>
+      {!pageFullscreen && teamPage}
+      <PageFullscreenLayer
+        open={pageFullscreen}
+        onClose={pageFs.exit}
+        label="Équipe plein écran"
+      >
+        {teamPage}
+      </PageFullscreenLayer>
     </DashboardWrapper>
   );
 }

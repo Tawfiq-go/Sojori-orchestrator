@@ -36,6 +36,13 @@ import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
 import 'moment/locale/fr';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import {
+  PageFullscreenEnterBtn,
+  PageFullscreenLayer,
+  pageContentFullscreenSx,
+  pageTreeFullscreenSx,
+  usePageFullscreen,
+} from '../components/page-fullscreen';
 import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import paymentsService, { type PaymentAuditRow } from '../services/paymentsService';
 import {
@@ -206,6 +213,8 @@ function DetailGrid({ row }: { row: PaymentAuditRow }) {
 }
 
 export function PaymentsPage() {
+  const pageFs = usePageFullscreen();
+  const pageFullscreen = pageFs.fullscreen;
   const navigate = useNavigate();
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const ownerScopeKey = requestOwnerId || '__platform__';
@@ -370,9 +379,13 @@ export function PaymentsPage() {
 
   const showBlockingSpinner = isLoading && !tableReady;
 
-  return (
-    <DashboardWrapper>
-      <Box sx={{ width: '100%', bgcolor: T.bg0, minHeight: '100vh' }}>
+  const paymentsPage = (
+      <Box sx={{
+        width: '100%',
+        bgcolor: T.bg0,
+        minHeight: pageFullscreen ? '100%' : '100vh',
+        ...pageTreeFullscreenSx(pageFullscreen),
+      }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={2}
@@ -443,6 +456,13 @@ export function PaymentsPage() {
             <Button variant="contained" onClick={applyFilters} sx={{ bgcolor: T.primary }}>
               Filtrer
             </Button>
+            {!pageFullscreen && (
+              <PageFullscreenEnterBtn
+                onClick={pageFs.enter}
+                disabled={!tableReady || rows.length === 0}
+                label="Liste plein écran"
+              />
+            )}
           </Stack>
         </Paper>
 
@@ -626,6 +646,18 @@ export function PaymentsPage() {
           </Stack>
         ) : null}
       </Box>
+  );
+
+  return (
+    <DashboardWrapper>
+      {!pageFullscreen && paymentsPage}
+      <PageFullscreenLayer
+        open={pageFullscreen}
+        onClose={pageFs.exit}
+        label="Paiements plein écran"
+      >
+        {paymentsPage}
+      </PageFullscreenLayer>
     </DashboardWrapper>
   );
 }

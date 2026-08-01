@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
+import { InboxFullscreenLayer } from '../unified-inbox/InboxFullscreen';
+import { useInboxFullscreen } from '../unified-inbox/useInboxFullscreen';
 import ThreadsList from '../unified-inbox/ThreadsList';
 import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
@@ -147,6 +149,7 @@ export default function MessagesOTATabV2() {
     phone: string;
   } | null>(null);
   const [initiatingWhatsApp, setInitiatingWhatsApp] = useState(false);
+  const fullscreenCtl = useInboxFullscreen();
 
   const inbox = useInboxOTAConversation();
   /* Référence stable : `inbox` change à chaque render et relancerait l'effet deep link. */
@@ -1199,30 +1202,9 @@ export default function MessagesOTATabV2() {
   // Ne pas bloquer la liste pendant un refresh arrière-plan (évite le clignotement au clic / deep-link).
   const showBlockingSpinner = loading && !tableReady;
 
-  return (
-    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {isRefreshing && (
-        <Box
-          sx={{
-            position: 'fixed',
-            top: 72,
-            right: 16,
-            zIndex: 1200,
-            bgcolor: 'rgba(255,90,95,0.92)',
-            color: '#fff',
-            px: 1.5,
-            py: 0.75,
-            borderRadius: 999,
-            fontSize: 12,
-            fontWeight: 600,
-          }}
-        >
-          Mise à jour OTA…
-        </Box>
-      )}
-      {/* fillViewport : reste dans la page (pas de hauteur fixe qui déborde en bas). */}
-      <InboxLayout fillViewport>
-        <ThreadsList
+  const inboxBody = (
+    <>
+      <ThreadsList
           threads={formattedThreads}
           channels={[
             { id: 'ab', label: 'OTA', icon: '🏨', color: '#FF5A5F', count: displayRows.length },
@@ -1259,6 +1241,8 @@ export default function MessagesOTATabV2() {
           hideListHeader
           compactToolbar
           ultraCompact
+          showFullscreenEnter={!fullscreenCtl.fullscreen}
+          onEnterFullscreen={fullscreenCtl.enter}
           onSelectThread={(thread) => {
             const row = displayRows.find((r) => r.threadId === thread.id);
             if (row) void handleSelect(row);
@@ -1340,7 +1324,39 @@ export default function MessagesOTATabV2() {
             )}
           </Box>
         )}
-      </InboxLayout>
+    </>
+  );
+
+  return (
+    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {isRefreshing && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 72,
+            right: 16,
+            zIndex: 1200,
+            bgcolor: 'rgba(255,90,95,0.92)',
+            color: '#fff',
+            px: 1.5,
+            py: 0.75,
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          Mise à jour OTA…
+        </Box>
+      )}
+      {/* fillViewport : reste dans la page (pas de hauteur fixe qui déborde en bas). */}
+      {!fullscreenCtl.fullscreen && <InboxLayout fillViewport>{inboxBody}</InboxLayout>}
+      <InboxFullscreenLayer
+        open={fullscreenCtl.fullscreen}
+        onClose={fullscreenCtl.exit}
+        label="Inbox Messages OTA plein écran"
+      >
+        {inboxBody}
+      </InboxFullscreenLayer>
 
       <AISuggestionModal
         open={showAIModal}

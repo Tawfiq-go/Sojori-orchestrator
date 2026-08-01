@@ -1,31 +1,67 @@
 /**
  * Finance canal (Airbnb / Booking via RU) — montants affichés côté PM / rapports.
  *
- * Priorité facturation :
- * 1. Airbnb Comments MAD (« Commission: X MAD », stay+fees, original price)
- * 2. Booking Comments EUR (« Booking.com commission », Room price, ChannelTotal×taux)
- * 3. ChannelBreakdown / otaCommission stocké
+ * Airbnb (preuve host app) :
+ * - Montants : Comments RU (stay, ménage, fee, original price) — pas inventés
+ * - % affiché : toujours 15,5 % (host service fee Airbnb) — ne pas recalculer 18,6 %
+ * - Ménage = CLEANING_FEE / fees Comments — pas une « taxe Sojori »
  *
- * ⚠️ Ne jamais inventer 10 % (inbox legacy Airbnb).
- * ⚠️ Booking : ne pas faire guest−RoomPrice = « commission » (ménage inclus dans l’écart).
+ * Booking :
+ * - Commission toujours recalculée (jamais le montant Comments/RU — non fiable)
+ * - Base = guest OTA (ChannelTotal / AlreadyPaid) × BOOKING_COMMISSION_PCT
  */
 
 export type ChannelFinanceSource =
   | 'airbnb-comments'
   | 'booking-comments'
+  | 'booking-calculated'
   | 'channel-breakdown'
   | 'otaCommission'
   | 'fallback';
+
+/** Host service fee Airbnb (label officiel) — ne pas dériver du ratio MAD. */
+export const AIRBNB_HOST_FEE_PCT = 15.5;
+
+/**
+ * TVA Maroc sur host fee Airbnb (preuve host app : « 15.5% + VAT »).
+ * 15,5 % × 1,20 = 18,6 % effectif sur le total guest.
+ */
+export const AIRBNB_HOST_FEE_VAT_PCT = 20;
+
+/** Commission Booking toujours recalculée (pas le montant canal). */
+export const BOOKING_COMMISSION_PCT = 15;
 
 export interface ChannelStayFinance {
   guestPaidMad: number;
   commissionMad: number;
   netHostMad: number;
+  /** % affiché (Airbnb = 15.5 fixe) */
   commissionPct: number;
   stayMad: number;
+  /** Ménage / cleaning inclus (0 si Comments disent 0 fees) */
   feesMad: number;
+  /** Taxe de séjour / Tourist Tax — ne jamais afficher comme ménage */
+  touristTaxMad: number;
+  /** Airbnb : part host fee 15,5 % (hors TVA) — déductible selon clients */
+  hostFeeMad?: number;
+  /** Airbnb Maroc : TVA 20 % sur host fee (« Moroccan Airbnb TVA ») */
+  hostFeeVatMad?: number;
   source: ChannelFinanceSource;
   note?: string;
+  /** Libellé court sous le KPI commission */
+  commissionHint?: string;
+}
+
+/** Découpe commission Airbnb = host fee 15,5 % + TVA 20 % (somme = commission). */
+export function splitAirbnbHostFeeVat(commissionMad: number): {
+  hostFeeMad: number;
+  hostFeeVatMad: number;
+} {
+  if (!(commissionMad > 0)) return { hostFeeMad: 0, hostFeeVatMad: 0 };
+  // fee HT = total / 1.20 ; TVA = reste (centimes stables)
+  const hostFeeMad = round2(commissionMad / (1 + AIRBNB_HOST_FEE_VAT_PCT / 100));
+  const hostFeeVatMad = round2(commissionMad - hostFeeMad);
+  return { hostFeeMad, hostFeeVatMad };
 }
 
 function num(v: unknown): number {
@@ -46,6 +82,14 @@ function commentsBlob(r: Record<string, unknown>): string {
     .replace(/&amp;/g, '&');
 }
 
+function isAirbnbChannel(r: Record<string, unknown>): boolean {
+  return /airbnb/i.test(String(r.channelName || r.source || ''));
+}
+
+function isBookingChannel(r: Record<string, unknown>): boolean {
+  return /booking/i.test(String(r.channelName || r.source || ''));
+}
+
 /** Montants MAD exacts dans les Comments RU (Airbnb). */
 export function parseAirbnbFinanceFromComments(comments: unknown): {
   paidMad?: number;
@@ -53,7 +97,12 @@ export function parseAirbnbFinanceFromComments(comments: unknown): {
   commissionMad?: number;
   hostPayoutMad?: number;
   stayMad?: number;
+  /** Cleaning / fees canal — peut être 0 explicitement */
   feesMad?: number;
+  /** Taxe de séjour / Tourist Tax (≠ ménage) */
+  touristTaxMad?: number;
+  /** true si « X MAD fees » était présent dans Price breakdown (même si 0) */
+  feesExplicit?: boolean;
 } {
   const text = String(comments || '')
     .replace(/&#xD;/gi, '\n')
@@ -64,13 +113,24 @@ export function parseAirbnbFinanceFromComments(comments: unknown): {
     const v = Number(m[idx]);
     return Number.isFinite(v) && v > 0 ? v : undefined;
   };
+  /** Accepte 0 (ménage explicitement nul). */
+  const n0 = (m: RegExpMatchArray | null, idx = 1) => {
+    if (!m) return undefined;
+    const v = Number(m[idx]);
+    return Number.isFinite(v) && v >= 0 ? v : undefined;
+  };
 
   const breakdown = text.match(
     /Price breakdown:\s*([\d]+(?:\.\d+)?)\s*MAD\s*stay\s*\+\s*([\d]+(?:\.\d+)?)\s*MAD\s*fees\s*-\s*([\d]+(?:\.\d+)?)\s*MAD\s*Airbnb fee/i,
   );
   const stayMad = n(breakdown, 1);
-  const feesMad = n(breakdown, 2);
+  const feesFromBreakdown = n0(breakdown, 2);
   const feeFromBreakdown = n(breakdown, 3);
+  const cleaningFee = n0(text.match(/CLEANING_FEE:\s*([\d]+(?:\.\d+)?)/i));
+  const touristTaxMad =
+    n(text.match(/Tourist Tax[^0-9]*([\d]+(?:\.\d+)?)\s*MAD/i)) ||
+    n(text.match(/Tax remitted by host:[^\d]*([\d]+(?:\.\d+)?)\s*MAD/i)) ||
+    n(text.match(/taxe de séjour[^0-9]*([\d]+(?:\.\d+)?)\s*MAD/i));
 
   const paid = text.match(/Paid\s*([\d]+(?:\.\d+)?)\s*MAD/i);
   const room = text.match(/Room remarks:\s*([\d]+(?:\.\d+)?)\s*MAD/i);
@@ -82,6 +142,9 @@ export function parseAirbnbFinanceFromComments(comments: unknown): {
     text.match(/original price is\s*([\d]+(?:\.\d+)?)\s*MAD/i) ||
     text.match(/You earn[:\s]*([\d]+(?:\.\d+)?)\s*MAD/i);
 
+  const feesMad = feesFromBreakdown ?? cleaningFee;
+  const feesExplicit = feesFromBreakdown != null || cleaningFee != null;
+  // Stay + cleaning seulement — la tourist tax est à part (souvent « remitted by host »)
   const paidMad =
     n(paid) ?? (stayMad != null && feesMad != null ? round2(stayMad + feesMad) : undefined);
 
@@ -92,6 +155,8 @@ export function parseAirbnbFinanceFromComments(comments: unknown): {
     hostPayoutMad: n(host),
     stayMad,
     feesMad,
+    touristTaxMad,
+    feesExplicit,
   };
 }
 
@@ -161,6 +226,7 @@ export function resolveChannelStayFinance(r: Record<string, unknown> | null | un
       commissionPct: 0,
       stayMad: 0,
       feesMad: 0,
+      touristTaxMad: 0,
       source: 'fallback',
     };
   }
@@ -176,7 +242,8 @@ export function resolveChannelStayFinance(r: Record<string, unknown> | null | un
     nb.totalPaidByCustomer?.amount ?? channelBreakdown.ChannelTotal,
   );
   const channelRent = num(channelBreakdown.ChannelRent ?? nb.accommodation?.amount);
-  const channelFeeItemsMad = (() => {
+
+  const sumChannelFeesBy = (predicate: (name: string) => boolean) => {
     const raw =
       channelBreakdown.ChannelTotalFeesTaxes?.ChannelTotalFeeTax ??
       channelBreakdown.ChannelTotalFeesTaxes;
@@ -184,9 +251,15 @@ export function resolveChannelStayFinance(r: Record<string, unknown> | null | un
     return arr.reduce((s: number, item: any) => {
       const a = num(item?.['@_Amount'] ?? item?.Amount ?? item?.amount);
       const cur = String(item?.['@_Currency'] ?? item?.Currency ?? item?.currency ?? 'MAD').toUpperCase();
-      return cur === 'MAD' ? s + a : s;
+      const name = String(item?.['@_Name'] ?? item?.Name ?? '');
+      if (cur !== 'MAD' || a <= 0) return s;
+      return predicate(name) ? s + a : s;
     }, 0);
-  })();
+  };
+  const channelCleaningMad = sumChannelFeesBy((name) => /clean|ménage|entretien/i.test(name));
+  const channelTouristTaxMad = sumChannelFeesBy((name) =>
+    /tourist\s*tax|taxe de séjour|city tax|séjour/i.test(name),
+  );
 
   const channelTotalCur = String(
     nb.totalPaidByCustomer?.currency ||
@@ -202,11 +275,29 @@ export function resolveChannelStayFinance(r: Record<string, unknown> | null | un
     nb.otaCommission?.channelAmount ?? rb.ChannelCommission ?? channelBreakdown.ChannelCommission,
   );
 
-  // ── Airbnb MAD ──────────────────────────────────────────────
-  if (airbnb.commissionMad != null || airbnb.hostPayoutMad != null) {
+  // ── Airbnb ──────────────────────────────────────────────────
+  // Montant fee = Comments / guest−net ; % affiché = 15,5 % fixe (pas le ratio effectif).
+  if (
+    isAirbnbChannel(r) ||
+    airbnb.commissionMad != null ||
+    airbnb.hostPayoutMad != null ||
+    airbnb.stayMad != null
+  ) {
+    const stayMad = airbnb.stayMad ?? (channelRent > 0 && channelTotalCur === 'MAD' ? channelRent : 0);
+    // Ménage : Comments explicites (y compris 0) > CLEANING channel — JAMAIS le résidu guest−stay
+    const feesMad =
+      airbnb.feesExplicit && airbnb.feesMad != null
+        ? airbnb.feesMad
+        : airbnb.feesMad != null && airbnb.feesMad > 0
+          ? airbnb.feesMad
+          : channelCleaningMad;
+    const touristTaxMad = airbnb.touristTaxMad ?? channelTouristTaxMad;
+
     let guestPaidMad = 0;
-    if (airbnb.paidMad) guestPaidMad = airbnb.paidMad;
-    else if (channelTotalRaw > 0 && channelTotalCur === 'MAD') guestPaidMad = channelTotalRaw;
+    if (channelTotalRaw > 0 && channelTotalCur === 'MAD') guestPaidMad = channelTotalRaw;
+    else if (airbnb.paidMad != null && touristTaxMad > 0) {
+      guestPaidMad = round2(airbnb.paidMad + touristTaxMad);
+    } else if (airbnb.paidMad) guestPaidMad = airbnb.paidMad;
     else if (alreadyPaid > 0) guestPaidMad = alreadyPaid;
     else if (totalPrice > 0) guestPaidMad = totalPrice;
 
@@ -215,123 +306,106 @@ export function resolveChannelStayFinance(r: Record<string, unknown> | null | un
         ? airbnb.commissionMad
         : airbnb.hostPayoutMad != null && guestPaidMad > 0
           ? round2(guestPaidMad - airbnb.hostPayoutMad)
-          : 0;
+          : storedCommission > 0
+            ? storedCommission
+            : 0;
+    // Net hôte = original price Comments (pas guest−commission si guest inclut tourist tax)
     const netHostMad =
       airbnb.hostPayoutMad != null
         ? airbnb.hostPayoutMad
-        : guestPaidMad > 0 && commissionMad > 0
-          ? round2(guestPaidMad - commissionMad)
+        : stayMad > 0 && feesMad >= 0 && commissionMad > 0
+          ? round2(stayMad + feesMad - commissionMad)
           : totalPrice;
-    const base = guestPaidMad > 0 ? guestPaidMad : netHostMad + commissionMad;
-    let stayMad = airbnb.stayMad ?? 0;
-    let feesMad = airbnb.feesMad ?? channelFeeItemsMad;
-    if (!stayMad && feesMad && guestPaidMad > feesMad) stayMad = round2(guestPaidMad - feesMad);
-    if (!feesMad && stayMad && guestPaidMad > stayMad) feesMad = round2(guestPaidMad - stayMad);
+
+    const { hostFeeMad, hostFeeVatMad } = splitAirbnbHostFeeVat(commissionMad);
     return {
-      guestPaidMad: guestPaidMad || round2(netHostMad + commissionMad),
+      guestPaidMad: guestPaidMad || round2(stayMad + feesMad + touristTaxMad),
       commissionMad,
       netHostMad,
-      commissionPct: base > 0 && commissionMad > 0 ? Math.round((commissionMad / base) * 1000) / 10 : 0,
+      commissionPct: AIRBNB_HOST_FEE_PCT,
       stayMad,
       feesMad,
-      source: 'airbnb-comments',
-      note: 'Montants Airbnb (Comments RU)',
+      touristTaxMad,
+      hostFeeMad,
+      hostFeeVatMad,
+      source: airbnb.commissionMad != null || airbnb.hostPayoutMad != null ? 'airbnb-comments' : 'otaCommission',
+      note: 'Montants Airbnb (Comments) — host fee 15,5 % + Moroccan Airbnb TVA 20 %',
+      commissionHint: 'Host fee 15,5 % + Moroccan Airbnb TVA 20 %',
     };
   }
 
-  // ── Booking.com EUR → MAD ───────────────────────────────────
-  const hasBooking =
-    booking.commissionEur != null ||
-    booking.roomPriceEur != null ||
-    /booking/i.test(String(r.channelName || r.source || ''));
-
-  if (hasBooking && (booking.commissionEur != null || booking.roomPriceEur != null)) {
+  // ── Booking.com : guest/stay depuis canal, commission TOUJOURS recalculée ──
+  const bookingChannel = isBookingChannel(r);
+  if (bookingChannel && (booking.roomPriceEur != null || channelTotalRaw > 0 || alreadyPaid > 0)) {
     const guestEur =
       booking.paidEur ??
       (channelTotalRaw > 0 && channelTotalCur === 'EUR' ? channelTotalRaw : 0);
-    // Taux implicite tops MAD / EUR canal (plus fidèle que défaut 10)
     let rate = 0;
     if (guestEur > 0 && alreadyPaid > 0) rate = alreadyPaid / guestEur;
-    else if (booking.roomPriceEur && totalPrice > 0) rate = totalPrice / booking.roomPriceEur;
-    else if (channelCommissionEur > 0 && storedCommission > 0) {
-      rate = storedCommission / channelCommissionEur;
-    } else rate = 10;
+    else if (booking.roomPriceEur && totalPrice > 0) {
+      const rr = totalPrice / booking.roomPriceEur;
+      if (rr >= 8 && rr <= 13) rate = rr;
+    }
+    if (!(rate > 0)) rate = 10;
 
-    const commissionEur = booking.commissionEur ?? channelCommissionEur;
-    const commissionMad =
-      commissionEur > 0
-        ? round2(commissionEur * rate)
-        : storedCommission;
     const guestPaidMad =
       guestEur > 0 ? round2(guestEur * rate) : alreadyPaid > 0 ? alreadyPaid : 0;
     const stayMad = booking.roomPriceEur ? round2(booking.roomPriceEur * rate) : 0;
     const cleaningEur =
       booking.cleaningEur ?? sumIncludedCleaningEur(channelBreakdown);
     const feesMad = cleaningEur > 0 ? round2(cleaningEur * rate) : 0;
-    // Net OTA = guest payé canal − commission (base facturation client)
+
+    // Jamais le montant Comments/RU — toujours recalcul %
+    const commissionMad =
+      guestPaidMad > 0
+        ? round2((guestPaidMad * BOOKING_COMMISSION_PCT) / 100)
+        : 0;
     const netHostMad =
       guestPaidMad > 0 && commissionMad > 0
         ? round2(guestPaidMad - commissionMad)
         : stayMad;
-    const base = guestPaidMad > 0 ? guestPaidMad : netHostMad + commissionMad;
+
     return {
       guestPaidMad,
       commissionMad,
       netHostMad,
-      commissionPct:
-        base > 0 && commissionMad > 0 ? Math.round((commissionMad / base) * 1000) / 10 : 0,
+      commissionPct: BOOKING_COMMISSION_PCT,
       stayMad,
       feesMad,
-      source: 'booking-comments',
-      note: 'Montants Booking.com (Comments RU × taux)',
+      touristTaxMad: 0,
+      source: 'booking-calculated',
+      note: `Commission Booking toujours recalculée (${BOOKING_COMMISSION_PCT} %)`,
+      commissionHint: `Calculée ${BOOKING_COMMISSION_PCT} % du guest OTA`,
     };
   }
 
-  // Guest fallback
+  // Guest fallback (hors Booking)
   let guestPaidMad = 0;
   if (channelTotalRaw > 0 && channelTotalCur === 'MAD') guestPaidMad = channelTotalRaw;
   else if (alreadyPaid > 0) guestPaidMad = alreadyPaid;
   else if (totalPrice > 0) guestPaidMad = totalPrice;
 
   let stayMad = channelRent > 0 && channelTotalCur === 'MAD' ? channelRent : 0;
-  let feesMad = channelFeeItemsMad;
-
-  // Ne pas inférer commission = guest − totalPrice si canal Booking (RoomPrice ≠ net)
-  const isBookingChannel = /booking/i.test(String(r.channelName || r.source || ''));
-  if (
-    guestPaidMad > 0 &&
-    storedCommission > 0 &&
-    (!isBookingChannel || !(totalPrice > 0 && totalPrice < guestPaidMad && Math.abs(guestPaidMad - totalPrice - storedCommission) > 1))
-  ) {
-    const netHostMad =
-      !isBookingChannel && totalPrice > 0 && totalPrice < guestPaidMad
-        ? totalPrice
-        : round2(guestPaidMad - storedCommission);
-    const commissionMad = storedCommission;
-    if (!stayMad && feesMad && guestPaidMad > feesMad) stayMad = round2(guestPaidMad - feesMad);
-    if (!feesMad && stayMad && guestPaidMad > stayMad) feesMad = round2(guestPaidMad - stayMad);
-    return {
-      guestPaidMad,
-      commissionMad,
-      netHostMad,
-      commissionPct: Math.round((commissionMad / guestPaidMad) * 1000) / 10,
-      stayMad,
-      feesMad,
-      source: channelTotalRaw > 0 ? 'channel-breakdown' : 'otaCommission',
-      note: isBookingChannel ? 'Guest OTA − commission stockée' : 'Guest payé − net hôte',
-    };
-  }
+  let feesMad = channelCleaningMad;
+  const touristTaxMad = channelTouristTaxMad;
 
   if (guestPaidMad > 0 && storedCommission > 0) {
+    const netHostMad =
+      totalPrice > 0 && totalPrice < guestPaidMad
+        ? totalPrice
+        : round2(guestPaidMad - storedCommission);
+    if (!stayMad && feesMad && guestPaidMad > feesMad) stayMad = round2(guestPaidMad - feesMad);
+    // Ne pas inventer ménage = guest − stay (peut être une taxe)
     return {
       guestPaidMad,
       commissionMad: storedCommission,
-      netHostMad: round2(guestPaidMad - storedCommission),
+      netHostMad,
       commissionPct: Math.round((storedCommission / guestPaidMad) * 1000) / 10,
       stayMad,
       feesMad,
-      source: 'otaCommission',
-      note: 'Commission stockée',
+      touristTaxMad,
+      source: channelTotalRaw > 0 ? 'channel-breakdown' : 'otaCommission',
+      note: 'Guest payé − net hôte',
     };
   }
 
@@ -345,6 +419,7 @@ export function resolveChannelStayFinance(r: Record<string, unknown> | null | un
         : 0,
     stayMad,
     feesMad,
+    touristTaxMad,
     source: 'fallback',
   };
 }

@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import {
+  PageFullscreenEnterBtn,
+  PageFullscreenLayer,
+  usePageFullscreen,
+} from '../components/page-fullscreen';
 import { useAuth } from '../hooks/useAuth';
 import { canSelectOwnerInAdminFilter } from '../utils/taskScope.utils';
 import PlanReservationPage from '../features/planReservation/PlanReservationPage';
@@ -26,6 +31,8 @@ import { ownerDisplayNameFromId } from '../utils/ownerDisplay.utils';
 import { getOwnersAllPages } from '../features/staff/services/serverApi.task';
 
 export default function PlansReservationPage() {
+  const pageFs = usePageFullscreen();
+  const pageFullscreen = pageFs.fullscreen;
   const { user } = useAuth();
   const showAdminConfigSource = useMemo(
     () => canSelectOwnerInAdminFilter(user),
@@ -349,8 +356,20 @@ export default function PlansReservationPage() {
   const showPlanLayout =
     !loading && !error && (totalCount > 0 || reservations.length > 0 || hasActiveQuery);
 
-  return (
-    <DashboardWrapper breadcrumb={['Tâches', 'Orchestration', 'Plans réservation']} compactMain>
+  const plansPage = (
+    <div style={{
+      width: '100%',
+      height: pageFullscreen ? '100%' : undefined,
+      display: pageFullscreen ? 'flex' : undefined,
+      flexDirection: pageFullscreen ? 'column' : undefined,
+      minHeight: pageFullscreen ? 0 : undefined,
+      boxSizing: 'border-box',
+    }}>
+      {!pageFullscreen && showPlanLayout && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <PageFullscreenEnterBtn onClick={pageFs.enter} label="Plans plein écran" />
+        </div>
+      )}
       {!loading && showAdminConfigSource && (
         <div
           style={{
@@ -428,6 +447,19 @@ export default function PlansReservationPage() {
           onPageChange={(page) => setListQuery((prev) => ({ ...prev, page }))}
         />
       )}
+    </div>
+  );
+
+  return (
+    <DashboardWrapper breadcrumb={['Tâches', 'Orchestration', 'Plans réservation']} compactMain>
+      {!pageFullscreen && plansPage}
+      <PageFullscreenLayer
+        open={pageFullscreen}
+        onClose={pageFs.exit}
+        label="Plans plein écran"
+      >
+        {plansPage}
+      </PageFullscreenLayer>
     </DashboardWrapper>
   );
 }

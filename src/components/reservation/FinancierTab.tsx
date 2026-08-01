@@ -7,7 +7,6 @@ import type { ReactNode } from 'react';
 import { Box, Stack, Typography, Paper, Divider, TextField, MenuItem, Chip, LinearProgress } from '@mui/material';
 import { format, isValid, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { formatPrice, formatPriceWithCurrency, formatPriceOrPlaceholder } from '../../utils/formatPrice';
 import { resolveChannelStayFinance } from '../../utils/reservationChannelFinance';
 
 interface FinancierTabProps {
@@ -46,8 +45,13 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Montants entiers MAD — pas de décimales (virgules). */
+function priceInt(v: unknown): string {
+  return Math.round(num(v)).toLocaleString('fr-FR');
+}
+
 function money(v: unknown, currency = 'MAD'): string {
-  return formatPriceWithCurrency(num(v), currency);
+  return `${priceInt(v)} ${currency}`;
 }
 
 function amt(obj: any): number {
@@ -321,13 +325,22 @@ export function FinancierTab({
     return amount;
   };
 
+  const isBooking = /booking/i.test(String(r.channelName || r.source || ''));
+  const isAirbnb = /airbnb/i.test(String(r.channelName || r.source || ''));
+
   const commissionPct = channelFinance.commissionPct;
   const commissionPctLabel =
     commissionPct > 0 ? `${String(commissionPct).replace('.', ',')}%` : '';
-  const commissionCalcLabel =
-    commissionPct > 0
-      ? `${formatPrice(commissionBaseMad)} × ${commissionPctLabel} = ${formatPrice(commissionMad)} MAD`
-      : '';
+  // Airbnb : % fixe 15,5 % (+ TVA) — ne pas recalculer un faux 18,6 %.
+  // Booking calculé : montrer guest × %.
+  const commissionCalcLabel = (() => {
+    if (channelFinance.commissionHint) return channelFinance.commissionHint;
+    if (isAirbnb) return '15,5 % + Moroccan Airbnb TVA 20 %';
+    if (commissionPct > 0 && (channelFinance.source === 'booking-calculated' || isBooking)) {
+      return `${priceInt(commissionBaseMad)} × ${commissionPctLabel} = ${priceInt(commissionMad)} MAD`;
+    }
+    return '';
+  })();
 
   const encaisseBase = Math.max(guestPaidMad, alreadyPaid);
   const remaining = Math.max(0, encaisseBase - alreadyPaid);
@@ -338,18 +351,23 @@ export function FinancierTab({
     num(r.nights) ||
     (Array.isArray(r.priceBreakdown) ? r.priceBreakdown.length : 0) ||
     0;
-  const avgNight = nights > 0 ? guestPaidMad / nights : 0;
+  // Airbnb host app : prix / nuit = séjour (hors ménage), pas total guest / nuits.
+  const avgNight =
+    nights > 0
+      ? (isAirbnb && channelFinance.stayMad > 0 ? channelFinance.stayMad : guestPaidMad) / nights
+      : 0;
 
   const setField = (field: string, value: unknown) => {
     onEditedDataChange?.({ ...editedData, [field]: value });
   };
 
   const unpaidFees = (breakdown?.fees || []).filter((f: any) => !f.paid);
-  const paidFees = (breakdown?.fees || []).filter((f: any) => f.paid);
-  const taxes = breakdown?.taxes || [];
-
-  const isBooking = /booking/i.test(String(r.channelName || r.source || ''));
-  const isAirbnb = /airbnb/i.test(String(r.channelName || r.source || ''));
+  const isCleaningFee = (f: any) => /clean|ménage|entretien/i.test(String(f?.name || ''));
+  const paidFees = (breakdown?.fees || []).filter((f: any) => f.paid && !isCleaningFee(f));
+  // Airbnb : ménage ≠ taxe — on n’affiche pas les « taxes » canal si déjà couvertes par ménage Comments.
+  const taxes = isAirbnb
+    ? []
+    : (breakdown?.taxes || []).filter((t: any) => !isCleaningFee(t));
   const cb = r.reservationBreakdown?.ChannelBreakdown || {};
   const otaDayPricesBrut: any[] = Array.isArray(cb.DayPricesBrut) ? cb.DayPricesBrut : [];
   const otaDayPrices: any[] = Array.isArray(cb.DayPrices) ? cb.DayPrices : [];
@@ -475,13 +493,15 @@ export function FinancierTab({
                   lineHeight: 1,
                 }}
               >
-                {formatPriceOrPlaceholder(displayTotal, currency)}
+                {displayTotal != null && displayTotal !== ''
+                  ? money(displayTotal, currency)
+                  : '—'}
               </Typography>
             )}
             <Typography sx={{ fontSize: 12.5, color: T.text2, mt: 0.75 }}>
               {formatDay(r.arrivalDate)} → {formatDay(r.departureDate)}
               {nights > 0 ? ` · ${nights} nuit${nights > 1 ? 's' : ''}` : ''}
-              {avgNight > 0 ? ` · ${formatPrice(avgNight)} ${currency}/nuit` : ''}
+              {avgNight > 0 ? ` · ${priceInt(avgNight)} ${currency}/nuit` : ''}
             </Typography>
           </Box>
 
@@ -557,9 +577,11 @@ export function FinancierTab({
           label="Commission OTA"
           value={commissionMad > 0 ? moneyMad(commissionMad) : '—'}
           hint={
-            commissionPctLabel
-              ? `${commissionPctLabel} · ${commissionCalcLabel}`
-              : 'Aucune'
+            isAirbnb && commissionMad > 0
+              ? `15,5 % + Moroccan Airbnb TVA · ${priceInt(commissionMad)} MAD`
+              : commissionPctLabel && commissionCalcLabel
+                ? `${commissionPctLabel} · ${commissionCalcLabel}`
+                : commissionPctLabel || 'Aucune'
           }
           accent={T.error}
         />
@@ -620,18 +642,26 @@ export function FinancierTab({
                 bg: T.infoBg,
               },
               {
-                label: commissionPctLabel ? `− Commission · ${commissionPctLabel}` : '− Commission',
+                label: isAirbnb
+                  ? '− Total fees for host'
+                  : commissionPctLabel
+                    ? `− Commission · ${commissionPctLabel}`
+                    : '− Commission',
                 value: commissionMad > 0 ? moneyMad(commissionMad) : '—',
-                sub: commissionCalcLabel || undefined,
+                sub: isAirbnb
+                  ? 'Host fee 15,5 % + Moroccan Airbnb TVA 20 %'
+                  : commissionCalcLabel || undefined,
                 color: T.error,
                 bg: T.errorBg,
               },
               {
                 label: '= Net reçu',
                 value: moneyMad(netMad),
-                sub: commissionPctLabel
-                  ? `${formatPrice(commissionBaseMad || guestPaidMad)} − ${formatPrice(commissionMad)}`
-                  : undefined,
+                sub: isAirbnb
+                  ? `${priceInt(commissionBaseMad || guestPaidMad)} − ${priceInt(commissionMad)}`
+                  : commissionPctLabel
+                    ? `${priceInt(commissionBaseMad || guestPaidMad)} − ${priceInt(commissionMad)}`
+                    : undefined,
                 color: T.success,
                 bg: T.successBg,
               },
@@ -693,7 +723,7 @@ export function FinancierTab({
             </Typography>
           ) : eurMadRate > 0 && channelCommissionEur ? (
             <Typography sx={{ fontSize: 11.5, color: T.text3, mt: 1.25, lineHeight: 1.4 }}>
-              Montants canal convertis en MAD (taux {formatPrice(eurMadRate)}).
+              Montants canal convertis en MAD (taux {priceInt(eurMadRate)}).
             </Typography>
           ) : null}
         </Paper>
@@ -708,17 +738,41 @@ export function FinancierTab({
           mb: 1.5,
         }}
       >
-        <Panel title="Répartition Sojori" icon="🏠">
-          <Line label="Hébergement" value={moneyMad(num(r.sojoriPriceTotal || r.totalPrice))} bold />
-          <Line label="Taxes Sojori" value={moneyMad(num(r.sojoriTaxTotal || 0))} />
-          <Line
-            label="Total Sojori"
-            value={moneyMad(num(r.sojoriTotal || r.totalPrice))}
-            bold
-            accent={T.primaryDeep}
-          />
+        <Panel title={isAirbnb ? 'Répartition Airbnb' : 'Répartition Sojori'} icon="🏠">
+          {isAirbnb && channelFinance.stayMad > 0 ? (
+            <>
+              <Line label="Hébergement" value={moneyMad(channelFinance.stayMad)} bold />
+              {channelFinance.feesMad > 0 ? (
+                <Line label="Ménage (cleaning)" value={moneyMad(channelFinance.feesMad)} />
+              ) : null}
+              {channelFinance.touristTaxMad > 0 ? (
+                <Line label="Taxe de séjour" value={moneyMad(channelFinance.touristTaxMad)} />
+              ) : null}
+              <Line
+                label="Total client"
+                value={moneyMad(guestPaidMad)}
+                bold
+                accent={T.primaryDeep}
+              />
+            </>
+          ) : (
+            <>
+              <Line label="Hébergement" value={moneyMad(num(r.sojoriPriceTotal || r.totalPrice))} bold />
+              <Line label="Taxes Sojori" value={moneyMad(num(r.sojoriTaxTotal || 0))} />
+              <Line
+                label="Total Sojori"
+                value={moneyMad(num(r.sojoriTotal || r.totalPrice))}
+                bold
+                accent={T.primaryDeep}
+              />
+            </>
+          )}
           {nights > 0 ? (
-            <Line label={`Moyenne / nuit (${nights})`} value={moneyMad(avgNight)} muted />
+            <Line
+              label={`Moyenne / nuit (${nights})${isAirbnb && channelFinance.stayMad > 0 ? ' · séjour' : ''}`}
+              value={moneyMad(avgNight)}
+              muted
+            />
           ) : null}
         </Panel>
 
@@ -786,7 +840,7 @@ export function FinancierTab({
               />
             ) : null}
             {channelFinance.feesMad > 0 ? (
-              <Line label="Ménage / frais (inclus)" value={moneyMad(channelFinance.feesMad)} />
+              <Line label="Ménage (cleaning)" value={moneyMad(channelFinance.feesMad)} />
             ) : (
               paidFees.map((f: any, i: number) => (
                 <Line
@@ -796,6 +850,12 @@ export function FinancierTab({
                 />
               ))
             )}
+            {channelFinance.touristTaxMad > 0 ? (
+              <Line label="Taxe de séjour (Tourist Tax)" value={moneyMad(channelFinance.touristTaxMad)} />
+            ) : null}
+            {isAirbnb ? (
+              <Line label="Guest service fee" value={moneyMad(0)} muted />
+            ) : null}
             {taxes.map((t: any, i: number) => (
               <Line
                 key={`tax-${i}`}
@@ -804,11 +864,28 @@ export function FinancierTab({
               />
             ))}
             {commissionMad > 0 ? (
-              <Line
-                label="Commission OTA"
-                value={moneyMad(commissionMad)}
-                accent={T.error}
-              />
+              <>
+                {isAirbnb && channelFinance.hostFeeMad != null && channelFinance.hostFeeMad > 0 ? (
+                  <Line
+                    label="Host fee 15,5 %"
+                    value={moneyMad(channelFinance.hostFeeMad)}
+                    accent={T.error}
+                  />
+                ) : null}
+                {isAirbnb && channelFinance.hostFeeVatMad != null && channelFinance.hostFeeVatMad > 0 ? (
+                  <Line
+                    label="Moroccan Airbnb TVA 20 %"
+                    value={moneyMad(channelFinance.hostFeeVatMad)}
+                    accent={T.error}
+                  />
+                ) : null}
+                <Line
+                  label={isAirbnb ? 'Total fees for host' : 'Commission OTA'}
+                  value={moneyMad(commissionMad)}
+                  accent={T.error}
+                  bold={isAirbnb}
+                />
+              </>
             ) : null}
             {netMad > 0 ? (
               <Line label="Net hôte" value={moneyMad(netMad)} bold accent={T.success} />
@@ -970,7 +1047,7 @@ export function FinancierTab({
             </Box>
             {eurMadRate > 0 ? (
               <Typography sx={{ fontSize: 11, color: T.text3, mt: 1 }}>
-                Taux EUR→MAD : {formatPrice(eurMadRate)}
+                Taux EUR→MAD : {priceInt(eurMadRate)}
               </Typography>
             ) : null}
           </Panel>

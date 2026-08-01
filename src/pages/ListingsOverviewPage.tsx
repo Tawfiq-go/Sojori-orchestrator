@@ -14,6 +14,12 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
+  PageFullscreenEnterBtn,
+  PageFullscreenLayer,
+  pageTreeFullscreenSx,
+  usePageFullscreen,
+} from '../components/page-fullscreen';
+import {
   Badge,
   PageHeader,
   Panel,
@@ -96,6 +102,8 @@ function initialStats(): ListingsStats {
 }
 
 export function ListingsOverviewPage() {
+  const pageFs = usePageFullscreen();
+  const pageFullscreen = pageFs.fullscreen;
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isActive: simulationActive } = usePmSimulation();
@@ -273,8 +281,8 @@ export function ListingsOverviewPage() {
     }
   };
 
-  return (
-    <DashboardWrapper breadcrumb={['Catalogue', 'Annonces']}>
+  const listingsPage = (
+    <Box sx={{ width: '100%', ...pageTreeFullscreenSx(pageFullscreen) }}>
       <CatalogueAnnoncesTabs />
       {/* Boutons actions en haut */}
       <Box sx={{ display: 'flex', gap: 1.5, mb: 2, justifyContent: 'flex-end' }}>
@@ -350,7 +358,7 @@ export function ListingsOverviewPage() {
             }}
             sx={{ flex: 1, minWidth: 240, maxWidth: 360 }}
           />
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             {STATUS_FILTERS.map((filter) => (
               <Button
                 key={filter.key}
@@ -365,6 +373,13 @@ export function ListingsOverviewPage() {
                 {filter.label}
               </Button>
             ))}
+            {!pageFullscreen && (
+              <PageFullscreenEnterBtn
+                onClick={pageFs.enter}
+                disabled={loading && listings.length === 0}
+                label="Listings plein écran"
+              />
+            )}
           </Box>
         </Box>
       </Panel>
@@ -611,6 +626,19 @@ export function ListingsOverviewPage() {
           </Box>
         ) : null}
       </Panel>
+    </Box>
+  );
+
+  return (
+    <DashboardWrapper breadcrumb={['Catalogue', 'Annonces']}>
+      {!pageFullscreen && listingsPage}
+      <PageFullscreenLayer
+        open={pageFullscreen}
+        onClose={pageFs.exit}
+        label="Listings plein écran"
+      >
+        {listingsPage}
+      </PageFullscreenLayer>
 
       <ImportAirbnbModalContainer
         open={showImportRu}

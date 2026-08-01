@@ -36,6 +36,12 @@ import * as fullchatbotApi from '../../services/fullchatbotApi';
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { CHATBOT_T as T } from './chatbotTokens';
 import {
+  PageFullscreenEnterBtn,
+  PageFullscreenLayer,
+  pageTreeFullscreenSx,
+  usePageFullscreen,
+} from '../../components/page-fullscreen';
+import {
   getCachedGuestContext,
   getCachedMenuOptions,
   hasCachedMenuOptions,
@@ -162,6 +168,8 @@ export default function ChatbotWhitelistView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [tableReady, setTableReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pageFs = usePageFullscreen();
+  const pageFullscreen = pageFs.fullscreen;
   const [search, setSearch] = useState('');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(null);
   const [sortField, setSortField] = useState<WhitelistSortField>('createdAt');
@@ -434,8 +442,8 @@ export default function ChatbotWhitelistView() {
 
   const showBlockingSpinner = (isLoading && !tableReady) || (tableReady && isRefreshing);
 
-  return (
-    <Box sx={{ width: '100%' }}>
+  const whitelistPage = (
+    <Box sx={{ width: '100%', ...pageTreeFullscreenSx(pageFullscreen) }}>
       {isLoading && !tableReady && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
           <CircularProgress size={48} sx={{ color: T.primary }} />
@@ -500,6 +508,13 @@ export default function ChatbotWhitelistView() {
               <RefreshIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Tooltip>
+            {!pageFullscreen && (
+              <PageFullscreenEnterBtn
+                onClick={pageFs.enter}
+                disabled={!tableReady || sorted.length === 0}
+                label="Whitelist plein écran"
+              />
+            )}
         </Stack>
 
         <Stack
@@ -593,6 +608,19 @@ export default function ChatbotWhitelistView() {
         </Stack>
       )}
     </Box>
+  );
+
+  return (
+    <>
+      {!pageFullscreen && whitelistPage}
+      <PageFullscreenLayer
+        open={pageFullscreen}
+        onClose={pageFs.exit}
+        label="Whitelist plein écran"
+      >
+        {whitelistPage}
+      </PageFullscreenLayer>
+    </>
   );
 }
 

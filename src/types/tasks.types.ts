@@ -134,6 +134,8 @@ export interface TasksPagination {
 
 export interface TasksSearchParams {
   ownerId?: string;
+  /** Scope listings (filtres admin PM) — transmis à getListings. */
+  filterOwnerId?: string;
   audience?: 'STAFF' | 'GUEST' | 'SYSTEM';
   page?: number;
   limit?: number;
@@ -155,12 +157,21 @@ export interface TasksSearchParams {
   isArchived?: boolean | 'all';
   /** Filtre multi-staff (côté API si supporté ; sinon filtré côté client). */
   staffCodes?: string[];
+  /**
+   * Caches optionnels : si fournis, getTasks ne refetch ni staff ni listings
+   * (évite le double appel page + service).
+   */
+  staffByIdCache?: Record<string, Record<string, unknown>>;
+  listingByIdCache?: Record<string, string>;
 }
 
 export interface TasksSearchResult {
   tasks: TaskListItem[];
   pagination: TasksPagination;
   performanceTime?: string;
+  /** Présents uniquement quand le service a chargé staff/listings (pas de cache). */
+  staff?: Array<{ _id: unknown; staffCode: string; name: unknown; phone: unknown }>;
+  listings?: Array<{ id: string; _id: string; name: string; city?: string }>;
 }
 
 export interface TaskCreatePayload {

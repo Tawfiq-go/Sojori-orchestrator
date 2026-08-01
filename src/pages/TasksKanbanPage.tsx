@@ -7,6 +7,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Box, CircularProgress, Alert } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import {
+  PageFullscreenEnterBtn,
+  PageFullscreenLayer,
+  pageTreeFullscreenSx,
+  usePageFullscreen,
+} from '../components/page-fullscreen';
 import KanbanView from '../components/calendar-views/KanbanView';
 import type { TaskItem, TaskStatus } from '../components/calendar-views/_shared';
 import tasksService from '../services/fulltaskTasksService';
@@ -17,6 +23,8 @@ import { useSocketIO } from '../hooks/useSocketIO';
 import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 
 export default function TasksKanbanPage() {
+  const pageFs = usePageFullscreen();
+  const pageFullscreen = pageFs.fullscreen;
   const { loading: authLoading } = useAuth();
   const scope = usePmTasksScope();
 
@@ -146,9 +154,17 @@ export default function TasksKanbanPage() {
     toast.info('🚧 Dialog création tâche à implémenter');
   };
 
-  return (
-    <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Kanban']} hidePageHeader>
-      <Box sx={{ bgcolor: '#f6f5f1', minHeight: 0 }}>
+  const kanbanPage = (
+      <Box sx={{ bgcolor: '#f6f5f1', minHeight: 0, ...pageTreeFullscreenSx(pageFullscreen) }}>
+        {!pageFullscreen && (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 1, pt: 1, pb: 0.5 }}>
+            <PageFullscreenEnterBtn
+              onClick={pageFs.enter}
+              disabled={isLoading || Boolean(error) || tasks.length === 0}
+              label="Kanban plein écran"
+            />
+          </Box>
+        )}
         {isLoading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
             <CircularProgress />
@@ -165,7 +181,6 @@ export default function TasksKanbanPage() {
 
         {!isLoading && !error && (
           <Box>
-            {/* KanbanView component - Design Claude */}
             <KanbanView
               tasks={tasks}
               onTaskMove={handleTaskMove}
@@ -175,6 +190,18 @@ export default function TasksKanbanPage() {
           </Box>
         )}
       </Box>
+  );
+
+  return (
+    <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Kanban']} hidePageHeader>
+      {!pageFullscreen && kanbanPage}
+      <PageFullscreenLayer
+        open={pageFullscreen}
+        onClose={pageFs.exit}
+        label="Kanban plein écran"
+      >
+        {kanbanPage}
+      </PageFullscreenLayer>
     </DashboardWrapper>
   );
 }

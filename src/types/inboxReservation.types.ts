@@ -23,11 +23,24 @@ export interface InboxReservationData {
   guestsCompact?: string;
   /** Téléphone voyageur (OTA / résa) */
   guestPhone?: string;
+  /** Total payé par le client (guest OTA) */
   totalPrice?: number;
   currency?: string;
   paymentStatus?: string;
+  /** Hébergement (stay) inclus dans le total client */
+  stayAmount?: number;
+  /** Ménage / cleaning inclus (0 = pas de ménage) */
+  cleaningAmount?: number;
+  /** Taxe de séjour / Tourist Tax (≠ ménage) */
+  touristTaxAmount?: number;
   netHost?: number;
   commission?: number;
+  /** Libellé commission : Host service fee / Commission Booking… */
+  commissionLabel?: string;
+  /** Airbnb : host fee 15,5 % (HT) */
+  hostFeeAmount?: number;
+  /** Airbnb : TVA 20 % sur host fee (Maroc) */
+  hostFeeVatAmount?: number;
   otaPlatform?: string;
   /** Code confirmation canal (Airbnb HM…, Booking, etc.) — lien « Ouvrir sur … » */
   otaCode?: string;
