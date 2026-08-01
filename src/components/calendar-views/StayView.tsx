@@ -45,7 +45,7 @@ export interface StayViewProps {
   listings: ListingRow[];
   /** tasks = chips tâches + KPI ops ; reservations = barres séjour uniquement + filtres statut */
   variant?: StayViewVariant;
-  /** Filtre couche cockpit (défaut all). */
+  /** Filtre couche cockpit (défaut resas sur cockpit ops, all sinon). */
   cockpitLayer?: StayCockpitLayer;
   onCockpitLayerChange?: (layer: StayCockpitLayer) => void;
   onTaskClick?: (item: TimelineItem) => void;
@@ -163,7 +163,10 @@ export default function StayView({
   enableCommsCockpit = false,
 }: StayViewProps) {
   const isReservations = variant === 'reservations';
-  const [internalCockpitLayer, setInternalCockpitLayer] = useState<StayCockpitLayer>('all');
+  /** Landing /planning (cockpit) : résas seules — l’utilisateur peut basculer vers Tout / Tâches / Msgs. */
+  const [internalCockpitLayer, setInternalCockpitLayer] = useState<StayCockpitLayer>(
+    () => (enableCommsCockpit ? 'resas' : 'all'),
+  );
   /** Multi MEWS : ▶ ouvre les roomTypes (collapsed par défaut). */
   const [multiExpanded, setMultiExpanded] = useState<Record<string, boolean>>({});
   const cockpitLayer = cockpitLayerProp ?? internalCockpitLayer;
@@ -200,6 +203,27 @@ export default function StayView({
       el.scrollLeft = targetLeft;
     }
   }, [days, startDate, todayBackDays, m.CELL_W]);
+
+  /**
+   * Élévation de la colonne épinglée (pattern calendrier multi / résas) :
+   * liseré + ombre permanente, approfondie pendant le scroll horizontal —
+   * les jours passent visuellement SOUS la colonne Prop.
+   */
+  const [pinScrolled, setPinScrolled] = useState(false);
+  useEffect(() => {
+    const el = gridScrollRef.current;
+    if (!el) return undefined;
+    const onScroll = () => {
+      const s = el.scrollLeft > 2;
+      setPinScrolled((prev) => (prev === s ? prev : s));
+    };
+    onScroll();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+  const pinShadow = pinScrolled
+    ? `inset -1px 0 0 ${T.borderStrong}, 8px 0 16px -2px rgba(20,17,10,0.28)`
+    : `inset -1px 0 0 ${T.borderStrong}, 3px 0 8px rgba(20,17,10,0.10)`;
 
   const cleanlinessShort: Record<CleanlinessFilter, string> = {
     clean: 'C',
@@ -1326,18 +1350,22 @@ export default function StayView({
       >
       <Box sx={{
         bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.75,
-        overflow: 'hidden', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+        // 'clip' (pas 'hidden') : hidden créerait un conteneur de défilement
+        // et casserait le position:sticky de la colonne épinglée.
+        overflow: 'clip', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
         minWidth: m.STICKY_W + VISIBLE_DAYS * m.CELL_W,
       }}>
         {/* Header */}
         <Box sx={{
           display: 'grid', gridTemplateColumns: `${m.STICKY_W}px repeat(${VISIBLE_DAYS}, ${m.CELL_W}px)`,
           bgcolor: T.bg2, borderBottom: `1px solid ${T.borderStrong}`,
-          position: 'sticky', top: 0, zIndex: 5,
+          position: 'sticky', top: 0, zIndex: 7,
         }}>
           <Box sx={{
             p: compactLayout ? '4px 6px' : '12px 14px', fontSize: compactLayout ? 9 : 10.5, fontWeight: 700, color: T.text3,
-            letterSpacing: '0.08em', textTransform: 'uppercase', borderRight: `1px solid ${T.border}`,
+            letterSpacing: '0.08em', textTransform: 'uppercase',
+            position: 'sticky', left: 0, zIndex: 8, bgcolor: T.bg2,
+            boxShadow: pinShadow, transition: 'box-shadow 0.15s ease',
           }}>Prop.</Box>
           {days.map(d => <DayHeader key={d.iso} day={d} width={m.CELL_W} compact={compactLayout} />)}
         </Box>
@@ -1384,6 +1412,7 @@ export default function StayView({
                 onCommsClick={onCommsClick}
                 onCleanlinessChange={onCleanlinessChange}
                 onCreateTaskAt={onCreateTaskAt}
+                pinShadow={pinShadow}
               />
             ))}
           </React.Fragment>
@@ -1401,6 +1430,7 @@ function ListingRowComp({
   multiExpanded = false,
   onToggleMulti,
   onTaskClick, onReservationClick, onCommsClick, onCleanlinessChange, onCreateTaskAt,
+  pinShadow,
 }: {
   listing: ListingRow; days: ReturnType<typeof genDays>; metrics: StayMetrics;
   compactListing?: boolean;
@@ -1423,6 +1453,8 @@ function ListingRowComp({
   onCleanlinessChange?: (listingId: string, status: DisplayCleanliness) => void | Promise<void>;
   /** Clic droit sur une cellule → créer une tâche (contexte déduit : logement + jour + résa). */
   onCreateTaskAt?: (ctx: PlanningCreateContext, anchor: { x: number; y: number }) => void;
+  /** Ombre d'élévation de la colonne épinglée (calculée par StayView selon le scroll). */
+  pinShadow?: string;
 }) {
   const isRoomTypeRow = Boolean(listing.isRoomTypeRow);
   const isMultiHotel = isPlanningMultiHotel(listing) && !isRoomTypeRow;
@@ -1538,7 +1570,6 @@ function ListingRowComp({
             ? (compactListing ? '4px 5px 4px 14px' : '10px 14px 10px 28px')
             : (compactListing ? '4px 5px' : '14px'),
           py: compactListing ? '3px' : '11px',
-          borderRight: `1px solid ${T.border}`,
           bgcolor: isRoomTypeRow ? T.bg2 : T.bg1,
           minWidth: 0,
           height: '100%',
@@ -1546,6 +1577,11 @@ function ListingRowComp({
           justifyContent: 'center',
           cursor: onToggleMulti ? 'pointer' : 'default',
           '&:hover': onToggleMulti ? { bgcolor: T.bg2 } : undefined,
+          // Colonne épinglée : au-dessus des barres résa (z2) et cartes comms (z5),
+          // sous le header sticky (z7/z8).
+          position: 'sticky', left: 0, zIndex: 6,
+          boxShadow: pinShadow ?? `inset -1px 0 0 ${T.border}`,
+          transition: 'box-shadow 0.15s ease',
         }}
       >
         <Box
