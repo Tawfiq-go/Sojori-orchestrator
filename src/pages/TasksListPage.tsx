@@ -3,9 +3,8 @@
 // Route: /tasks — toolbar, pills échéances, KPI compacts, tableau premium.
 // ════════════════════════════════════════════════════════════════════
 
-import { useCallback, useEffect, useMemo, useState, Suspense, memo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense, memo, type ReactNode } from 'react';
 import { lazyWithReload } from '../utils/lazyWithReload';
-import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -48,6 +47,13 @@ import moment from 'moment';
 import 'moment/locale/fr';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import {
+  PageFullscreenEnterBtn,
+  PageFullscreenLayer,
+  pageContentFullscreenSx,
+  pageTreeFullscreenSx,
+  usePageFullscreen,
+} from '../components/page-fullscreen';
 import { autocompleteOptionLiProps } from '../utils/autocompleteOptionLiProps';
 import {
   Badge,
@@ -413,6 +419,7 @@ function TasksScrollTable({
       ultraCompact={ultraCompact}
       tableMinWidth={TASKS_TABLE_MIN_WIDTH}
       headerTextTransform="none"
+      pinFirstColumn
       onRowClick={(row) => onRowClick(row as TaskListItem)}
     />
   );
@@ -451,52 +458,8 @@ function TasksScrollTable({
   );
 }
 
-function ListFullscreenEnterBtn({
-  onClick,
-  disabled = false,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Box
-      component="button"
-      type="button"
-      title="Liste plein écran"
-      aria-label="Liste plein écran"
-      disabled={disabled}
-      onClick={disabled ? undefined : onClick}
-      sx={{
-        all: 'unset',
-        boxSizing: 'border-box',
-        flexShrink: 0,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 30,
-        height: 28,
-        borderRadius: '6px',
-        border: `1px solid ${T.borderStrong}`,
-        bgcolor: T.bg1,
-        color: disabled ? T.text4 : T.text2,
-        fontSize: 15,
-        fontWeight: 600,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        fontFamily: 'inherit',
-        lineHeight: 1,
-        opacity: disabled ? 0.5 : 1,
-        boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
-        '&:hover': disabled ? {} : { bgcolor: T.bg2, borderColor: T.primary, color: T.primaryDeep },
-      }}
-    >
-      ⛶
-    </Box>
-  );
-}
-
 /** Badge OTA circulaire — aligné sur ReservationsPage (channel = Airbnb, Booking…) */
-function OTABadge({ channel }: { channel?: string | null }) {
-  const c = (channel || '').toLowerCase();
+function OTABadge({ channel }: { channel?: string | null }) {  const c = (channel || '').toLowerCase();
   const meta =
     c.includes('airbnb')  ? { label: 'Airbnb',  bg: '#FF5A5F', initial: 'A' } :
     c.includes('booking') ? { label: 'Booking', bg: '#003580', initial: 'B' } :
@@ -1047,6 +1010,10 @@ export function TasksListPage() {
   });
   const [staff, setStaff] = useState<TasksStaffMember[]>([]);
   const [listings, setListings] = useState<TaskListingOption[]>([]);
+  const staffRef = useRef(staff);
+  const listingsRef = useRef(listings);
+  staffRef.current = staff;
+  listingsRef.current = listings;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
@@ -1095,21 +1062,14 @@ export function TasksListPage() {
 
   const [showDescription, setShowDescription] = useState(false);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
-  const [listFullscreen, setListFullscreen] = useState(false);
+  const listFs = usePageFullscreen();
+  const listFullscreen = listFs.fullscreen;
 
+  // Scope owner changé → vider le cache listings (getTasks rechargera avec le bon filter).
   useEffect(() => {
-    if (!listFullscreen) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setListFullscreen(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [listFullscreen]);
+    listingsRef.current = [];
+    setListings((prev) => (prev.length === 0 ? prev : []));
+  }, [scope.filterOwnerId]);
 
   // ⚡ PERFORMANCE: Fusion du chargement staff/listings/tasks en parallèle
   const fetchTasks = useCallback(async (opts?: { silent?: boolean; loadMetadata?: boolean }) => {
@@ -1151,47 +1111,65 @@ export function TasksListPage() {
         dateEnd = fmt(today.clone().add(7, 'days'));
       }
 
-      // ⚡ PERFORMANCE: Chargement parallèle tasks + staff + listings
-      const shouldLoadMetadata = opts?.loadMetadata !== false && (staff.length === 0 || listings.length === 0);
+      // Un seul round-trip : getTasks charge déjà staff+listings (sauf si caches fournis).
+      // Refs : éviter de dépendre de staff/listings (sinon refetch en boucle après setState).
+      const staffSnapshot = staffRef.current;
+      const listingsSnapshot = listingsRef.current;
+      const staffByIdCache =
+        staffSnapshot.length > 0
+          ? Object.fromEntries(
+              staffSnapshot.map((s) => {
+                const row = s as TasksStaffMember & { name?: string; phone?: string };
+                return [
+                  String(s._id),
+                  {
+                    _id: s._id,
+                    name: row.name || s.username,
+                    phone: row.phone || s.callPhone || s.whatsappPhone,
+                  } as Record<string, unknown>,
+                ];
+              }),
+            )
+          : undefined;
+      const listingByIdCache =
+        listingsSnapshot.length > 0
+          ? Object.fromEntries(listingsSnapshot.map((l) => [String(l._id), l.name]))
+          : undefined;
 
-      const promises: [
-        Promise<any>,
-        Promise<any> | null,
-        Promise<any> | null
-      ] = [
-        tasksService.getTasks({
-          ownerId: scope.ownerId,
-          page,
-          limit: rowsPerPage,
-          listingIds: listFilters.listingIds.length ? listFilters.listingIds : undefined,
-          subTypes: listFilters.subTypes.length ? listFilters.subTypes : undefined,
-          statuses: realStatuses.length ? realStatuses : undefined,
-          sources: listFilters.sources.length ? listFilters.sources : undefined,
-          staffCodes: listFilters.staffCodes.length ? listFilters.staffCodes : undefined,
-          paymentStatus:
-            listFilters.paymentStatus === 'all' ? undefined : listFilters.paymentStatus,
-          hasAssociation:
-            listFilters.hasAssociation === 'all' ? undefined : listFilters.hasAssociation,
-          dateType,
-          dateStart,
-          dateEnd,
-          searchTerm: activeSearchTerm.trim() || undefined,
-          sortField,
-          sortDirection,
-          isArchived,
-        }),
-        shouldLoadMetadata ? tasksService.getStaff({ ownerId: scope.ownerId, limit: 200 }) : null,
-        shouldLoadMetadata ? tasksService.getListings({ filterOwnerId: scope.filterOwnerId }) : null,
-      ];
+      const tasksResult = await tasksService.getTasks({
+        ownerId: scope.ownerId,
+        filterOwnerId: scope.filterOwnerId,
+        page,
+        limit: rowsPerPage,
+        listingIds: listFilters.listingIds.length ? listFilters.listingIds : undefined,
+        subTypes: listFilters.subTypes.length ? listFilters.subTypes : undefined,
+        statuses: realStatuses.length ? realStatuses : undefined,
+        sources: listFilters.sources.length ? listFilters.sources : undefined,
+        staffCodes: listFilters.staffCodes.length ? listFilters.staffCodes : undefined,
+        paymentStatus:
+          listFilters.paymentStatus === 'all' ? undefined : listFilters.paymentStatus,
+        hasAssociation:
+          listFilters.hasAssociation === 'all' ? undefined : listFilters.hasAssociation,
+        dateType,
+        dateStart,
+        dateEnd,
+        searchTerm: activeSearchTerm.trim() || undefined,
+        sortField,
+        sortDirection,
+        isArchived,
+        staffByIdCache,
+        listingByIdCache,
+      });
 
-      const [tasksResult, staffResult, listingResult] = await Promise.all(promises);
-
-      setTasks(tasksResult.tasks);
+      setTasks(tasksResult.tasks as TaskListItem[]);
       setPagination(tasksResult.pagination);
 
-      // Mettre à jour staff et listings si chargés
-      if (staffResult) setStaff(staffResult.staff);
-      if (listingResult) setListings(listingResult);
+      if (tasksResult.staff?.length) {
+        setStaff(tasksResult.staff as unknown as TasksStaffMember[]);
+      }
+      if (tasksResult.listings?.length) {
+        setListings(tasksResult.listings as TaskListingOption[]);
+      }
 
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Erreur inconnue');
@@ -1262,10 +1240,17 @@ export function TasksListPage() {
   const staffById = useMemo(
     () =>
       Object.fromEntries(
-        staff.map((s) => [
-          String(s._id || s.staffCode),
-          { _id: s._id, name: s.name, phone: s.phone },
-        ]),
+        staff.map((s) => {
+          const row = s as TasksStaffMember & { name?: string; phone?: string };
+          return [
+            String(s._id || s.staffCode),
+            {
+              _id: s._id,
+              name: row.name || s.username,
+              phone: row.phone || s.callPhone || s.whatsappPhone,
+            },
+          ];
+        }),
       ),
     [staff],
   );
@@ -1983,57 +1968,6 @@ export function TasksListPage() {
       />
     ) : null;
 
-  const listFullscreenLayer =
-    listFullscreen && tasksTable && typeof document !== 'undefined'
-      ? createPortal(
-          <Box
-            role="dialog"
-            aria-modal="true"
-            aria-label="Liste des tâches plein écran"
-            sx={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 9999,
-              bgcolor: T.bg0,
-              display: 'flex',
-              flexDirection: 'column',
-              p: { xs: 0.5, sm: 0.75 },
-              boxSizing: 'border-box',
-            }}
-          >
-            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              {tasksTable}
-            </Box>
-            <Tooltip title="Quitter le plein écran (Échap)" placement="left">
-              <IconButton
-                type="button"
-                onClick={() => setListFullscreen(false)}
-                aria-label="Quitter le plein écran"
-                sx={{
-                  position: 'fixed',
-                  right: { xs: 10, md: 14 },
-                  bottom: { xs: 10, md: 14 },
-                  zIndex: 10000,
-                  width: 36,
-                  height: 36,
-                  bgcolor: 'rgba(255,255,255,0.94)',
-                  border: `1px solid ${T.border}`,
-                  boxShadow: '0 4px 16px rgba(20,17,10,0.14)',
-                  color: T.text3,
-                  fontSize: 22,
-                  fontWeight: 300,
-                  lineHeight: 1,
-                  '&:hover': { bgcolor: T.bg1, color: T.text, borderColor: T.borderStrong },
-                }}
-              >
-                ×
-              </IconButton>
-            </Tooltip>
-          </Box>,
-          document.body,
-        )
-      : null;
-
   // ⚡ PERFORMANCE: Skeleton loading pour affichage immédiat
   if (loading && tasks.length === 0) {
     return (
@@ -2087,16 +2021,18 @@ export function TasksListPage() {
     );
   }
 
-  return (
-    <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
+  // Même arbre JSX page / plein écran — filtres + liste.
+  const tasksPage = (
       <Box sx={{
         display: 'flex',
         flexDirection: 'column',
         width: '100%',
         px: 0,
         py: isMobile ? { xs: 1, md: 1.25 } : { xs: 2, md: 3 },
+        ...pageTreeFullscreenSx(listFullscreen),
+        ...(listFullscreen ? { overflow: 'hidden', boxSizing: 'border-box' } : {}),
       }}>
-        {!listFullscreen && isMobile ? (
+        {isMobile ? (
         <Paper sx={{
           p: '4px 6px',
           mb: 0.5,
@@ -2217,15 +2153,18 @@ export function TasksListPage() {
             pl: 0.35,
             borderLeft: `1px solid ${T.border}`,
           }}>
-            <ListFullscreenEnterBtn
-              onClick={() => setListFullscreen(true)}
-              disabled={displayTasks.length === 0}
-            />
+            {!listFullscreen && (
+              <PageFullscreenEnterBtn
+                onClick={listFs.enter}
+                disabled={displayTasks.length === 0}
+                label="Liste plein écran"
+              />
+            )}
           </Box>
         </Paper>
         ) : null}
 
-        {!listFullscreen && !isMobile ? (
+        {!isMobile ? (
         <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
             <TextField
@@ -2380,10 +2319,13 @@ export function TasksListPage() {
                 <RefreshIcon sx={{ fontSize: 18 }} />
               </IconButton>
             </Tooltip>
-            <ListFullscreenEnterBtn
-              onClick={() => setListFullscreen(true)}
-              disabled={displayTasks.length === 0}
-            />
+            {!listFullscreen && (
+              <PageFullscreenEnterBtn
+                onClick={listFs.enter}
+                disabled={displayTasks.length === 0}
+                label="Liste plein écran"
+              />
+            )}
           </Stack>
 
           <Stack direction="row" sx={{ mt: 1.5, gap: 0.75, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -2420,7 +2362,7 @@ export function TasksListPage() {
         </Paper>
         ) : null}
 
-        {error && !listFullscreen ? <Alert severity="error" sx={{ mb: isMobile ? 0.75 : 2, py: isMobile ? 0 : undefined, flexShrink: 0 }}>{error}</Alert> : null}
+        {error ? <Alert severity="error" sx={{ mb: isMobile ? 0.75 : 2, py: isMobile ? 0 : undefined, flexShrink: 0 }}>{error}</Alert> : null}
 
         {loading && tasks.length === 0 ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: isMobile ? 4 : 8, flexShrink: 0 }}>
@@ -2428,7 +2370,7 @@ export function TasksListPage() {
           </Box>
         ) : null}
 
-        {!listFullscreen && tasksTable ? (
+        {tasksTable ? (
           isMobile ? (
           <Box sx={{
             minHeight: TABLE_VIEWPORT_HEIGHT,
@@ -2441,7 +2383,7 @@ export function TasksListPage() {
           ) : tasksTable
         ) : null}
 
-        {!listFullscreen && !loading && displayTasks.length === 0 ? (
+        {!loading && displayTasks.length === 0 ? (
           <Paper sx={{ textAlign: 'center', py: 6, border: `1px solid ${T.border}`, bgcolor: T.bg1, borderRadius: 1.25, flexShrink: 0 }}>
             <InboxIcon sx={{ fontSize: 48, color: T.text4, mb: 1.5 }} />
             <Typography sx={{ fontSize: 14, fontWeight: 600, color: T.text2 }}>Aucune tâche trouvée</Typography>
@@ -2458,7 +2400,7 @@ export function TasksListPage() {
           </Paper>
         ) : null}
 
-        {!listFullscreen && !loading && displayTasks.length > 0 ? (
+        {!loading && displayTasks.length > 0 ? (
           <Stack direction="row" sx={{ mt: isMobile ? 0.75 : 2, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, flexShrink: 0 }}>
             <Typography sx={{ fontSize: isMobile ? 11 : 13, color: T.text3 }}>
               {pagination.total > 0
@@ -2490,7 +2432,19 @@ export function TasksListPage() {
           </Stack>
         ) : null}
 
-        {listFullscreenLayer}
+      </Box>
+  );
+
+  return (
+    <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
+      {!listFullscreen && tasksPage}
+      <PageFullscreenLayer
+        open={listFullscreen}
+        onClose={listFs.exit}
+        label="Liste des tâches plein écran"
+      >
+        {tasksPage}
+      </PageFullscreenLayer>
 
           <Dialog
             open={filtersModalOpen}
@@ -2749,7 +2703,6 @@ export function TasksListPage() {
               </Button>
             </DialogActions>
           </Dialog>
-      </Box>
 
       {selectedTaskDetail && (
         <Suspense fallback={<CircularProgress />}>
