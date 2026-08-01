@@ -233,11 +233,49 @@ export default function ConversationDetails({
             {r.totalPrice != null && (
               <DtCard title="Tarif" emoji="💰">
                 <PriceHero value={r.totalPrice} currency={r.currency} />
-                {r.netHost != null && (
-                  <DtRow label="Net hôte">{`${r.netHost} ${r.currency || 'MAD'}`}</DtRow>
+                <DtRow label="Total payé client">
+                  {`${Math.round(Number(r.totalPrice)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                </DtRow>
+                {r.stayAmount != null && (
+                  <DtRow label="dont hébergement">
+                    {`${Math.round(Number(r.stayAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.cleaningAmount != null && r.cleaningAmount > 0 && (
+                  <DtRow label="dont ménage">
+                    {`${Math.round(Number(r.cleaningAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.touristTaxAmount != null && r.touristTaxAmount > 0 && (
+                  <DtRow label="dont taxe de séjour">
+                    {`${Math.round(Number(r.touristTaxAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.hostFeeAmount != null && (
+                  <DtRow label="Host fee 15,5 %">
+                    {`− ${Math.round(Number(r.hostFeeAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.hostFeeVatAmount != null && (
+                  <DtRow label="Moroccan Airbnb TVA 20 %">
+                    {`− ${Math.round(Number(r.hostFeeVatAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
                 )}
                 {r.commission != null && (
-                  <DtRow label="Commission">{`${r.commission} ${r.currency || 'MAD'}`}</DtRow>
+                  <DtRow
+                    label={
+                      r.hostFeeAmount != null
+                        ? 'Total fees for host'
+                        : r.commissionLabel || 'Commission OTA'
+                    }
+                  >
+                    {`− ${Math.round(Number(r.commission)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.netHost != null && (
+                  <DtRow label="Reste hôte (net)">
+                    {`${Math.round(Number(r.netHost)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
                 )}
               </DtCard>
             )}
@@ -406,6 +444,50 @@ export default function ConversationDetails({
             {r.totalPrice != null && (
               <DtCard title="Tarif" emoji="💰">
                 <PriceHero value={r.totalPrice} currency={r.currency} />
+                <DtRow label="Total payé client">
+                  {`${Math.round(Number(r.totalPrice)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                </DtRow>
+                {r.stayAmount != null && (
+                  <DtRow label="dont hébergement">
+                    {`${Math.round(Number(r.stayAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.cleaningAmount != null && r.cleaningAmount > 0 && (
+                  <DtRow label="dont ménage">
+                    {`${Math.round(Number(r.cleaningAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.touristTaxAmount != null && r.touristTaxAmount > 0 && (
+                  <DtRow label="dont taxe de séjour">
+                    {`${Math.round(Number(r.touristTaxAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.hostFeeAmount != null && (
+                  <DtRow label="Host fee 15,5 %">
+                    {`− ${Math.round(Number(r.hostFeeAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.hostFeeVatAmount != null && (
+                  <DtRow label="Moroccan Airbnb TVA 20 %">
+                    {`− ${Math.round(Number(r.hostFeeVatAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.commission != null && (
+                  <DtRow
+                    label={
+                      r.hostFeeAmount != null
+                        ? 'Total fees for host'
+                        : r.commissionLabel || 'Commission OTA'
+                    }
+                  >
+                    {`− ${Math.round(Number(r.commission)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.netHost != null && (
+                  <DtRow label="Reste hôte (net)">
+                    {`${Math.round(Number(r.netHost)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
                 {r.paymentStatus && (
                   <DtRow label="Paiement">
                     <Typography component="span" sx={{ color: T.success, fontWeight: 700 }}>

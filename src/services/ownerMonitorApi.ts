@@ -34,3 +34,43 @@ export function fetchOwnerMonitorActivity() {
     timeout: 60000,
   });
 }
+
+/** Habitudes clients sur période — actions calendrier + messages + résas. */
+export interface OwnerMonitorHabitItem {
+  ownerId: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  actorType?: string;
+  calendarUpdates: number;
+  daysModified: number;
+  auditsLaunched: number;
+  importsActivated: number;
+  importsFinished: number;
+  activeDaysCount: number;
+  listingsTouched: number;
+  lastActivityAt?: string;
+  messagesReceived: number;
+  manualRepliesDashboard: number;
+  manualRepliesWhatsapp: number;
+  reservationsCreated: number;
+}
+
+export interface OwnerMonitorHabitsResponse {
+  success: boolean;
+  data?: {
+    days: number;
+    habitsAvailable: boolean;
+    kpisAvailable: boolean;
+    generatedAt: string;
+    items: OwnerMonitorHabitItem[];
+  };
+  error?: string;
+}
+
+export function fetchOwnerMonitorHabits(days: number) {
+  return apiClient.get<OwnerMonitorHabitsResponse>(`${OWNER_MONITOR}/habits`, {
+    ...channelsDashboardAxiosConfig(),
+    params: { days },
+    timeout: 60000,
+  });
+}

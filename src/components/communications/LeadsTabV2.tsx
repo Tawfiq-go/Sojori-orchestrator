@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
+import { InboxFullscreenLayer } from '../unified-inbox/InboxFullscreen';
+import { useInboxFullscreen } from '../unified-inbox/useInboxFullscreen';
 import ThreadsList from '../unified-inbox/ThreadsList';
 import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
@@ -68,6 +70,7 @@ export default function LeadsTabV2() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAIModal, setShowAIModal] = useState(false);
   const [composerDraft, setComposerDraft] = useState('');
+  const fullscreenCtl = useInboxFullscreen();
   const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [filter, setFilter] = useState('all');
   const activeRef = useRef<LeadRow | null>(null);
@@ -419,9 +422,8 @@ export default function LeadsTabV2() {
     );
   }
 
-  return (
-    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <InboxLayout fillViewport>
+  const inboxBody = (
+    <>
         <ThreadsList
           threads={threads}
           channels={[{ id: 'ab', label: 'Demande', icon: '🎯', color: '#FF5A5F', count: leads.length }]}
@@ -431,6 +433,8 @@ export default function LeadsTabV2() {
           ultraCompact
           activeThreadId={activeThread?.id ?? null}
           searchTerm={searchTerm}
+          showFullscreenEnter={!fullscreenCtl.fullscreen}
+          onEnterFullscreen={fullscreenCtl.enter}
           onSelectThread={(th) => {
             const lead = filteredLeads.find((l) => l.threadId === th.id);
             if (lead) void handleSelect(lead);
@@ -478,7 +482,19 @@ export default function LeadsTabV2() {
             <Typography sx={{ color: t.text3 }}>Sélectionnez une demande</Typography>
           </Box>
         )}
-      </InboxLayout>
+    </>
+  );
+
+  return (
+    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {!fullscreenCtl.fullscreen && <InboxLayout fillViewport>{inboxBody}</InboxLayout>}
+      <InboxFullscreenLayer
+        open={fullscreenCtl.fullscreen}
+        onClose={fullscreenCtl.exit}
+        label="Inbox Demandes plein écran"
+      >
+        {inboxBody}
+      </InboxFullscreenLayer>
 
       <AISuggestionModal
         open={showAIModal}

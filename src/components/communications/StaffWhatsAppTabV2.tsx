@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
+import { InboxFullscreenLayer } from '../unified-inbox/InboxFullscreen';
+import { useInboxFullscreen } from '../unified-inbox/useInboxFullscreen';
 import ThreadsList from '../unified-inbox/ThreadsList';
 import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
@@ -61,6 +63,7 @@ export default function StaffWhatsAppTabV2({ inboxParty = 'staff' }: Props) {
   const [composerDraft, setComposerDraft] = useState('');
   const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
+  const fullscreenCtl = useInboxFullscreen();
 
   const inbox = useInboxStaffConversation(inboxParty);
 
@@ -246,69 +249,82 @@ export default function StaffWhatsAppTabV2({ inboxParty = 'staff' }: Props) {
     );
   }
 
+  const inboxBody = (
+    <>
+      <ThreadsList
+        threads={formattedThreads}
+        channels={[
+          {
+            id: 'wa',
+            label: channelLabel,
+            icon: channelEmoji,
+            color: '#25D366',
+            count: conversations.length,
+          },
+        ]}
+        listTitle={listTitle}
+        mode="whatsapp"
+        activeThreadId={activeThread?.id ?? null}
+        searchTerm={searchTerm}
+        showFullscreenEnter={!fullscreenCtl.fullscreen}
+        onEnterFullscreen={fullscreenCtl.enter}
+        onSelectThread={(thread) => {
+          const conv = findConversationByThreadId(conversations, String(thread.id));
+          if (conv) void handleSelect(conv);
+        }}
+        onSearchChange={setSearchTerm}
+      />
+      {activeThread ? (
+        <>
+          <ConversationThread
+            thread={activeThread}
+            messages={formattedMessages}
+            loadingMessages={inbox.loadingMessages}
+            quickTemplates={templates}
+            composerValue={composerDraft}
+            onComposerValueChange={setComposerDraft}
+            onSendMessage={handleStaffSend}
+            onSelectTemplate={async (tpl) => {
+              if (tpl.text) await handleStaffSend(tpl.text);
+            }}
+            onAISuggestion={(draft) => {
+              setAiSourceDraft(draft);
+              setShowAIModal(true);
+            }}
+          />
+          <ConversationDetails thread={activeThread} type="staff" />
+        </>
+      ) : (
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'column',
+            gap: 2,
+            gridColumn: { xs: '1', lg: '2' },
+          }}
+        >
+          <Typography sx={{ fontSize: 48 }}>{channelEmoji}</Typography>
+          <Typography sx={{ fontSize: 15, fontWeight: 600, color: t.text2 }}>
+            {selectLabel}
+          </Typography>
+        </Box>
+      )}
+    </>
+  );
+
   return (
     <>
-      <InboxLayout>
-        <ThreadsList
-          threads={formattedThreads}
-          channels={[
-            {
-              id: 'wa',
-              label: channelLabel,
-              icon: channelEmoji,
-              color: '#25D366',
-              count: conversations.length,
-            },
-          ]}
-          listTitle={listTitle}
-          mode="whatsapp"
-          activeThreadId={activeThread?.id ?? null}
-          searchTerm={searchTerm}
-          onSelectThread={(thread) => {
-            const conv = findConversationByThreadId(conversations, String(thread.id));
-            if (conv) void handleSelect(conv);
-          }}
-          onSearchChange={setSearchTerm}
-        />
-        {activeThread ? (
-          <>
-            <ConversationThread
-              thread={activeThread}
-              messages={formattedMessages}
-              loadingMessages={inbox.loadingMessages}
-              quickTemplates={templates}
-              composerValue={composerDraft}
-              onComposerValueChange={setComposerDraft}
-              onSendMessage={handleStaffSend}
-              onSelectTemplate={async (tpl) => {
-                if (tpl.text) await handleStaffSend(tpl.text);
-              }}
-              onAISuggestion={(draft) => {
-                setAiSourceDraft(draft);
-                setShowAIModal(true);
-              }}
-            />
-            <ConversationDetails thread={activeThread} type="staff" />
-          </>
-        ) : (
-          <Box
-            sx={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              gap: 2,
-              gridColumn: { xs: '1', lg: '2' },
-            }}
-          >
-            <Typography sx={{ fontSize: 48 }}>{channelEmoji}</Typography>
-            <Typography sx={{ fontSize: 15, fontWeight: 600, color: t.text2 }}>
-              {selectLabel}
-            </Typography>
-          </Box>
-        )}
-      </InboxLayout>
+      {!fullscreenCtl.fullscreen && <InboxLayout>{inboxBody}</InboxLayout>}
+      <InboxFullscreenLayer
+        open={fullscreenCtl.fullscreen}
+        onClose={fullscreenCtl.exit}
+        label={`Inbox ${channelLabel} plein écran`}
+      >
+        {inboxBody}
+      </InboxFullscreenLayer>
 
       <AISuggestionModal
         open={showAIModal}

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { createPortal } from 'react-dom';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
+import { InboxFullscreenLayer } from '../unified-inbox/InboxFullscreen';
+import { useInboxFullscreen } from '../unified-inbox/useInboxFullscreen';
 import ThreadsList from '../unified-inbox/ThreadsList';
 import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
@@ -108,22 +109,9 @@ export default function WhatsAppTabV2() {
   const [sendingGuestMenuCode, setSendingGuestMenuCode] = useState<string | null>(null);
   const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
-  const [inboxFullscreen, setInboxFullscreen] = useState(false);
+  const fullscreenCtl = useInboxFullscreen();
+  const inboxFullscreen = fullscreenCtl.fullscreen;
   const [initiatingWhatsApp, setInitiatingWhatsApp] = useState(false);
-
-  useEffect(() => {
-    if (!inboxFullscreen) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setInboxFullscreen(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [inboxFullscreen]);
 
   const globalSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const globalSearchRequestIdRef = useRef(0);
@@ -835,7 +823,7 @@ export default function WhatsAppTabV2() {
         compactToolbar
         ultraCompact
         showFullscreenEnter={!inboxFullscreen}
-        onEnterFullscreen={() => setInboxFullscreen(true)}
+        onEnterFullscreen={fullscreenCtl.enter}
         onSelectThread={(thread) => {
           const conv = findConversationByThreadId(displayConversations, String(thread.id));
           if (conv) void handleSelect(conv);
@@ -895,62 +883,6 @@ export default function WhatsAppTabV2() {
     </>
   );
 
-  const inboxFullscreenLayer =
-    inboxFullscreen && typeof document !== 'undefined'
-      ? createPortal(
-          <Box
-            role="dialog"
-            aria-modal="true"
-            aria-label="Inbox WhatsApp plein écran"
-            sx={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 9999,
-              bgcolor: '#f6f5f1',
-              display: 'flex',
-              flexDirection: 'column',
-              p: { xs: 0.5, md: 0.75 },
-              boxSizing: 'border-box',
-            }}
-          >
-            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <InboxLayout fillViewport fullscreen>
-                {inboxBody}
-              </InboxLayout>
-            </Box>
-            <Box
-              component="button"
-              type="button"
-              onClick={() => setInboxFullscreen(false)}
-              title="Quitter le plein écran (Échap)"
-              aria-label="Quitter le plein écran"
-              sx={{
-                position: 'fixed',
-                right: { xs: 10, md: 14 },
-                bottom: { xs: 10, md: 14 },
-                zIndex: 10000,
-                width: 36,
-                height: 36,
-                borderRadius: '99px',
-                border: '1px solid rgba(20,17,10,0.12)',
-                bgcolor: 'rgba(255,255,255,0.94)',
-                boxShadow: '0 4px 16px rgba(20,17,10,0.14)',
-                color: '#7a756c',
-                fontSize: 22,
-                fontWeight: 300,
-                lineHeight: 1,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                p: 0,
-              }}
-            >
-              ×
-            </Box>
-          </Box>,
-          document.body,
-        )
-      : null;
-
   if (inboxConversations.length === 0 && searchMode === 'none' && !searchTerm.trim()) {
     return (
       <>
@@ -973,7 +905,13 @@ export default function WhatsAppTabV2() {
         </InboxLayout>
       )}
 
-      {inboxFullscreenLayer}
+      <InboxFullscreenLayer
+        open={inboxFullscreen}
+        onClose={fullscreenCtl.exit}
+        label="Inbox WhatsApp plein écran"
+      >
+        {inboxBody}
+      </InboxFullscreenLayer>
 
       <AISuggestionModal
         open={showAIModal}

@@ -307,6 +307,7 @@ export default function ThreadsList({
         maxHeight: { xs: '46vh', lg: '100%' },
         minHeight: 0,
         overflow: 'hidden',
+        position: 'relative',
         bgcolor: T.bg1,
         // Bande canal (WA vert / OTA Airbnb)
         ...(usePlansListStyle
@@ -316,6 +317,42 @@ export default function ThreadsList({
           : {}),
       }}
     >
+      {/* Sans header (OTA/Leads compacts) : bouton plein écran flottant en haut à droite. */}
+      {hideListHeader && showFullscreenEnter && onEnterFullscreen && (
+        <Box
+          component="button"
+          type="button"
+          title="Inbox plein écran"
+          aria-label="Inbox plein écran"
+          onClick={onEnterFullscreen}
+          sx={{
+            all: 'unset',
+            boxSizing: 'border-box',
+            position: 'absolute',
+            top: 6,
+            right: 6,
+            zIndex: 5,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 26,
+            height: 24,
+            borderRadius: '6px',
+            border: `1px solid ${T.borderStrong}`,
+            bgcolor: 'rgba(255,255,255,0.92)',
+            color: T.text2,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            lineHeight: 1,
+            boxShadow: '0 1px 2px rgba(20,17,10,0.08)',
+            '&:hover': { bgcolor: T.bg2, borderColor: T.primary, color: T.primaryDeep },
+          }}
+        >
+          ⛶
+        </Box>
+      )}
       {!hideListHeader && (
       <Box
         sx={{

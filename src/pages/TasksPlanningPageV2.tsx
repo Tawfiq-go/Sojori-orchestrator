@@ -4,10 +4,13 @@
 // Intègre: sidebar, filtres actifs, scope user, owner selection
 // ════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { Box, CircularProgress, Alert, useMediaQuery, useTheme } from '@mui/material';
 import { format, addDays, startOfDay } from 'date-fns';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import {
+  PageFullscreenLayer,
+  usePageFullscreen,
+} from '../components/page-fullscreen';
 import StayView from '../components/calendar-views/StayView';
 import type { ListingRow, TimelineItem } from '../components/calendar-views/_shared';
 import { resolveTasksUserScope } from '../services/fulltaskTasksService';
@@ -86,21 +89,8 @@ export default function TasksPlanningPageV2() {
   } | null>(null);
   const [opSyncTick, setOpSyncTick] = useState(0);
   const listingsHydratedRef = useRef(activeListings.length > 0);
-  const [listFullscreen, setListFullscreen] = useState(false);
-
-  useEffect(() => {
-    if (!listFullscreen) return undefined;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setListFullscreen(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [listFullscreen]);
+  const listFs = usePageFullscreen();
+  const listFullscreen = listFs.fullscreen;
 
   const windowRange = useCallback(() => {
     const startDateStr = format(startDate, 'yyyy-MM-dd');
@@ -443,66 +433,12 @@ export default function TasksPlanningPageV2() {
         {...stayViewProps}
         compactLayout={isMobile}
         denseToolbar={!isMobile}
-        gridOnly={listFullscreen}
+        gridOnly={false}
         fillViewport={isMobile || listFullscreen}
         showFullscreenEnter={!listFullscreen}
-        onEnterFullscreen={() => setListFullscreen(true)}
+        onEnterFullscreen={listFs.enter}
       />
     ) : null;
-
-  const listFullscreenLayer =
-    listFullscreen && planningGrid && typeof document !== 'undefined'
-      ? createPortal(
-          <Box
-            role="dialog"
-            aria-modal="true"
-            aria-label="Planning tâches plein écran"
-            sx={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 9999,
-              bgcolor: '#f6f5f1',
-              display: 'flex',
-              flexDirection: 'column',
-              p: { xs: 0.5, md: 0.75 },
-              boxSizing: 'border-box',
-            }}
-          >
-            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              {planningGrid}
-            </Box>
-            <Box
-              component="button"
-              type="button"
-              onClick={() => setListFullscreen(false)}
-              title="Quitter le plein écran (Échap)"
-              aria-label="Quitter le plein écran"
-              sx={{
-                position: 'fixed',
-                right: { xs: 10, md: 14 },
-                bottom: { xs: 10, md: 14 },
-                zIndex: 10000,
-                width: 36,
-                height: 36,
-                borderRadius: '99px',
-                border: '1px solid rgba(20,17,10,0.12)',
-                bgcolor: 'rgba(255,255,255,0.94)',
-                boxShadow: '0 4px 16px rgba(20,17,10,0.14)',
-                color: '#7a756c',
-                fontSize: 22,
-                fontWeight: 300,
-                lineHeight: 1,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                p: 0,
-              }}
-            >
-              ×
-            </Box>
-          </Box>,
-          document.body,
-        )
-      : null;
 
   return (
     <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Planning']}>
@@ -576,7 +512,13 @@ export default function TasksPlanningPageV2() {
           </Box>
         )}
 
-        {listFullscreenLayer}
+        <PageFullscreenLayer
+          open={listFullscreen}
+          onClose={listFs.exit}
+          label="Planning tâches plein écran"
+        >
+          {planningGrid}
+        </PageFullscreenLayer>
         {reservationDrawer}
         {taskDetailDrawer}
 

@@ -191,6 +191,7 @@ export function fullTaskToListItem(
   const assignedTo = task.assignedTo ? String(task.assignedTo) : '';
   const staff = assignedTo ? staffById[assignedTo] : null;
   const listingId = task.listingId ? String(task.listingId) : '';
+  const payload = (task.payload || {}) as Record<string, unknown>;
   const hotelName =
     listingById[listingId] || (payload.listingName as string) || undefined;
   const roomFromMeta = pickRoomTypeName(reservationMeta);
@@ -203,7 +204,6 @@ export function fullTaskToListItem(
   const endIso = task.dueAt
     ? new Date(String(task.dueAt)).toISOString()
     : startIso;
-  const payload = (task.payload || {}) as Record<string, unknown>;
   const taskType = String(task.type || '');
   const regCounts =
     taskType === 'registration'

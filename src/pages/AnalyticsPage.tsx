@@ -32,6 +32,12 @@ import {
 } from 'recharts';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
+  PageFullscreenEnterBtn,
+  PageFullscreenLayer,
+  pageTreeFullscreenSx,
+  usePageFullscreen,
+} from '../components/page-fullscreen';
+import {
   Badge,
   DataTable,
   FilterBar,
@@ -81,6 +87,8 @@ export function AnalyticsPage() {
 }
 
 function AnalyticsPageContent() {
+  const pageFs = usePageFullscreen();
+  const pageFullscreen = pageFs.fullscreen;
   const { requestOwnerId, ownerScopeUnset, showOwnerFilter } = useAdminOwnerFilter();
   const scopeFetchReady = useAdminScopeFetchReady();
   const [period, setPeriod] = useState<(typeof analyticsPeriodOptions)[number]['value']>('month');
@@ -394,8 +402,8 @@ function AnalyticsPageContent() {
     }
   };
 
-  return (
-    <DashboardWrapper breadcrumb={['Pilotage', 'Analytics']}>
+  const analyticsPage = (
+    <Box sx={{ width: '100%', ...pageTreeFullscreenSx(pageFullscreen) }}>
       <FilterBar>
         {analyticsPeriodOptions.map((item) => (
           <FilterChip
@@ -436,6 +444,9 @@ function AnalyticsPageContent() {
         >
           {exporting === 'csv' ? 'Export…' : 'CSV'}
         </Button>
+        {!pageFullscreen && (
+          <PageFullscreenEnterBtn onClick={pageFs.enter} label="Analytics plein écran" />
+        )}
         <Button
           size="small"
           sx={btnGhostSx}
@@ -952,6 +963,19 @@ function AnalyticsPageContent() {
           </DialogActions>
         </Dialog>
       ) : null}
+    </Box>
+  );
+
+  return (
+    <DashboardWrapper breadcrumb={['Pilotage', 'Analytics']}>
+      {!pageFullscreen && analyticsPage}
+      <PageFullscreenLayer
+        open={pageFullscreen}
+        onClose={pageFs.exit}
+        label="Analytics plein écran"
+      >
+        {analyticsPage}
+      </PageFullscreenLayer>
     </DashboardWrapper>
   );
 }

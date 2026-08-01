@@ -89,7 +89,6 @@ class FulltaskTasksService {
   }
 
   async getTasks(params: TasksSearchParams) {
-    console.log('🔍 [getTasks] START - Fetching tasks, staff, and listings in parallel');
     const startTime = performance.now();
 
     const isArchivedParam =
@@ -99,26 +98,26 @@ class FulltaskTasksService {
           ? true
           : false;
 
+    const hasStaffCache = Boolean(params.staffByIdCache && Object.keys(params.staffByIdCache).length);
+    const hasListingCache = Boolean(
+      params.listingByIdCache && Object.keys(params.listingByIdCache).length,
+    );
+
     const tasksPromise = fulltaskApi.listTasks({
       ownerId: params.ownerId,
       audience: params.audience ?? 'STAFF',
       listingId: params.listingIds?.length === 1 ? params.listingIds[0] : undefined,
       type: params.subTypes?.length === 1 ? params.subTypes[0] : undefined,
       isArchived: isArchivedParam,
-    }).then(res => {
-      console.log(`✅ [getTasks] listTasks completed in ${(performance.now() - startTime).toFixed(0)}ms`);
-      return res;
     });
 
-    const staffPromise = fulltaskApi.listStaff().then(res => {
-      console.log(`✅ [getTasks] listStaff completed in ${(performance.now() - startTime).toFixed(0)}ms`);
-      return res;
-    });
-
-    const listingsPromise = this.getListings().then(res => {
-      console.log(`✅ [getTasks] getListings completed in ${(performance.now() - startTime).toFixed(0)}ms`);
-      return res;
-    });
+    // Staff / listings : 1 seul fetch (page ne doit plus les rappeler en parallèle).
+    const staffPromise = hasStaffCache
+      ? Promise.resolve(null)
+      : fulltaskApi.listStaff();
+    const listingsPromise = hasListingCache
+      ? Promise.resolve(null)
+      : this.getListings({ filterOwnerId: params.filterOwnerId });
 
     const [tasksRes, staffRes, listingRows] = await Promise.all([
       tasksPromise,
@@ -126,22 +125,36 @@ class FulltaskTasksService {
       listingsPromise,
     ]);
 
-    console.log(`⏱️  [getTasks] All 3 API calls completed in ${(performance.now() - startTime).toFixed(0)}ms`);
+    let staffRows: Record<string, unknown>[] = [];
+    let staffById: Record<string, Record<string, unknown>>;
+    if (hasStaffCache && params.staffByIdCache) {
+      staffById = params.staffByIdCache;
+    } else {
+      staffRows = staffRes?.data || [];
+      if (params.ownerId) {
+        staffRows = staffRows.filter(
+          (s) => !s.ownerId || String(s.ownerId) === String(params.ownerId),
+        );
+      }
+      staffById = Object.fromEntries(staffRows.map((s) => [String(s._id), s]));
+    }
 
-    const staffRows = staffRes?.data || [];
-    const staffById = Object.fromEntries(
-      staffRows.map((s: Record<string, unknown>) => [String(s._id), s]),
-    );
-    const listingById = Object.fromEntries(
-      listingRows.map((l) => [String(l._id), l.name]),
-    );
+    let listingById: Record<string, string>;
+    let listingOptions: Array<{ id: string; _id: string; name: string; city?: string }> = [];
+    if (hasListingCache && params.listingByIdCache) {
+      listingById = params.listingByIdCache;
+    } else {
+      listingOptions = listingRows || [];
+      listingById = Object.fromEntries(listingOptions.map((l) => [String(l._id), l.name]));
+    }
 
     const rawTasks = (tasksRes?.data || []) as Record<string, unknown>[];
-    console.log(`🔄 [getTasks] Processing ${rawTasks.length} tasks, loading reservation metadata...`);
-
-    const resStartTime = performance.now();
     const reservationMetaById = await this.loadReservationMetaForTasks(rawTasks);
-    console.log(`🔄 [getTasks] Loaded ${reservationMetaById.size} reservations in ${(performance.now() - resStartTime).toFixed(0)}ms`);
+    if (import.meta.env.DEV) {
+      console.debug(
+        `[getTasks] ${rawTasks.length} tasks, ${Object.keys(listingById).length} listings, ${(performance.now() - startTime).toFixed(0)}ms`,
+      );
+    }
 
     let rows = rawTasks.map((t: Record<string, unknown>) => {
       const resId = t.reservationId ? String(t.reservationId) : '';
@@ -241,6 +254,17 @@ class FulltaskTasksService {
         total: rows.length,
         totalPages: Math.max(1, Math.ceil(rows.length / limit)),
       },
+      ...(!hasStaffCache
+        ? {
+            staff: staffRows.slice(0, 200).map((s) => ({
+              _id: s._id,
+              staffCode: String(s._id),
+              name: s.name,
+              phone: s.phone,
+            })),
+          }
+        : {}),
+      ...(!hasListingCache ? { listings: listingOptions } : {}),
     };
   }
 
@@ -341,7 +365,6 @@ class FulltaskTasksService {
   }
 
   async getListings(options?: { filterOwnerId?: string }) {
-    console.log('📋 [getListings] START - Fetching with limit=100, compact=true');
     const startTime = performance.now();
 
     const response = await listingsService.getListings({
@@ -353,9 +376,12 @@ class FulltaskTasksService {
       filterOwnerId: options?.filterOwnerId,
     });
 
-    const elapsed = (performance.now() - startTime).toFixed(0);
     const items = response?.data?.items ?? [];
-    console.log(`📋 [getListings] Received ${items.length} listings in ${elapsed}ms`);
+    if (import.meta.env.DEV) {
+      console.debug(
+        `[getListings] ${items.length} listings in ${(performance.now() - startTime).toFixed(0)}ms`,
+      );
+    }
 
     return items.map((l) => {
       const id = (l as { id?: string; _id?: string }).id || (l as { _id?: string })._id;

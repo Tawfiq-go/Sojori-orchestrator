@@ -58,8 +58,8 @@ function DashboardShellInner({
   const location = useLocation();
   // Fil d’Ariane dès la route — jamais topbar vide en attendant le mount page.
   const routeBreadcrumb = useMemo(
-    () => resolvePageChrome(location.pathname)?.breadcrumb ?? [],
-    [location.pathname],
+    () => resolvePageChrome(location.pathname, location.search)?.breadcrumb ?? [],
+    [location.pathname, location.search],
   );
   const [breadcrumb, setBreadcrumb] = useState<string[]>(routeBreadcrumb);
   const [compactMain, setCompactMain] = useState(false);

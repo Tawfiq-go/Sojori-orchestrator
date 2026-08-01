@@ -162,12 +162,13 @@ export function mapReservationToInboxData(
   const checkIn = r.arrivalDate ? String(r.arrivalDate) : conv?.checkin_date;
   const checkOut = r.departureDate ? String(r.departureDate) : conv?.checkout_date;
   const nights = r.nights ?? nightsBetween(checkIn, checkOut);
-  // Aligné Airbnb Comments / ChannelTotal — plus de 10 % inventé.
+  // Aligné Airbnb/Booking Comments — plus de 10 % inventé.
   const finance = resolveChannelStayFinance(r as unknown as Record<string, unknown>);
   const total = finance.guestPaidMad > 0 ? finance.guestPaidMad : undefined;
   const commission = finance.commissionMad > 0 ? finance.commissionMad : undefined;
   const netHost = finance.netHostMad > 0 ? finance.netHostMad : undefined;
   const source = normalizeBookingSource(r.channelName || conv?.channel_name);
+  const isAirbnb = /airbnb/i.test(String(r.channelName || source || ''));
   const createdRaw = r.createdAt ?? r.reservationDate;
   const stayOps = stayOpsFromReservation(r);
 
@@ -190,8 +191,20 @@ export function mapReservationToInboxData(
     totalPrice: total,
     currency: r.currency || 'MAD',
     paymentStatus: mapPaymentStatus(r.paymentStatus, r.alreadyPaid, total),
+    stayAmount: finance.stayMad > 0 ? finance.stayMad : undefined,
+    // Afficher ménage seulement si > 0 (0 fees Comments ≠ inventer une taxe)
+    cleaningAmount: finance.feesMad > 0 ? finance.feesMad : undefined,
+    touristTaxAmount: finance.touristTaxMad > 0 ? finance.touristTaxMad : undefined,
     netHost,
     commission,
+    commissionLabel: isAirbnb
+      ? 'Host service fee'
+      : /booking/i.test(String(r.channelName || source || ''))
+        ? 'Commission Booking (15 %)'
+        : 'Commission OTA',
+    hostFeeAmount: finance.hostFeeMad != null && finance.hostFeeMad > 0 ? finance.hostFeeMad : undefined,
+    hostFeeVatAmount:
+      finance.hostFeeVatMad != null && finance.hostFeeVatMad > 0 ? finance.hostFeeVatMad : undefined,
     otaPlatform: source,
     otaCode: String(r.otaCode || '').trim() || undefined,
     ...stayOps,

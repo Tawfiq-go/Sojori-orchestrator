@@ -8,13 +8,19 @@
 // ════════════════════════════════════════════════════════════════════
 
 import { useCallback, useEffect, useMemo, useState, startTransition, memo, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import {
   Box, Stack, Typography, Paper, Chip, IconButton, Tooltip, Button,
   TextField, InputAdornment, FormControl, Select, MenuItem, Checkbox,
   ListItemText, CircularProgress, Alert, useMediaQuery, useTheme,
   Card, CardContent, Divider,
 } from '@mui/material';
+import {
+  PageFullscreenEnterBtn,
+  PageFullscreenLayer,
+  pageContentFullscreenSx,
+  pageTreeFullscreenSx,
+  usePageFullscreen,
+} from '../components/page-fullscreen';
 import {
   Visibility as VisibilityIcon,
   CalendarToday as CalendarIcon,
@@ -132,49 +138,6 @@ const TOOLBAR_SEARCH_SX = {
   maxWidth: 280,
   '& .MuiOutlinedInput-root': { height: 30, fontSize: 12 },
 } as const;
-
-function ListFullscreenEnterBtn({
-  onClick,
-  disabled = false,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Box
-      component="button"
-      type="button"
-      title="Liste plein écran"
-      aria-label="Liste plein écran"
-      disabled={disabled}
-      onClick={disabled ? undefined : onClick}
-      sx={{
-        all: 'unset',
-        boxSizing: 'border-box',
-        flexShrink: 0,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 30,
-        height: 28,
-        borderRadius: '6px',
-        border: `1px solid ${T.borderStrong}`,
-        bgcolor: T.bg1,
-        color: disabled ? T.text4 : T.text2,
-        fontSize: 15,
-        fontWeight: 600,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        fontFamily: 'inherit',
-        lineHeight: 1,
-        opacity: disabled ? 0.5 : 1,
-        boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
-        '&:hover': disabled ? {} : { bgcolor: T.bg2, borderColor: T.primary, color: T.primaryDeep },
-      }}
-    >
-      ⛶
-    </Box>
-  );
-}
 
 // ─── Helpers ───────────────────────────────────────────────────────
 const isReservationCancelled = (status: string) => {
@@ -317,6 +280,9 @@ export function ReservationsPage() {
   useEffect(() => {
     isModalOpenRef.current = isModalOpen;
   }, [isModalOpen]);
+
+  const listFs = usePageFullscreen();
+  const listFullscreen = listFs.fullscreen;
 
   // ─── Helper for cancellation acknowledgement ──────────────────────
   const isCancellationUnacknowledged = (reservation: Reservation) => {
@@ -590,6 +556,33 @@ export function ReservationsPage() {
 
   const visibleRows = filteredReservations;
 
+  const listContent =
+    !isLoading && visibleRows.length > 0 ? (
+      isMobile ? (
+        <Stack spacing={1.25}>
+          {visibleRows.map((r) => (
+            <MobileCard
+              key={r._id}
+              r={r}
+              onClick={() => handleViewDetails(r)}
+              onAcknowledge={handleAcknowledgeCancellation}
+              onStayUpdate={handleStayFieldUpdate}
+              onRegistrationUpdate={handleRegistrationUpdate}
+            />
+          ))}
+        </Stack>
+      ) : (
+        <DesktopTable
+          rows={visibleRows}
+          onRowClick={handleViewDetails}
+          onNavigate={navigate}
+          onAcknowledge={handleAcknowledgeCancellation}
+          onStayUpdate={handleStayFieldUpdate}
+          onRegistrationUpdate={handleRegistrationUpdate}
+        />
+      )
+    ) : null;
+
   // Skeleton loading pendant le chargement initial
   if (isLoading && reservations.length === 0) {
     return (
@@ -660,236 +653,249 @@ export function ReservationsPage() {
     );
   }
 
-  return (
-    <DashboardWrapper breadcrumb={['Activité', 'Réservations']}>
-      <Box sx={{ width: '100%' }}>
-        {/* Toolbar */}
-        <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-            <TextField
-              size="small" placeholder="Rechercher voyageur, propriété, n° de réservation…"
-              value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)}
-              slotProps={{
-                input: {
-                  startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: T.text3 }} /></InputAdornment>,
-                },
-              }}
-              sx={{ flex: 1, minWidth: 180, maxWidth: 320 }}
-            />
-            {canWrite ? (
-            <Button
-              variant="contained"
-              size="small"
-              onClick={openCreateModal}
-              sx={{
-                textTransform: 'none',
-                bgcolor: T.primary,
-                color: T.primaryOnGold,
-                fontWeight: 600,
-                px: 2,
-                '&:hover': { bgcolor: T.primaryDeep, color: '#fff' },
-                whiteSpace: 'nowrap',
-              }}
-            >
-              ➕ Ajouter
-            </Button>
-            ) : null}
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <Select multiple displayEmpty value={selectedListings}
-                onChange={(e) => setSelectedListings(e.target.value as string[])}
-                renderValue={(s) => `Propriété · ${(s as string[]).length || 'toutes'}`}>
-                {availableListings.map((lst) => (
-                  <MenuItem key={lst.id} value={lst.id}>
-                    <Checkbox checked={selectedListings.indexOf(lst.id) > -1} size="small" />
-                    <ListItemText primary={lst.name} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 160 }}>
-              <Select multiple displayEmpty value={selectedStatuses}
-                onChange={(e) => { setSelectedStatuses(e.target.value as string[]); setPage(0); }}
-                renderValue={(s) => `État · ${(s as string[]).length || 'tous'}`}>
-                {[
-                  { val: 'Pending', label: '📋 En attente' },
-                  { val: 'Confirmed', label: '✅ Confirmé' },
-                  { val: 'Completed', label: '🎉 Complété' },
-                  { val: 'Rejected', label: '❌ Rejeté' },
-                  { val: 'Cancelled', label: '📵 Annulé (RU / canal)' },
-                  { val: 'CancelledByHost', label: '🏠 Annulé par hôte' },
-                  { val: 'CancelledByCustomer', label: '🚫 Annulé par client' },
-                  { val: 'CancelledByAdmin', label: '⛔ Annulé par admin' },
-                  { val: 'CancelledByOTA', label: '🔴 Annulé par OTA' },
-                  { val: 'CancelledPaymentFailed', label: '💳 Annulé - paiement échoué' },
-                  { val: 'OtherCancellation', label: '⭕ Autre annulation' },
-                ].map((st) => (
-                  <MenuItem key={st.val} value={st.val}>
-                    <Checkbox checked={selectedStatuses.indexOf(st.val) > -1} size="small" />
-                    <ListItemText primary={st.label} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 140 }}>
-              <Select multiple displayEmpty value={selectedChannels}
-                onChange={(e) => setSelectedChannels(e.target.value as string[])}
-                renderValue={(s) => `Source · ${(s as string[]).length || 'toutes'}`}>
-                {[
-                  { val: 'sojori', label: 'Direct / Sojori', icon: 'Direct / Sojori' },
-                  { val: 'AirBNB', label: 'Airbnb', icon: 'Airbnb' },
-                  { val: 'BookingCom', label: 'Booking.com', icon: 'Booking.com' },
-                ].map((ch) => (
-                  <MenuItem key={ch.val} value={ch.val}>
-                    <Checkbox checked={selectedChannels.indexOf(ch.val) > -1} size="small" />
-                    <ListItemText primary={ch.label} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Tooltip title="Réinitialiser tous les filtres">
-              <IconButton size="small" onClick={handleReset}><RefreshIcon sx={{ fontSize: 18 }} /></IconButton>
-            </Tooltip>
-          </Stack>
-
-          {/* Quick filters pills + KPI cards on same row */}
-          <Stack direction="row" sx={{ mt: 1.5, gap: 0.75, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-            {/* Pills à gauche */}
-            <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
-              <Pill label="Arr. auj." count={filterCounts.arrToday}    active={quickFilters.arrToday}    onClick={() => toggleQuick('arrToday')}    color={T.info} />
-              <Pill label="Dép. auj." count={filterCounts.depToday}    active={quickFilters.depToday}    onClick={() => toggleQuick('depToday')}    color={T.warning} />
-              <Pill label="Arr. demain" count={filterCounts.arrTomorrow} active={quickFilters.arrTomorrow} onClick={() => toggleQuick('arrTomorrow')} color={T.info} />
-              <Pill label="Dép. demain" count={filterCounts.depTomorrow} active={quickFilters.depTomorrow} onClick={() => toggleQuick('depTomorrow')} color={T.warning} />
-              <Pill label="Arr. 7 jours" count={filterCounts.arr7days}  active={quickFilters.arr7days}  onClick={() => toggleQuick('arr7days')}    color={T.primary} />
-              <Pill label="Dép. 7 jours" count={filterCounts.dep7days}  active={quickFilters.dep7days}  onClick={() => toggleQuick('dep7days')}    color={T.error} />
-            </Stack>
-
-            {/* KPI cards compacts à droite */}
-            <Stack direction="row" sx={{ gap: 0.75 }}>
-              <KpiCompact
-                label="Arr. auj."
-                value={kpis.arrToday}
-                accent={T.info}
-                onClick={() => {
-                  const isActive = quickFilters.arrToday;
-                  setQuickFilters({
-                    arrToday: !isActive,
-                    depToday: false,
-                    arrTomorrow: false,
-                    depTomorrow: false,
-                    arr7days: false,
-                    dep7days: false,
-                  });
-                }}
-              />
-              <KpiCompact
-                label="Dép. auj."
-                value={kpis.depToday}
-                accent={T.warning}
-                onClick={() => {
-                  const isActive = quickFilters.depToday;
-                  setQuickFilters({
-                    arrToday: false,
-                    depToday: !isActive,
-                    arrTomorrow: false,
-                    depTomorrow: false,
-                    arr7days: false,
-                    dep7days: false,
-                  });
-                }}
-              />
-              <KpiCompact
-                label="Présents"
-                value={kpis.present}
-                accent={T.success}
-                onClick={() => {
-                  if (selectedStatuses.length === 1 && selectedStatuses[0] === 'Confirmed') {
-                    setSelectedStatuses(['Pending', 'Confirmed']);
-                  } else {
-                    setSelectedStatuses(['Confirmed']);
-                  }
-                  setQuickFilters({ arrToday: false, depToday: false, arrTomorrow: false, depTomorrow: false, arr7days: false, dep7days: false });
-                }}
-              />
-              <KpiCompact
-                label="En attente"
-                value={kpis.pending}
-                accent={T.text2}
-                onClick={() => {
-                  if (selectedStatuses.length === 1 && selectedStatuses[0] === 'Pending') {
-                    setSelectedStatuses(['Pending', 'Confirmed']);
-                  } else {
-                    setSelectedStatuses(['Pending']);
-                  }
-                  setQuickFilters({ arrToday: false, depToday: false, arrTomorrow: false, depTomorrow: false, arr7days: false, dep7days: false });
-                }}
-              />
-            </Stack>
-          </Stack>
-        </Paper>
-
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-        {isLoading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress size={48} sx={{ color: T.primary }} />
-          </Box>
-        )}
-
-        {!isLoading && totalReservations > 0 && (
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            sx={{ mb: 1.5, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 1.5 }}
+  // Même arbre JSX en page et en plein écran (comme calendar-v3) :
+  // filtres + toolbar restent utilisables — ne pas portal-er seulement la liste.
+  const reservationsPage = (
+    <Box
+      sx={{
+        width: '100%',
+        ...pageTreeFullscreenSx(listFullscreen),
+        ...(listFullscreen ? { overflow: 'hidden', boxSizing: 'border-box' } : {}),
+      }}
+    >
+      {/* Toolbar / filtres — restent visibles en fullscreen */}
+      <Paper
+        sx={{
+          p: 1.5,
+          mb: 1.5,
+          border: `1px solid ${T.border}`,
+          borderRadius: 1.5,
+          bgcolor: T.bg1,
+          flexShrink: 0,
+        }}
+      >
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+          <TextField
+            size="small" placeholder="Rechercher voyageur, propriété, n° de réservation…"
+            value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)}
+            slotProps={{
+              input: {
+                startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: T.text3 }} /></InputAdornment>,
+              },
+            }}
+            sx={{ flex: 1, minWidth: 180, maxWidth: 320 }}
+          />
+          {canWrite ? (
+          <Button
+            variant="contained"
+            size="small"
+            onClick={openCreateModal}
+            sx={{
+              textTransform: 'none',
+              bgcolor: T.primary,
+              color: T.primaryOnGold,
+              fontWeight: 600,
+              px: 2,
+              '&:hover': { bgcolor: T.primaryDeep, color: '#fff' },
+              whiteSpace: 'nowrap',
+            }}
           >
-            <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
-              {page * limit + 1}–{Math.min((page + 1) * limit, totalReservations)} sur {totalReservations}
-              {' · '}page {page + 1}/{totalPages}
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-              <Typography sx={{ fontSize: 12, color: T.text3 }}>Par page</Typography>
-              <Select
-                size="small"
-                value={limit}
-                onChange={(e) => {
-                  setLimit(Number(e.target.value));
-                  setPage(0);
-                }}
-                sx={{ minWidth: 72, fontSize: 13, height: 32 }}
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <MenuItem key={size} value={size}>{size}</MenuItem>
-                ))}
-              </Select>
-              <Button
-                size="small"
-                disabled={page === 0 || isLoading}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                sx={{ textTransform: 'none' }}
-              >
-                ← Précédent
-              </Button>
-              <Button
-                size="small"
-                disabled={page + 1 >= totalPages || isLoading}
-                onClick={() => setPage((p) => p + 1)}
-                sx={{ textTransform: 'none' }}
-              >
-                Suivant →
-              </Button>
-            </Stack>
-          </Stack>
-        )}
+            ➕ Ajouter
+          </Button>
+          ) : null}
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <Select multiple displayEmpty value={selectedListings}
+              onChange={(e) => setSelectedListings(e.target.value as string[])}
+              renderValue={(s) => `Propriété · ${(s as string[]).length || 'toutes'}`}>
+              {availableListings.map((lst) => (
+                <MenuItem key={lst.id} value={lst.id}>
+                  <Checkbox checked={selectedListings.indexOf(lst.id) > -1} size="small" />
+                  <ListItemText primary={lst.name} />
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <Select multiple displayEmpty value={selectedStatuses}
+              onChange={(e) => { setSelectedStatuses(e.target.value as string[]); setPage(0); }}
+              renderValue={(s) => `État · ${(s as string[]).length || 'tous'}`}>
+              {[
+                { val: 'Pending', label: '📋 En attente' },
+                { val: 'Confirmed', label: '✅ Confirmé' },
+                { val: 'Completed', label: '🎉 Complété' },
+                { val: 'Rejected', label: '❌ Rejeté' },
+                { val: 'Cancelled', label: '📵 Annulé (RU / canal)' },
+                { val: 'CancelledByHost', label: '🏠 Annulé par hôte' },
+                { val: 'CancelledByCustomer', label: '🚫 Annulé par client' },
+                { val: 'CancelledByAdmin', label: '⛔ Annulé par admin' },
+                { val: 'CancelledByOTA', label: '🔴 Annulé par OTA' },
+                { val: 'CancelledPaymentFailed', label: '💳 Annulé - paiement échoué' },
+                { val: 'OtherCancellation', label: '⭕ Autre annulation' },
+              ].map((st) => (
+                <MenuItem key={st.val} value={st.val}>
+                  <Checkbox checked={selectedStatuses.indexOf(st.val) > -1} size="small" />
+                  <ListItemText primary={st.label} />
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <Select multiple displayEmpty value={selectedChannels}
+              onChange={(e) => setSelectedChannels(e.target.value as string[])}
+              renderValue={(s) => `Source · ${(s as string[]).length || 'toutes'}`}>
+              {[
+                { val: 'sojori', label: 'Direct / Sojori', icon: 'Direct / Sojori' },
+                { val: 'AirBNB', label: 'Airbnb', icon: 'Airbnb' },
+                { val: 'BookingCom', label: 'Booking.com', icon: 'Booking.com' },
+              ].map((ch) => (
+                <MenuItem key={ch.val} value={ch.val}>
+                  <Checkbox checked={selectedChannels.indexOf(ch.val) > -1} size="small" />
+                  <ListItemText primary={ch.label} />
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Tooltip title="Réinitialiser tous les filtres">
+            <IconButton size="small" onClick={handleReset}><RefreshIcon sx={{ fontSize: 18 }} /></IconButton>
+          </Tooltip>
+          {!listFullscreen && (
+            <PageFullscreenEnterBtn
+              onClick={listFs.enter}
+              disabled={visibleRows.length === 0}
+              label="Liste plein écran"
+            />
+          )}
+        </Stack>
 
-        {/* MOBILE : cards · DESKTOP : table */}
-        {!isLoading && !isMobile && visibleRows.length > 0 && (
-          <DesktopTable rows={visibleRows} onRowClick={handleViewDetails} onNavigate={navigate} onAcknowledge={handleAcknowledgeCancellation} onStayUpdate={handleStayFieldUpdate} onRegistrationUpdate={handleRegistrationUpdate} />
-        )}
-        {!isLoading && isMobile && visibleRows.length > 0 && (
-          <Stack spacing={1.25}>
-            {visibleRows.map((r) => (
-              <MobileCard key={r._id} r={r} onClick={() => handleViewDetails(r)} onAcknowledge={handleAcknowledgeCancellation} onStayUpdate={handleStayFieldUpdate} onRegistrationUpdate={handleRegistrationUpdate} />
-            ))}
+        {/* Quick filters pills + KPI cards on same row */}
+        <Stack direction="row" sx={{ mt: 1.5, gap: 0.75, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
+            <Pill label="Arr. auj." count={filterCounts.arrToday}    active={quickFilters.arrToday}    onClick={() => toggleQuick('arrToday')}    color={T.info} />
+            <Pill label="Dép. auj." count={filterCounts.depToday}    active={quickFilters.depToday}    onClick={() => toggleQuick('depToday')}    color={T.warning} />
+            <Pill label="Arr. demain" count={filterCounts.arrTomorrow} active={quickFilters.arrTomorrow} onClick={() => toggleQuick('arrTomorrow')} color={T.info} />
+            <Pill label="Dép. demain" count={filterCounts.depTomorrow} active={quickFilters.depTomorrow} onClick={() => toggleQuick('depTomorrow')} color={T.warning} />
+            <Pill label="Arr. 7 jours" count={filterCounts.arr7days}  active={quickFilters.arr7days}  onClick={() => toggleQuick('arr7days')}    color={T.primary} />
+            <Pill label="Dép. 7 jours" count={filterCounts.dep7days}  active={quickFilters.dep7days}  onClick={() => toggleQuick('dep7days')}    color={T.error} />
           </Stack>
-        )}
+
+          <Stack direction="row" sx={{ gap: 0.75 }}>
+            <KpiCompact
+              label="Arr. auj."
+              value={kpis.arrToday}
+              accent={T.info}
+              onClick={() => {
+                const isActive = quickFilters.arrToday;
+                setQuickFilters({
+                  arrToday: !isActive,
+                  depToday: false,
+                  arrTomorrow: false,
+                  depTomorrow: false,
+                  arr7days: false,
+                  dep7days: false,
+                });
+              }}
+            />
+            <KpiCompact
+              label="Dép. auj."
+              value={kpis.depToday}
+              accent={T.warning}
+              onClick={() => {
+                const isActive = quickFilters.depToday;
+                setQuickFilters({
+                  arrToday: false,
+                  depToday: !isActive,
+                  arrTomorrow: false,
+                  depTomorrow: false,
+                  arr7days: false,
+                  dep7days: false,
+                });
+              }}
+            />
+            <KpiCompact
+              label="Présents"
+              value={kpis.present}
+              accent={T.success}
+              onClick={() => {
+                if (selectedStatuses.length === 1 && selectedStatuses[0] === 'Confirmed') {
+                  setSelectedStatuses(['Pending', 'Confirmed']);
+                } else {
+                  setSelectedStatuses(['Confirmed']);
+                }
+                setQuickFilters({ arrToday: false, depToday: false, arrTomorrow: false, depTomorrow: false, arr7days: false, dep7days: false });
+              }}
+            />
+            <KpiCompact
+              label="En attente"
+              value={kpis.pending}
+              accent={T.text2}
+              onClick={() => {
+                if (selectedStatuses.length === 1 && selectedStatuses[0] === 'Pending') {
+                  setSelectedStatuses(['Pending', 'Confirmed']);
+                } else {
+                  setSelectedStatuses(['Pending']);
+                }
+                setQuickFilters({ arrToday: false, depToday: false, arrTomorrow: false, depTomorrow: false, arr7days: false, dep7days: false });
+              }}
+            />
+          </Stack>
+        </Stack>
+      </Paper>
+
+      {error && <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>{error}</Alert>}
+
+      {isLoading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8, flexShrink: 0 }}>
+          <CircularProgress size={48} sx={{ color: T.primary }} />
+        </Box>
+      )}
+
+      {!isLoading && totalReservations > 0 && (
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          sx={{ mb: 1.5, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 1.5, flexShrink: 0 }}
+        >
+          <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
+            {page * limit + 1}–{Math.min((page + 1) * limit, totalReservations)} sur {totalReservations}
+            {' · '}page {page + 1}/{totalPages}
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <Typography sx={{ fontSize: 12, color: T.text3 }}>Par page</Typography>
+            <Select
+              size="small"
+              value={limit}
+              onChange={(e) => {
+                setLimit(Number(e.target.value));
+                setPage(0);
+              }}
+              sx={{ minWidth: 72, fontSize: 13, height: 32 }}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <MenuItem key={size} value={size}>{size}</MenuItem>
+              ))}
+            </Select>
+            <Button
+              size="small"
+              disabled={page === 0 || isLoading}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              sx={{ textTransform: 'none' }}
+            >
+              ← Précédent
+            </Button>
+            <Button
+              size="small"
+              disabled={page + 1 >= totalPages || isLoading}
+              onClick={() => setPage((p) => p + 1)}
+              sx={{ textTransform: 'none' }}
+            >
+              Suivant →
+            </Button>
+          </Stack>
+        </Stack>
+      )}
+
+      {/* Contenu liste — zone scrollable en fullscreen */}
+      <Box sx={pageContentFullscreenSx(listFullscreen)}>
+        {listContent}
 
         {!isLoading && filteredReservations.length === 0 && (
           <Paper sx={{ textAlign: 'center', py: 8, mt: 2, border: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
@@ -900,7 +906,6 @@ export function ReservationsPage() {
           </Paper>
         )}
 
-        {/* Pagination bas */}
         {!isLoading && totalReservations > limit && (
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
@@ -931,17 +936,29 @@ export function ReservationsPage() {
           </Stack>
         )}
       </Box>
+    </Box>
+  );
 
-      {/* Modal d'ajout de réservation */}
+  return (
+    <DashboardWrapper breadcrumb={['Activité', 'Réservations']}>
+      {!listFullscreen && reservationsPage}
+
       <CreateReservationModal
         open={isModalOpen}
         filterOwnerId={requestOwnerId || undefined}
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {
           setIsModalOpen(false);
-          fetchReservations(); // Recharger la liste après création
+          fetchReservations();
         }}
       />
+      <PageFullscreenLayer
+        open={listFullscreen}
+        onClose={listFs.exit}
+        label="Liste des réservations plein écran"
+      >
+        {reservationsPage}
+      </PageFullscreenLayer>
     </DashboardWrapper>
   );
 }

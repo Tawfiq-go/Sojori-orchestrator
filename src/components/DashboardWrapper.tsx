@@ -61,7 +61,7 @@ export function DashboardWrapper({
   const pmBusiness = isPmBusinessPath(location.pathname);
   const scopeGate = !disableScopeGate && showOwnerFilter && pmBusiness && ownerScopeUnset;
 
-  const registryChrome = resolvePageChrome(location.pathname);
+  const registryChrome = resolvePageChrome(location.pathname, location.search);
   const effectiveBreadcrumb =
     breadcrumb.length > 0 ? breadcrumb : (registryChrome?.breadcrumb ?? []);
   const effectiveTitle =

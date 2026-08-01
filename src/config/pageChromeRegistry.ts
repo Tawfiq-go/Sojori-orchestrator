@@ -54,6 +54,15 @@ function routePath(route: string): string {
   return route.split('?')[0];
 }
 
+function chromeFromNavId(navId: string): PageChromeDef | null {
+  const meta = navIdToMeta.get(navId);
+  if (!meta) return null;
+  return {
+    breadcrumb: [meta.group, meta.label],
+    title: TITLE_OVERRIDES[navId] ?? meta.label,
+  };
+}
+
 function resolveNavId(pathname: string): string | null {
   const path = pathname.replace(/\/+$/, '') || '/';
   const entries = Object.entries(NAV_TO_ROUTE).sort(
@@ -63,21 +72,27 @@ function resolveNavId(pathname: string): string | null {
   for (const [navId, route] of entries) {
     const base = routePath(route);
     if (base === '/') continue;
-    if (path === base || path.startsWith(`${base}/`)) return navId;
+    if (path === base || path.startsWith(`${base}/`)) {
+      // Skip bare ids without sidebar meta (ex. `calendar` vs `calendar/multi`)
+      if (!navIdToMeta.has(navId)) continue;
+      return navId;
+    }
   }
   return null;
 }
 
 /** Fil d’Ariane + titre H1 alignés sur la sidebar owner. */
-export function resolvePageChrome(pathname: string): PageChromeDef | null {
+export function resolvePageChrome(pathname: string, search = ''): PageChromeDef | null {
+  const path = pathname.replace(/\/+$/, '') || '/';
+
+  // Calendrier : ?view=simple|multi (aligné useDashboardChrome) — sinon topbar vide.
+  if (path === '/calendar' || path.startsWith('/calendar-v2')) {
+    const view = new URLSearchParams(search).get('view');
+    const navId = view === 'simple' ? 'calendar/simple' : 'calendar/multi';
+    return chromeFromNavId(navId);
+  }
+
   const navId = resolveNavId(pathname);
   if (!navId) return null;
-
-  const meta = navIdToMeta.get(navId);
-  if (!meta) return null;
-
-  return {
-    breadcrumb: [meta.group, meta.label],
-    title: TITLE_OVERRIDES[navId] ?? meta.label,
-  };
+  return chromeFromNavId(navId);
 }

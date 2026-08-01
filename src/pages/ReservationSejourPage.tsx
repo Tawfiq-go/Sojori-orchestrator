@@ -5,7 +5,6 @@
 // ════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { Box, Stack, Typography, Tabs, Tab, IconButton, Button, Chip, Tooltip, useTheme, useMediaQuery, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
 import { ArrowBack, Edit, CalendarToday, Person, Email, Save, Close, Warning } from '@mui/icons-material';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -14,6 +13,11 @@ import reservationsService from '../services/reservationsService';
 import { getCachedReservationDetail } from '../utils/reservationDetailCache';
 import { buildReservationUpdatePayload } from '../utils/reservationEditPayload';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import {
+  PageFullscreenEnterBtn,
+  PageFullscreenLayer,
+  usePageFullscreen,
+} from '../components/page-fullscreen';
 import { GuestInfoTab } from '../components/reservation/GuestInfoTab';
 import { FinancierTab } from '../components/reservation/FinancierTab';
 import { MessagesTab } from '../components/reservation/MessagesTab';
@@ -38,41 +42,6 @@ function formatStayRange(arrival?: string, departure?: string): string {
     ? new Date(departure).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
     : '—';
   return `${a} → ${d}`;
-}
-
-function FullscreenEnterBtn({ onClick }: { onClick: () => void }) {
-  return (
-    <Box
-      component="button"
-      type="button"
-      title="Plein écran"
-      aria-label="Plein écran"
-      onClick={onClick}
-      sx={{
-        all: 'unset',
-        boxSizing: 'border-box',
-        flexShrink: 0,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 30,
-        height: 28,
-        borderRadius: '6px',
-        border: `1px solid rgba(20,17,10,0.14)`,
-        bgcolor: '#fff',
-        color: T.text2,
-        fontSize: 15,
-        fontWeight: 600,
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-        lineHeight: 1,
-        boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
-        '&:hover': { bgcolor: T.bg2, borderColor: T.primary, color: T.primaryDeep },
-      }}
-    >
-      ⛶
-    </Box>
-  );
 }
 
 export function ReservationSejourPage() {
@@ -103,7 +72,8 @@ export function ReservationSejourPage() {
   // Edited data for save
   const [editedData, setEditedData] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
-  const [contentFullscreen, setContentFullscreen] = useState(false);
+  const contentFs = usePageFullscreen();
+  const contentFullscreen = contentFs.fullscreen;
 
   // Sync tab when URL ?tab= changes (ex. lien depuis Séjour → Enregistrement)
   useEffect(() => {
@@ -112,20 +82,6 @@ export function ReservationSejourPage() {
     const idx = TAB_NAMES.indexOf(key);
     if (idx >= 0 && idx !== tab) setTab(idx);
   }, [searchParams, tab]);
-
-  useEffect(() => {
-    if (!contentFullscreen) return undefined;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setContentFullscreen(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [contentFullscreen]);
 
   const refreshReservation = useCallback(() => {
     if (!id) return;
@@ -425,78 +381,37 @@ export function ReservationSejourPage() {
           <Tooltip title="Email"><IconButton size="small" sx={{ color: T.text2, width: 28, height: 28 }}><Email sx={{ fontSize: 17 }} /></IconButton></Tooltip>
         </Stack>
         {actionButtons}
-        <FullscreenEnterBtn onClick={() => setContentFullscreen(true)} />
+        {!contentFullscreen && <PageFullscreenEnterBtn onClick={contentFs.enter} label="Plein écran" />}
       </Stack>
       <Box sx={{ borderTop: `1px solid ${T.border}` }}>{tabsBar}</Box>
     </Box>
   );
 
-  const contentFullscreenLayer =
-    contentFullscreen && tabContent && typeof document !== 'undefined'
-      ? createPortal(
-          <Box
-            role="dialog"
-            aria-modal="true"
-            aria-label="Détail réservation plein écran"
-            sx={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 9999,
-              bgcolor: T.bg0,
-              display: 'flex',
-              flexDirection: 'column',
-              boxSizing: 'border-box',
-            }}
-          >
-            <Box sx={{
-              flexShrink: 0,
-              bgcolor: T.bg1,
-              borderBottom: `1px solid ${T.border}`,
-              px: { xs: 1, md: 1.25 },
-            }}>
-              <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, py: 0.5 }}>
-                <Typography sx={{ fontSize: 12, fontWeight: 700, fontFamily: '"Geist Mono", monospace', color: T.text, flexShrink: 0 }}>
-                  {reservationDetails.reservationNumber}
-                </Typography>
-                <Chip label={statusBadge.label} size="small" sx={{ height: 18, bgcolor: statusBadge.bg, color: statusBadge.color, fontWeight: 700, fontSize: 9.5 }} />
-                <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>{tabsBar}</Box>
-              </Stack>
-            </Box>
-            <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', bgcolor: T.bg0 }}>
-              {tabContent}
-            </Box>
-            <Box
-              component="button"
-              type="button"
-              onClick={() => setContentFullscreen(false)}
-              title="Quitter le plein écran (Échap)"
-              aria-label="Quitter le plein écran"
-              sx={{
-                position: 'fixed',
-                right: { xs: 10, md: 14 },
-                bottom: { xs: 10, md: 14 },
-                zIndex: 10000,
-                width: 36,
-                height: 36,
-                borderRadius: '99px',
-                border: '1px solid rgba(20,17,10,0.12)',
-                bgcolor: 'rgba(255,255,255,0.94)',
-                boxShadow: '0 4px 16px rgba(20,17,10,0.14)',
-                color: T.text3,
-                fontSize: 22,
-                fontWeight: 300,
-                lineHeight: 1,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                p: 0,
-              }}
-            >
-              ×
-            </Box>
-          </Box>,
-          document.body,
-        )
-      : null;
+  const contentFullscreenLayer = (
+    <PageFullscreenLayer
+      open={contentFullscreen && Boolean(tabContent)}
+      onClose={contentFs.exit}
+      label="Détail réservation plein écran"
+    >
+      <Box sx={{
+        flexShrink: 0,
+        bgcolor: T.bg1,
+        borderBottom: `1px solid ${T.border}`,
+        px: { xs: 1, md: 1.25 },
+      }}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, py: 0.5 }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 700, fontFamily: '"Geist Mono", monospace', color: T.text, flexShrink: 0 }}>
+            {reservationDetails.reservationNumber}
+          </Typography>
+          <Chip label={statusBadge.label} size="small" sx={{ height: 18, bgcolor: statusBadge.bg, color: statusBadge.color, fontWeight: 700, fontSize: 9.5 }} />
+          <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>{tabsBar}</Box>
+        </Stack>
+      </Box>
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', bgcolor: T.bg0 }}>
+        {tabContent}
+      </Box>
+    </PageFullscreenLayer>
+  );
 
   return (
     <DashboardWrapper breadcrumb={['Activité', 'Réservations', reservationDetails.reservationNumber || id || '']}>

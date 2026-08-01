@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, Typography, CircularProgress } from '@mui/material';
 import { tokens as t } from '../dashboard/DashboardV2.components';
 import InboxLayout from '../unified-inbox/InboxLayout';
+import { InboxFullscreenLayer } from '../unified-inbox/InboxFullscreen';
+import { useInboxFullscreen } from '../unified-inbox/useInboxFullscreen';
 import ThreadsList from '../unified-inbox/ThreadsList';
 import ReviewCenterPanel from '../unified-inbox/ReviewCenterPanel';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
@@ -38,6 +40,7 @@ export default function ReviewsTabV2() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
   const [showAIModal, setShowAIModal] = useState(false);
+  const fullscreenCtl = useInboxFullscreen();
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestIdRef = useRef(0);
   const prevSearchTermRef = useRef('');
@@ -219,6 +222,59 @@ export default function ReviewsTabV2() {
     );
   }
 
+  const inboxBody = (
+    <>
+      <ThreadsList
+        threads={threads}
+        channels={[{ id: 'ab', label: 'Avis', icon: '⭐', color: '#FF5A5F', count: rows.length }]}
+        listTitle="Avis"
+        mode="ota"
+        activeThreadId={activeThread?.id ?? null}
+        searchTerm={searchTerm}
+        loading={loading}
+        otaGlobalSearchActive={reviewsGlobalSearchActive}
+        otaSearchPending={searchPending}
+        showFullscreenEnter={!fullscreenCtl.fullscreen}
+        onEnterFullscreen={fullscreenCtl.enter}
+        onSelectThread={(th) => {
+          const row = filtered.find((r) => r.threadId === th.id);
+          if (row) {
+            setActive(row);
+            setReplyText(row.response || '');
+          }
+        }}
+        onSearchChange={setSearchTerm}
+      />
+      {activeThread && active ? (
+        <>
+          <ReviewCenterPanel
+            thread={activeThread}
+            reservation={reservation}
+            reviewText={active.reviewText}
+            replyText={replyText}
+            onReplyChange={setReplyText}
+            onPublish={() => handlePublish()}
+            onAISuggestion={() => setShowAIModal(true)}
+            sending={sending}
+            otaPlatform={normalizeBookingSource(active.channel)}
+            replyDisabled={airbnbReplyWindowClosed}
+            replyDisabledReason={airbnbReplyWindowReason}
+          />
+          <ConversationDetails
+            thread={activeThread}
+            type="reviews"
+            reservation={reservation}
+            onAction={() => handlePublish()}
+          />
+        </>
+      ) : (
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gridColumn: { xs: '1', lg: '2 / 4' } }}>
+          <Typography sx={{ color: t.text3 }}>Sélectionnez un avis</Typography>
+        </Box>
+      )}
+    </>
+  );
+
   return (
     <>
       {loadError && (
@@ -266,54 +322,14 @@ export default function ReviewsTabV2() {
         ))}
       </Box>
 
-      <InboxLayout>
-        <ThreadsList
-          threads={threads}
-          channels={[{ id: 'ab', label: 'Avis', icon: '⭐', color: '#FF5A5F', count: rows.length }]}
-          listTitle="Avis"
-          mode="ota"
-          activeThreadId={activeThread?.id ?? null}
-          searchTerm={searchTerm}
-          loading={loading}
-          otaGlobalSearchActive={reviewsGlobalSearchActive}
-          otaSearchPending={searchPending}
-          onSelectThread={(th) => {
-            const row = filtered.find((r) => r.threadId === th.id);
-            if (row) {
-              setActive(row);
-              setReplyText(row.response || '');
-            }
-          }}
-          onSearchChange={setSearchTerm}
-        />
-        {activeThread && active ? (
-          <>
-            <ReviewCenterPanel
-              thread={activeThread}
-              reservation={reservation}
-              reviewText={active.reviewText}
-              replyText={replyText}
-              onReplyChange={setReplyText}
-              onPublish={() => handlePublish()}
-              onAISuggestion={() => setShowAIModal(true)}
-              sending={sending}
-              otaPlatform={normalizeBookingSource(active.channel)}
-              replyDisabled={airbnbReplyWindowClosed}
-              replyDisabledReason={airbnbReplyWindowReason}
-            />
-            <ConversationDetails
-              thread={activeThread}
-              type="reviews"
-              reservation={reservation}
-              onAction={() => handlePublish()}
-            />
-          </>
-        ) : (
-          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gridColumn: { xs: '1', lg: '2 / 4' } }}>
-            <Typography sx={{ color: t.text3 }}>Sélectionnez un avis</Typography>
-          </Box>
-        )}
-      </InboxLayout>
+      {!fullscreenCtl.fullscreen && <InboxLayout>{inboxBody}</InboxLayout>}
+      <InboxFullscreenLayer
+        open={fullscreenCtl.fullscreen}
+        onClose={fullscreenCtl.exit}
+        label="Inbox Avis plein écran"
+      >
+        {inboxBody}
+      </InboxFullscreenLayer>
 
       <AISuggestionModal
         open={showAIModal}
