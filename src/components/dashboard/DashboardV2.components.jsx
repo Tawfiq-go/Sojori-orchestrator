@@ -1237,6 +1237,12 @@ export function DataTable({
   ultraCompact = false,
   /** Style des en-têtes (partners = titres mixtes, pas tout en majuscules). */
   headerTextTransform = 'uppercase',
+  /**
+   * Épingle la 1ʳᵉ colonne (sticky left) avec élévation Material : liseré +
+   * ombre permanente, approfondie pendant le scroll horizontal — pattern
+   * calendrier multi / réservations. Ignoré si `selectable` (checkbox en 1ʳᵉ).
+   */
+  pinFirstColumn = false,
 }) {
   const toggleRow = (id) => {
     const next = selectedIds.includes(id)
@@ -1245,13 +1251,32 @@ export function DataTable({
     onSelectionChange?.(next);
   };
 
+  const pinActive = pinFirstColumn && !selectable;
+  const [pinScrolled, setPinScrolled] = React.useState(false);
+  const pinScrollRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!pinActive) return undefined;
+    const el = pinScrollRef.current;
+    if (!el) return undefined;
+    const onScroll = () => {
+      const s = el.scrollLeft > 2;
+      setPinScrolled((prev) => (prev === s ? prev : s));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [pinActive]);
+  const pinEdge = t.borderStrong || t.border;
+  const pinShadow = pinScrolled
+    ? `inset -1px 0 0 ${pinEdge}, 8px 0 16px -2px rgba(26,20,8,0.28)`
+    : `inset -1px 0 0 ${pinEdge}, 3px 0 8px rgba(26,20,8,0.10)`;
+
   return (
     <Box sx={{
       bgcolor: t.bg1, border: `1px solid ${t.border}`,
       borderRadius: '12px', overflow: 'hidden',
       boxShadow: '0 1px 2px rgba(26,20,8,0.03)',
     }}>
-      <Box sx={{ overflowX: tableMinWidth ? 'auto' : compact ? 'hidden' : 'visible', width: '100%' }}>
+      <Box ref={pinScrollRef} sx={{ overflowX: tableMinWidth ? 'auto' : compact ? 'hidden' : 'visible', width: '100%' }}>
       <Box
         component="table"
         sx={{
@@ -1265,7 +1290,7 @@ export function DataTable({
         <Box component="thead" sx={ultraCompact ? { position: 'sticky', top: 0, zIndex: 2 } : undefined}>
           <Box component="tr">
             {selectable && <Box component="th" sx={thSx} style={{ width: 36 }}><Checkbox /></Box>}
-            {columns.map(col => (
+            {columns.map((col, colIndex) => (
               <Box
                 component="th"
                 key={col.key}
@@ -1277,6 +1302,10 @@ export function DataTable({
                   maxWidth: col.width,
                   textTransform: col.headerTextTransform ?? headerTextTransform,
                   ...(ultraCompact ? { bgcolor: t.bg2 } : {}),
+                  ...(pinActive && colIndex === 0 ? {
+                    position: 'sticky', left: 0, zIndex: 3,
+                    boxShadow: pinShadow, transition: 'box-shadow 0.15s ease',
+                  } : {}),
                 }}
               >
                 {col.label} {col.sortable && <Box component="span" sx={{ opacity: 0.4, ml: 0.5, fontSize: 9 }}>↕</Box>}
@@ -1295,6 +1324,19 @@ export function DataTable({
                 '&:hover': { bgcolor: selected ? t.primaryTint : t.bg2 },
                 '&:hover .row-actions': { opacity: 1 },
                 cursor: onRowClick ? 'pointer' : 'default',
+                ...(pinActive ? {
+                  // Fond OPAQUE requis sur la cellule épinglée (le contenu passe dessous) ;
+                  // teintes sélection/hover réappliquées par-dessus via backgroundImage.
+                  '& > td:first-of-type': {
+                    position: 'sticky', left: 0, zIndex: 2,
+                    bgcolor: t.bg1,
+                    backgroundImage: selected ? `linear-gradient(${t.primaryTint}, ${t.primaryTint})` : 'none',
+                    boxShadow: pinShadow, transition: 'box-shadow 0.15s ease',
+                  },
+                  '&:hover > td:first-of-type': {
+                    backgroundImage: `linear-gradient(${selected ? t.primaryTint : t.bg2}, ${selected ? t.primaryTint : t.bg2})`,
+                  },
+                } : {}),
               }}>
                 {selectable && (
                   <Box component="td" sx={{
