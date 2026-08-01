@@ -12,6 +12,10 @@ import {
   useTheme,
 } from '@mui/material';
 import StayView from '../calendar-views/StayView';
+import {
+  PageFullscreenLayer,
+  usePageFullscreen,
+} from '../page-fullscreen';
 import type { ListingRow, TimelineItem } from '../calendar-views/_shared';
 import reservationsService from '../../services/reservationsService';
 import listingsService from '../../services/listingsService';
@@ -139,6 +143,8 @@ function buildTaskTimelineIndex(
 }
 
 export default function ResasTabV2() {
+  const listFs = usePageFullscreen();
+  const listFullscreen = listFs.fullscreen;
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { loading: authLoading } = useAuth();
@@ -682,6 +688,7 @@ export default function ResasTabV2() {
       )}
 
       <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {!listFullscreen && (
         <StayView
           variant="reservations"
           enableCommsCockpit
@@ -735,9 +742,77 @@ export default function ResasTabV2() {
           }}
           compactLayout={isMobile}
           denseToolbar={!isMobile}
+          // Toujours fillViewport : le wrapper page est overflow:hidden — sans
+          // scroll interne, le vertical est mort sur desktop. Bonus : header
+          // jours sticky pendant le scroll vertical (comme le calendrier).
           fillViewport
+          showFullscreenEnter={!listFullscreen}
+          onEnterFullscreen={listFs.enter}
         />
+        )}
       </Box>
+
+      <PageFullscreenLayer
+        open={listFullscreen}
+        onClose={listFs.exit}
+        label="Planning ops plein écran"
+      >
+        <StayView
+          variant="reservations"
+          enableCommsCockpit
+          startDate={startDate}
+          daysCount={daysCount}
+          todayBackDays={PLANNING_INITIAL_BACK_DAYS}
+          listings={listingRows}
+          onReservationClick={(reservation, listing) => {
+            openReservation(reservation, listing, 'overview');
+          }}
+          onTaskClick={(item: TimelineItem) => {
+            const d = (item.data || {}) as Record<string, unknown>;
+            const taskId = String(d.taskId || d._id || '').trim();
+            if (taskId) {
+              void openTaskById(taskId);
+              return;
+            }
+            const resNum = String(d.reservationNumber || d.reservationCode || '').trim();
+            if (!resNum) return;
+            const hit = listingRows
+              .flatMap((l) =>
+                (l.reservations || []).map((r) => ({ reservation: r, listing: l })),
+              )
+              .find(
+                (x) =>
+                  x.reservation.reservationNumber === resNum ||
+                  x.reservation.reservationId === resNum,
+              );
+            if (hit) {
+              openReservation(hit.reservation, {
+                listingId: hit.listing.listingId,
+                listingName: hit.listing.listingName,
+                city: hit.listing.city,
+              });
+            }
+          }}
+          onCommsClick={(kind, reservation, listing) => {
+            openReservation(reservation, listing, kind);
+          }}
+          onGoToday={goToday}
+          onPrevDay={() => shiftDays(-1)}
+          onNextDay={() => shiftDays(1)}
+          onPrevWeek={() => shiftDays(-7)}
+          onNextWeek={() => shiftDays(7)}
+          onDateChange={(d) => setStartDate(startOfDay(d))}
+          onCleanlinessChange={handleCleanlinessChange}
+          onCreateTaskAt={(ctx, anchor) => {
+            setQuickTaskCtx(ctx);
+            setQuickTaskAnchor(anchor);
+          }}
+          compactLayout={isMobile}
+          denseToolbar={!isMobile}
+          fillViewport
+          showFullscreenEnter={false}
+        />
+      </PageFullscreenLayer>
 
       {/* Clic droit sur une cellule → créer une tâche (contexte déduit de la position). */}
       <PlanningQuickTaskMenu
