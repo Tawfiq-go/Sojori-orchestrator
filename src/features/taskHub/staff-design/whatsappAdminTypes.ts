@@ -25,7 +25,8 @@ export type WhatsappAdminDesign = {
   ownerId?: string;
 };
 
-/** Menus WhatsApp (lettre tapée) ↔ permission stockée en base. */
+/** Menus WhatsApp (lettre tapée) ↔ permission stockée en base.
+ * Pas de `Task` générique (« tout ») — uniquement superviseurs par métier (anti-fuite / clarté). */
 export const WA_ADMIN_TYPES = [
   { type: 'Message', label: 'Messages', menuLetter: 'M', abbr: 'MS' },
   { type: 'Reviews', label: 'Avis', menuLetter: 'V', abbr: 'AV' },
@@ -34,7 +35,20 @@ export const WA_ADMIN_TYPES = [
   { type: 'ArrivalDeparture', label: 'Arr. / dép.', menuLetter: 'D', abbr: 'DC' },
   { type: 'Finances', label: 'Dépense / Extra', menuLetter: 'E', abbr: 'EX' },
   { type: 'Enregistrement', label: 'Enregistrement (passeports)', menuLetter: 'P', abbr: 'PG' },
-  { type: 'Task', label: 'Supervision tâches', menuLetter: 'T', abbr: 'TS' },
+  { type: 'Task:Cleaning', label: 'Superviseur Ménage', menuLetter: 'T', abbr: 'TM' },
+  { type: 'Task:Arrival', label: 'Superviseur Accueil', menuLetter: 'T', abbr: 'TA' },
+  { type: 'Task:Support', label: 'Superviseur Support', menuLetter: 'T', abbr: 'TP' },
+  { type: 'Task:ServiceClient', label: 'Superviseur Service client', menuLetter: 'T', abbr: 'TC' },
+] as const;
+
+/** Types T encore lus en base (legacy) mais plus exposés dans l’UI. */
+const LEGACY_TASK_GENERIC_TYPES = ['Task', 'Tâche'] as const;
+
+const TASK_STAR_TYPES = [
+  'Task:Cleaning',
+  'Task:Arrival',
+  'Task:Support',
+  'Task:ServiceClient',
 ] as const;
 
 /** Langues WhatsApp Admin (ops) — alignées normalizeAdminLanguageForTemplates. */
@@ -192,6 +206,19 @@ const TYPE_TO_CANONICAL: Record<string, string> = {
   Reservation: 'Reservation',
   Tâche: 'Task',
   Task: 'Task',
+  'Task:Cleaning': 'Task:Cleaning',
+  TaskCleaning: 'Task:Cleaning',
+  'Supervision:Ménage': 'Task:Cleaning',
+  'Supervision:Menage': 'Task:Cleaning',
+  'Task:Arrival': 'Task:Arrival',
+  TaskArrival: 'Task:Arrival',
+  'Supervision:Accueil': 'Task:Arrival',
+  'Task:Support': 'Task:Support',
+  TaskSupport: 'Task:Support',
+  'Supervision:Support': 'Task:Support',
+  'Task:ServiceClient': 'Task:ServiceClient',
+  TaskServiceClient: 'Task:ServiceClient',
+  'Supervision:ServiceClient': 'Task:ServiceClient',
   Message: 'Message',
   Messages: 'Message',
   Avis: 'Reviews',
@@ -256,7 +283,11 @@ export function emptyWhatsappAdmin(): WhatsappAdminDesign {
     listingIds: [],
     cityIds: [],
     banned: false,
-    permissions: WA_ADMIN_TYPES.map((t) => ({ type: t.type, access: 'write' as const })),
+    permissions: WA_ADMIN_TYPES.map((t) => ({
+      type: t.type,
+      // T métiers à none par défaut — l’opérateur active Superviseur Ménage / Accueil / …
+      access: (t.type.startsWith('Task:') ? 'none' : 'write') as 'read' | 'write' | 'none',
+    })),
     notifications: defaultAdminNotifications(),
   };
 }
@@ -273,8 +304,23 @@ export function apiWhatsappAdminToDesign(row: Record<string, unknown>): Whatsapp
       else if (p.read) access = 'read';
       else access = 'none';
     }
+    // Legacy Task générique → stocké temporairement sous clé Task
+    if ((LEGACY_TASK_GENERIC_TYPES as readonly string[]).includes(String(p.type))) {
+      permMap.set('Task', access as 'read' | 'write' | 'none');
+      return;
+    }
     permMap.set(canonical, access as 'read' | 'write' | 'none');
   });
+
+  // Migration soft : Task=write et aucun Task:* → déplier en 4 superviseurs (même access).
+  const genericAccess = permMap.get('Task');
+  const anyStar = TASK_STAR_TYPES.some((t) => {
+    const a = permMap.get(t);
+    return a === 'read' || a === 'write';
+  });
+  if ((genericAccess === 'read' || genericAccess === 'write') && !anyStar) {
+    for (const t of TASK_STAR_TYPES) permMap.set(t, genericAccess);
+  }
 
   const listingIds = normalizeListingIds(row.listingIds as unknown[] | undefined);
   const cityIds = normalizeCityIds(row.cityIds as unknown[] | undefined);

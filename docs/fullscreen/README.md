@@ -98,6 +98,13 @@ En fullscreen :
 | Masquer ⛶ quand déjà en fullscreen | Laisser un 2ᵉ bouton enter dans le portal |
 | Planning StayView : **ne pas** `gridOnly` en FS (garder nav dates) | Masquer le chrome StayView en plein écran |
 
+### Erreurs fréquentes (à éviter)
+
+1. **Portal = contenu seul** — filtres / toolbar restent dans `DashboardWrapper` sous l’overlay → utilisateur ne peut plus filtrer. Toujours portaler **le même** `pageTree`.
+2. **Inbox hub chrome** — recherche / chips WA·OTA·Leads vivent dans `CommsHubChrome` (`InboxHubTabs`). Le plein écran doit les remonter via `InboxFullscreenLayer` (auto) ou `chrome={…}` (Avis). Ne pas portaler uniquement la grille 3 colonnes.
+3. **Bouton ⛶ ad-hoc** — préférer `PageFullscreenEnterBtn` (StayView, ThreadsList, pages).
+4. **Pills / filtres hors de `pageTree`** — ex. Avis : les chips « Tous / À répondre » doivent être dans le portal (`chrome` ou arbre unique).
+
 ---
 
 ## Écrans couverts

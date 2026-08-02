@@ -16,6 +16,8 @@ import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
   PageFullscreenEnterBtn,
   PageFullscreenLayer,
+  pageContentFullscreenSx,
+  pageTreeFullscreenSx,
   usePageFullscreen,
 } from '../components/page-fullscreen';
 import { GuestInfoTab } from '../components/reservation/GuestInfoTab';
@@ -387,30 +389,28 @@ export function ReservationSejourPage() {
     </Box>
   );
 
-  const contentFullscreenLayer = (
-    <PageFullscreenLayer
-      open={contentFullscreen && Boolean(tabContent)}
-      onClose={contentFs.exit}
-      label="Détail réservation plein écran"
+  // Même arbre page / plein écran — header (actions + tabs) + contenu.
+  const detailPage = (
+    <Box
+      sx={{
+        width: '100%',
+        ...pageTreeFullscreenSx(contentFullscreen),
+        ...(contentFullscreen ? { overflow: 'hidden', boxSizing: 'border-box' } : {}),
+      }}
     >
-      <Box sx={{
-        flexShrink: 0,
-        bgcolor: T.bg1,
-        borderBottom: `1px solid ${T.border}`,
-        px: { xs: 1, md: 1.25 },
-      }}>
-        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, py: 0.5 }}>
-          <Typography sx={{ fontSize: 12, fontWeight: 700, fontFamily: '"Geist Mono", monospace', color: T.text, flexShrink: 0 }}>
-            {reservationDetails.reservationNumber}
-          </Typography>
-          <Chip label={statusBadge.label} size="small" sx={{ height: 18, bgcolor: statusBadge.bg, color: statusBadge.color, fontWeight: 700, fontSize: 9.5 }} />
-          <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>{tabsBar}</Box>
-        </Stack>
-      </Box>
-      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', bgcolor: T.bg0 }}>
+      {compactHeader}
+      <Box
+        sx={{
+          bgcolor: T.bg0,
+          ...pageContentFullscreenSx(contentFullscreen),
+          ...(!contentFullscreen
+            ? { minHeight: { xs: 'calc(100dvh - 120px)', md: 'calc(100dvh - 128px)' } }
+            : {}),
+        }}
+      >
         {tabContent}
       </Box>
-    </PageFullscreenLayer>
+    </Box>
   );
 
   return (
@@ -439,19 +439,14 @@ export function ReservationSejourPage() {
         </Box>
       )}
 
-      {!contentFullscreen && (
-        <>
-          {compactHeader}
-          <Box sx={{
-            bgcolor: T.bg0,
-            minHeight: { xs: 'calc(100dvh - 120px)', md: 'calc(100dvh - 128px)' },
-          }}>
-            {tabContent}
-          </Box>
-        </>
-      )}
-
-      {contentFullscreenLayer}
+      {!contentFullscreen && detailPage}
+      <PageFullscreenLayer
+        open={contentFullscreen && Boolean(tabContent)}
+        onClose={contentFs.exit}
+        label="Détail réservation plein écran"
+      >
+        {detailPage}
+      </PageFullscreenLayer>
 
       {/* Modal de confirmation d'annulation */}
       <Dialog

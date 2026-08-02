@@ -309,6 +309,7 @@ export default function TeamWeekView({
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dropStaffId, setDropStaffId] = useState<string | null>(null);
   const [dropDeniedStaffId, setDropDeniedStaffId] = useState<string | null>(null);
+  const [dropUnassignKey, setDropUnassignKey] = useState<string | null>(null);
   const dragMovedRef = useRef(false);
   const dragTaskRef = useRef<TeamTask | null>(null);
   const requestIdRef = useRef(0);
@@ -490,10 +491,10 @@ export default function TeamWeekView({
     for (const [oid, bucket] of byOwner.entries()) {
       const staffRows = [...bucket.staffRows.values()].sort((a, b) => b.total - a.total);
       const rows: RowDef[] = [];
-      // Ligne « À assigner » comme les staff : cells = count/jour, clic = chips
-      if (bucket.unassigned.total > 0) rows.push(bucket.unassigned);
+      // Toujours en tête : drop cible pour désassigner (glisser vers le haut)
+      rows.push(bucket.unassigned);
       rows.push(...staffRows);
-      if (rows.length === 0) continue;
+      if (staffRows.length === 0 && bucket.unassigned.total === 0) continue;
       const taskCount = rows.reduce((acc, r) => acc + r.total, 0);
       result.push({ ownerId: oid, label: ownerLabel(oid), rows, taskCount });
     }
@@ -557,6 +558,56 @@ export default function TeamWeekView({
     setDragTaskId(null);
     setDropStaffId(null);
     setDropDeniedStaffId(null);
+    setDropUnassignKey(null);
+  };
+
+  const canUnassignTask = (t: TeamTask) =>
+    Boolean(t.taskId && t.staffId && t.lifecycle === 'waiting_accept');
+
+  const handleUnassign = async (task?: TeamTask) => {
+    const target = task || taskMenu?.task;
+    if (!target?.taskId || assigning) return;
+    if (!canUnassignTask(target)) {
+      toast.error('Désassignation seulement si assignée et pas encore acceptée');
+      clearDragState();
+      setTaskMenu(null);
+      return;
+    }
+    const taskId = target.taskId;
+    const prevStaffId = target.staffId;
+    const prevLc = target.lifecycle;
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.taskId === taskId
+          ? { ...t, staffId: null, lifecycle: 'none' as Lifecycle, done: false }
+          : t,
+      ),
+    );
+    setTaskMenu(null);
+    clearDragState();
+    setAssigning(true);
+    try {
+      await fulltaskApi.assignTask(taskId, null);
+      toast.success('Tâche désassignée');
+      void load({ silent: true });
+    } catch (e: unknown) {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.taskId === taskId
+            ? {
+                ...t,
+                staffId: prevStaffId,
+                lifecycle: prevLc,
+                done: prevLc === 'finished',
+              }
+            : t,
+        ),
+      );
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      toast.error(err.response?.data?.error || err.message || 'Erreur désassignation');
+    } finally {
+      setAssigning(false);
+    }
   };
 
   const handleAssign = async (staffId: string, task?: TeamTask) => {
@@ -747,17 +798,72 @@ export default function TeamWeekView({
     void handleAssign(staffId, task);
   };
 
+  const resolveDragTask = (e: React.DragEvent): TeamTask | undefined => {
+    const raw = e.dataTransfer.getData('application/json');
+    let task: TeamTask | undefined;
+    try {
+      task = raw ? (JSON.parse(raw) as TeamTask) : undefined;
+    } catch {
+      task = undefined;
+    }
+    const tid = e.dataTransfer.getData('text/task-id') || dragTaskId;
+    if (!task && tid) {
+      task =
+        dragTaskRef.current?.taskId === tid
+          ? dragTaskRef.current
+          : filteredTasks.find((x) => x.taskId === tid);
+    }
+    return task;
+  };
+
+  const onUnassignDragOver = (rowKey: string, e: React.DragEvent) => {
+    e.preventDefault();
+    const dragTask = dragTaskRef.current;
+    if (!dragTask?.staffId) {
+      e.dataTransfer.dropEffect = 'none';
+      setDropUnassignKey(null);
+      return;
+    }
+    if (!canUnassignTask(dragTask)) {
+      e.dataTransfer.dropEffect = 'none';
+      setDropUnassignKey(null);
+      return;
+    }
+    e.dataTransfer.dropEffect = 'move';
+    setDropStaffId(null);
+    setDropDeniedStaffId(null);
+    setDropUnassignKey(rowKey);
+  };
+
+  const onUnassignDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const task = resolveDragTask(e);
+    if (!task?.taskId) {
+      clearDragState();
+      return;
+    }
+    void handleUnassign(task);
+  };
+
   const renderChip = (t: TeamTask, i: number) => {
-    const next = lifecycleNextShort(t.lifecycle);
+    // Sans staff = toujours « à assigner » (évite badge « → Accepter » fantôme)
+    const lc: Lifecycle = t.staffId ? t.lifecycle : 'none';
+    const next = lifecycleNextShort(lc);
     const tip = [
       t.label,
       t.listingName,
       t.guestName || null,
-      `Statut : ${lifecycleCurrentShort(t.lifecycle)}`,
-      lifecycleNextAction(t.lifecycle)
-        ? `Prochaine étape : ${lifecycleNextAction(t.lifecycle)}`
+      `Statut : ${lifecycleCurrentShort(lc)}`,
+      lifecycleNextAction(lc)
+        ? `Prochaine étape : ${lifecycleNextAction(lc)}`
+        : !t.staffId
+          ? 'Prochaine étape : Assigner un staff'
+          : null,
+      t.taskId
+        ? canUnassignTask(t)
+          ? 'Clic = actions · glisser vers le haut (« À assigner ») = désassigner'
+          : 'Clic = actions · glisser = assigner'
         : null,
-      t.taskId ? 'Clic = actions · glisser = assigner' : null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -766,7 +872,7 @@ export default function TeamWeekView({
         key={`${t.taskId || t.reservationId}-${i}`}
         type="button"
         draggable={Boolean(t.taskId) && !t.done}
-        className={`twv-chip twv-chip--${t.kind} twv-chip--lc-${t.lifecycle}${t.done ? ' twv-chip--done' : ''}${!t.staffId ? ' twv-chip--unassigned' : ''}${dragTaskId && t.taskId === dragTaskId ? ' twv-chip--dragging' : ''}`}
+        className={`twv-chip twv-chip--${t.kind} twv-chip--lc-${lc}${t.done ? ' twv-chip--done' : ''}${!t.staffId ? ' twv-chip--unassigned' : ''}${dragTaskId && t.taskId === dragTaskId ? ' twv-chip--dragging' : ''}`}
         title={tip}
         onClick={(e) => onChipClick(t, e)}
         onDragStart={(e) => onChipDragStart(t, e)}
@@ -780,13 +886,13 @@ export default function TeamWeekView({
         <span className="twv-chip-head">
           {t.time ? <span className="twv-chip-time">{t.time}</span> : null}
           {next ? (
-            <span className={`twv-chip-lc twv-chip-lc--${t.lifecycle}`}>{next}</span>
+            <span className={`twv-chip-lc twv-chip-lc--${lc}`}>{next}</span>
           ) : null}
         </span>
         {t.label}
         <span className="twv-chip-listing">{t.listingName}</span>
-        {t.lifecycle !== 'finished' && t.lifecycle !== 'none' ? (
-          <span className="twv-chip-status">{lifecycleCurrentShort(t.lifecycle)}</span>
+        {lc !== 'finished' && lc !== 'none' ? (
+          <span className="twv-chip-status">{lifecycleCurrentShort(lc)}</span>
         ) : null}
       </button>
     );
@@ -865,20 +971,43 @@ export default function TeamWeekView({
     const isDropTarget = Boolean(sid && dropStaffId === sid);
     const isDropDenied = Boolean(sid && dropDeniedStaffId === sid);
     const dimWhileDrag = Boolean(dragTask && row.staff && !canReceive);
+    const unassignDropOk =
+      Boolean(row.unassigned && dropUnassignKey === row.key);
+    const unassignDropDenied =
+      Boolean(
+        row.unassigned &&
+          dragTask?.staffId &&
+          !canUnassignTask(dragTask) &&
+          dragTaskId,
+      );
     return (
       <tr
         key={row.key}
-        className={`twv-row${row.unassigned ? ' twv-row--unassigned' : ''}${!row.unassigned && row.total === 0 ? ' twv-row--idle' : ''}${isDropTarget ? ' twv-row--drop' : ''}${isDropDenied ? ' twv-row--drop-denied' : ''}${dimWhileDrag ? ' twv-row--no-access' : ''}${focusLifecycle !== 'all' ? ' twv-row--focused' : ''}`}
-        onDragOver={sid ? (e) => onStaffDragOver(sid, e) : undefined}
+        className={`twv-row${row.unassigned ? ' twv-row--unassigned' : ''}${!row.unassigned && row.total === 0 ? ' twv-row--idle' : ''}${isDropTarget || unassignDropOk ? ' twv-row--drop' : ''}${isDropDenied || unassignDropDenied ? ' twv-row--drop-denied' : ''}${dimWhileDrag ? ' twv-row--no-access' : ''}${focusLifecycle !== 'all' ? ' twv-row--focused' : ''}`}
+        onDragOver={
+          sid
+            ? (e) => onStaffDragOver(sid, e)
+            : row.unassigned
+              ? (e) => onUnassignDragOver(row.key, e)
+              : undefined
+        }
         onDragLeave={
           sid
             ? () => {
                 setDropStaffId((cur) => (cur === sid ? null : cur));
                 setDropDeniedStaffId((cur) => (cur === sid ? null : cur));
               }
-            : undefined
+            : row.unassigned
+              ? () => setDropUnassignKey((cur) => (cur === row.key ? null : cur))
+              : undefined
         }
-        onDrop={sid ? (e) => onStaffDrop(sid, e) : undefined}
+        onDrop={
+          sid
+            ? (e) => onStaffDrop(sid, e)
+            : row.unassigned
+              ? (e) => onUnassignDrop(e)
+              : undefined
+        }
       >
         <td className="twv-staff-cell">
           {row.unassigned ? (
@@ -887,7 +1016,11 @@ export default function TeamWeekView({
               <span>
                 <span className="twv-staff-name twv-staff-name--warn">À assigner</span>
                 <span className="twv-staff-sub">
-                  {row.total} · clic jour = liste · glisser ou choisir
+                  {row.total > 0
+                    ? `${row.total} · clic jour = liste · dépôt = désassigner`
+                    : dragTask?.staffId && canUnassignTask(dragTask)
+                      ? 'Déposer ici pour désassigner'
+                      : 'Déposer une tâche non acceptée ici'}
                 </span>
               </span>
             </div>
@@ -1086,7 +1219,7 @@ export default function TeamWeekView({
         </div>
       ) : (
         <div className="twv-staff-strip twv-staff-strip--hint">
-          Filtrez ville/annonce · clic tâche = accepter / commencer / terminer · glisser = assigner
+          Filtrez ville/annonce · clic tâche = accepter / commencer / terminer · glisser = assigner · glisser vers « À assigner » = désassigner (si pas encore acceptée)
         </div>
       )}
 
@@ -1190,6 +1323,14 @@ export default function TeamWeekView({
               onClick={() => void handleStaffAction('reject')}
             >
               Refuser
+            </MenuItem>
+            <MenuItem
+              dense
+              disabled={assigning || acting}
+              onClick={() => void handleUnassign()}
+              sx={{ fontWeight: 700, color: '#b45309' }}
+            >
+              Désassigner (↖ vers « À assigner »)
             </MenuItem>
             <Divider />
           </>

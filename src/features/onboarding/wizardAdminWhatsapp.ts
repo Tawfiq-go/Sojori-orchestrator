@@ -13,6 +13,10 @@ export const WA_MENU_ICONS: Record<string, string> = {
   Reservation: '📅',
   ArrivalDeparture: '🛬',
   Task: '✅',
+  'Task:Cleaning': '🧼',
+  'Task:Arrival': '🙋',
+  'Task:Support': '🛟',
+  'Task:ServiceClient': '💌',
 };
 
 export const WA_MENU_TYPES = [
@@ -21,7 +25,10 @@ export const WA_MENU_TYPES = [
   { type: 'Lead', label: 'Leads', menuLetter: 'L' },
   { type: 'Reservation', label: 'Réservations', menuLetter: 'R' },
   { type: 'ArrivalDeparture', label: 'Arr. / dép.', menuLetter: 'D' },
-  { type: 'Task', label: 'Supervision tâches', menuLetter: 'T' },
+  { type: 'Task:Cleaning', label: 'Superviseur Ménage', menuLetter: 'T' },
+  { type: 'Task:Arrival', label: 'Superviseur Accueil', menuLetter: 'T' },
+  { type: 'Task:Support', label: 'Superviseur Support', menuLetter: 'T' },
+  { type: 'Task:ServiceClient', label: 'Superviseur Service client', menuLetter: 'T' },
 ] as const;
 
 const RESERVATION_PUSH_KEYS = [
