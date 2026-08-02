@@ -56,17 +56,64 @@ export const DEFAULT_SCHEDULE: PartnerServiceSchedule = {
 
 export type PaymentMethod = 'card' | 'cash' | 'transfer';
 export type PaymentCollection = 'full' | 'deposit';
+/** instant = accepté d'office · on_confirmation = le provider confirme sous SLA */
+export type PaymentTiming = 'instant' | 'on_confirmation';
 
 export type PartnerServicePayment = {
   methods: PaymentMethod[];
   collection: PaymentCollection;
   depositPercent?: number | null;
+  timing?: PaymentTiming;
 };
 
 export const DEFAULT_PAYMENT: PartnerServicePayment = {
   methods: ['cash'],
   collection: 'full',
   depositPercent: null,
+  timing: 'instant',
+};
+
+export type PartnerServiceContact = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+};
+
+export type PartnerServiceConfirmation = {
+  slaHours: number;
+  remindBeforeHours: number;
+  remindAfterHours: number;
+};
+
+export const DEFAULT_CONFIRMATION: PartnerServiceConfirmation = {
+  slaHours: 12,
+  remindBeforeHours: 3,
+  remindAfterHours: 3,
+};
+
+export type PartnerServiceProviderReminder = {
+  /** 0 = J0 · 1 = J-1 · 2 = J-2 · 3 = J-3 */
+  offsetDays: number;
+  time: string;
+};
+
+export const DEFAULT_PROVIDER_REMINDER: PartnerServiceProviderReminder = {
+  offsetDays: 1,
+  time: '18:00',
+};
+
+export type ShareGuestContactWhen = 'immediate' | 'J-3' | 'J-2' | 'J-1' | 'J0';
+
+export type PartnerServiceShareGuestContact = {
+  enabled: boolean;
+  when: ShareGuestContactWhen;
+  time?: string;
+};
+
+export const DEFAULT_SHARE_GUEST_CONTACT: PartnerServiceShareGuestContact = {
+  enabled: false,
+  when: 'immediate',
+  time: '',
 };
 
 export type PartnerService = {
@@ -90,6 +137,10 @@ export type PartnerService = {
   formules: PartnerServiceFormule[];
   schedule?: PartnerServiceSchedule;
   payment?: PartnerServicePayment;
+  contact?: PartnerServiceContact;
+  confirmation?: PartnerServiceConfirmation;
+  providerReminder?: PartnerServiceProviderReminder;
+  shareGuestContact?: PartnerServiceShareGuestContact;
   commissionType?: CommissionType | null;
   commissionPercent?: number | null;
   commissionFixedMad?: number | null;

@@ -7,9 +7,17 @@ import {
   type PartnerServiceFormule,
   type PartnerServicePayment,
   type PartnerServiceSchedule,
+  type PartnerServiceContact,
+  type PartnerServiceConfirmation,
+  type PartnerServiceProviderReminder,
+  type PartnerServiceShareGuestContact,
+  type ShareGuestContactWhen,
   type PaymentMethod,
   DEFAULT_SCHEDULE,
   DEFAULT_PAYMENT,
+  DEFAULT_CONFIRMATION,
+  DEFAULT_PROVIDER_REMINDER,
+  DEFAULT_SHARE_GUEST_CONTACT,
 } from '../services/partnersApi';
 import { postFormDataAsMultipart } from '../utils/upload/postFormData';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
@@ -27,9 +35,28 @@ type Draft = {
   formules: PartnerServiceFormule[];
   schedule: PartnerServiceSchedule;
   payment: PartnerServicePayment;
+  contact: PartnerServiceContact;
+  confirmation: PartnerServiceConfirmation;
+  providerReminder: PartnerServiceProviderReminder;
+  shareGuestContact: PartnerServiceShareGuestContact;
   active: boolean;
   sortOrder: number;
 };
+
+const REMINDER_OFFSETS = [
+  { v: 3, l: 'J-3' },
+  { v: 2, l: 'J-2' },
+  { v: 1, l: 'J-1' },
+  { v: 0, l: 'J0 (jour même)' },
+];
+
+const SHARE_WHEN: { v: ShareGuestContactWhen; l: string }[] = [
+  { v: 'immediate', l: 'Immédiatement (dans le message info)' },
+  { v: 'J-3', l: 'J-3' },
+  { v: 'J-2', l: 'J-2' },
+  { v: 'J-1', l: 'J-1' },
+  { v: 'J0', l: 'J0 (jour même)' },
+];
 
 const CATS = [
   { v: 'Aventure', l: 'Aventure' },
@@ -112,6 +139,10 @@ function emptyDraft(): Draft {
     formules: [{ label: '', priceMad: 0 }],
     schedule: { ...DEFAULT_SCHEDULE },
     payment: { ...DEFAULT_PAYMENT, methods: [...DEFAULT_PAYMENT.methods] },
+    contact: { firstName: '', lastName: '', email: '' },
+    confirmation: { ...DEFAULT_CONFIRMATION },
+    providerReminder: { ...DEFAULT_PROVIDER_REMINDER },
+    shareGuestContact: { ...DEFAULT_SHARE_GUEST_CONTACT },
     active: true,
     sortOrder: 0,
   };
@@ -136,7 +167,16 @@ function toDraft(s: PartnerService): Draft {
       methods: Array.isArray(pay.methods) && pay.methods.length ? [...pay.methods] : ['cash'],
       collection: pay.collection === 'deposit' ? 'deposit' : 'full',
       depositPercent: pay.depositPercent ?? null,
+      timing: pay.timing === 'on_confirmation' ? 'on_confirmation' : 'instant',
     },
+    contact: {
+      firstName: s.contact?.firstName || '',
+      lastName: s.contact?.lastName || '',
+      email: s.contact?.email || '',
+    },
+    confirmation: { ...DEFAULT_CONFIRMATION, ...(s.confirmation || {}) },
+    providerReminder: { ...DEFAULT_PROVIDER_REMINDER, ...(s.providerReminder || {}) },
+    shareGuestContact: { ...DEFAULT_SHARE_GUEST_CONTACT, ...(s.shareGuestContact || {}) },
     active: s.active !== false,
     sortOrder: s.sortOrder || 0,
   };
@@ -171,6 +211,21 @@ function experienceProviderLabel(
   return 'Mes expériences';
 }
 
+/**
+ * Own = catalogue PM CRUD (`/experiences` → partnerId null, providerKind owner).
+ * Sojori = catalogue partenaires plateforme (`partnerId` set / providerKind partner).
+ * Ne pas utiliser le libellé fiche owner (« Dreams ») comme proxy d’ownership :
+ * ce nom wrappe seulement le provider label, pas le bulk des services liés.
+ */
+function isOwnExperience(s: PartnerService): boolean {
+  if (s.providerKind === 'partner') return false;
+  if (s.providerKind === 'owner') return true;
+  // Fallback raw docs (listExperiences / listServices sans enrichissement catalog)
+  return !s.partnerId;
+}
+
+type CatalogTab = 'own' | 'sojori';
+
 export function OwnerExperiencesPage() {
   const [rows, setRows] = useState<PartnerService[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -180,33 +235,57 @@ export function OwnerExperiencesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
+  const [formTab, setFormTab] = useState<'config' | 'contact'>('config');
+  const [catalogTab, setCatalogTab] = useState<CatalogTab>('own');
   const [q, setQ] = useState('');
   const [providerFilter, setProviderFilter] = useState('all');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [ownList, partnersList, citiesRes] = await Promise.all([
+      const [ownList, sojoriList, partnersList, citiesRes] = await Promise.all([
+        // CRUD PM — partnerId null (inclut inactifs)
         partnersApi.listExperiences(),
-        // Inclure les fiches plateforme (NOMMOS) + fiche owner (Dreams)
+        // Partenaires plateforme (+ labels providerKind=partner) — lecture seule
+        partnersApi.listExperienceCatalog({ scope: 'sojori' }).catch(() => [] as PartnerService[]),
         partnersApi.list({ includePlatform: true }).catch(() => [] as Partner[]),
         listingsService.getCities({ limit: 200 }).catch(() => null),
       ]);
       const partnersArr = Array.isArray(partnersList) ? partnersList : [];
       setPartners(partnersArr);
 
-      // Services liés à une fiche Partner (ex. NOMMOS) — absents de /experiences (partnerId null)
-      const platformPartners = partnersArr.filter((p) => !p.ownerId);
-      const partnerServiceLists = await Promise.all(
-        platformPartners.map((p) =>
-          partnersApi.listServices(p.id).catch(() => [] as PartnerService[]),
-        ),
-      );
       const byId = new Map<string, PartnerService>();
-      for (const s of ownList || []) byId.set(s.id, s);
-      for (const list of partnerServiceLists) {
-        for (const s of list || []) byId.set(s.id, s);
+      for (const s of ownList || []) {
+        byId.set(s.id, {
+          ...s,
+          providerKind: 'owner',
+          providerName: s.providerName || undefined,
+        });
       }
+      for (const s of sojoriList || []) {
+        // Catalog sojori gagne sur un éventuel doublon ; jamais classé « own »
+        byId.set(s.id, { ...s, providerKind: 'partner' });
+      }
+
+      // Fallback : fiches plateforme absentes du catalog (ex. inactifs) — hors own
+      const platformPartners = partnersArr.filter((p) => !p.ownerId);
+      const missingPlatform = platformPartners.filter(
+        (p) => ![...byId.values()].some((s) => String(s.partnerId) === String(p.id)),
+      );
+      if (missingPlatform.length) {
+        const extraLists = await Promise.all(
+          missingPlatform.map((p) =>
+            partnersApi.listServices(p.id).catch(() => [] as PartnerService[]),
+          ),
+        );
+        for (const list of extraLists) {
+          for (const s of list || []) {
+            if (byId.has(s.id)) continue;
+            byId.set(s.id, { ...s, providerKind: 'partner' });
+          }
+        }
+      }
+
       setRows(Array.from(byId.values()));
 
       const cityList = (citiesRes?.data?.cities ?? citiesRes?.data ?? citiesRes ?? []) as Array<{
@@ -245,13 +324,19 @@ export function OwnerExperiencesPage() {
     return map;
   }, [partners]);
 
+  const ownRows = useMemo(() => rows.filter(isOwnExperience), [rows]);
+  const sojoriRows = useMemo(() => rows.filter((r) => !isOwnExperience(r)), [rows]);
+  const scopedRows = catalogTab === 'own' ? ownRows : sojoriRows;
+  const canEditCatalog = catalogTab === 'own';
+
+  /** Filtre provider uniquement sur l’onglet Sojori (Mes = une seule source). */
   const providers = useMemo(() => {
+    if (catalogTab !== 'sojori') return [] as Array<{ id: string; name: string }>;
     const map = new Map<string, string>();
-    // Toujours lister les fiches connues (Dreams + NOMMOS), même sans activité
     for (const p of partners) {
-      if (p.id && p.name) map.set(String(p.id), p.name);
+      if (!p.ownerId && p.id && p.name) map.set(String(p.id), p.name);
     }
-    for (const r of rows) {
+    for (const r of sojoriRows) {
       const id = experienceProviderKey(r, partnersByOwnerId);
       const name = experienceProviderLabel(r, partnersById, partnersByOwnerId);
       if (!map.has(id)) map.set(id, name);
@@ -259,7 +344,7 @@ export function OwnerExperiencesPage() {
     return Array.from(map.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
-  }, [rows, partners, partnersById, partnersByOwnerId]);
+  }, [catalogTab, sojoriRows, partners, partnersById, partnersByOwnerId]);
 
   useEffect(() => {
     if (providerFilter === 'all') return;
@@ -269,19 +354,21 @@ export function OwnerExperiencesPage() {
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return rows.filter((r) => {
-      const pid = experienceProviderKey(r, partnersByOwnerId);
-      if (providerFilter !== 'all' && pid !== providerFilter) return false;
+    return scopedRows.filter((r) => {
+      if (catalogTab === 'sojori' && providerFilter !== 'all') {
+        const pid = experienceProviderKey(r, partnersByOwnerId);
+        if (pid !== providerFilter) return false;
+      }
       if (!needle) return true;
       const provider = experienceProviderLabel(r, partnersById, partnersByOwnerId);
       return (
         r.title.toLowerCase().includes(needle) ||
         r.category.toLowerCase().includes(needle) ||
         (r.description || '').toLowerCase().includes(needle) ||
-        provider.toLowerCase().includes(needle)
+        (catalogTab === 'sojori' && provider.toLowerCase().includes(needle))
       );
     });
-  }, [rows, q, providerFilter, partnersById, partnersByOwnerId]);
+  }, [scopedRows, q, providerFilter, partnersById, partnersByOwnerId, catalogTab]);
 
   const cityName = useCallback(
     (id: string) => cities.find((c) => c._id === id)?.name || id,
@@ -317,24 +404,41 @@ export function OwnerExperiencesPage() {
   }, [filtered, cityName]);
 
   const openNew = () => {
+    if (!canEditCatalog) return;
     setIsNew(true);
     setSelectedId(null);
     setDraft(emptyDraft());
+    setFormTab('config');
   };
 
   const openEdit = (s: PartnerService) => {
+    if (!canEditCatalog || !isOwnExperience(s)) return;
     setIsNew(false);
     setSelectedId(s.id);
     setDraft(toDraft(s));
+    setFormTab('config');
   };
 
   const closeEditor = () => {
     setIsNew(false);
     setSelectedId(null);
     setDraft(emptyDraft());
+    setFormTab('config');
+  };
+
+  const switchCatalogTab = (next: CatalogTab) => {
+    if (next === catalogTab) return;
+    setCatalogTab(next);
+    setProviderFilter('all');
+    setQ('');
+    closeEditor();
   };
 
   const save = async () => {
+    if (!canEditCatalog) {
+      toast.error('Les expériences Sojori sont en lecture seule');
+      return;
+    }
     if (!draft.title.trim() || !draft.category.trim()) {
       toast.error('Titre et catégorie requis');
       return;
@@ -358,6 +462,7 @@ export function OwnerExperiencesPage() {
         needsRemote && draft.payment.collection === 'deposit'
           ? Number(draft.payment.depositPercent) || 30
           : null,
+      timing: draft.payment.timing === 'on_confirmation' ? 'on_confirmation' : 'instant',
     };
     const body = {
       category: draft.category.trim(),
@@ -369,22 +474,42 @@ export function OwnerExperiencesPage() {
       formules,
       schedule: draft.schedule,
       payment,
+      contact: {
+        firstName: (draft.contact.firstName || '').trim(),
+        lastName: (draft.contact.lastName || '').trim(),
+        email: (draft.contact.email || '').trim(),
+      },
+      confirmation: {
+        slaHours: Number(draft.confirmation.slaHours) || 12,
+        remindBeforeHours: Number(draft.confirmation.remindBeforeHours) || 0,
+        remindAfterHours: Number(draft.confirmation.remindAfterHours) || 0,
+      },
+      providerReminder: {
+        offsetDays: Number(draft.providerReminder.offsetDays) || 0,
+        time: draft.providerReminder.time || '18:00',
+      },
+      shareGuestContact: {
+        enabled: Boolean(draft.shareGuestContact.enabled),
+        when: draft.shareGuestContact.when,
+        time: draft.shareGuestContact.time || '',
+      },
       active: draft.active,
       sortOrder: draft.sortOrder,
     };
     setSaving(true);
     try {
       const existing = !isNew && selectedId ? rows.find((r) => r.id === selectedId) : null;
+      if (existing && !isOwnExperience(existing)) {
+        toast.error('Les expériences Sojori sont en lecture seule');
+        return;
+      }
       if (isNew) {
         const created = await partnersApi.createExperience(body);
         toast.success('Expérience créée');
         await load();
         openEdit(created);
-      } else if (selectedId && existing?.partnerId) {
-        await partnersApi.updateService(String(existing.partnerId), selectedId, body);
-        toast.success('Enregistré');
-        await load();
       } else if (selectedId) {
+        // Own catalogue only — never mutate partner (Sojori) services from this page
         await partnersApi.updateExperience(selectedId, body);
         toast.success('Enregistré');
         await load();
@@ -397,16 +522,16 @@ export function OwnerExperiencesPage() {
   };
 
   const remove = async () => {
-    if (!selectedId || isNew) return;
+    if (!canEditCatalog || !selectedId || isNew) return;
     if (!window.confirm('Supprimer cette expérience ?')) return;
     setSaving(true);
     try {
       const existing = rows.find((r) => r.id === selectedId);
-      if (existing?.partnerId) {
-        await partnersApi.removeService(String(existing.partnerId), selectedId);
-      } else {
-        await partnersApi.removeExperience(selectedId);
+      if (!existing || !isOwnExperience(existing)) {
+        toast.error('Les expériences Sojori sont en lecture seule');
+        return;
       }
+      await partnersApi.removeExperience(selectedId);
       toast.success('Supprimée');
       closeEditor();
       await load();
@@ -471,7 +596,7 @@ export function OwnerExperiencesPage() {
     });
   };
 
-  const showEditor = isNew || !!selectedId;
+  const showEditor = canEditCatalog && (isNew || !!selectedId);
   const needsRemotePay = draft.payment.methods.some((m) => m === 'card' || m === 'transfer');
 
   return (
@@ -482,7 +607,7 @@ export function OwnerExperiencesPage() {
           alignItems: 'flex-end',
           justifyContent: 'space-between',
           gap: 16,
-          marginBottom: 22,
+          marginBottom: 16,
         }}
       >
         <div>
@@ -491,13 +616,54 @@ export function OwnerExperiencesPage() {
             Expériences
           </h1>
           <p style={{ margin: 0, color: 'var(--pa-ink3)', fontSize: 14, maxWidth: 560 }}>
-            Catalogue par ville (comme Ensoconnect). Les listings ne créent pas d’activités —
-            ils cochent celles à activer (Expériences PM ou Expériences Sojori).
+            {catalogTab === 'own'
+              ? 'Vos expériences uniquement — créez et modifiez. Les listings cochent celles à activer.'
+              : 'Catalogue Sojori (partenaires plateforme / à vendre) — lecture seule, filtrez par provider.'}
           </p>
         </div>
-        <button type="button" style={btnGold()} onClick={openNew}>
-          + Nouvelle expérience
-        </button>
+        {canEditCatalog ? (
+          <button type="button" style={btnGold()} onClick={openNew}>
+            + Nouvelle expérience
+          </button>
+        ) : null}
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          marginBottom: 18,
+          borderBottom: '1px solid var(--pa-line)',
+        }}
+      >
+        {(
+          [
+            { v: 'own' as const, l: 'Mes expériences', count: ownRows.length },
+            { v: 'sojori' as const, l: 'Expériences Sojori', count: sojoriRows.length },
+          ] as const
+        ).map((tb) => (
+          <button
+            key={tb.v}
+            type="button"
+            onClick={() => switchCatalogTab(tb.v)}
+            style={{
+              border: 'none',
+              background: 'none',
+              padding: '10px 16px',
+              cursor: 'pointer',
+              fontSize: 14,
+              fontWeight: catalogTab === tb.v ? 700 : 500,
+              color: catalogTab === tb.v ? 'var(--pa-ink)' : 'var(--pa-ink3)',
+              borderBottom: catalogTab === tb.v ? '2px solid var(--pa-gold, #b8851a)' : '2px solid transparent',
+              marginBottom: -1,
+            }}
+          >
+            {tb.l}
+            <span style={{ marginLeft: 8, color: 'var(--pa-ink4)', fontWeight: 500, fontSize: 12 }}>
+              {tb.count}
+            </span>
+          </button>
+        ))}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: showEditor ? '340px 1fr' : '1fr', gap: 20 }}>
@@ -532,12 +698,15 @@ export function OwnerExperiencesPage() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: providers.length > 0 ? 'minmax(160px, 1fr) 1.4fr' : '1fr',
+              gridTemplateColumns:
+                catalogTab === 'sojori' && providers.length > 0
+                  ? 'minmax(160px, 1fr) 1.4fr'
+                  : '1fr',
               gap: 10,
               marginBottom: 12,
             }}
           >
-            {providers.length > 0 ? (
+            {catalogTab === 'sojori' && providers.length > 0 ? (
               <select
                 className="pa-in"
                 style={inpBase}
@@ -556,7 +725,11 @@ export function OwnerExperiencesPage() {
             <input
               className="pa-in"
               style={inpBase}
-              placeholder="Rechercher… (titre, catégorie, provider)"
+              placeholder={
+                catalogTab === 'sojori'
+                  ? 'Rechercher… (titre, catégorie, provider)'
+                  : 'Rechercher… (titre, catégorie)'
+              }
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -573,16 +746,23 @@ export function OwnerExperiencesPage() {
                 background: 'var(--pa-surface)',
               }}
             >
-              {rows.length === 0
-                ? 'Aucune expérience. Créez la première.'
+              {scopedRows.length === 0
+                ? catalogTab === 'own'
+                  ? 'Aucune expérience. Créez la première.'
+                  : 'Aucune expérience Sojori pour le moment.'
                 : 'Aucun résultat pour ces filtres.'}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {providerFilter !== 'all' || q.trim() ? (
+              {catalogTab === 'sojori' && (providerFilter !== 'all' || q.trim()) ? (
                 <div style={{ fontSize: 12, color: 'var(--pa-ink3)', marginTop: -4 }}>
                   {filtered.length} résultat{filtered.length !== 1 ? 's' : ''}
-                  {rows.length !== filtered.length ? ` · sur ${rows.length}` : ''}
+                  {scopedRows.length !== filtered.length ? ` · sur ${scopedRows.length}` : ''}
+                </div>
+              ) : q.trim() ? (
+                <div style={{ fontSize: 12, color: 'var(--pa-ink3)', marginTop: -4 }}>
+                  {filtered.length} résultat{filtered.length !== 1 ? 's' : ''}
+                  {scopedRows.length !== filtered.length ? ` · sur ${scopedRows.length}` : ''}
                 </div>
               ) : null}
               {groupedByCity.map((group) => (
@@ -598,8 +778,17 @@ export function OwnerExperiencesPage() {
                     {group.items.map((s) => {
                       const prices = (s.formules || []).map((f) => Number(f.priceMad) || 0);
                       const min = prices.length ? Math.min(...prices) : 0;
-                      const active = selectedId === s.id && !isNew;
-                      const provider = experienceProviderLabel(s, partnersById, partnersByOwnerId);
+                      const active = canEditCatalog && selectedId === s.id && !isNew;
+                      const provider =
+                        catalogTab === 'sojori'
+                          ? experienceProviderLabel(s, partnersById, partnersByOwnerId)
+                          : null;
+                      const cityLabel =
+                        s.cityIds === 'all' || !s.cityIds
+                          ? 'Toutes les villes'
+                          : Array.isArray(s.cityIds)
+                            ? s.cityIds.map(cityName).join(', ')
+                            : '';
                       return (
                         <div
                           key={`${group.key}-${s.id}`}
@@ -612,56 +801,114 @@ export function OwnerExperiencesPage() {
                             background: active ? 'var(--pa-gold-wash)' : 'var(--pa-surface)',
                           }}
                         >
-                          <button
-                            type="button"
-                            onClick={() => openEdit(s)}
-                            style={{
-                              flex: 1,
-                              textAlign: 'left',
-                              padding: '14px 16px',
-                              border: 'none',
-                              background: 'transparent',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>{s.title}</div>
-                            <div style={{ fontSize: 12, color: 'var(--pa-ink3)', marginTop: 4 }}>
-                              <span style={{ fontWeight: 700, color: 'var(--pa-ink2)' }}>{provider}</span>
-                              {` · ${s.category}`}
-                              {min > 0 ? ` · dès ${money(min)} MAD` : ''}
-                              {!s.active ? ' · inactif' : ''}
+                          {canEditCatalog ? (
+                            <button
+                              type="button"
+                              onClick={() => openEdit(s)}
+                              style={{
+                                flex: 1,
+                                textAlign: 'left',
+                                padding: '14px 16px',
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>{s.title}</div>
+                              <div style={{ fontSize: 12, color: 'var(--pa-ink3)', marginTop: 4 }}>
+                                {provider ? (
+                                  <span style={{ fontWeight: 700, color: 'var(--pa-ink2)' }}>
+                                    {provider}
+                                    {' · '}
+                                  </span>
+                                ) : null}
+                                {s.category}
+                                {min > 0 ? ` · dès ${money(min)} MAD` : ''}
+                                {!s.active ? ' · inactif' : ''}
+                              </div>
+                            </button>
+                          ) : (
+                            <div style={{ flex: 1, textAlign: 'left', padding: '14px 16px' }}>
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>{s.title}</div>
+                              <div style={{ fontSize: 12, color: 'var(--pa-ink3)', marginTop: 4 }}>
+                                {provider ? (
+                                  <span style={{ fontWeight: 700, color: 'var(--pa-ink2)' }}>
+                                    {provider}
+                                    {' · '}
+                                  </span>
+                                ) : null}
+                                {s.category}
+                                {min > 0 ? ` · dès ${money(min)} MAD` : ''}
+                                {!s.active ? ' · inactif' : ''}
+                              </div>
+                              {s.description ? (
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    color: 'var(--pa-ink3)',
+                                    marginTop: 8,
+                                    lineHeight: 1.45,
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                  }}
+                                >
+                                  {s.description}
+                                </div>
+                              ) : null}
+                              {(s.formules || []).length > 0 ? (
+                                <div style={{ fontSize: 12, color: 'var(--pa-ink2)', marginTop: 8 }}>
+                                  {(s.formules || [])
+                                    .slice(0, 3)
+                                    .map((f) => `${f.label} · ${money(Number(f.priceMad) || 0)} MAD`)
+                                    .join(' · ')}
+                                  {(s.formules || []).length > 3 ? '…' : ''}
+                                </div>
+                              ) : null}
+                              {cityLabel ? (
+                                <div style={{ fontSize: 11, color: 'var(--pa-ink4)', marginTop: 6 }}>
+                                  {cityLabel}
+                                </div>
+                              ) : null}
                             </div>
-                          </button>
-                          <button
-                            type="button"
-                            title="Supprimer"
-                            disabled={saving}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void (async () => {
-                                if (!window.confirm(`Supprimer « ${s.title} » ?`)) return;
-                                setSaving(true);
-                                try {
-                                  await partnersApi.removeExperience(s.id);
-                                  toast.success('Supprimée');
-                                  if (selectedId === s.id) closeEditor();
-                                  await load();
-                                } catch (err) {
-                                  toast.error(
-                                    err instanceof Error ? err.message : 'Suppression impossible',
-                                  );
-                                } finally {
-                                  setSaving(false);
-                                }
-                              })();
-                            }}
-                            style={{
-                              ...btnDanger({ padding: '8px 12px', alignSelf: 'center', marginRight: 8 }),
-                              fontSize: 12,
-                            }}
-                          >
-                            Supprimer
-                          </button>
+                          )}
+                          {canEditCatalog ? (
+                            <button
+                              type="button"
+                              title="Supprimer"
+                              disabled={saving}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void (async () => {
+                                  if (!isOwnExperience(s)) {
+                                    toast.error('Les expériences Sojori sont en lecture seule');
+                                    return;
+                                  }
+                                  if (!window.confirm(`Supprimer « ${s.title} » ?`)) return;
+                                  setSaving(true);
+                                  try {
+                                    await partnersApi.removeExperience(s.id);
+                                    toast.success('Supprimée');
+                                    if (selectedId === s.id) closeEditor();
+                                    await load();
+                                  } catch (err) {
+                                    toast.error(
+                                      err instanceof Error ? err.message : 'Suppression impossible',
+                                    );
+                                  } finally {
+                                    setSaving(false);
+                                  }
+                                })();
+                              }}
+                              style={{
+                                ...btnDanger({ padding: '8px 12px', alignSelf: 'center', marginRight: 8 }),
+                                fontSize: 12,
+                              }}
+                            >
+                              Supprimer
+                            </button>
+                          ) : null}
                         </div>
                       );
                     })}
@@ -698,6 +945,34 @@ export function OwnerExperiencesPage() {
               </div>
             </div>
 
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid var(--pa-line)' }}>
+              {([
+                { v: 'config', l: '⚙️ Configuration' },
+                { v: 'contact', l: '📞 Contact & paiement' },
+              ] as const).map((tb) => (
+                <button
+                  key={tb.v}
+                  type="button"
+                  onClick={() => setFormTab(tb.v)}
+                  style={{
+                    border: 'none',
+                    background: 'none',
+                    padding: '8px 14px',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: formTab === tb.v ? 700 : 500,
+                    color: formTab === tb.v ? 'var(--pa-ink)' : 'var(--pa-ink3)',
+                    borderBottom: formTab === tb.v ? '2px solid var(--pa-gold, #b8851a)' : '2px solid transparent',
+                    marginBottom: -1,
+                  }}
+                >
+                  {tb.l}
+                </button>
+              ))}
+            </div>
+
+            {formTab === 'config' && (
+            <>
             <section style={{ marginBottom: 22 }}>
               <div className="pa-lbl">Présentation</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 12, marginTop: 8 }}>
@@ -849,6 +1124,38 @@ export function OwnerExperiencesPage() {
                 + Formule
               </button>
             </section>
+            </>
+            )}
+
+            {formTab === 'contact' && (
+            <>
+            <section style={{ marginBottom: 22 }}>
+              <div className="pa-lbl">Contact provider</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 8 }}>
+                <input
+                  className="pa-in"
+                  style={inpBase}
+                  placeholder="Prénom du contact"
+                  value={draft.contact.firstName || ''}
+                  onChange={(e) => setDraft((d) => ({ ...d, contact: { ...d.contact, firstName: e.target.value } }))}
+                />
+                <input
+                  className="pa-in"
+                  style={inpBase}
+                  placeholder="Nom du contact"
+                  value={draft.contact.lastName || ''}
+                  onChange={(e) => setDraft((d) => ({ ...d, contact: { ...d.contact, lastName: e.target.value } }))}
+                />
+              </div>
+              <input
+                className="pa-in"
+                style={{ ...inpBase, marginTop: 12 }}
+                type="email"
+                placeholder="Email du contact"
+                value={draft.contact.email || ''}
+                onChange={(e) => setDraft((d) => ({ ...d, contact: { ...d.contact, email: e.target.value } }))}
+              />
+            </section>
 
             <section style={{ marginBottom: 22 }}>
               <div className="pa-lbl">Paiement</div>
@@ -919,8 +1226,195 @@ export function OwnerExperiencesPage() {
                   Cash seul → règlement sur place (pas d’acompte).
                 </p>
               )}
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--pa-ink2)', marginBottom: 6 }}>
+                  Quand encaisser ?
+                </div>
+                <select
+                  className="pa-in"
+                  style={{ ...inpBase, maxWidth: 340 }}
+                  value={draft.payment.timing || 'instant'}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      payment: { ...d.payment, timing: e.target.value as 'instant' | 'on_confirmation' },
+                    }))
+                  }
+                >
+                  <option value="instant">Instantané — accepté d’office, lien envoyé direct</option>
+                  <option value="on_confirmation">Après confirmation du provider</option>
+                </select>
+              </div>
             </section>
 
+            {draft.payment.timing === 'on_confirmation' ? (
+              <section style={{ marginBottom: 22 }}>
+                <div className="pa-lbl">Confirmation provider</div>
+                <p style={{ margin: '6px 0 8px', fontSize: 12, color: 'var(--pa-ink3)' }}>
+                  Le provider doit confirmer la dispo sous ce délai — relances automatiques, puis
+                  escalade vers vous si silence.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 8 }}>
+                  <label style={{ fontSize: 12, color: 'var(--pa-ink3)' }}>
+                    Répondre sous (heures)
+                    <input
+                      className="pa-in"
+                      style={{ ...inpBase, marginTop: 4 }}
+                      type="number"
+                      min={1}
+                      max={168}
+                      value={draft.confirmation.slaHours}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          confirmation: { ...d.confirmation, slaHours: Number(e.target.value) || 12 },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label style={{ fontSize: 12, color: 'var(--pa-ink3)' }}>
+                    Relance avant échéance (h)
+                    <input
+                      className="pa-in"
+                      style={{ ...inpBase, marginTop: 4 }}
+                      type="number"
+                      min={0}
+                      max={48}
+                      value={draft.confirmation.remindBeforeHours}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          confirmation: { ...d.confirmation, remindBeforeHours: Number(e.target.value) || 0 },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label style={{ fontSize: 12, color: 'var(--pa-ink3)' }}>
+                    Relance après échéance (h)
+                    <input
+                      className="pa-in"
+                      style={{ ...inpBase, marginTop: 4 }}
+                      type="number"
+                      min={0}
+                      max={48}
+                      value={draft.confirmation.remindAfterHours}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          confirmation: { ...d.confirmation, remindAfterHours: Number(e.target.value) || 0 },
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+              </section>
+            ) : null}
+
+            <section style={{ marginBottom: 22 }}>
+              <div className="pa-lbl">Rappel provider (prestation)</div>
+              <p style={{ margin: '6px 0 8px', fontSize: 12, color: 'var(--pa-ink3)' }}>
+                Un seul rappel WhatsApp avant la prestation (coût maîtrisé).
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 12, marginTop: 8, maxWidth: 480 }}>
+                <select
+                  className="pa-in"
+                  style={inpBase}
+                  value={draft.providerReminder.offsetDays}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      providerReminder: { ...d.providerReminder, offsetDays: Number(e.target.value) },
+                    }))
+                  }
+                >
+                  {REMINDER_OFFSETS.map((o) => (
+                    <option key={o.v} value={o.v}>
+                      {o.l}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="pa-in"
+                  style={inpBase}
+                  type="time"
+                  value={draft.providerReminder.time}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      providerReminder: { ...d.providerReminder, time: e.target.value || '18:00' },
+                    }))
+                  }
+                />
+              </div>
+            </section>
+
+            <section style={{ marginBottom: 22 }}>
+              <div className="pa-lbl">Transmettre les coordonnées client</div>
+              <p style={{ margin: '6px 0 8px', fontSize: 12, color: 'var(--pa-ink3)' }}>
+                Nom + prénom + numéro du client envoyés au provider — greffés au message info ou au
+                rappel (jamais de message en plus).
+              </p>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                <button
+                  type="button"
+                  style={
+                    draft.shareGuestContact.enabled
+                      ? btnGold({ padding: '7px 13px', fontSize: 12.5 })
+                      : btnOutline({ padding: '7px 13px', fontSize: 12.5 })
+                  }
+                  onClick={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      shareGuestContact: { ...d.shareGuestContact, enabled: !d.shareGuestContact.enabled },
+                    }))
+                  }
+                >
+                  {draft.shareGuestContact.enabled ? 'Oui — transmettre' : 'Non'}
+                </button>
+                {draft.shareGuestContact.enabled ? (
+                  <>
+                    <select
+                      className="pa-in"
+                      style={{ ...inpBase, maxWidth: 320 }}
+                      value={draft.shareGuestContact.when}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          shareGuestContact: {
+                            ...d.shareGuestContact,
+                            when: e.target.value as ShareGuestContactWhen,
+                          },
+                        }))
+                      }
+                    >
+                      {SHARE_WHEN.map((w) => (
+                        <option key={w.v} value={w.v}>
+                          {w.l}
+                        </option>
+                      ))}
+                    </select>
+                    {draft.shareGuestContact.when !== 'immediate' ? (
+                      <input
+                        className="pa-in"
+                        style={{ ...inpBase, maxWidth: 140 }}
+                        type="time"
+                        value={draft.shareGuestContact.time || ''}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            shareGuestContact: { ...d.shareGuestContact, time: e.target.value },
+                          }))
+                        }
+                      />
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            </section>
+            </>
+            )}
+
+            {formTab === 'config' && (
             <section style={{ marginBottom: 22 }}>
               <div className="pa-lbl">Planning</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 8 }}>
@@ -985,6 +1479,7 @@ export function OwnerExperiencesPage() {
                 }
               />
             </section>
+            )}
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
               <input
