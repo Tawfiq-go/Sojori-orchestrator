@@ -21,12 +21,14 @@ export async function fetchTaskListings(ownerId?: string): Promise<Listing[]> {
 }
 
 /** Logements srv-listing (même source que la liste tâches fulltask). */
-export async function fetchFulltaskListings(): Promise<Listing[]> {
+export async function fetchFulltaskListings(ownerId?: string): Promise<Listing[]> {
   const res = await listingsService.getListings({
     useActiveFilter: true,
     active: true,
     limit: 1000,
     page: 0,
+    compact: true,
+    ...(ownerId ? { ownerId } : {}),
   });
   const items = res.data?.items ?? [];
   return items.map((l) => ({
@@ -36,7 +38,7 @@ export async function fetchFulltaskListings(): Promise<Listing[]> {
     title: l.name,
     address: l.city || undefined,
     city: l.city,
-    ownerId: l.ownerId ? String(l.ownerId) : '',
+    ownerId: l.ownerId ? String(l.ownerId) : ownerId ? String(ownerId) : '',
   }));
 }
 

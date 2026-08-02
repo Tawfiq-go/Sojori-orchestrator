@@ -48,7 +48,7 @@ export default function InboxHubTabs({
   compact = false,
 }: InboxHubTabsProps) {
   const { user } = useAuth();
-  const { leading, subBar } = useCommsHubChrome();
+  const { leading, subBar, fullscreenActive } = useCommsHubChrome();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const active = (searchParams.get('tab') || (section === 'staff' ? 'staff' : 'whatsapp')) as CommsHubTab;
@@ -59,7 +59,9 @@ export default function InboxHubTabs({
   const sectionLabel = section === 'staff' ? 'Staff' : 'Guest';
 
   const total = hubTabs.reduce((s, tab) => s + (counts[tab.id] || 0), 0);
-  const hasLeading = Boolean(leading);
+  // En FS, leading/subBar sont montés dans InboxFullscreenLayer (un seul arbre).
+  const hasLeading = Boolean(leading) && !fullscreenActive;
+  const visibleSubBar = fullscreenActive ? null : subBar;
 
   const goTab = (tabId: string) => {
     const next = new URLSearchParams();
@@ -215,7 +217,7 @@ export default function InboxHubTabs({
       </Box>
 
       {/* Sous-barre compacte (chips Demandes, etc.) — juste après les blocs hub */}
-      {subBar ? <Box sx={{ mt: 0.4, minWidth: 0 }}>{subBar}</Box> : null}
+      {visibleSubBar ? <Box sx={{ mt: 0.4, minWidth: 0 }}>{visibleSubBar}</Box> : null}
     </Box>
   );
 }

@@ -37,6 +37,7 @@ function planningCityLabel(city: string | null | undefined): string {
   const key = normalizeCityKey(raw);
   return key === '—' ? 'Sans ville' : key;
 }
+import { PageFullscreenEnterBtn } from '../page-fullscreen';
 import ListingGroupMultiFilter from './ListingGroupMultiFilter';
 import {
   expandPlanningListingRows,
@@ -1015,36 +1016,10 @@ export default function StayView({
             pl: 0.35,
             borderLeft: `1px solid ${T.border}`,
           }}>
-            <Box
-              component="button"
-              type="button"
-              title="Planning plein écran"
-              aria-label="Planning plein écran"
+            <PageFullscreenEnterBtn
               onClick={onEnterFullscreen}
-              sx={{
-                all: 'unset',
-                boxSizing: 'border-box',
-                flexShrink: 0,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 30,
-                height: 28,
-                borderRadius: '6px',
-                border: `1px solid ${T.borderStrong}`,
-                bgcolor: T.bg1,
-                color: T.text2,
-                fontSize: 15,
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                lineHeight: 1,
-                boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
-                '&:hover': { bgcolor: T.bg2, borderColor: T.primary, color: T.primaryDeep },
-              }}
-            >
-              ⛶
-            </Box>
+              label="Planning plein écran"
+            />
           </Box>
         ) : null}
 
@@ -1186,9 +1161,10 @@ export default function StayView({
         </Box>
 
         {showFullscreenEnter && onEnterFullscreen ? (
-          <PlanningNavBtn title="Planning plein écran" onClick={onEnterFullscreen}>
-            ⛶
-          </PlanningNavBtn>
+          <PageFullscreenEnterBtn
+            onClick={onEnterFullscreen}
+            label="Planning plein écran"
+          />
         ) : null}
 
         <CalendarDatePicker

@@ -3,8 +3,9 @@
 // Restaure l’UI legacy « Travellers » sur la fiche résa Atelier 2026.
 // ════════════════════════════════════════════════════════════════════
 
-import { useMemo, useState, useEffect, type ChangeEvent } from 'react';
+import { useCallback, useMemo, useState, useEffect, type ChangeEvent } from 'react';
 import {
+  Alert,
   Box,
   Stack,
   Typography,
@@ -24,9 +25,17 @@ import { Add, Close, CloudUpload, Edit, Person } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { useDispatch } from 'react-redux';
 import { ReservationRegistrationActions } from '../reservations/ReservationRegistrationActions';
-import reservationsService from '../../services/reservationsService';
+import * as fulltaskApi from '../../services/fulltaskApi';
+import listingsService from '../../services/listingsService';
 import { uploadImageToAPI } from '../../redux/slices/UploadSlice';
 import { getListingMediaDisplayUrl, isListingsBucketUrl } from '../../features/finances/services/listingMediaApi';
+import {
+  REGISTRATION_FIELD_LABELS,
+  missingFieldsForMember,
+  normalizeRegistrationLevel,
+  type RegistrationFieldKey,
+  type RegistrationLevel,
+} from '../../features/registration/registrationLevel';
 
 const T = {
   primary: '#b8851a',
@@ -61,6 +70,14 @@ type MemberForm = {
   phone: string;
   document_front_download: string;
   document_back_download: string;
+  place_of_birth: string;
+  profession: string;
+  domicile: string;
+  city: string;
+  coming_from: string;
+  going_to: string;
+  document_issued_at: string;
+  document_issued_on: string;
 };
 
 const EMPTY_FORM: MemberForm = {
@@ -76,6 +93,14 @@ const EMPTY_FORM: MemberForm = {
   phone: '',
   document_front_download: '',
   document_back_download: '',
+  place_of_birth: '',
+  profession: '',
+  domicile: '',
+  city: '',
+  coming_from: '',
+  going_to: '',
+  document_issued_at: '',
+  document_issued_on: '',
 };
 
 function memberDocUrl(m: Member, side: 'front' | 'back'): string {
@@ -85,13 +110,18 @@ function memberDocUrl(m: Member, side: 'front' | 'back'): string {
   return String(m.document_back_download || m.document_back_scan || '').trim();
 }
 
-function memberStatus(m: Member): 'complete' | 'draft' | 'empty' {
-  if (m.status === 'COMPLETE' || m.draft === false) return 'complete';
+function memberStatus(
+  m: Member,
+  level: RegistrationLevel,
+): 'complete' | 'draft' | 'empty' {
+  const missing = missingFieldsForMember(m, level);
+  if (missing.length === 0) return 'complete';
   if (m.status === 'DRAFT' || m.draft === true) return 'draft';
-  const hasCore =
-    Boolean(m.first_name || m.firstName) &&
-    Boolean(m.document_number || m.passport);
-  return hasCore ? 'complete' : 'empty';
+  const hasAny =
+    Boolean(m.first_name || m.firstName) ||
+    Boolean(m.document_number || m.passport) ||
+    Boolean(memberDocUrl(m, 'front'));
+  return hasAny ? 'draft' : 'empty';
 }
 
 function toForm(m?: Member | null): MemberForm {
@@ -103,6 +133,13 @@ function toForm(m?: Member | null): MemberForm {
     if (!Number.isNaN(d.getTime())) date_of_birth = d.toISOString().slice(0, 10);
     else if (/^\d{4}-\d{2}-\d{2}/.test(dobRaw)) date_of_birth = dobRaw.slice(0, 10);
   }
+  const issuedOnRaw = String(m.document_issued_on || m.issued_on || '');
+  let document_issued_on = '';
+  if (issuedOnRaw) {
+    const d = new Date(issuedOnRaw);
+    if (!Number.isNaN(d.getTime())) document_issued_on = d.toISOString().slice(0, 10);
+    else if (/^\d{4}-\d{2}-\d{2}/.test(issuedOnRaw)) document_issued_on = issuedOnRaw.slice(0, 10);
+  }
   return {
     first_name: String(m.first_name || m.firstName || ''),
     last_name: String(m.last_name || m.lastName || ''),
@@ -111,42 +148,19 @@ function toForm(m?: Member | null): MemberForm {
     document_type: String(m.document_type || 'passport').toLowerCase() || 'passport',
     document_number: String(m.document_number || m.passport || ''),
     date_of_birth,
-    country_of_residence: String(m.country_of_residence || m.residence_country || ''),
+    country_of_residence: String(m.country_of_residence || m.residence_country || m.country || ''),
     email: String(m.email || ''),
     phone: String(m.phone || ''),
     document_front_download: memberDocUrl(m, 'front'),
     document_back_download: memberDocUrl(m, 'back'),
-  };
-}
-
-function formToMember(form: MemberForm): Member {
-  const dob = form.date_of_birth
-    ? `${form.date_of_birth}T00:00:00.000Z`
-    : '';
-  return {
-    first_name: form.first_name.trim(),
-    last_name: form.last_name.trim(),
-    firstName: form.first_name.trim(),
-    lastName: form.last_name.trim(),
-    nationality: form.nationality.trim(),
-    gender: form.gender.trim(),
-    document_type: form.document_type || 'passport',
-    document_number: form.document_number.trim(),
-    passport: form.document_number.trim(),
-    date_of_birth: dob,
-    birth_date: dob,
-    birthDate: dob,
-    country_of_residence: form.country_of_residence.trim(),
-    residence_country: form.country_of_residence.trim(),
-    email: form.email.trim(),
-    phone: form.phone.trim(),
-    document_front_download: form.document_front_download,
-    document_back_download: form.document_back_download,
-    document_front_scan: form.document_front_download,
-    document_back_scan: form.document_back_download,
-    registration: 'Manual',
-    status: 'COMPLETE',
-    draft: false,
+    place_of_birth: String(m.place_of_birth || m.birth_place || ''),
+    profession: String(m.profession || m.occupation || ''),
+    domicile: String(m.domicile || m.address || ''),
+    city: String(m.city || ''),
+    coming_from: String(m.coming_from || m.provenance || ''),
+    going_to: String(m.going_to || m.destination || ''),
+    document_issued_at: String(m.document_issued_at || m.issued_at || ''),
+    document_issued_on,
   };
 }
 
@@ -163,6 +177,7 @@ export function RegistrationTab({
 }: RegistrationTabProps) {
   const r = reservationDetails;
   const resaId = String(r?._id || r?.id || '');
+  const listingId = String(r?.listingId || r?.listing_id || '').trim();
   const guestReg = r?.guestRegistration ?? {};
   const members: Member[] = Array.isArray(guestReg.members) ? guestReg.members : [];
   const regTotal =
@@ -175,19 +190,52 @@ export function RegistrationTab({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [imageKey, setImageKey] = useState(0);
+  const [registrationLevel, setRegistrationLevel] = useState<RegistrationLevel>('simple');
 
-  const complete = regTotal > 0 && regDone >= regTotal;
+  const loadLevel = useCallback(async () => {
+    if (!listingId) {
+      setRegistrationLevel('simple');
+      return;
+    }
+    try {
+      const raw = (await listingsService.getListingOrchestrationCompiled(listingId)) as {
+        data?: { capabilities?: { registration?: { gestion?: { registrationLevel?: unknown } } } };
+        capabilities?: { registration?: { gestion?: { registrationLevel?: unknown } } };
+      } | null;
+      const doc = raw && typeof raw === 'object' && 'data' in raw && raw.data ? raw.data : raw;
+      setRegistrationLevel(
+        normalizeRegistrationLevel(doc?.capabilities?.registration?.gestion?.registrationLevel),
+      );
+    } catch {
+      setRegistrationLevel('simple');
+    }
+  }, [listingId]);
+
+  useEffect(() => {
+    void loadLevel();
+  }, [loadLevel]);
 
   const stats = useMemo(() => {
     let ok = 0;
     let draft = 0;
-    for (const m of members) {
-      const s = memberStatus(m);
+    const allMissing = new Set<RegistrationFieldKey>();
+    for (let i = 0; i < regTotal; i++) {
+      const m = members[i] || {};
+      const missing = missingFieldsForMember(m, registrationLevel);
+      missing.forEach((k) => allMissing.add(k));
+      const s = memberStatus(m, registrationLevel);
       if (s === 'complete') ok += 1;
       else if (s === 'draft') draft += 1;
     }
-    return { ok, draft, missing: Math.max(0, regTotal - ok) };
-  }, [members, regTotal]);
+    return {
+      ok,
+      draft,
+      missing: Math.max(0, regTotal - ok),
+      missingLabels: [...allMissing].map((k) => REGISTRATION_FIELD_LABELS[k]),
+    };
+  }, [members, regTotal, registrationLevel]);
+
+  const complete = regTotal > 0 && stats.ok >= regTotal;
 
   const openAdd = () => {
     setEditIndex(null);
@@ -213,23 +261,6 @@ export function RegistrationTab({
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const persistMembers = async (nextMembers: Member[]) => {
-    const completeCount = nextMembers.filter((m) => memberStatus(m) === 'complete').length;
-    const draftCount = nextMembers.filter((m) => memberStatus(m) === 'draft').length;
-    const nextReg = {
-      ...guestReg,
-      members: nextMembers,
-      nbre_guest_to_register: Math.max(regTotal, nextMembers.length, 1),
-      nbre_guest_registered: completeCount,
-      nbre_guest_complete: completeCount,
-      nbre_guest_draft: draftCount,
-      registration_status:
-        completeCount >= Math.max(regTotal, 1) ? 'COMPLETED' : completeCount > 0 ? 'IN_PROGRESS' : 'NOT_STARTED',
-    };
-    const res = await reservationsService.updateGuestRegistration(resaId, nextReg);
-    if (!res.success) throw new Error(res.message || 'Échec enregistrement');
-  };
-
   const handleSave = async () => {
     if (!resaId) return;
     if (!form.first_name.trim()) {
@@ -238,12 +269,35 @@ export function RegistrationTab({
     }
     setSaving(true);
     try {
-      const member = formToMember(form);
-      const next =
-        editIndex === null
-          ? [...members, member]
-          : members.map((m, i) => (i === editIndex ? { ...m, ...member } : m));
-      await persistMembers(next);
+      const index = editIndex === null ? members.length : editIndex;
+      const res = await fulltaskApi.registerGuestMember(resaId, index, {
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        nationality: form.nationality.trim() || undefined,
+        gender: form.gender.trim() || undefined,
+        document_type: form.document_type || 'passport',
+        document_number: form.document_number.trim() || undefined,
+        date_of_birth: form.date_of_birth
+          ? `${form.date_of_birth}T00:00:00.000Z`
+          : undefined,
+        residence_country: form.country_of_residence.trim() || undefined,
+        country: form.country_of_residence.trim() || undefined,
+        email: form.email.trim() || undefined,
+        phone: form.phone.trim() || undefined,
+        document_front_download: form.document_front_download || undefined,
+        document_back_download: form.document_back_download || undefined,
+        place_of_birth: form.place_of_birth.trim() || undefined,
+        profession: form.profession.trim() || undefined,
+        domicile: form.domicile.trim() || undefined,
+        city: form.city.trim() || undefined,
+        coming_from: form.coming_from.trim() || undefined,
+        going_to: form.going_to.trim() || undefined,
+        document_issued_at: form.document_issued_at.trim() || undefined,
+        document_issued_on: form.document_issued_on
+          ? `${form.document_issued_on}T00:00:00.000Z`
+          : undefined,
+      });
+      if (res?.success === false) throw new Error(res?.error || 'Échec enregistrement');
       toast.success(editIndex === null ? 'Voyageur ajouté' : 'Voyageur mis à jour');
       closeModal();
       onRefresh?.();
@@ -256,11 +310,16 @@ export function RegistrationTab({
 
   const handleDelete = async (index: number) => {
     if (!resaId || readOnly) return;
-    if (!window.confirm('Supprimer ce voyageur enregistré ?')) return;
+    if (
+      !window.confirm(
+        'Supprimer ce voyageur ? Identité, passeport/OCR et statut d’enregistrement seront effacés ; la tâche et l’orchestration seront remises à jour.',
+      )
+    )
+      return;
     setSaving(true);
     try {
-      const next = members.filter((_, i) => i !== index);
-      await persistMembers(next);
+      const res = await fulltaskApi.unregisterGuestMember(resaId, index);
+      if (res?.success === false) throw new Error(res?.error || 'Échec suppression');
       toast.success('Voyageur supprimé');
       onRefresh?.();
     } catch (err) {
@@ -307,8 +366,21 @@ export function RegistrationTab({
                   color: complete ? T.success : T.primaryDeep,
                 }}
               >
-                {regDone}/{regTotal}
+                {stats.ok}/{regTotal}
               </Typography>
+              <Chip
+                size="small"
+                label={
+                  registrationLevel === 'complete' ? 'Mode complet' : 'Mode simple'
+                }
+                sx={{
+                  fontWeight: 700,
+                  fontSize: 11,
+                  height: 22,
+                  bgcolor: T.bg3,
+                  color: T.text2,
+                }}
+              />
               <Chip
                 size="small"
                 label={complete ? 'Finalisé' : 'En cours'}
@@ -324,8 +396,25 @@ export function RegistrationTab({
                 {stats.ok} validé{stats.ok > 1 ? 's' : ''} · {stats.draft} brouillon
                 {stats.draft > 1 ? 's' : ''} · {stats.missing} manquant
                 {stats.missing > 1 ? 's' : ''}
+                {regDone !== stats.ok ? ` · sync ${regDone}` : ''}
               </Typography>
             </Stack>
+            {!complete && stats.missingLabels.length > 0 ? (
+              <Alert
+                severity="error"
+                sx={{
+                  mt: 1.25,
+                  py: 0.5,
+                  alignItems: 'center',
+                  '& .MuiAlert-message': { fontSize: 12.5, fontWeight: 600 },
+                }}
+              >
+                Champs manquants : {stats.missingLabels.slice(0, 10).join(', ')}
+                {stats.missingLabels.length > 10
+                  ? ` (+${stats.missingLabels.length - 10})`
+                  : ''}
+              </Alert>
+            ) : null}
           </Box>
           <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
             {resaId ? (
@@ -360,7 +449,7 @@ export function RegistrationTab({
         </Stack>
       </Paper>
 
-      {members.length === 0 ? (
+      {Math.max(members.length, regTotal) === 0 ? (
         <Paper
           sx={{
             p: 4,
@@ -398,8 +487,10 @@ export function RegistrationTab({
             gap: 1.5,
           }}
         >
-          {members.map((m, i) => {
-            const status = memberStatus(m);
+          {Array.from({ length: Math.max(members.length, regTotal) }, (_, i) => {
+            const m = (members[i] || {}) as Member;
+            const status = memberStatus(m, registrationLevel);
+            const missing = missingFieldsForMember(m, registrationLevel);
             const first = String(m.first_name || m.firstName || '—');
             const last = String(m.last_name || m.lastName || '');
             const front = memberDocUrl(m, 'front');
@@ -410,7 +501,7 @@ export function RegistrationTab({
                 key={i}
                 sx={{
                   p: 2,
-                  border: `1px solid ${T.border}`,
+                  border: `1px solid ${missing.length ? 'rgba(200,30,30,0.35)' : T.border}`,
                   borderRadius: 1.5,
                   bgcolor: T.bg1,
                 }}
@@ -439,13 +530,13 @@ export function RegistrationTab({
                             ? 'rgba(10,143,94,0.12)'
                             : status === 'draft'
                               ? 'rgba(196,101,6,0.12)'
-                              : T.bg3,
+                              : 'rgba(200,30,30,0.10)',
                         color:
                           status === 'complete'
                             ? T.success
                             : status === 'draft'
                               ? T.warning
-                              : T.text3,
+                              : T.error,
                       }}
                     />
                     {!readOnly ? (
@@ -465,20 +556,74 @@ export function RegistrationTab({
                   </Stack>
                 </Stack>
 
+                {missing.length > 0 ? (
+                  <Typography
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: T.error,
+                      mb: 1,
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    Manquent :{' '}
+                    {missing
+                      .slice(0, 8)
+                      .map((k) => REGISTRATION_FIELD_LABELS[k])
+                      .join(', ')}
+                    {missing.length > 8 ? ` (+${missing.length - 8})` : ''}
+                  </Typography>
+                ) : null}
+
                 <Stack spacing={0.45} sx={{ mb: 1.25 }}>
-                  <InfoRow label="Nationalité" value={String(m.nationality || '—')} />
-                  <InfoRow label="Passeport / pièce" value={passport} mono />
+                  <InfoRow
+                    label="Nationalité"
+                    value={String(m.nationality || '—')}
+                    missing={missing.includes('nationality')}
+                  />
+                  <InfoRow
+                    label="Passeport / pièce"
+                    value={passport}
+                    mono
+                    missing={missing.includes('document_number')}
+                  />
                   <InfoRow
                     label="Naissance"
                     value={
                       formDate(String(m.date_of_birth || m.birth_date || m.birthDate || '')) || '—'
                     }
+                    missing={missing.includes('birth_date')}
                   />
                   <InfoRow label="Genre" value={String(m.gender || '—')} />
                   <InfoRow
                     label="Résidence"
-                    value={String(m.country_of_residence || m.residence_country || '—')}
+                    value={String(m.country_of_residence || m.residence_country || m.country || '—')}
+                    missing={missing.includes('country')}
                   />
+                  {registrationLevel === 'complete' ? (
+                    <>
+                      <InfoRow
+                        label="Lieu de naissance"
+                        value={String(m.place_of_birth || m.birth_place || '—')}
+                        missing={missing.includes('place_of_birth')}
+                      />
+                      <InfoRow
+                        label="Profession"
+                        value={String(m.profession || '—')}
+                        missing={missing.includes('profession')}
+                      />
+                      <InfoRow
+                        label="Provenance"
+                        value={String(m.coming_from || '—')}
+                        missing={missing.includes('coming_from')}
+                      />
+                      <InfoRow
+                        label="Destination"
+                        value={String(m.going_to || '—')}
+                        missing={missing.includes('going_to')}
+                      />
+                    </>
+                  ) : null}
                 </Stack>
 
                 {(front || back) ? (
@@ -599,6 +744,7 @@ export function RegistrationTab({
                 fullWidth
                 value={form.email}
                 onChange={(e) => setField('email', e.target.value)}
+                error={registrationLevel === 'complete' && !form.email.trim()}
               />
               <TextField
                 label="Téléphone"
@@ -606,8 +752,89 @@ export function RegistrationTab({
                 fullWidth
                 value={form.phone}
                 onChange={(e) => setField('phone', e.target.value)}
+                error={registrationLevel === 'complete' && !form.phone.trim()}
               />
             </Stack>
+
+            {registrationLevel === 'complete' ? (
+              <>
+                <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.error, pt: 0.5 }}>
+                  Fiche de police — champs complémentaires
+                </Typography>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                  <TextField
+                    label="Lieu de naissance"
+                    size="small"
+                    fullWidth
+                    value={form.place_of_birth}
+                    onChange={(e) => setField('place_of_birth', e.target.value)}
+                    error={!form.place_of_birth.trim()}
+                  />
+                  <TextField
+                    label="Profession"
+                    size="small"
+                    fullWidth
+                    value={form.profession}
+                    onChange={(e) => setField('profession', e.target.value)}
+                    error={!form.profession.trim()}
+                  />
+                </Stack>
+                <TextField
+                  label="Domicile habituel"
+                  size="small"
+                  fullWidth
+                  value={form.domicile}
+                  onChange={(e) => setField('domicile', e.target.value)}
+                  error={!form.domicile.trim()}
+                />
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                  <TextField
+                    label="Ville"
+                    size="small"
+                    fullWidth
+                    value={form.city}
+                    onChange={(e) => setField('city', e.target.value)}
+                    error={!form.city.trim()}
+                  />
+                  <TextField
+                    label="Lieu de provenance"
+                    size="small"
+                    fullWidth
+                    value={form.coming_from}
+                    onChange={(e) => setField('coming_from', e.target.value)}
+                    error={!form.coming_from.trim()}
+                  />
+                  <TextField
+                    label="Allant à"
+                    size="small"
+                    fullWidth
+                    value={form.going_to}
+                    onChange={(e) => setField('going_to', e.target.value)}
+                    error={!form.going_to.trim()}
+                  />
+                </Stack>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                  <TextField
+                    label="Délivré à"
+                    size="small"
+                    fullWidth
+                    value={form.document_issued_at}
+                    onChange={(e) => setField('document_issued_at', e.target.value)}
+                    error={!form.document_issued_at.trim()}
+                  />
+                  <TextField
+                    label="Délivré le"
+                    type="date"
+                    size="small"
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                    value={form.document_issued_on}
+                    onChange={(e) => setField('document_issued_on', e.target.value)}
+                    error={!form.document_issued_on.trim()}
+                  />
+                </Stack>
+              </>
+            ) : null}
 
             <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, pt: 0.5 }}>
               Pièce d’identité
@@ -706,20 +933,32 @@ export function RegistrationTab({
   );
 }
 
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function InfoRow({
+  label,
+  value,
+  mono,
+  missing,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  missing?: boolean;
+}) {
   return (
     <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
-      <Typography sx={{ fontSize: 12, color: T.text3 }}>{label}</Typography>
+      <Typography sx={{ fontSize: 12, color: missing ? T.error : T.text3, fontWeight: missing ? 700 : 400 }}>
+        {label}
+      </Typography>
       <Typography
         sx={{
           fontSize: 12.5,
           fontWeight: 600,
-          color: T.text,
+          color: missing ? T.error : T.text,
           textAlign: 'right',
           fontFamily: mono ? '"Geist Mono", monospace' : 'inherit',
         }}
       >
-        {value}
+        {missing && (!value || value === '—') ? 'manquant' : value}
       </Typography>
     </Stack>
   );

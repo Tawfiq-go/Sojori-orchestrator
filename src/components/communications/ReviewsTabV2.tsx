@@ -222,6 +222,40 @@ export default function ReviewsTabV2() {
     );
   }
 
+  const filterBar = (
+    <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+      {[
+        { id: 'all', label: 'Tous' },
+        { id: 'unreplied', label: 'À répondre' },
+        { id: 'replied', label: 'Répondu' },
+        { id: 'airbnb', label: 'Airbnb' },
+        { id: 'booking', label: 'Booking' },
+        { id: '5stars', label: '5★' },
+        { id: 'low', label: '≤3★' },
+      ].map((f) => (
+        <Box
+          key={f.id}
+          component="button"
+          onClick={() => setFilter(f.id)}
+          sx={{
+            px: 1.25,
+            py: 0.5,
+            borderRadius: '6px',
+            border: `1px solid ${filter === f.id ? '#FF5A5F' : t.border}`,
+            bgcolor: filter === f.id ? 'rgba(255,90,95,0.12)' : t.bg1,
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            color: filter === f.id ? '#c0353a' : t.text3,
+          }}
+        >
+          {f.label}
+        </Box>
+      ))}
+    </Box>
+  );
+
   const inboxBody = (
     <>
       <ThreadsList
@@ -290,43 +324,18 @@ export default function ReviewsTabV2() {
           Impossible de charger les avis Booking/Airbnb : {loadError}
         </Alert>
       )}
-      <Box sx={{ display: 'flex', gap: 0.75, mb: 1.5, flexWrap: 'wrap' }}>
-        {[
-          { id: 'all', label: 'Tous' },
-          { id: 'unreplied', label: 'À répondre' },
-          { id: 'replied', label: 'Répondu' },
-          { id: 'airbnb', label: 'Airbnb' },
-          { id: 'booking', label: 'Booking' },
-          { id: '5stars', label: '5★' },
-          { id: 'low', label: '≤3★' },
-        ].map((f) => (
-          <Box
-            key={f.id}
-            component="button"
-            onClick={() => setFilter(f.id)}
-            sx={{
-              px: 1.25,
-              py: 0.5,
-              borderRadius: '6px',
-              border: `1px solid ${filter === f.id ? '#FF5A5F' : t.border}`,
-              bgcolor: filter === f.id ? 'rgba(255,90,95,0.12)' : t.bg1,
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              color: filter === f.id ? '#c0353a' : t.text3,
-            }}
-          >
-            {f.label}
-          </Box>
-        ))}
-      </Box>
 
-      {!fullscreenCtl.fullscreen && <InboxLayout>{inboxBody}</InboxLayout>}
+      {!fullscreenCtl.fullscreen && (
+        <>
+          <Box sx={{ mb: 1.5 }}>{filterBar}</Box>
+          <InboxLayout>{inboxBody}</InboxLayout>
+        </>
+      )}
       <InboxFullscreenLayer
         open={fullscreenCtl.fullscreen}
         onClose={fullscreenCtl.exit}
         label="Inbox Avis plein écran"
+        chrome={filterBar}
       >
         {inboxBody}
       </InboxFullscreenLayer>

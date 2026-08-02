@@ -99,15 +99,15 @@ export function Step1TypeSelection({
     ? Boolean(formData.fulltaskTypeId)
     : Boolean(formData.taskType);
 
-  // Charger listings quand type sélectionné (fulltask: scope JWT ; legacy: ownerId ou admin)
+  // Charger listings quand type sélectionné — toujours scopé ownerId sauf admin global
   useEffect(() => {
     if (!typeSelected) return;
-    if (!useFulltaskApi && !isAdminUser && !ownerId) return;
+    if (!isAdminUser && !ownerId) return;
     const loadListings = async () => {
       try {
         setLoadingListings(true);
         const data = useFulltaskApi
-          ? await fetchFulltaskListings()
+          ? await fetchFulltaskListings(ownerId)
           : await fetchTaskListings(ownerId);
         setListings(data);
       } catch {

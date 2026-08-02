@@ -40,14 +40,16 @@ function deriveAccessPanel(a: Pick<WhatsappAdminDesign, 'listingIds' | 'cityIds'
   return null;
 }
 
+/** Libellé accès — vide = aucun ; All = tous les biens de ce PM (pas la plateforme). */
 function adminAccessSummary(a: WhatsappAdminDesign, cities: CityOpt[]): string {
-  if (hasAllAccess(a.listingIds)) return 'Toutes les annonces';
-  if (!a.listingIds?.length && !a.cityIds?.length) return 'Toutes les annonces';
+  if (hasAllAccess(a.listingIds) || hasAllAccess(a.cityIds)) {
+    return 'Tous les listings (ce owner)';
+  }
+  if (!a.listingIds?.length && !a.cityIds?.length) return 'Aucun accès';
   const parts: string[] = [];
-  if (hasAllAccess(a.cityIds)) {
-    parts.push('Toutes les villes');
-  } else if (a.cityIds?.length) {
+  if (a.cityIds?.length) {
     const names = a.cityIds
+      .filter((id) => id !== 'All' && id !== 'ALL')
       .map((id) => cities.find((c) => c.id === id)?.name || '')
       .filter(Boolean)
       .slice(0, 2);
@@ -425,7 +427,7 @@ export default function WhatsappAdminPageView({
               <div className="access-mode-row">
                 {(
                   [
-                    ['all', '🌍', 'Tous les listings'],
+                    ['all', '🌍', 'Tous (ce owner)'],
                     ['city', '📍', 'Par ville'],
                     ['listing', '🏠', 'Par listing'],
                   ] as const
@@ -452,7 +454,7 @@ export default function WhatsappAdminPageView({
                 <div className="access-selected-chips access-selected-chips--compact">
                   <span className="access-chip">
                     <span className="access-chip-emoji">🌍</span>
-                    <span className="access-chip-label">Tous les listings</span>
+                    <span className="access-chip-label">Tous les listings (ce owner)</span>
                     <button
                       type="button"
                       className="access-chip-x"

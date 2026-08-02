@@ -82,7 +82,7 @@ export async function completeTask(
   return data;
 }
 
-export async function assignTask(id: string, staffId: string) {
+export async function assignTask(id: string, staffId: string | null) {
   const { data } = await apiClient.patch(`${BASE}/tasks/${id}/assign`, { staffId });
   return data;
 }
@@ -838,7 +838,8 @@ export async function declareGuestArrival(reservationId: string, hour?: number) 
   logResaGuest('api:declare-arrival →', { reservationId, hour, time });
   const { data } = await apiClient.patch(
     `${BASE}/guest-actions/declare-arrival`,
-    { reservationId, declared: true, time },
+    // forceCreate: PM dashboard crée la Task même si service guest OFF sur le listing
+    { reservationId, declared: true, time, forceCreate: true },
   );
   logResaGuest('api:declare-arrival ←', {
     reservationId,
@@ -854,7 +855,8 @@ export async function declareGuestDeparture(reservationId: string, hour?: number
   logResaGuest('api:declare-departure →', { reservationId, hour, time });
   const { data } = await apiClient.patch(
     `${BASE}/guest-actions/declare-departure`,
-    { reservationId, declared: true, time },
+    // forceCreate: PM dashboard crée la Task même si service guest OFF sur le listing
+    { reservationId, declared: true, time, forceCreate: true },
   );
   logResaGuest('api:declare-departure ←', {
     reservationId,
@@ -871,6 +873,7 @@ export type RegistrationFlowState = {
   total: number;
   registered: number;
   complete: boolean;
+  registrationLevel?: 'simple' | 'complete';
 };
 
 export type GuestMemberInput = {
@@ -881,6 +884,20 @@ export type GuestMemberInput = {
   gender?: string;
   date_of_birth?: string;
   document_type?: string;
+  residence_country?: string;
+  country?: string;
+  email?: string;
+  phone?: string;
+  document_front_download?: string;
+  document_back_download?: string;
+  place_of_birth?: string;
+  profession?: string;
+  domicile?: string;
+  city?: string;
+  coming_from?: string;
+  going_to?: string;
+  document_issued_at?: string;
+  document_issued_on?: string;
 };
 
 export async function getRegistrationFlowState(reservationId: string) {
@@ -908,6 +925,28 @@ export async function registerGuestMember(
     { reservationId, index, member },
   );
   logResaGuest('api:register-guest ←', {
+    reservationId,
+    index,
+    success: data?.success,
+    error: data?.error,
+    state: data?.data?.state,
+    guestContext: guestContextStaySummary(data?.data?.guestContext),
+  });
+  return data as {
+    success?: boolean;
+    error?: string;
+    data?: { state?: RegistrationFlowState; guestContext?: unknown };
+  };
+}
+
+/** Efface un voyageur enregistré (Task fulltask → sync résa / guest context). */
+export async function unregisterGuestMember(reservationId: string, index: number) {
+  logResaGuest('api:unregister-guest →', { reservationId, index });
+  const { data } = await apiClient.patch(
+    `${BASE}/guest-actions/unregister-guest`,
+    { reservationId, index },
+  );
+  logResaGuest('api:unregister-guest ←', {
     reservationId,
     index,
     success: data?.success,
