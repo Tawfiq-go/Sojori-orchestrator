@@ -21,13 +21,14 @@ import {
   IconButton,
   CircularProgress,
 } from '@mui/material';
-import { Add, Close, CloudUpload, Edit, Person } from '@mui/icons-material';
+import { Add, Close, CloudUpload, Edit, Person, PictureAsPdf } from '@mui/icons-material';
 import { toast } from 'react-toastify';
-import { useDispatch } from 'react-redux';
 import { ReservationRegistrationActions } from '../reservations/ReservationRegistrationActions';
 import * as fulltaskApi from '../../services/fulltaskApi';
 import listingsService from '../../services/listingsService';
-import { uploadImageToAPI } from '../../redux/slices/UploadSlice';
+import { MICROSERVICE_BASE_URL } from '../../config/authConfig';
+import { generateRandomString } from '../../utils/upload/helpers';
+import { postFormDataAsMultipart } from '../../utils/upload/postFormData';
 import { getListingMediaDisplayUrl, isListingsBucketUrl } from '../../features/finances/services/listingMediaApi';
 import {
   REGISTRATION_FIELD_LABELS,
@@ -36,6 +37,9 @@ import {
   type RegistrationFieldKey,
   type RegistrationLevel,
 } from '../../features/registration/registrationLevel';
+import { downloadFichePolicePdf } from '../../features/registration/fichePolicePdf';
+import { fetchDefaultPmReportHeader } from '../../features/finances/financesApi';
+import { normalizeProfitReportHeader } from '../../features/finances/utils/profitReportHeader';
 
 const T = {
   primary: '#b8851a',
@@ -177,7 +181,14 @@ export function RegistrationTab({
 }: RegistrationTabProps) {
   const r = reservationDetails;
   const resaId = String(r?._id || r?.id || '');
-  const listingId = String(r?.listingId || r?.listing_id || '').trim();
+  const listingId = String(
+    r?.listingId ||
+      r?.listing_id ||
+      r?.sojoriId ||
+      r?.listing?._id ||
+      r?.listing?.id ||
+      '',
+  ).trim();
   const guestReg = r?.guestRegistration ?? {};
   const members: Member[] = Array.isArray(guestReg.members) ? guestReg.members : [];
   const regTotal =
@@ -191,6 +202,7 @@ export function RegistrationTab({
   const [saving, setSaving] = useState(false);
   const [imageKey, setImageKey] = useState(0);
   const [registrationLevel, setRegistrationLevel] = useState<RegistrationLevel>('simple');
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const loadLevel = useCallback(async () => {
     if (!listingId) {
@@ -238,15 +250,35 @@ export function RegistrationTab({
   const complete = regTotal > 0 && stats.ok >= regTotal;
 
   const openAdd = () => {
-    setEditIndex(null);
+    // Première case vide / brouillon plutôt que d’empiler un 4e voyageur
+    let target: number | null = null;
+    for (let i = 0; i < Math.max(members.length, regTotal); i++) {
+      const m = members[i] || {};
+      const hasIdentity =
+        Boolean(String(m.first_name || m.firstName || '').trim()) ||
+        Boolean(String(m.document_number || m.passport || '').trim()) ||
+        Boolean(memberDocUrl(m, 'front'));
+      if (!hasIdentity) {
+        target = i;
+        break;
+      }
+    }
+    setPreviewUrl(null);
+    setEditIndex(target);
     setForm({ ...EMPTY_FORM });
     setImageKey(Date.now());
     setModalOpen(true);
   };
 
   const openEdit = (index: number) => {
+    const m = members[index] || {};
+    const hasIdentity =
+      Boolean(String(m.first_name || m.firstName || '').trim()) ||
+      Boolean(String(m.document_number || m.passport || '').trim());
+    setPreviewUrl(null);
     setEditIndex(index);
-    setForm(toForm(members[index]));
+    // Case vide / brouillon sans identité → formulaire vierge (pas d’image du voyageur N-1)
+    setForm(hasIdentity ? toForm(m) : { ...EMPTY_FORM });
     setImageKey(Date.now());
     setModalOpen(true);
   };
@@ -254,7 +286,9 @@ export function RegistrationTab({
   const closeModal = () => {
     setModalOpen(false);
     setEditIndex(null);
-    setForm(EMPTY_FORM);
+    setPreviewUrl(null);
+    setForm({ ...EMPTY_FORM });
+    setImageKey(Date.now());
   };
 
   const setField = <K extends keyof MemberForm>(key: K, value: MemberForm[K]) => {
@@ -269,7 +303,20 @@ export function RegistrationTab({
     }
     setSaving(true);
     try {
-      const index = editIndex === null ? members.length : editIndex;
+      const index =
+        editIndex !== null && editIndex >= 0
+          ? editIndex
+          : (() => {
+              for (let i = 0; i < members.length; i++) {
+                const m = members[i] || {};
+                const hasIdentity =
+                  Boolean(String(m.first_name || m.firstName || '').trim()) ||
+                  Boolean(String(m.document_number || m.passport || '').trim()) ||
+                  Boolean(memberDocUrl(m, 'front'));
+                if (!hasIdentity) return i;
+              }
+              return members.length;
+            })();
       const res = await fulltaskApi.registerGuestMember(resaId, index, {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
@@ -329,8 +376,78 @@ export function RegistrationTab({
     }
   };
 
+  const handleDownloadFichePolice = async () => {
+    if (registrationLevel !== 'complete') return;
+    setPdfBusy(true);
+    try {
+      let listingName = String(
+        r?.listingName || r?.listing_nickname || r?.listing?.name || r?.title || '',
+      ).trim();
+      if (!listingName && listingId) {
+        try {
+          const doc = await listingsService.getListingDocument(listingId);
+          listingName = String(doc?.name || doc?.nickname || doc?.internalName || '').trim();
+        } catch {
+          /* ignore */
+        }
+      }
+
+      let brand: {
+        companyName?: string;
+        phone?: string;
+        email?: string;
+        address?: string;
+        logoUrl?: string;
+      } = {};
+      try {
+        const header = normalizeProfitReportHeader(
+          (await fetchDefaultPmReportHeader()) || undefined,
+        );
+        brand = {
+          companyName: header.companyName || header.publicName || '',
+          phone: header.phone || '',
+          email: header.email || '',
+          address: header.address || '',
+          logoUrl: header.logoUrl || '',
+        };
+      } catch {
+        /* branding optionnel */
+      }
+
+      await downloadFichePolicePdf(members, {
+        reservationLabel: String(r?.reservationNumber || r?.reservation_id || resaId || ''),
+        listingName: listingName || '—',
+        checkIn: String(r?.arrivalDate || r?.checkIn || r?.startDate || ''),
+        checkOut: String(r?.departureDate || r?.checkOut || r?.endDate || ''),
+        brand,
+      });
+      toast.success('PDF fiche police téléchargé');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Échec génération PDF');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   return (
     <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: T.bg0, minHeight: 320 }}>
+      {registrationLevel === 'complete' ? (
+        <Alert
+          severity="error"
+          sx={{
+            mb: 1.5,
+            py: 0.75,
+            '& .MuiAlert-message': { fontSize: 13, fontWeight: 700 },
+          }}
+        >
+          Mode complet (fiche police) — les champs manquants apparaissent en rouge ci-dessous
+          {stats.missingLabels.length
+            ? ` : ${stats.missingLabels.slice(0, 8).join(', ')}${
+                stats.missingLabels.length > 8 ? '…' : ''
+              }`
+            : '.'}
+        </Alert>
+      ) : null}
       <Paper
         sx={{
           p: 2,
@@ -417,6 +534,30 @@ export function RegistrationTab({
             ) : null}
           </Box>
           <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
+            {registrationLevel === 'complete' ? (
+              <Button
+                size="small"
+                variant="contained"
+                disabled={pdfBusy || members.length === 0}
+                startIcon={
+                  pdfBusy ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : (
+                    <PictureAsPdf sx={{ fontSize: 16 }} />
+                  )
+                }
+                onClick={() => void handleDownloadFichePolice()}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: 12,
+                  bgcolor: T.primaryDeep,
+                  '&:hover': { bgcolor: '#6e4f14' },
+                }}
+              >
+                PDF fiche police
+              </Button>
+            ) : null}
             {resaId ? (
               <ReservationRegistrationActions
                 reservationId={resaId}
@@ -594,19 +735,25 @@ export function RegistrationTab({
                     }
                     missing={missing.includes('birth_date')}
                   />
+                  <InfoRow
+                    label="Lieu de naissance"
+                    value={String(m.place_of_birth || m.birth_place || '—')}
+                  />
+                  <InfoRow
+                    label="Délivré à"
+                    value={String(m.document_issued_at || m.issued_at || '—')}
+                  />
+                  <InfoRow
+                    label="Délivré le"
+                    value={formDate(String(m.document_issued_on || m.issued_on || '')) || '—'}
+                  />
                   <InfoRow label="Genre" value={String(m.gender || '—')} />
                   <InfoRow
                     label="Résidence"
                     value={String(m.country_of_residence || m.residence_country || m.country || '—')}
-                    missing={missing.includes('country')}
                   />
                   {registrationLevel === 'complete' ? (
                     <>
-                      <InfoRow
-                        label="Lieu de naissance"
-                        value={String(m.place_of_birth || m.birth_place || '—')}
-                        missing={missing.includes('place_of_birth')}
-                      />
                       <InfoRow
                         label="Profession"
                         value={String(m.profession || '—')}
@@ -622,6 +769,13 @@ export function RegistrationTab({
                         value={String(m.going_to || '—')}
                         missing={missing.includes('going_to')}
                       />
+                      <InfoRow
+                        label="Téléphone"
+                        value={String(m.phone || '—')}
+                        missing={missing.includes('phone')}
+                      />
+                      <InfoRow label="Domicile" value={String(m.domicile || m.address || '—')} />
+                      <InfoRow label="Ville" value={String(m.city || '—')} />
                     </>
                   ) : null}
                 </Stack>
@@ -646,7 +800,14 @@ export function RegistrationTab({
         </Box>
       )}
 
-      <Dialog open={modalOpen} onClose={closeModal} maxWidth="sm" fullWidth>
+      <Dialog
+        open={modalOpen}
+        onClose={closeModal}
+        maxWidth="sm"
+        fullWidth
+        // Remount formulaire à chaque ouverture → pas d’image / champs fantômes du voyageur précédent
+        key={`reg-modal-${editIndex ?? 'new'}-${imageKey}`}
+      >
         <DialogTitle sx={{ fontSize: 15, fontWeight: 800, pr: 6 }}>
           {editIndex === null ? 'Ajouter un voyageur' : 'Modifier le voyageur'}
           <IconButton
@@ -725,7 +886,7 @@ export function RegistrationTab({
                 type="date"
                 size="small"
                 fullWidth
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
                 value={form.date_of_birth}
                 onChange={(e) => setField('date_of_birth', e.target.value)}
               />
@@ -744,7 +905,6 @@ export function RegistrationTab({
                 fullWidth
                 value={form.email}
                 onChange={(e) => setField('email', e.target.value)}
-                error={registrationLevel === 'complete' && !form.email.trim()}
               />
               <TextField
                 label="Téléphone"
@@ -753,6 +913,40 @@ export function RegistrationTab({
                 value={form.phone}
                 onChange={(e) => setField('phone', e.target.value)}
                 error={registrationLevel === 'complete' && !form.phone.trim()}
+                helperText={
+                  registrationLevel === 'complete' && !form.phone.trim()
+                    ? 'Requis en mode complet'
+                    : undefined
+                }
+              />
+            </Stack>
+
+            <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, pt: 0.5 }}>
+              Passeport / pièce (OCR)
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField
+                label="Lieu de naissance"
+                size="small"
+                fullWidth
+                value={form.place_of_birth}
+                onChange={(e) => setField('place_of_birth', e.target.value)}
+              />
+              <TextField
+                label="Délivré à"
+                size="small"
+                fullWidth
+                value={form.document_issued_at}
+                onChange={(e) => setField('document_issued_at', e.target.value)}
+              />
+              <TextField
+                label="Délivré le"
+                type="date"
+                size="small"
+                fullWidth
+                slotProps={{ inputLabel: { shrink: true } }}
+                value={form.document_issued_on}
+                onChange={(e) => setField('document_issued_on', e.target.value)}
               />
             </Stack>
 
@@ -761,31 +955,20 @@ export function RegistrationTab({
                 <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.error, pt: 0.5 }}>
                   Fiche de police — champs complémentaires
                 </Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                  <TextField
-                    label="Lieu de naissance"
-                    size="small"
-                    fullWidth
-                    value={form.place_of_birth}
-                    onChange={(e) => setField('place_of_birth', e.target.value)}
-                    error={!form.place_of_birth.trim()}
-                  />
-                  <TextField
-                    label="Profession"
-                    size="small"
-                    fullWidth
-                    value={form.profession}
-                    onChange={(e) => setField('profession', e.target.value)}
-                    error={!form.profession.trim()}
-                  />
-                </Stack>
+                <TextField
+                  label="Profession"
+                  size="small"
+                  fullWidth
+                  value={form.profession}
+                  onChange={(e) => setField('profession', e.target.value)}
+                  error={!form.profession.trim()}
+                />
                 <TextField
                   label="Domicile habituel"
                   size="small"
                   fullWidth
                   value={form.domicile}
                   onChange={(e) => setField('domicile', e.target.value)}
-                  error={!form.domicile.trim()}
                 />
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                   <TextField
@@ -794,7 +977,6 @@ export function RegistrationTab({
                     fullWidth
                     value={form.city}
                     onChange={(e) => setField('city', e.target.value)}
-                    error={!form.city.trim()}
                   />
                   <TextField
                     label="Lieu de provenance"
@@ -813,26 +995,6 @@ export function RegistrationTab({
                     error={!form.going_to.trim()}
                   />
                 </Stack>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                  <TextField
-                    label="Délivré à"
-                    size="small"
-                    fullWidth
-                    value={form.document_issued_at}
-                    onChange={(e) => setField('document_issued_at', e.target.value)}
-                    error={!form.document_issued_at.trim()}
-                  />
-                  <TextField
-                    label="Délivré le"
-                    type="date"
-                    size="small"
-                    fullWidth
-                    InputLabelProps={{ shrink: true }}
-                    value={form.document_issued_on}
-                    onChange={(e) => setField('document_issued_on', e.target.value)}
-                    error={!form.document_issued_on.trim()}
-                  />
-                </Stack>
               </>
             ) : null}
 
@@ -842,21 +1004,38 @@ export function RegistrationTab({
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <Box sx={{ flex: 1 }}>
                 {form.document_front_download ? (
-                  <Box
-                    component="img"
-                    src={form.document_front_download}
-                    alt="Recto"
-                    sx={{
-                      width: '100%',
-                      height: 120,
-                      objectFit: 'cover',
-                      borderRadius: 1,
-                      border: `1px solid ${T.border}`,
-                      mb: 1,
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setPreviewUrl(form.document_front_download)}
-                  />
+                  <Box sx={{ position: 'relative', mb: 1 }}>
+                    <Box
+                      component="img"
+                      key={`front-img-${imageKey}-${form.document_front_download}`}
+                      src={form.document_front_download}
+                      alt="Recto"
+                      sx={{
+                        width: '100%',
+                        height: 120,
+                        objectFit: 'cover',
+                        borderRadius: 1,
+                        border: `1px solid ${T.border}`,
+                        cursor: 'pointer',
+                        display: 'block',
+                      }}
+                      onClick={() => setPreviewUrl(form.document_front_download)}
+                    />
+                    <Button
+                      size="small"
+                      onClick={() => setField('document_front_download', '')}
+                      sx={{
+                        mt: 0.5,
+                        textTransform: 'none',
+                        fontSize: 11,
+                        color: T.error,
+                        minWidth: 0,
+                        p: 0.25,
+                      }}
+                    >
+                      Retirer la photo
+                    </Button>
+                  </Box>
                 ) : null}
                 <DocUploadButton
                   key={`front-${imageKey}`}
@@ -870,21 +1049,38 @@ export function RegistrationTab({
               {form.document_type !== 'passport' ? (
                 <Box sx={{ flex: 1 }}>
                   {form.document_back_download ? (
-                    <Box
-                      component="img"
-                      src={form.document_back_download}
-                      alt="Verso"
-                      sx={{
-                        width: '100%',
-                        height: 120,
-                        objectFit: 'cover',
-                        borderRadius: 1,
-                        border: `1px solid ${T.border}`,
-                        mb: 1,
-                        cursor: 'pointer',
-                      }}
-                      onClick={() => setPreviewUrl(form.document_back_download)}
-                    />
+                    <Box sx={{ position: 'relative', mb: 1 }}>
+                      <Box
+                        component="img"
+                        key={`back-img-${imageKey}-${form.document_back_download}`}
+                        src={form.document_back_download}
+                        alt="Verso"
+                        sx={{
+                          width: '100%',
+                          height: 120,
+                          objectFit: 'cover',
+                          borderRadius: 1,
+                          border: `1px solid ${T.border}`,
+                          cursor: 'pointer',
+                          display: 'block',
+                        }}
+                        onClick={() => setPreviewUrl(form.document_back_download)}
+                      />
+                      <Button
+                        size="small"
+                        onClick={() => setField('document_back_download', '')}
+                        sx={{
+                          mt: 0.5,
+                          textTransform: 'none',
+                          fontSize: 11,
+                          color: T.error,
+                          minWidth: 0,
+                          p: 0.25,
+                        }}
+                      >
+                        Retirer
+                      </Button>
+                    </Box>
                   ) : null}
                   <DocUploadButton
                     key={`back-${imageKey}`}
@@ -1068,7 +1264,6 @@ function DocUploadButton({
   label: string;
   onUploaded: (url: string) => void;
 }) {
-  const dispatch = useDispatch();
   const [loading, setLoading] = useState(false);
   const inputId = `doc-upload-${label.replace(/\W+/g, '-').toLowerCase()}`;
 
@@ -1078,9 +1273,22 @@ function DocUploadButton({
     if (!file) return;
     setLoading(true);
     try {
-      const resultAction = await dispatch(uploadImageToAPI({ file, folder: 'documents' }) as any);
-      if (uploadImageToAPI.fulfilled.match(resultAction) && resultAction.payload?.url) {
-        onUploaded(String(resultAction.payload.url));
+      const rid =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `upl-${Date.now()}`;
+      const formData = new FormData();
+      formData.append('media', file);
+      formData.append('type', 'documents');
+      formData.append('name', generateRandomString(15));
+      formData.append('client_rid', rid);
+
+      const response = await postFormDataAsMultipart(MICROSERVICE_BASE_URL.UPLOAD_IMAGE, formData, {
+        rid,
+      });
+      const url = response?.data?.url;
+      if (url) {
+        onUploaded(String(url));
         toast.success('Image uploadée');
       } else {
         toast.error('Échec upload image');

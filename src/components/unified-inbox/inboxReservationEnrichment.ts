@@ -12,6 +12,10 @@ import {
 } from './inboxFormat';
 import { resolveListingName } from './inboxListingName';
 import { resolveChannelStayFinance } from '../../utils/reservationChannelFinance';
+import { getCachedEurMadAdminRate, loadEurMadAdminRate } from '../../utils/eurMadAdminRate';
+
+// Warm taux admin dès le chargement du module inbox
+void loadEurMadAdminRate();
 
 export function getConversationReservationNumber(conv: Conversation): string | undefined {
   const raw = conv.reservation_number || conv.reservation_id;
@@ -162,8 +166,10 @@ export function mapReservationToInboxData(
   const checkIn = r.arrivalDate ? String(r.arrivalDate) : conv?.checkin_date;
   const checkOut = r.departureDate ? String(r.departureDate) : conv?.checkout_date;
   const nights = r.nights ?? nightsBetween(checkIn, checkOut);
-  // Aligné Airbnb/Booking Comments — plus de 10 % inventé.
-  const finance = resolveChannelStayFinance(r as unknown as Record<string, unknown>);
+  // Aligné Airbnb/Booking — MAD via taux admin pour Booking EUR.
+  const finance = resolveChannelStayFinance(r as unknown as Record<string, unknown>, {
+    eurMadRate: getCachedEurMadAdminRate(),
+  });
   const total = finance.guestPaidMad > 0 ? finance.guestPaidMad : undefined;
   const commission = finance.commissionMad > 0 ? finance.commissionMad : undefined;
   const netHost = finance.netHostMad > 0 ? finance.netHostMad : undefined;
@@ -189,7 +195,7 @@ export function mapReservationToInboxData(
     guestsLabel: formatGuestsLabel(r),
     guestPhone: String(r.phone || '').trim() || undefined,
     totalPrice: total,
-    currency: r.currency || 'MAD',
+    currency: 'MAD',
     paymentStatus: mapPaymentStatus(r.paymentStatus, r.alreadyPaid, total),
     stayAmount: finance.stayMad > 0 ? finance.stayMad : undefined,
     // Afficher ménage seulement si > 0 (0 fees Comments ≠ inventer une taxe)
@@ -205,6 +211,15 @@ export function mapReservationToInboxData(
     hostFeeAmount: finance.hostFeeMad != null && finance.hostFeeMad > 0 ? finance.hostFeeMad : undefined,
     hostFeeVatAmount:
       finance.hostFeeVatMad != null && finance.hostFeeVatMad > 0 ? finance.hostFeeVatMad : undefined,
+    hostFeeLabel: finance.hostFeeLabel,
+    hostFeeVatLabel: finance.hostFeeVatLabel,
+    guestServiceFeeAmount:
+      finance.guestServiceFeeMad != null && finance.guestServiceFeeMad > 0
+        ? finance.guestServiceFeeMad
+        : undefined,
+    guestVatAmount:
+      finance.guestVatMad != null && finance.guestVatMad > 0 ? finance.guestVatMad : undefined,
+    airbnbFeeModel: finance.feeModel,
     otaPlatform: source,
     otaCode: String(r.otaCode || '').trim() || undefined,
     ...stayOps,

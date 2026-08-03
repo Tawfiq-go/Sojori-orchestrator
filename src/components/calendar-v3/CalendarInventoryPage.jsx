@@ -401,14 +401,35 @@ export default function CalendarInventoryPage({
         overflow: 'hidden',
         background: '#f6f5f1',
       }
-    : {
-        padding: view === 'simple' ? '8px 24px 40px' : '10px 28px 36px',
-        maxWidth: '100%',
-        margin: '0 auto',
-        width: '100%',
-        // overflow hidden casse position:sticky (rail vignettes) — nécessaire seulement en vue multi
-        overflow: view === 'simple' ? 'visible' : 'hidden',
-      };
+    : view === 'multi'
+      ? {
+          // Multi : occupe la hauteur main → scroll interne (freeze dates + colonne listing)
+          padding: '8px 12px 12px',
+          maxWidth: '100%',
+          margin: 0,
+          width: '100%',
+          height: '100%',
+          maxHeight: 'calc(100dvh - 56px)',
+          minHeight: 0,
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+        }
+      : {
+          // Simple : hauteur utile pour scroll mois interne (flèches ↑↓)
+          padding: '8px 24px 24px',
+          maxWidth: '100%',
+          margin: '0 auto',
+          width: '100%',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          height: 'calc(100dvh - 64px)',
+          boxSizing: 'border-box',
+        };
 
   const calendarPage = (
     <div style={pageShellStyle}>
@@ -632,8 +653,8 @@ export default function CalendarInventoryPage({
 
       <div
         style={
-          calendarFullscreen
-            ? { flex: 1, minHeight: 0, overflow: 'auto' }
+          view === 'multi' || view === 'simple' || calendarFullscreen
+            ? { flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }
             : undefined
         }
       >
@@ -648,7 +669,7 @@ export default function CalendarInventoryPage({
           calendarBlocksById={calendarBlocksById}
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
-          fillViewport={calendarFullscreen}
+          fillViewport
           onCellsSelected={canWrite ? setModalCells : undefined}
           onOpenReservation={openReservationDrawer}
           onCalendarImportReviewFinished={onCalendarImportReviewFinished}
@@ -713,6 +734,7 @@ export default function CalendarInventoryPage({
           inventoryLoading={inventoryLoading}
           inventories={simpleInventories}
           calendarBlocksById={calendarBlocksById}
+          fillViewport
           onCellsSelected={canWrite ? setModalCells : undefined}
           onOpenReservation={openReservationDrawer}
           onReleaseBlock={canWrite ? releaseBlock : undefined}
@@ -778,6 +800,7 @@ export default function CalendarInventoryPage({
         open={calendarFullscreen}
         onClose={calendarFs.exit}
         label="Calendrier plein écran"
+        // z-index bas : modales calendrier (audit ~50) doivent passer au-dessus
         zIndex={40}
       >
         {calendarPage}

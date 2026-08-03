@@ -327,10 +327,11 @@ export default function MultiView({
     return () => { b.removeEventListener('scroll', onBody); h.removeEventListener('scroll', onHead); };
   }, []);
 
-  /* ─── Scroll horizontal molette / trackpad (pattern docs/scroll : capture + passive:false) ───
-   * Zone dates (header + cellules) → toujours horizontal, collapse ouvert ou fermé.
-   * Colonne Listing seule → vertical si la liste déborde.
-   * capture:true : rien dans les cellules (Excel, tips) ne peut avaler le wheel. */
+  /* ─── Molette / trackpad : axes naturels ─────────────────────────────────
+   * deltaX → horizontal, deltaY → vertical (partout sur la grille).
+   * Shift + molette verticale → horizontal (souris sans trackpad).
+   * Avant : le vertical était remappé en horizontal sauf sur la colonne Listing,
+   * ce qui bloquait le scroll listings (et le plein écran). */
   useEffect(() => {
     const body = bodyRef.current;
     const header = headerRef.current;
@@ -345,72 +346,75 @@ export default function MultiView({
       const maxY = body.scrollHeight - body.clientHeight;
       if (maxX <= 1 && maxY <= 1) return;
 
-      const bodyRect = body.getBoundingClientRect();
-      const headerRect = header?.getBoundingClientRect();
-      const overHeader = !!(
-        header && (
-          header.contains(/** @type {Node} */ (e.target)) ||
-          (headerRect &&
-            e.clientX >= headerRect.left && e.clientX <= headerRect.right &&
-            e.clientY >= headerRect.top && e.clientY <= headerRect.bottom)
-        )
-      );
-      const overBody =
-        body.contains(/** @type {Node} */ (e.target)) ||
-        (e.clientX >= bodyRect.left && e.clientX <= bodyRect.right &&
-          e.clientY >= bodyRect.top && e.clientY <= bodyRect.bottom);
-      if (!overHeader && !overBody) return;
+      const overRoot =
+        root.contains(/** @type {Node} */ (e.target)) ||
+        (() => {
+          const r = root.getBoundingClientRect();
+          return (
+            e.clientX >= r.left && e.clientX <= r.right &&
+            e.clientY >= r.top && e.clientY <= r.bottom
+          );
+        })();
+      if (!overRoot) return;
 
-      const originLeft = overHeader ? (headerRect?.left ?? bodyRect.left) : bodyRect.left;
-      const localX = e.clientX - originLeft;
-      const overLeftCol = localX < LEFT_W;
+      const absX = Math.abs(e.deltaX);
+      const absY = Math.abs(e.deltaY);
+      let moved = false;
 
-      // Colonne noms : scroll vertical des listings (si débordement)
-      if (overLeftCol && !overHeader && !e.shiftKey && maxY > 1 && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
-        if (!e.deltaY) return;
-        const next = clamp(body.scrollTop + e.deltaY, 0, maxY);
+      const applyH = (delta) => {
+        if (!delta || maxX <= 1) return;
+        const next = clamp(body.scrollLeft + delta, 0, maxX);
+        if (next === body.scrollLeft) return;
+        syncing.current = true;
+        body.scrollLeft = next;
+        if (header) header.scrollLeft = next;
+        requestAnimationFrame(() => { syncing.current = false; });
+        moved = true;
+      };
+      const applyV = (delta) => {
+        if (!delta || maxY <= 1) return;
+        const next = clamp(body.scrollTop + delta, 0, maxY);
         if (next === body.scrollTop) return;
         body.scrollTop = next;
-        e.preventDefault();
-        e.stopPropagation();
-        return;
+        moved = true;
+      };
+
+      // Shift + molette verticale = scroll dates (souris)
+      if (e.shiftKey && absY >= absX) {
+        applyH(e.deltaY || e.deltaX);
+      } else {
+        // Trackpad : appliquer les deux axes s’ils sont présents
+        if (absX > 0) applyH(e.deltaX);
+        if (absY > 0) applyV(e.deltaY);
       }
 
-      // Header dates + cellules prix/dispo : toujours horizontal (collapse ouvert ou fermé)
-      if (maxX <= 1) return;
-      const delta =
-        (Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : 0) || e.deltaY || e.deltaX;
-      if (!delta) return;
-      const prev = body.scrollLeft;
-      const next = clamp(prev + delta, 0, maxX);
-      if (next === prev) return;
-      // Bloquer le sync inverse header→body pendant l'application
-      syncing.current = true;
-      body.scrollLeft = next;
-      if (header) header.scrollLeft = next;
-      requestAnimationFrame(() => { syncing.current = false; });
-      e.preventDefault();
-      e.stopPropagation();
+      if (moved) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     };
 
     root.addEventListener('wheel', onWheel, { passive: false, capture: true });
     return () => {
       root.removeEventListener('wheel', onWheel, { capture: true });
     };
-  }, [LEFT_W]);
+  }, [LEFT_W, fillViewport, days.length, listings.length]);
 
-  /* ─── Flèches clavier ← / → : scroll horizontal de la grille (Shift = 7 jours) ───
-   * Actives dès le chargement, sans clic ni survol préalable (la grille multi est
-   * la seule zone scrollable horizontalement de la page). Le handler s'efface si :
-   * un champ de saisie a le focus, un modal (aria-modal) est ouvert, ou un
-   * raccourci navigateur (Cmd/Ctrl/Alt) est utilisé. */
+  /* ─── Flèches clavier : ←→ horizontal, ↑↓ vertical ───────────────────────
+   * Actives dès le chargement (pas besoin de clic cellule).
+   * Ignore les vraies modales, mais PAS le plein écran calendrier (aria-modal
+   * technique sur PageFullscreenLayer — sinon ←→ morts en fullscreen). */
   useEffect(() => {
     const body = bodyRef.current;
     const header = headerRef.current;
     if (!body) return undefined;
 
+    const ROW_STEP = 44; // hauteur approx. d’une ligne listing
+
     const onKeyDown = (e) => {
-      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const isH = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+      const isV = e.key === 'ArrowUp' || e.key === 'ArrowDown';
+      if (!isH && !isV) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const ae = document.activeElement;
       if (
@@ -420,36 +424,49 @@ export default function MultiView({
           ae.tagName === 'SELECT' ||
           ae.isContentEditable)
       ) return;
-      // Modal réellement VISIBLE uniquement : un MUI Drawer fermé (keepMounted)
-      // reste dans le DOM avec aria-modal="true" mais 0 rect — ne doit pas bloquer.
-      const modalOpen = [...document.querySelectorAll('[aria-modal="true"]')].some(
-        (el) => el.getClientRects().length > 0,
-      );
+      // Modale VISIBLE uniquement — exclure le plein écran page (data-page-fullscreen)
+      const modalOpen = [...document.querySelectorAll('[aria-modal="true"]')].some((el) => {
+        if (el.getAttribute('data-page-fullscreen') === 'true') return false;
+        return el.getClientRects().length > 0;
+      });
       if (modalOpen) return;
 
       const maxX = body.scrollWidth - body.clientWidth;
-      if (maxX <= 1) return;
+      const maxY = body.scrollHeight - body.clientHeight;
 
-      const step = CELL_W * (e.shiftKey ? 7 : 1);
+      if (isH) {
+        if (maxX <= 1) return;
+        const step = CELL_W * (e.shiftKey ? 7 : 1);
+        const next = Math.max(
+          0,
+          Math.min(maxX, body.scrollLeft + (e.key === 'ArrowRight' ? step : -step)),
+        );
+        e.preventDefault();
+        if (next === body.scrollLeft) return;
+        syncing.current = true;
+        body.scrollLeft = next;
+        if (header) header.scrollLeft = next;
+        requestAnimationFrame(() => { syncing.current = false; });
+        return;
+      }
+
+      // ↑ ↓ : scroll vertical listings
+      if (maxY <= 1) return;
+      const step = ROW_STEP * (e.shiftKey ? 5 : 1);
       const next = Math.max(
         0,
-        Math.min(maxX, body.scrollLeft + (e.key === 'ArrowRight' ? step : -step)),
+        Math.min(maxY, body.scrollTop + (e.key === 'ArrowDown' ? step : -step)),
       );
-      // La flèche appartient à la grille même en butée — pas de scroll page derrière.
       e.preventDefault();
-      if (next === body.scrollLeft) return;
-
-      syncing.current = true;
-      body.scrollLeft = next;
-      if (header) header.scrollLeft = next;
-      requestAnimationFrame(() => { syncing.current = false; });
+      if (next === body.scrollTop) return;
+      body.scrollTop = next;
     };
 
     document.addEventListener('keydown', onKeyDown, { capture: true });
     return () => {
       document.removeEventListener('keydown', onKeyDown, { capture: true });
     };
-  }, [CELL_W]);
+  }, [CELL_W, fillViewport, days.length, listings.length]);
 
   /* ─── Popover rotations / clic résa ─── */
   const [popover, setPopover] = useState(null);
@@ -469,20 +486,28 @@ export default function MultiView({
     <CalendarBlocksContext.Provider value={calendarBlocksById}>
     <div style={{
       background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 14,
-      overflow: 'hidden', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+      overflow: 'hidden',
+      boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
       userSelect: isDragging ? 'none' : 'auto',
       maxWidth: '100%',
       width: '100%',
       minWidth: 0,
-      maxHeight: fillViewport ? 'calc(100dvh - 72px)' : 'calc(100vh - 150px)',
-      height: fillViewport ? 'calc(100dvh - 72px)' : undefined,
-      display: 'flex',
-      flexDirection: 'column',
+      // freeze panes : header dates fixe + colonne listing sticky left dans le même scroll
+      ...(fillViewport
+        ? {
+            height: '100%',
+            // filet de secours si la chaîne flex parent n’a pas de hauteur résolue
+            maxHeight: 'min(100%, calc(100dvh - 96px))',
+            display: 'flex',
+            flexDirection: 'column',
+          }
+        : {}),
     }}>
       {/* Légende des couleurs - au-dessus du header */}
       <div style={{
         padding: '4px 12px', background: T.bg0, borderBottom: `1px solid ${T.border}`,
         display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+        flexShrink: 0,
       }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: T.text3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
           Légende
@@ -501,12 +526,13 @@ export default function MultiView({
         </div>
       </div>
 
-      {/* Header sticky avec scroll sync */}
+      {/* Header dates fixe (hors scroll body) — sync hori via scrollLeft */}
       <div ref={headerRef} style={{
-        position: 'sticky', top: 0, zIndex: 5,
+        flexShrink: 0,
+        zIndex: 5,
         background: T.bg2, borderBottom: `1px solid ${T.borderStrong}`,
         overflowX: 'hidden', overflowY: 'hidden',
-        minWidth: 0, // flex: sinon largeur intrinsèque = pas de scroll hori
+        minWidth: 0,
         width: '100%',
       }}>
         <div style={{
@@ -530,18 +556,22 @@ export default function MultiView({
         </div>
       </div>
 
-      {/* Body scrollable — overlay chargement uniquement sur la zone dates */}
+      {/* Body scrollable — listing sticky left + calendrier alignés sur le même scroll */}
       <div
         ref={bodyRef}
         className="calendar-multi-hscroll"
         style={{
           overflowX: 'auto',
-          overflowY: 'auto',
-          flex: 1,
-          minHeight: 0,
-          minWidth: 0, // critique flex column : active overflow-x
+          overflowY: fillViewport ? 'auto' : 'visible',
+          flex: fillViewport ? 1 : undefined,
+          minHeight: fillViewport ? 0 : undefined,
+          minWidth: 0,
           width: '100%',
           position: 'relative',
+          paddingBottom: 24,
+          // Trackpad / molette : laisser le navigateur reconnaître les gestes 2 axes
+          touchAction: 'pan-x pan-y',
+          overscrollBehavior: 'contain',
         }}
       >
         {inventoryLoading && (
@@ -645,7 +675,11 @@ export default function MultiView({
         const inv = inventoriesByListing[activeTip.listingId]?.[activeTip.dateStr];
         const listing = listings.find((l) => String(l._id) === String(activeTip.listingId));
         if (!inv || !listing || !hasInventoryData(inv)) return null;
-        const dayBlock = inv?.blockId ? calendarBlocksById[String(inv.blockId)] : null;
+        /* Résa gagne vs Import initial : tooltip ne montre le blocage que s’il n’y a pas de résa. */
+        const dayBlock =
+          (inv?.reservations?.length ?? 0) > 0
+            ? null
+            : (inv?.blockId ? calendarBlocksById[String(inv.blockId)] : null);
         return (
           <TooltipBreakdown
             open

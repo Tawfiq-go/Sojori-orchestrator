@@ -581,6 +581,34 @@ function cleanTranslation(value: unknown): string | null {
   return v;
 }
 
+/**
+ * Côté voyageur vs hôte/équipe.
+ * RU Airbnb marque souvent les msgs Cohost avec isIncoming=true — ne PAS
+ * s'appuyer seul sur isIncoming, sinon une réponse host apparaît comme guest.
+ */
+export function isOtaGuestMessageSide(msg: {
+  senderType?: string | null;
+  isIncoming?: boolean | null;
+}): boolean {
+  const t = String(msg.senderType || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+  if (
+    t === 'host' ||
+    t === 'cohost' ||
+    t === 'owner' ||
+    t === 'propertymanager' ||
+    t === 'manager' ||
+    t === 'admin'
+  ) {
+    return false;
+  }
+  if (t === 'guest') return true;
+  if (!t) return Boolean(msg.isIncoming);
+  return false;
+}
+
 export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Message[] {
   // Chrono croissant : ancien en haut, récent en bas (comme WhatsApp).
   const sorted = [...messages].sort((a, b) => {
@@ -629,6 +657,7 @@ export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Me
     }
 
     const isIncoming = Boolean(msg.isIncoming);
+    const isGuestSide = isOtaGuestMessageSide(msg);
     const originTag = isAutomationMsg
       ? 'AU'
       : otaReplyOriginTag({
@@ -638,21 +667,19 @@ export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Me
           isAutomation: msg.isAutomation,
           body: rawBody,
         });
-    // Traductions opérateur (backend: Message.translatedFr / translatedAry).
-    // Seulement sur les messages VOYAGEUR : les réponses host sont écrites par
-    // l'opérateur lui-même, il n'a pas besoin de les relire traduites.
-    const translatedFr = isIncoming ? cleanTranslation(msg.translatedFr) : null;
-    const translatedAry = isIncoming ? cleanTranslation(msg.translatedAry) : null;
+    // Traductions opérateur : messages VOYAGEUR seulement (pas Host/Cohost).
+    const translatedFr = isGuestSide ? cleanTranslation(msg.translatedFr) : null;
+    const translatedAry = isGuestSide ? cleanTranslation(msg.translatedAry) : null;
 
     out.push({
       id: msg._id || msg.messageId || `m-${index}`,
-      from: isIncoming ? 'guest' : 'you',
+      from: isGuestSide ? 'guest' : 'you',
       text: body,
       time: ts
         ? new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
         : '',
-      status: !isIncoming ? msg.status : undefined,
-      ...(originTag && !isIncoming ? { tags: [originTag] } : {}),
+      status: !isGuestSide ? msg.status : undefined,
+      ...(originTag && !isGuestSide ? { tags: [originTag] } : {}),
       ...(translatedFr ? { translatedFr } : {}),
       ...(translatedAry ? { translatedAry } : {}),
       // `body` reste la source de vérité affichable ; on garde l'original pour le

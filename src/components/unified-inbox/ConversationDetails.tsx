@@ -246,18 +246,28 @@ export default function ConversationDetails({
                     {`${Math.round(Number(r.cleaningAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
                   </DtRow>
                 )}
+                {r.guestServiceFeeAmount != null && r.guestServiceFeeAmount > 0 && (
+                  <DtRow label="dont Guest fee Airbnb">
+                    {`${Math.round(Number(r.guestServiceFeeAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.guestVatAmount != null && r.guestVatAmount > 0 && (
+                  <DtRow label="dont TVA voyageur (OTA)">
+                    {`${Math.round(Number(r.guestVatAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
                 {r.touristTaxAmount != null && r.touristTaxAmount > 0 && (
                   <DtRow label="dont taxe de séjour">
                     {`${Math.round(Number(r.touristTaxAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
                   </DtRow>
                 )}
                 {r.hostFeeAmount != null && (
-                  <DtRow label="Host fee 15,5 %">
+                  <DtRow label={r.hostFeeLabel || 'Host fee'}>
                     {`− ${Math.round(Number(r.hostFeeAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
                   </DtRow>
                 )}
                 {r.hostFeeVatAmount != null && (
-                  <DtRow label="Moroccan Airbnb TVA 20 %">
+                  <DtRow label={r.hostFeeVatLabel || 'Moroccan Airbnb TVA 20 %'}>
                     {`− ${Math.round(Number(r.hostFeeVatAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
                   </DtRow>
                 )}
@@ -457,18 +467,28 @@ export default function ConversationDetails({
                     {`${Math.round(Number(r.cleaningAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
                   </DtRow>
                 )}
+                {r.guestServiceFeeAmount != null && r.guestServiceFeeAmount > 0 && (
+                  <DtRow label="dont Guest fee Airbnb">
+                    {`${Math.round(Number(r.guestServiceFeeAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
+                {r.guestVatAmount != null && r.guestVatAmount > 0 && (
+                  <DtRow label="dont TVA voyageur (OTA)">
+                    {`${Math.round(Number(r.guestVatAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
+                  </DtRow>
+                )}
                 {r.touristTaxAmount != null && r.touristTaxAmount > 0 && (
                   <DtRow label="dont taxe de séjour">
                     {`${Math.round(Number(r.touristTaxAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
                   </DtRow>
                 )}
                 {r.hostFeeAmount != null && (
-                  <DtRow label="Host fee 15,5 %">
+                  <DtRow label={r.hostFeeLabel || 'Host fee'}>
                     {`− ${Math.round(Number(r.hostFeeAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
                   </DtRow>
                 )}
                 {r.hostFeeVatAmount != null && (
-                  <DtRow label="Moroccan Airbnb TVA 20 %">
+                  <DtRow label={r.hostFeeVatLabel || 'Moroccan Airbnb TVA 20 %'}>
                     {`− ${Math.round(Number(r.hostFeeVatAmount)).toLocaleString('fr-FR')} ${r.currency || 'MAD'}`}
                   </DtRow>
                 )}

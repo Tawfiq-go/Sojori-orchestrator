@@ -11,6 +11,8 @@ import { fr } from 'date-fns/locale';
 import { formatPriceOrPlaceholder } from '../../utils/formatPrice';
 import { formatReservationPaid } from '../../utils/reservationPaidDisplay';
 import { formatDateInputValue } from '../../utils/reservationEditPayload';
+import { resolveChannelStayFinance } from '../../utils/reservationChannelFinance';
+import { useEurMadAdminRate } from '../../utils/eurMadAdminRate';
 import * as fulltaskApi from '../../services/fulltaskApi';
 import { toast } from 'react-toastify';
 import { useSearchParams } from 'react-router-dom';
@@ -498,6 +500,7 @@ export function GuestInfoTab({
   onRefresh,
 }: GuestInfoTabProps) {
   const [, setSearchParams] = useSearchParams();
+  const eurMadRate = useEurMadAdminRate();
 
   if (!reservationDetails) {
     return (
@@ -518,6 +521,8 @@ export function GuestInfoTab({
   };
   const isBooking = (r.channelName || '').toLowerCase().includes('booking');
   const resaId = reservationId || r._id;
+  const channelFinance = resolveChannelStayFinance(r, { eurMadRate });
+  const mad = (v: number) => `${Math.round(v).toLocaleString('fr-FR')} MAD`;
 
   const handleDeclareArrival = async () => {
     if (!resaId) return;
@@ -752,15 +757,35 @@ export function GuestInfoTab({
           {isBooking && (
             <SectionCard title="Booking.com">
               <Stack spacing={1.25}>
-                <FinancialRow label="Prix OTA" value={priceOf(r.reservationBreakdown?.normalizedBreakdown?.totalPaidByCustomer) || `${r.totalPrice ?? '—'} ${r.currency || ''}`} bold />
+                <FinancialRow
+                  label="Prix OTA"
+                  value={
+                    channelFinance.guestPaidMad > 0
+                      ? mad(channelFinance.guestPaidMad)
+                      : priceOf(r.reservationBreakdown?.normalizedBreakdown?.totalPaidByCustomer) || '—'
+                  }
+                  bold
+                />
+                {channelFinance.note ? (
+                  <Typography sx={{ fontSize: 11, color: T.text3 }}>{channelFinance.note}</Typography>
+                ) : null}
                 <Box sx={{ textAlign: 'center', color: T.text4, fontSize: 16 }}>↓</Box>
-                <FinancialRow label="Commission OTA" value={priceOf(r.reservationBreakdown?.normalizedBreakdown?.otaCommission) || '—'} accent={T.error} bold />
+                <FinancialRow
+                  label="Commission OTA"
+                  value={
+                    channelFinance.commissionMad > 0
+                      ? mad(channelFinance.commissionMad)
+                      : priceOf(r.reservationBreakdown?.normalizedBreakdown?.otaCommission) || '—'
+                  }
+                  accent={T.error}
+                  bold
+                />
                 <Box sx={{ textAlign: 'center', color: T.text4, fontSize: 16 }}>=</Box>
                 <Paper sx={{ p: 1.5, bgcolor: 'rgba(10,143,94,0.08)', border: `1px solid rgba(10,143,94,0.18)`, borderRadius: 1 }}>
                   <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography sx={{ fontSize: 12, fontWeight: 600, color: T.text2 }}>Net reçu</Typography>
                     <Typography sx={{ fontSize: 18, fontWeight: 700, color: T.success, fontFamily: '"Geist Mono", monospace' }}>
-                      {netReceived(r)}
+                      {channelFinance.netHostMad > 0 ? mad(channelFinance.netHostMad) : netReceived(r)}
                     </Typography>
                   </Stack>
                 </Paper>

@@ -19,6 +19,7 @@ import {
   stayOpsDayPillCount, resolveTaskUrgency,
 } from './_shared';
 import { CleanlinessBadgeInteractive } from './CleanlinessBadgeInteractive';
+import { useArrowKeyScroll } from '../../hooks/useArrowKeyScroll';
 import {
   deriveDisplayCleanliness,
   displayCleanlinessLabel,
@@ -200,6 +201,13 @@ export default function StayView({
   const minimapDays = useMemo(() => genDays(startDate, daysCount), [startDate, daysCount]);
   const days = useMemo(() => genDays(startDate, VISIBLE_DAYS), [startDate]);
   const gridScrollRef = useRef<HTMLDivElement>(null);
+  useArrowKeyScroll(gridScrollRef, {
+    horizontal: true,
+    vertical: true,
+    hStep: m.CELL_W,
+    vStep: 48,
+    enabled: true,
+  });
 
   useLayoutEffect(() => {
     const el = gridScrollRef.current;
@@ -1327,11 +1335,13 @@ export default function StayView({
         ref={gridScrollRef}
         sx={{
           overflowX: 'auto',
-          overflowY: flexFill ? 'auto' : undefined,
+          overflowY: flexFill ? 'auto' : 'auto',
           flex: flexFill ? 1 : undefined,
           minHeight: flexFill ? 0 : undefined,
+          maxHeight: flexFill ? undefined : 'calc(100dvh - 160px)',
           borderRadius: 1.75,
           WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain',
         }}
       >
       <Box sx={{

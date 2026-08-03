@@ -37,10 +37,20 @@ export interface InboxReservationData {
   commission?: number;
   /** Libellé commission : Host service fee / Commission Booking… */
   commissionLabel?: string;
-  /** Airbnb : host fee 15,5 % (HT) */
+  /** Airbnb : host fee HT (15,5 % ou 3 % selon régime) */
   hostFeeAmount?: number;
-  /** Airbnb : TVA 20 % sur host fee (Maroc) */
+  /** Airbnb : TVA 20 % sur host fee (Maroc) — seulement si régime + TVA */
   hostFeeVatAmount?: number;
+  /** Libellé dynamique host fee (ex. « Host fee 3 % ») */
+  hostFeeLabel?: string;
+  /** Libellé TVA marocaine — absent si pas de TVA */
+  hostFeeVatLabel?: string;
+  /** Airbnb : Guest service fee (côté client) */
+  guestServiceFeeAmount?: number;
+  /** Airbnb : TVA voyageur (pays) — ≠ Moroccan TVA */
+  guestVatAmount?: number;
+  /** Régime fee Airbnb détecté */
+  airbnbFeeModel?: string;
   otaPlatform?: string;
   /** Code confirmation canal (Airbnb HM…, Booking, etc.) — lien « Ouvrir sur … » */
   otaCode?: string;
