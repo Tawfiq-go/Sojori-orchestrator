@@ -1,9 +1,7 @@
 /**
  * Récap Pricing — une ligne par owner par mois : listings RU (snapshot courant, RU n'a pas
  * d'historique mensuel), coût RU implicite, coût AirROI estimé, coût IA réel, coût WhatsApp
- * ESTIMÉ (voir WhatsappCostTab — Meta facture par conversation, pas par message, grille
- * approximative). Les métriques agrégées par jour côté backend (IA, WhatsApp) sont
- * regroupées par mois ici pour rester à la même granularité que la vue Summary.
+ * (Meta pricing_analytics pour le total plateforme ; attribution owner via webhooks PMP).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Stack, Typography } from '@mui/material';
@@ -12,6 +10,7 @@ import {
   fetchAirroiCostByOwner,
   fetchAiUsageByOwnerDay,
   fetchWhatsappUsageByOwnerDay,
+  fetchWhatsappMetaPricing,
   type RuListingsByOwnerItem,
 } from '../../services/pricingDashboardApi';
 import { resolveChannelsOwnerNames } from '../../services/channelsDashboardApi';
@@ -66,17 +65,19 @@ export function PricingSummaryTab() {
   const [whatsappByMonth, setWhatsappByMonth] = useState<
     { ownerId: string; month: string; total: number; costUsd: number }[]
   >([]);
+  const [metaWhatsappCostUsd, setMetaWhatsappCostUsd] = useState(0);
   const [ownerNames, setOwnerNames] = useState<Record<string, string>>({});
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const [ruRes, airroiRes, aiRes, waRes] = await Promise.all([
+      const [ruRes, airroiRes, aiRes, waRes, metaWaRes] = await Promise.all([
         fetchRuListingsByOwner(),
         fetchAirroiCostByOwner({ hours: 720 }),
         fetchAiUsageByOwnerDay({ hours: 720 }),
         fetchWhatsappUsageByOwnerDay({ hours: 720 }),
+        fetchWhatsappMetaPricing({ hours: 720 }),
       ]);
 
       const ruRows = ruRes.data.success ? ruRes.data.data.items || [] : [];
@@ -115,6 +116,10 @@ export function PricingSummaryTab() {
         }
       }
       setWhatsappByMonth(Array.from(waMonthMap.values()));
+
+      if (metaWaRes.data.success) {
+        setMetaWhatsappCostUsd(metaWaRes.data.data.totalCostUsd || 0);
+      }
 
       const ownerIds = Array.from(
         new Set(
@@ -194,9 +199,11 @@ export function PricingSummaryTab() {
   const totalAirroiCostUsd = airroiByMonth.filter((r) => r.month === thisMonth).reduce((sum, r) => sum + r.costUsd, 0);
   const totalAiCostUsd = aiByMonth.filter((r) => r.month === thisMonth).reduce((sum, r) => sum + r.costUsd, 0);
   const totalWhatsapp = whatsappByMonth.filter((r) => r.month === thisMonth).reduce((sum, r) => sum + r.total, 0);
-  const totalWhatsappCostUsd = whatsappByMonth
-    .filter((r) => r.month === thisMonth)
-    .reduce((sum, r) => sum + r.costUsd, 0);
+  // Prefer Meta-reported platform cost for the headline; owner rows still use attributed PMP.
+  const totalWhatsappCostUsd =
+    metaWhatsappCostUsd > 0
+      ? metaWhatsappCostUsd
+      : whatsappByMonth.filter((r) => r.month === thisMonth).reduce((sum, r) => sum + r.costUsd, 0);
   const ownersCount = new Set(rows.map((r) => r.ownerId)).size;
 
   const columns = [
@@ -236,7 +243,7 @@ export function PricingSummaryTab() {
     },
     {
       key: 'whatsappCostUsd',
-      label: 'Coût WhatsApp (estimé)',
+      label: 'Coût WhatsApp',
       align: 'right' as const,
       render: (row: SummaryRow) => (
         <Typography sx={{ fontSize: 12, color: t.text3, fontFamily: 'monospace' }}>
@@ -334,7 +341,7 @@ export function PricingSummaryTab() {
           iconBg="rgba(16,185,129,0.12)"
           iconColor={t.success}
           value={`$${totalWhatsappCostUsd.toFixed(2)}`}
-          label={`Coût WhatsApp estimé (ce mois, ${totalWhatsapp} msg)`}
+          label={`WhatsApp Meta — 30 j (${totalWhatsapp} msg DB)`}
         />
         <StatCard
           icon="💰"
@@ -354,11 +361,10 @@ export function PricingSummaryTab() {
       </MonitorSection>
 
       <Typography sx={{ fontSize: 11, color: t.text3 }}>
-        RU n'a pas d'historique mensuel (snapshot du nombre de listings actuel) — seul le mois en
-        cours affiche un coût RU. AirROI a un historique calculé par appel (estimation à rapprocher
-        de la facture) et IA conserve son historique de consommation par mois.
-        WhatsApp affiche un coût ESTIMÉ (Meta facture par conversation/catégorie/pays, pas par
-        message — voir l'onglet WhatsApp pour le détail de l'approximation utilisée).
+        RU n&apos;a pas d&apos;historique mensuel (snapshot listings actifs) — seul le mois en
+        cours affiche un coût RU. WhatsApp plateforme : Meta <code>pricing_analytics</code> ;
+        lignes owner : attribution via webhooks de livraison (gratuit vs facturé) + grille PMP.
+        AirROI et IA restent calculés côté appels.
       </Typography>
     </Stack>
   );
