@@ -94,7 +94,11 @@ export interface WhatsappUsageByOwnerDayItem {
   received: number;
   sent: number;
   total: number;
+  freeSent: number;
+  billableSent: number;
   costUsd: number;
+  /** true when some messages on this row still use rate-card backfill (no webhook pricing yet). */
+  costEstimated?: boolean;
 }
 
 export interface WhatsappUsageByOwnerDayResponse {
@@ -103,14 +107,16 @@ export interface WhatsappUsageByOwnerDayResponse {
     byOwnerDay: WhatsappUsageByOwnerDayItem[];
     totalReceived: number;
     totalSent: number;
+    totalFreeSent: number;
+    totalBillableSent: number;
     totalCostUsd: number;
-    /** true : coût estimé (1 conversation "service"/jour actif), pas la facturation Meta exacte. */
+    /** true if any owner-day row still uses rate-card backfill for messages without webhook pricing. */
     costEstimated: boolean;
     serviceErrors?: Record<string, string>;
   };
 }
 
-/** Fusion volet guest (srv-fullchatbot) + staff (srv-fulltask). Coût estimé (voir costEstimated). */
+/** Fusion volet guest (srv-fullchatbot) + staff (srv-fulltask). */
 export function fetchWhatsappUsageByOwnerDay(query: { period?: 'all'; hours?: number } = {}) {
   const params = new URLSearchParams();
   if (query.period === 'all') params.set('period', 'all');
@@ -118,5 +124,58 @@ export function fetchWhatsappUsageByOwnerDay(query: { period?: 'all'; hours?: nu
   return apiClient.get<WhatsappUsageByOwnerDayResponse>(
     `${PRICING_DASHBOARD}/whatsapp-usage-by-owner-day?${params.toString()}`,
     { ...channelsDashboardAxiosConfig(), timeout: 30000 },
+  );
+}
+
+export interface WhatsappMetaPricingDay {
+  day: string;
+  freeVolume: number;
+  billableVolume: number;
+  volume: number;
+  cost: number;
+  costFromMeta: boolean;
+}
+
+export interface WhatsappMetaPricingCategory {
+  category: string;
+  freeVolume: number;
+  billableVolume: number;
+  volume: number;
+  cost: number;
+}
+
+export interface WhatsappMetaPricingResponse {
+  success: boolean;
+  data: {
+    byDay: WhatsappMetaPricingDay[];
+    byCategory: WhatsappMetaPricingCategory[];
+    freeVolume: number;
+    billableVolume: number;
+    totalVolume: number;
+    totalCostUsd: number;
+    costAvailable: boolean;
+    costSource: 'meta' | 'rate_card' | 'mixed';
+    currency: string;
+    accounts: Array<{
+      account?: string;
+      wabaId?: string;
+      totalCost?: number;
+      freeVolume?: number;
+      billableVolume?: number;
+      costSource?: string;
+      costAvailable?: boolean;
+    }>;
+    serviceErrors?: Record<string, string>;
+  };
+}
+
+/** Meta pricing_analytics (guest + staff WABAs) — source of truth for platform spend. */
+export function fetchWhatsappMetaPricing(query: { period?: 'all'; hours?: number } = {}) {
+  const params = new URLSearchParams();
+  if (query.period === 'all') params.set('period', 'all');
+  else params.set('hours', String(query.hours ?? 720));
+  return apiClient.get<WhatsappMetaPricingResponse>(
+    `${PRICING_DASHBOARD}/whatsapp-meta-pricing?${params.toString()}`,
+    { ...channelsDashboardAxiosConfig(), timeout: 60000 },
   );
 }
