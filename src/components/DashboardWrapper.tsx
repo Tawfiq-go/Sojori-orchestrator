@@ -103,11 +103,28 @@ export function DashboardWrapper({
     return <AdminBusinessScopeUnsetAlert />;
   }
 
+  const body = listingCompact ? (
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        width: '100%',
+      }}
+    >
+      {children}
+    </div>
+  ) : (
+    children
+  );
+
   return (
     <>
       {scopeAlerts}
       {pageHeader}
-      {children}
+      {body}
     </>
   );
 }

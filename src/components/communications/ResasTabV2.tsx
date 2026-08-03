@@ -44,6 +44,7 @@ import {
   reservationOwnerId,
   findListingForReservation,
 } from '../../utils/planningListingMatch';
+import { freeBlockSegmentsAfterReservations } from '../../utils/reservationBeatsCalendarBlock';
 import {
   fetchInboxResas,
   initiateWhatsAppForResa,
@@ -436,13 +437,6 @@ export default function ResasTabV2() {
       if (bucket) bucket.push(b);
       else blocksByListing.set(lid, [b]);
     }
-    /** dateTo de bloc = inclusif ; la barre planning attend un départ exclusif → +1 jour. */
-    const isoPlusOneDay = (iso: string) => {
-      const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
-      d.setDate(d.getDate() + 1);
-      return format(d, 'yyyy-MM-dd');
-    };
-
     return rowsSource.map((listing) => {
       const listingId = String(listing.id);
       const resas = reservationsByListing.get(listingId) || [];
@@ -615,17 +609,26 @@ export default function ResasTabV2() {
         }),
       };
     }).map((row) => {
-      const blockRows = (blocksByListing.get(String(row.listingId)) || []).map((b) => ({
-        reservationId: `block-${b._id}`,
-        guestName: b.title,
-        arrivalDate: String(b.dateFrom).slice(0, 10),
-        departureDate: isoPlusOneDay(String(b.dateTo)),
-        status: 'confirmed' as const,
-        channelName: 'direct',
-        kind: 'block' as const,
-        blockNote: b.note,
-        blockAuthor: b.createdBy?.name,
-      }));
+      /* Résa gagne vs blocage (Import initial / manuel) : on ne montre le
+         blocage que sur les jours sans séjour Sojori (segments découpés). */
+      const blockRows = (blocksByListing.get(String(row.listingId)) || []).flatMap((b) => {
+        const segments = freeBlockSegmentsAfterReservations({
+          blockDateFrom: String(b.dateFrom),
+          blockDateToInclusive: String(b.dateTo),
+          reservations: row.reservations,
+        });
+        return segments.map((seg) => ({
+          reservationId: `block-${b._id}-${seg.start}`,
+          guestName: b.title,
+          arrivalDate: seg.start,
+          departureDate: seg.end,
+          status: 'confirmed' as const,
+          channelName: 'direct',
+          kind: 'block' as const,
+          blockNote: b.note,
+          blockAuthor: b.createdBy?.name,
+        }));
+      });
       if (blockRows.length === 0) return row;
       return { ...row, reservations: [...row.reservations, ...blockRows] };
     });

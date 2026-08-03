@@ -46,6 +46,7 @@ export function PageFullscreenLayer({
         p: { xs: 0.5, sm: 0.75 },
         boxSizing: 'border-box',
       }}
+      data-page-fullscreen="true"
     >
       <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {children}

@@ -364,6 +364,9 @@ function DayContextBlock({ inv, block }) {
     catch { return String(v).slice(0, 10); }
   };
 
+  /* Résa gagne toujours contre Import initial / blocage sur le même jour. */
+  const showBlock = !hasResa && Boolean(block);
+
   return (
     <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
       {hasResa ? (
@@ -398,7 +401,7 @@ function DayContextBlock({ inv, block }) {
             );
           })}
         </>
-      ) : block ? (
+      ) : showBlock ? (
         <>
           <div style={{
             fontSize: 9, fontWeight: 800, color: T.error, marginBottom: 5,

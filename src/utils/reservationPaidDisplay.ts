@@ -1,37 +1,64 @@
 /**
- * Montant à afficher comme « prix / payé » d’une réservation.
+ * Montant à afficher comme « prix / payé » d’une réservation — toujours en MAD.
  *
- * Source : `alreadyPaid` (MAD), déjà converti à l’ingest RU avec le taux admin
- * (`exchangerates.rate`) — pas un ×10 en dur côté UI.
- *
- * = total déjà payé (ex. ChannelTotal Booking), **hors taxes non payées**
- * (ex. taxe de séjour sur place dans ClientPrice mais pas dans AlreadyPaid).
- *
- * Fallback : `totalPrice` (loyer / RUPrice converti) si `alreadyPaid` absent.
+ * Booking : EUR Comments/RU × taux admin (currencies.madRate), puis affichage MAD.
+ * Airbnb : Comments MAD / alreadyPaid MAD.
  */
+import { resolveChannelStayFinance } from './reservationChannelFinance';
+import { getCachedEurMadAdminRate } from './eurMadAdminRate';
+
 export function reservationPaidDisplay(r: {
   alreadyPaid?: number | null;
   totalPrice?: number | null;
   currency?: string | null;
-}): { amount: number | null; currency: string; source: 'alreadyPaid' | 'totalPrice' | null } {
-  const currency = (r.currency && String(r.currency).trim()) || 'MAD';
+  channelName?: string | null;
+  source?: string | null;
+  comments?: unknown;
+  notes?: unknown;
+  roomRemarks?: unknown;
+  otaCommission?: unknown;
+  reservationBreakdown?: unknown;
+  [k: string]: unknown;
+}): { amount: number | null; currency: string; source: string | null } {
+  const finance = resolveChannelStayFinance(r as Record<string, unknown>, {
+    eurMadRate: getCachedEurMadAdminRate(),
+  });
+  if (finance.guestPaidMad > 0) {
+    return {
+      amount: finance.guestPaidMad,
+      currency: 'MAD',
+      source: finance.source,
+    };
+  }
   const paid = Number(r.alreadyPaid);
   if (Number.isFinite(paid) && paid > 0) {
-    return { amount: paid, currency, source: 'alreadyPaid' };
+    return { amount: paid, currency: 'MAD', source: 'alreadyPaid' };
   }
   const total = Number(r.totalPrice);
   if (Number.isFinite(total) && total > 0) {
-    return { amount: total, currency, source: 'totalPrice' };
+    // Booking mal labellé EUR sous currency MAD → ne pas afficher brut
+    if (/booking/i.test(String(r.channelName || r.source || ''))) {
+      return { amount: null, currency: 'MAD', source: null };
+    }
+    return { amount: total, currency: 'MAD', source: 'totalPrice' };
   }
-  return { amount: null, currency, source: null };
+  return { amount: null, currency: 'MAD', source: null };
 }
 
 export function formatReservationPaid(r: {
   alreadyPaid?: number | null;
   totalPrice?: number | null;
   currency?: string | null;
+  channelName?: string | null;
+  source?: string | null;
+  comments?: unknown;
+  notes?: unknown;
+  roomRemarks?: unknown;
+  otaCommission?: unknown;
+  reservationBreakdown?: unknown;
+  [k: string]: unknown;
 }): string | null {
-  const { amount, currency } = reservationPaidDisplay(r);
+  const { amount } = reservationPaidDisplay(r);
   if (amount == null) return null;
-  return `${Math.round(amount).toLocaleString('fr-FR')} ${currency}`;
+  return `${Math.round(amount).toLocaleString('fr-FR')} MAD`;
 }

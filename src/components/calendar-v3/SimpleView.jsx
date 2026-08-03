@@ -20,6 +20,7 @@ import {
   finishListingCalendarImportReview,
   isCalendarImportReviewActive,
 } from '../../services/calendarImportReviewService';
+import { useArrowKeyScroll } from '../../hooks/useArrowKeyScroll';
 
 const WEEKDAYS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
 const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
@@ -95,8 +96,17 @@ export default function SimpleView({
   onCalendarImportReviewActivated,
   /** Admin only — jamais Owner. */
   canActivateCalendarImport = false,
+  /** Plein écran / hauteur contrainte : scroll interne des mois. */
+  fillViewport = false,
 }) {
   const todayIso = toIso(new Date());
+  const monthsScrollRef = useRef(null);
+  useArrowKeyScroll(monthsScrollRef, {
+    horizontal: false,
+    vertical: true,
+    vStep: 72,
+    enabled: true,
+  });
 
   /** Mois empilés : [pivot, pivot+1, …] (scroll vertical façon Airbnb). */
   const months = useMemo(() => {
@@ -257,16 +267,17 @@ export default function SimpleView({
     return () => { cancelled = true; };
   }, [auditOpen, auditResult.loading, listing._id, listing.roomTypeId]);
 
-  /* ─── Sentinel scroll → charger plus de mois ─── */
+  /* ─── Sentinel scroll → charger plus de mois (root = panneau mois) ─── */
   const sentinelRef = useRef(null);
   useEffect(() => {
     const el = sentinelRef.current;
+    const root = monthsScrollRef.current;
     if (!el || !onLoadMoreMonths || inventoryLoading) return undefined;
     const io = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) onLoadMoreMonths();
       },
-      { rootMargin: '600px 0px' },
+      { root: root || null, rootMargin: '600px 0px' },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -284,7 +295,16 @@ export default function SimpleView({
     : (listing.city || '');
 
   return (
-    <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start', justifyContent: 'center' }}>
+    <div
+      style={{
+        display: 'flex',
+        gap: 18,
+        alignItems: fillViewport ? 'stretch' : 'flex-start',
+        justifyContent: 'center',
+        height: fillViewport ? '100%' : undefined,
+        minHeight: fillViewport ? 0 : undefined,
+      }}
+    >
       {/* ─── Rail : Multi = hôtel + types empilés ; Single = vignettes ─── */}
       {isRoomTypeRail ? (
         <MultiHotelRail
@@ -301,16 +321,32 @@ export default function SimpleView({
         />
       )}
 
-      {/* ─── Calendrier vertical — plafonné et centré (façon Airbnb) ─── */}
-      <div style={{ flex: 1, minWidth: 0, maxWidth: 1150 }}>
+      {/* ─── Calendrier vertical — scroll interne (flèches ↑↓ + plein écran) ─── */}
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          maxWidth: 1150,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          height: fillViewport ? '100%' : undefined,
+          maxHeight: fillViewport ? '100%' : 'calc(100dvh - 140px)',
+        }}
+      >
         <div style={{
           background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 16, overflow: 'hidden',
           boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
         }}>
           {/* En-tête listing / room type */}
           <div style={{
             padding: '7px 14px', borderBottom: `1px solid ${T.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            flexShrink: 0,
           }}>
             <h3 style={{
               margin: 0, fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.01em',
@@ -438,10 +474,11 @@ export default function SimpleView({
             </div>
           </div>
 
-          {/* Jours de semaine — sticky pendant le scroll */}
+          {/* Jours de semaine — fixe hors scroll mois */}
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-            position: 'sticky', top: 0, zIndex: 5,
+            flexShrink: 0,
+            zIndex: 5,
             background: T.bg1, borderBottom: `1px solid ${T.border}`,
           }}>
             {WEEKDAYS.map((w) => (
@@ -452,7 +489,19 @@ export default function SimpleView({
             ))}
           </div>
 
-          {/* Mois empilés */}
+          {/* Mois empilés — scroll vertical (flèches ↑↓) */}
+          <div
+            ref={monthsScrollRef}
+            className="calendar-simple-vscroll"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              overscrollBehavior: 'contain',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
           {months.map(({ year: y, month: m }) => (
             <MonthGrid
               key={`${y}-${m}`}
@@ -471,6 +520,7 @@ export default function SimpleView({
           {/* Sentinel : approche du bas → mois suivants */}
           <div ref={sentinelRef} style={{ padding: '18px 0 26px', textAlign: 'center', fontSize: 11, color: T.text4, fontWeight: 600 }}>
             {inventoryLoading ? 'Chargement des mois suivants…' : '⌄ faire défiler pour plus de mois'}
+          </div>
           </div>
         </div>
       </div>
@@ -1208,6 +1258,9 @@ function DaySidePanel({ selected, focusIso, inventories, calendarBlocksById = {}
               color={inv.stopSell ? T.error : (inv.availableRoom ?? 1) <= 0 ? T.warning : T.success}
             />
             {(() => {
+              /* Résa gagne vs Import initial / blocage : ne pas afficher le bandeau
+                 de blocage si une réservation Sojori occupe déjà le jour. */
+              if ((inv.reservations?.length ?? 0) > 0) return null;
               const dayBlock = inv.blockId ? calendarBlocksById[String(inv.blockId)] : null;
               if (!dayBlock) return null;
               const bFrom = String(dayBlock.dateFrom).slice(0, 10);

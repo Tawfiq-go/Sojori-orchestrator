@@ -43,6 +43,7 @@ export const REGISTRATION_FIELD_LABELS: Record<RegistrationFieldKey, string> = {
   passport_photo: 'Photo pièce',
 };
 
+/** Requis pour valider (simple ou complet). */
 const SIMPLE_REQUIRED: RegistrationFieldKey[] = [
   'first_name',
   'last_name',
@@ -52,18 +53,39 @@ const SIMPLE_REQUIRED: RegistrationFieldKey[] = [
   'passport_photo',
 ];
 
-const COMPLETE_EXTRA: RegistrationFieldKey[] = [
+/** Affichés / OCR — ne bloquent pas le Validé. */
+export const PASSPORT_OPTIONAL_OCR: RegistrationFieldKey[] = [
   'place_of_birth',
-  'profession',
-  'domicile',
-  'city',
-  'country',
-  'coming_from',
-  'going_to',
   'document_issued_at',
   'document_issued_on',
-  'email',
+];
+
+/** Manuel — mode complet uniquement. */
+const COMPLETE_EXTRA: RegistrationFieldKey[] = [
+  'profession',
+  'coming_from',
+  'going_to',
   'phone',
+];
+
+/** Affichage formulaire / carte — toujours (passeport). */
+export const SIMPLE_DISPLAY_FIELDS: RegistrationFieldKey[] = [
+  'first_name',
+  'last_name',
+  'birth_date',
+  'nationality',
+  'document_number',
+  'place_of_birth',
+  'document_issued_at',
+  'document_issued_on',
+  'passport_photo',
+];
+
+/** Affichage complémentaire si mode complet. */
+export const COMPLETE_DISPLAY_FIELDS: RegistrationFieldKey[] = [
+  ...COMPLETE_EXTRA,
+  'domicile',
+  'city',
 ];
 
 export function normalizeRegistrationLevel(raw: unknown): RegistrationLevel {

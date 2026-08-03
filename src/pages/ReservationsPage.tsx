@@ -17,10 +17,10 @@ import {
 import {
   PageFullscreenEnterBtn,
   PageFullscreenLayer,
-  pageContentFullscreenSx,
   pageTreeFullscreenSx,
   usePageFullscreen,
 } from '../components/page-fullscreen';
+import { useArrowKeyScroll } from '../hooks/useArrowKeyScroll';
 import {
   Visibility as VisibilityIcon,
   CalendarToday as CalendarIcon,
@@ -579,6 +579,7 @@ export function ReservationsPage() {
           onAcknowledge={handleAcknowledgeCancellation}
           onStayUpdate={handleStayFieldUpdate}
           onRegistrationUpdate={handleRegistrationUpdate}
+          fillViewport
         />
       )
     ) : null;
@@ -586,7 +587,7 @@ export function ReservationsPage() {
   // Skeleton loading pendant le chargement initial
   if (isLoading && reservations.length === 0) {
     return (
-      <DashboardWrapper breadcrumb={['Activité', 'Réservations']}>
+      <DashboardWrapper compactMain breadcrumb={['Activité', 'Réservations']}>
         <Box sx={{ width: '100%' }}>
           {/* Header skeleton */}
           <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5, bgcolor: T.bg1 }}>
@@ -659,8 +660,20 @@ export function ReservationsPage() {
     <Box
       sx={{
         width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+        height: listFullscreen ? '100%' : '100%',
+        maxHeight: listFullscreen ? '100%' : undefined,
+        overflow: 'hidden',
+        boxSizing: 'border-box',
         ...pageTreeFullscreenSx(listFullscreen),
-        ...(listFullscreen ? { overflow: 'hidden', boxSizing: 'border-box' } : {}),
+        ...(!listFullscreen
+          ? {
+              flex: 1,
+              minHeight: 0,
+            }
+          : {}),
       }}
     >
       {/* Toolbar / filtres — restent visibles en fullscreen */}
@@ -893,8 +906,16 @@ export function ReservationsPage() {
         </Stack>
       )}
 
-      {/* Contenu liste — zone scrollable en fullscreen */}
-      <Box sx={pageContentFullscreenSx(listFullscreen)}>
+      {/* Contenu liste — scroll interne (sticky header tableau) */}
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {listContent}
 
         {!isLoading && filteredReservations.length === 0 && (
@@ -940,7 +961,7 @@ export function ReservationsPage() {
   );
 
   return (
-    <DashboardWrapper breadcrumb={['Activité', 'Réservations']}>
+    <DashboardWrapper compactMain breadcrumb={['Activité', 'Réservations']}>
       {!listFullscreen && reservationsPage}
 
       <CreateReservationModal
@@ -1032,21 +1053,29 @@ const Pill = ({ label, count, active, onClick, color }: { label: string; count: 
 );
 
 // ─── Desktop table ─────────────────────────────────────────────────
-function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdate, onRegistrationUpdate }: {
+function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdate, onRegistrationUpdate, fillViewport = false }: {
   rows: Reservation[];
   onRowClick: (r: Reservation) => void;
   onNavigate: (path: string) => void;
   onAcknowledge?: (r: Reservation) => void;
   onStayUpdate?: (reservationId: string, patch: StayFieldPatch) => void;
   onRegistrationUpdate?: (reservationId: string, patch: RegistrationFieldPatch) => void;
+  /** Remplit la hauteur parent — scroll interne + sticky 1re ligne */
+  fillViewport?: boolean;
 }) {
   /**
-   * Élévation de la colonne épinglée (pattern Material) : à plat au repos,
+   * Élévation de la colonne épinée (pattern Material) : à plat au repos,
    * ombre marquée dès qu'on scrolle — les autres colonnes passent visuellement
    * SOUS la colonne Voyageur.
    */
   const [hScrolled, setHScrolled] = useState(false);
   const scrollHostRef = useRef<HTMLDivElement | null>(null);
+  useArrowKeyScroll(scrollHostRef, {
+    horizontal: true,
+    vertical: true,
+    hStep: 120,
+    vStep: 44,
+  });
   useEffect(() => {
     const el = scrollHostRef.current;
     if (!el) return undefined;
@@ -1064,9 +1093,40 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
     : `inset -1px 0 0 ${T.borderStrong}, 3px 0 8px rgba(20,17,10,0.10)`;
 
   return (
-    <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.5, overflow: 'hidden' }}>
-      <Box ref={scrollHostRef} sx={{ overflowX: 'auto' }}>
-        <Box component="table" sx={{ width: '100%', minWidth: 1520, borderCollapse: 'collapse', fontSize: 12.5 }}>
+    <Paper
+      sx={{
+        border: `1px solid ${T.border}`,
+        borderRadius: 1.5,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: fillViewport ? 1 : undefined,
+        minHeight: fillViewport ? 0 : undefined,
+        height: fillViewport ? '100%' : undefined,
+        maxHeight: fillViewport ? '100%' : 'calc(100dvh - 280px)',
+      }}
+    >
+      <Box
+        ref={scrollHostRef}
+        sx={{
+          overflow: 'auto',
+          flex: 1,
+          minHeight: 0,
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
+        <Box
+          component="table"
+          sx={{
+            width: '100%',
+            minWidth: 1520,
+            // separate : sticky thead fiable (collapse casse sticky)
+            borderCollapse: 'separate',
+            borderSpacing: 0,
+            fontSize: 12.5,
+          }}
+        >
           <Box component="thead">
             <Box component="tr" sx={{
               bgcolor: T.bg2,
@@ -1078,12 +1138,19 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                   px: 1.5, py: 1.25,
                   fontSize: 10.75, fontWeight: 700,
                   letterSpacing: '0.08em', textTransform: 'uppercase',
-                  color: T.text2, borderBottom: `2px solid ${T.borderStrong}`, whiteSpace: 'nowrap',
-                  // Colonne identité épinglée (pattern Mews) — même design que la colonne
-                  // listing du calendrier multi : sticky + fond opaque + ombre au scroll.
+                  color: T.text2,
+                  borderBottom: `2px solid ${T.borderStrong}`,
+                  whiteSpace: 'nowrap',
+                  // Sticky 1re ligne (comme dates calendrier)
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: h === 'Voyageur' ? 5 : 3,
+                  bgcolor: T.bg2,
+                  background: `linear-gradient(180deg, ${T.bg1} 0%, ${T.bg2} 100%)`,
+                  // Colonne identité aussi sticky left (coin figé)
                   ...(h === 'Voyageur' && {
-                    position: 'sticky', left: 0, zIndex: 4,
-                    bgcolor: T.bg2, minWidth: 185,
+                    left: 0,
+                    minWidth: 185,
                     boxShadow: pinnedShadow,
                     transition: 'box-shadow 0.15s ease',
                   }),
