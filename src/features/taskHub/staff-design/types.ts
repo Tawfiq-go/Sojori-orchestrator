@@ -29,8 +29,8 @@ export interface Staff {
   /** Property manager — aligné plans / admins WA */
   ownerId?: string;
   email?: string;
-  /** Langue de travail — FR / EN / AR */
-  lang?: 'fr' | 'en' | 'ar';
+  /** Langue de travail — FR / DA (Darija) / AR / EN */
+  lang?: 'fr' | 'da' | 'ar' | 'en';
   avatarColor?: 1 | 2 | 3 | 4 | 5 | 6;
   status: StaffStatus;
   isAdmin: boolean;

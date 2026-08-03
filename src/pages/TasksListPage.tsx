@@ -3,13 +3,15 @@
 // Route: /tasks — toolbar, pills échéances, KPI compacts, tableau premium.
 // ════════════════════════════════════════════════════════════════════
 
-import { useCallback, useEffect, useMemo, useRef, useState, Suspense, memo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense, memo, type MouseEvent, type ReactNode } from 'react';
 import { lazyWithReload } from '../utils/lazyWithReload';
 import { useSearchParams } from 'react-router-dom';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ChecklistRtlIcon from '@mui/icons-material/ChecklistRtl';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import InboxIcon from '@mui/icons-material/Inbox';
+import NotesIcon from '@mui/icons-material/Notes';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
@@ -30,10 +32,13 @@ import {
   FormControl,
   IconButton,
   InputAdornment,
+  List,
+  ListItem,
   ListItemText,
   Menu,
   MenuItem,
   Paper,
+  Popover,
   Select,
   Stack,
   TablePagination,
@@ -76,6 +81,7 @@ import { useAuth } from '../hooks/useAuth';
 import tasksService, { resolveTasksUserScope } from '../services/fulltaskTasksService';
 import { usePmTasksScope } from '../hooks/usePmTasksScope';
 import { useSocketIO } from '../hooks/useSocketIO';
+import { useArrowKeyScroll } from '../hooks/useArrowKeyScroll';
 import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 import type {
   TaskListItem,
@@ -107,6 +113,7 @@ const COLUMN_WIDTHS = {
   source: '56px',
   status: '96px',
   assignedStaff: '96px',
+  extras: '64px',
   description: '120px',
   createdAt: '92px',
 } as const;
@@ -404,57 +411,68 @@ function TasksScrollTable({
   rows,
   onRowClick,
   ultraCompact = false,
+  fillViewport = false,
 }: {
   columns: TasksTableColumn[];
   rows: TaskListItem[];
   onRowClick: (task: TaskListItem) => void;
   ultraCompact?: boolean;
+  /** Remplit la hauteur parent — freeze panes calendrier multi (header hors scroll V) */
+  fillViewport?: boolean;
 }) {
-  const table = (
-    <DataTable
-      columns={columns}
-      rows={rows.map((task) => ({ ...task, id: task._id }))}
-      hideRowActions
-      compact={ultraCompact}
-      ultraCompact={ultraCompact}
-      tableMinWidth={TASKS_TABLE_MIN_WIDTH}
-      headerTextTransform="none"
-      pinFirstColumn
-      onRowClick={(row) => onRowClick(row as TaskListItem)}
-    />
-  );
-
-  if (!ultraCompact) {
-    return (
-      <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.5, overflow: 'hidden' }}>
-        <Box sx={{ overflowX: 'auto' }}>{table}</Box>
-      </Paper>
-    );
-  }
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [hScrolled, setHScrolled] = useState(false);
+  useArrowKeyScroll(bodyRef, {
+    horizontal: true,
+    vertical: true,
+    hStep: 120,
+    vStep: 44,
+    syncHorizontalRef: headerRef,
+  });
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return undefined;
+    const onScroll = () => {
+      const scrolled = el.scrollLeft > 2;
+      setHScrolled((prev) => (prev === scrolled ? prev : scrolled));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
-    <Box sx={{
-      flex: 1,
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      minWidth: 0,
-      minHeight: 0,
-    }}>
-      <Box sx={{
-        overflowX: 'auto',
-        overflowY: 'auto',
-        flex: 1,
-        minHeight: 0,
-        WebkitOverflowScrolling: 'touch',
+    <Paper
+      sx={{
         border: `1px solid ${T.border}`,
-        borderRadius: 1.25,
-        bgcolor: T.bg1,
-        '& > div': { border: 'none', boxShadow: 'none', borderRadius: 0 },
-      }}>
-        {table}
-      </Box>
-    </Box>
+        borderRadius: 1.5,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: fillViewport ? 1 : undefined,
+        minHeight: fillViewport ? 0 : undefined,
+        height: fillViewport ? '100%' : undefined,
+        maxHeight: fillViewport ? '100%' : ultraCompact ? undefined : 'calc(100dvh - 280px)',
+      }}
+    >
+      <DataTable
+        columns={columns}
+        rows={rows.map((task) => ({ ...task, id: task._id }))}
+        hideRowActions
+        compact={ultraCompact}
+        ultraCompact={ultraCompact}
+        tableMinWidth={TASKS_TABLE_MIN_WIDTH}
+        headerTextTransform="none"
+        pinFirstColumn
+        freezePanes
+        bare
+        fillViewport={fillViewport}
+        pinScrolled={hScrolled}
+        headerScrollRef={headerRef}
+        bodyScrollRef={bodyRef}
+        onRowClick={(row) => onRowClick(row as TaskListItem)}
+      />
+    </Paper>
   );
 }
 
@@ -622,6 +640,195 @@ function firstDescriptionLine(task: TaskListItem): string {
     return String(first.description);
   }
   return '';
+}
+
+function taskNotesText(task: TaskListItem): string {
+  if (task.notesText?.trim()) return task.notesText.trim();
+  return firstDescriptionLine(task);
+}
+
+/** Icônes Checklist / Note — clic → popover (uniquement si contenu). */
+function TaskExtrasIcons({ task }: { task: TaskListItem }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [kind, setKind] = useState<'checklist' | 'notes' | null>(null);
+  const checklist = task.checklistItems || [];
+  const notes = taskNotesText(task);
+  const hasChecklist = checklist.length > 0;
+  const hasNotes = Boolean(notes);
+
+  if (!hasChecklist && !hasNotes) {
+    return <Typography sx={{ fontSize: 11, color: T.text4, textAlign: 'center' }}>—</Typography>;
+  }
+
+  const open = (e: MouseEvent<HTMLElement>, k: 'checklist' | 'notes') => {
+    e.stopPropagation();
+    setAnchor(e.currentTarget);
+    setKind(k);
+  };
+  const close = () => {
+    setAnchor(null);
+    setKind(null);
+  };
+
+  const doneN = checklist.filter((c) => c.done).length;
+  const totalN = checklist.length;
+  const checklistEmpty = totalN === 0 || doneN === 0;
+
+  return (
+    <>
+      <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'center', alignItems: 'center' }}>
+        {hasChecklist ? (
+          <Tooltip
+            title={
+              checklistEmpty
+                ? `Checklist · 0/${totalN} (rien coché par le staff)`
+                : `Checklist · ${doneN}/${totalN} faits`
+            }
+            arrow
+          >
+            <IconButton
+              size="small"
+              aria-label="Voir checklist"
+              onClick={(e) => open(e, 'checklist')}
+              sx={{
+                color: doneN > 0 ? T.success : T.primaryDeep,
+                p: 0.35,
+                borderRadius: 1,
+                gap: 0.25,
+              }}
+            >
+              <ChecklistRtlIcon sx={{ fontSize: 17 }} />
+              <Typography
+                component="span"
+                sx={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  color: doneN > 0 ? T.success : T.text3,
+                  minWidth: 28,
+                }}
+              >
+                {doneN}/{totalN}
+              </Typography>
+            </IconButton>
+          </Tooltip>
+        ) : null}
+        {hasNotes ? (
+          <Tooltip title="Voir la note" arrow>
+            <IconButton
+              size="small"
+              aria-label="Voir note"
+              onClick={(e) => open(e, 'notes')}
+              sx={{ color: T.text2, p: 0.35 }}
+            >
+              <NotesIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+        ) : null}
+      </Stack>
+      <Popover
+        open={Boolean(anchor) && kind != null}
+        anchorEl={anchor}
+        onClose={close}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        onClick={(e) => e.stopPropagation()}
+        slotProps={{
+          paper: {
+            sx: {
+              maxWidth: 380,
+              maxHeight: 420,
+              p: 1.25,
+              border: `1px solid ${T.border}`,
+              borderRadius: 1.5,
+            },
+          },
+        }}
+      >
+        {kind === 'checklist' ? (
+          <Box>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.text, mb: 0.5 }}>
+              Checklist ménage · {doneN}/{totalN}
+            </Typography>
+            <Typography sx={{ fontSize: 10, color: T.text3, mb: 0.75 }}>
+              ✅ vert = coché par le staff · ❌ rouge = pas fait (≠ note)
+            </Typography>
+            <List dense disablePadding sx={{ maxHeight: 340, overflow: 'auto' }}>
+              {checklist.map((item, i) => {
+                const prevCat = i > 0 ? checklist[i - 1]?.categoryLabel : undefined
+                const showCat =
+                  Boolean(item.categoryLabel) && item.categoryLabel !== prevCat
+                const done = item.done === true
+                return (
+                  <Box key={item.id || `${item.label}-${i}`}>
+                    {showCat ? (
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: T.primaryDeep,
+                          mt: i === 0 ? 0 : 0.75,
+                          mb: 0.25,
+                        }}
+                      >
+                        {item.categoryLabel}
+                      </Typography>
+                    ) : null}
+                    <ListItem disableGutters sx={{ py: 0.3, alignItems: 'flex-start' }}>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          color: done ? '#15803d' : '#b91c1c',
+                          lineHeight: 1.35,
+                          fontWeight: done ? 700 : 500,
+                        }}
+                      >
+                        {done ? '✅' : '❌'} {item.label}
+                        {item.labelDa && item.labelDa !== item.label ? (
+                          <Typography
+                            component="span"
+                            sx={{
+                              display: 'block',
+                              fontSize: 10.5,
+                              color: done ? '#166534' : '#991b1b',
+                              opacity: 0.85,
+                              dir: 'rtl',
+                            }}
+                          >
+                            {item.labelDa}
+                          </Typography>
+                        ) : null}
+                        {item.photoRequired ? ' · 📷' : ''}
+                      </Typography>
+                    </ListItem>
+                  </Box>
+                )
+              })}
+            </List>
+          </Box>
+        ) : null}
+        {kind === 'notes' ? (
+          <Box>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.text, mb: 0.75 }}>
+              🗒️ Note
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: 12.5,
+                color: T.text2,
+                whiteSpace: 'pre-wrap',
+                lineHeight: 1.45,
+                maxHeight: 340,
+                overflow: 'auto',
+              }}
+            >
+              {notes}
+            </Typography>
+          </Box>
+        ) : null}
+      </Popover>
+    </>
+  );
 }
 
 function hourSourceColor(source?: string | null): string {
@@ -1060,8 +1267,8 @@ export function TasksListPage() {
   const [tempHasAssociation, setTempHasAssociation] = useState<'all' | 'with' | 'without'>('all');
   const [tempSources, setTempSources] = useState<string[]>([]);
 
-  const [showDescription, setShowDescription] = useState(false);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState<null | HTMLElement>(null);
+  const optionalColumnsOn = 0;
   const listFs = usePageFullscreen();
   const listFullscreen = listFs.fullscreen;
 
@@ -1931,32 +2138,15 @@ export function TasksListPage() {
       render: (row: TaskRow) => <StaffAssignCell task={row} onAssign={openAssignStaff} />,
     },
     {
-      key: 'description',
-      label: 'Note',
-      width: COLUMN_WIDTHS.description,
-      align: 'left' as const,
-      render: (row: TaskRow) => {
-        const line = firstDescriptionLine(row);
-        if (!line) {
-          return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
-        }
-        return (
-          <Tooltip title={line} arrow>
-            <Typography sx={{ fontSize: 11, color: T.text2, maxWidth: 160 }} noWrap>
-              {line}
-            </Typography>
-          </Tooltip>
-        );
-      },
+      key: 'extras',
+      label: 'Infos',
+      width: COLUMN_WIDTHS.extras,
+      align: 'center' as const,
+      render: (row: TaskRow) => <TaskExtrasIcons task={row} />,
     },
   ];
 
-  const visibleColumns = columns.filter((col) => {
-    if (col.key === 'description' && !showDescription) return false;
-    return true;
-  });
-
-  const optionalColumnsOn = showDescription ? 1 : 0;
+  const visibleColumns = columns;
 
   const tasksTable =
     displayTasks.length > 0 ? (
@@ -1965,13 +2155,14 @@ export function TasksListPage() {
         rows={displayTasks}
         onRowClick={openTaskDetail}
         ultraCompact={isMobile}
+        fillViewport
       />
     ) : null;
 
   // ⚡ PERFORMANCE: Skeleton loading pour affichage immédiat
   if (loading && tasks.length === 0) {
     return (
-      <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
+      <DashboardWrapper compactMain breadcrumb={['Tâches & Opérations', 'Liste']}>
         <Box sx={{ width: '100%' }}>
           {/* Header skeleton */}
           <Paper sx={{ p: 1.5, mb: 1.5, border: `1px solid ${T.border}`, borderRadius: 1.5 }}>
@@ -2027,8 +2218,11 @@ export function TasksListPage() {
         display: 'flex',
         flexDirection: 'column',
         width: '100%',
+        height: '100%',
+        minHeight: 0,
+        overflow: 'hidden',
         px: 0,
-        py: isMobile ? { xs: 1, md: 1.25 } : { xs: 2, md: 3 },
+        py: isMobile ? { xs: 1, md: 1.25 } : { xs: 1.5, md: 2 },
         ...pageTreeFullscreenSx(listFullscreen),
         ...(listFullscreen ? { overflow: 'hidden', boxSizing: 'border-box' } : {}),
       }}>
@@ -2371,16 +2565,17 @@ export function TasksListPage() {
         ) : null}
 
         {tasksTable ? (
-          isMobile ? (
           <Box sx={{
-            minHeight: TABLE_VIEWPORT_HEIGHT,
-            maxHeight: TABLE_VIEWPORT_HEIGHT,
+            flex: 1,
+            minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
+            ...(isMobile
+              ? { minHeight: TABLE_VIEWPORT_HEIGHT, maxHeight: TABLE_VIEWPORT_HEIGHT }
+              : {}),
           }}>
             {tasksTable}
           </Box>
-          ) : tasksTable
         ) : null}
 
         {!loading && displayTasks.length === 0 ? (
@@ -2436,7 +2631,7 @@ export function TasksListPage() {
   );
 
   return (
-    <DashboardWrapper breadcrumb={['Tâches & Opérations', 'Liste']}>
+    <DashboardWrapper compactMain breadcrumb={['Tâches & Opérations', 'Liste']}>
       {!listFullscreen && tasksPage}
       <PageFullscreenLayer
         open={listFullscreen}
@@ -2855,29 +3050,20 @@ export function TasksListPage() {
       >
         <Box sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${T.border}` }}>
           <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2 }}>
-            Colonnes optionnelles
+            Colonnes
           </Typography>
           <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.5 }}>
-            Colonnes de base : code, date création, type, résa, logement, invité, prévu, priorité, origine, statut, staff
+            Infos = icônes Checklist / Note (clic pour ouvrir) quand présentes sur la tâche.
           </Typography>
         </Box>
-        <MenuItem onClick={() => setShowDescription(!showDescription)} sx={{ fontSize: 13, py: 1.25 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-            <Box sx={{
-              width: 18, height: 18, borderRadius: '4px',
-              border: `2px solid ${showDescription ? T.primary : T.border}`,
-              bgcolor: showDescription ? T.primary : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 10, fontWeight: 700,
-            }}>
-              {showDescription && '✓'}
-            </Box>
-            <Typography sx={{ fontSize: 13, color: T.text2 }}>Note / demande</Typography>
-          </Box>
-        </MenuItem>
+        <Box sx={{ px: 2, py: 1.5 }}>
+          <Typography sx={{ fontSize: 12, color: T.text2 }}>
+            Checklist ✓ · Note 🗒️ — visibles uniquement s’il y a du contenu.
+          </Typography>
+        </Box>
         <Box sx={{ px: 2, py: 1.5, borderTop: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
           <Typography sx={{ fontSize: 11, color: T.text3, fontStyle: 'italic' }}>
-            💡 {visibleColumns.length} colonnes visibles sur {columns.length}
+            💡 {visibleColumns.length} colonnes
           </Typography>
         </Box>
       </Menu>

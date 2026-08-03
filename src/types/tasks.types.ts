@@ -122,6 +122,21 @@ export interface TaskListItem {
     nbre_guest_to_register?: number;
     members?: Array<Record<string, unknown>>;
   };
+  /** Checklist ménage (payload) — icône cliquable ; `done` = coché par le staff (checklistDone). */
+  checklistItems?: Array<{
+    id?: string;
+    label: string;
+    labelDa?: string;
+    labelEn?: string;
+    labelAr?: string;
+    categoryId?: string;
+    categoryLabel?: string;
+    done?: boolean;
+    required?: boolean;
+    photoRequired?: boolean;
+  }>;
+  /** Note affichable (requestNote / executionNote / payload.notes) — distinct de la checklist */
+  notesText?: string;
   ownerId?: string;
 }
 

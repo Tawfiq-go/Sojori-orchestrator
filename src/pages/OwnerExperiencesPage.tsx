@@ -23,9 +23,11 @@ import { postFormDataAsMultipart } from '../utils/upload/postFormData';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 import { listingsService } from '../services/listingsService';
 import CityAssociationField from '../features/listing/components/ConfigOrchestration/CityAssociationField';
+import { useAdminOwnerFilter } from '../context/AdminOwnerFilterContext';
 import './partnersAdmin.css';
 
 type Draft = {
+  partnerId: string;
   category: string;
   title: string;
   description: string;
@@ -41,6 +43,7 @@ type Draft = {
   shareGuestContact: PartnerServiceShareGuestContact;
   active: boolean;
   sortOrder: number;
+  forSale: boolean;
 };
 
 const REMINDER_OFFSETS = [
@@ -60,6 +63,7 @@ const SHARE_WHEN: { v: ShareGuestContactWhen; l: string }[] = [
 
 const CATS = [
   { v: 'Aventure', l: 'Aventure' },
+  { v: 'Quad', l: 'Quad' },
   { v: 'Excursion', l: 'Excursion' },
   { v: 'Vue d’en haut', l: 'Vue d’en haut' },
   { v: 'Culture & nature', l: 'Culture & nature' },
@@ -130,6 +134,7 @@ function money(n: number) {
 
 function emptyDraft(): Draft {
   return {
+    partnerId: '',
     category: 'Aventure',
     title: '',
     description: '',
@@ -145,6 +150,7 @@ function emptyDraft(): Draft {
     shareGuestContact: { ...DEFAULT_SHARE_GUEST_CONTACT },
     active: true,
     sortOrder: 0,
+    forSale: false,
   };
 }
 
@@ -155,6 +161,7 @@ function toDraft(s: PartnerService): Draft {
       : [{ label: '', priceMad: 0 }];
   const pay = s.payment || DEFAULT_PAYMENT;
   return {
+    partnerId: s.partnerId ? String(s.partnerId) : '',
     category: s.category || 'Aventure',
     title: s.title || '',
     description: s.description || '',
@@ -179,6 +186,7 @@ function toDraft(s: PartnerService): Draft {
     shareGuestContact: { ...DEFAULT_SHARE_GUEST_CONTACT, ...(s.shareGuestContact || {}) },
     active: s.active !== false,
     sortOrder: s.sortOrder || 0,
+    forSale: Boolean(s.forSale),
   };
 }
 
@@ -218,15 +226,14 @@ function experienceProviderLabel(
  * ce nom wrappe seulement le provider label, pas le bulk des services liés.
  */
 function isOwnExperience(s: PartnerService): boolean {
-  if (s.providerKind === 'partner') return false;
-  if (s.providerKind === 'owner') return true;
-  // Fallback raw docs (listExperiences / listServices sans enrichissement catalog)
-  return !s.partnerId;
+  // load() marque Mes = providerKind owner, Marché = partner
+  return s.providerKind !== 'partner';
 }
 
 type CatalogTab = 'own' | 'sojori';
 
 export function OwnerExperiencesPage() {
+  const { requestOwnerId, showOwnerFilter, ownerScopeUnset } = useAdminOwnerFilter();
   const [rows, setRows] = useState<PartnerService[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [cities, setCities] = useState<Array<{ _id: string; name: string }>>([]);
@@ -239,18 +246,37 @@ export function OwnerExperiencesPage() {
   const [catalogTab, setCatalogTab] = useState<CatalogTab>('own');
   const [q, setQ] = useState('');
   const [providerFilter, setProviderFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [groupBy, setGroupBy] = useState<'city' | 'category'>('category');
+  /** Ids marché Activés pour mes listings */
+  const [marketAdopted, setMarketAdopted] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
+    if (showOwnerFilter && ownerScopeUnset) {
+      setRows([]);
+      setPartners([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const [ownList, sojoriList, partnersList, citiesRes] = await Promise.all([
-        // CRUD PM — partnerId null (inclut inactifs)
-        partnersApi.listExperiences(),
-        // Partenaires plateforme (+ labels providerKind=partner) — lecture seule
-        partnersApi.listExperienceCatalog({ scope: 'sojori' }).catch(() => [] as PartnerService[]),
-        partnersApi.list({ includePlatform: true }).catch(() => [] as Partner[]),
+      const ownerParams = requestOwnerId ? { ownerId: String(requestOwnerId) } : undefined;
+      const [ownList, marketList, partnersList, citiesRes, adoptedIds] = await Promise.all([
+        partnersApi.listExperiences(ownerParams),
+        partnersApi
+          .listExperienceCatalog({
+            scope: 'sojori',
+            marketMode: 'browse',
+            ownerId: requestOwnerId ? String(requestOwnerId) : undefined,
+          })
+          .catch(() => [] as PartnerService[]),
+        partnersApi
+          .list({ includePlatform: false, ownerId: requestOwnerId ? String(requestOwnerId) : undefined })
+          .catch(() => [] as Partner[]),
         listingsService.getCities({ limit: 200 }).catch(() => null),
+        partnersApi.listMarketAdoptions(ownerParams).catch(() => [] as string[]),
       ]);
+      setMarketAdopted(new Set((adoptedIds || []).map(String)));
       const partnersArr = Array.isArray(partnersList) ? partnersList : [];
       setPartners(partnersArr);
 
@@ -259,31 +285,17 @@ export function OwnerExperiencesPage() {
         byId.set(s.id, {
           ...s,
           providerKind: 'owner',
-          providerName: s.providerName || undefined,
+          providerName:
+            s.providerName ||
+            (s.partnerId
+              ? partnersArr.find((p) => p.id === s.partnerId)?.name
+              : undefined) ||
+            undefined,
         });
       }
-      for (const s of sojoriList || []) {
-        // Catalog sojori gagne sur un éventuel doublon ; jamais classé « own »
+      for (const s of marketList || []) {
+        if (byId.has(s.id)) continue;
         byId.set(s.id, { ...s, providerKind: 'partner' });
-      }
-
-      // Fallback : fiches plateforme absentes du catalog (ex. inactifs) — hors own
-      const platformPartners = partnersArr.filter((p) => !p.ownerId);
-      const missingPlatform = platformPartners.filter(
-        (p) => ![...byId.values()].some((s) => String(s.partnerId) === String(p.id)),
-      );
-      if (missingPlatform.length) {
-        const extraLists = await Promise.all(
-          missingPlatform.map((p) =>
-            partnersApi.listServices(p.id).catch(() => [] as PartnerService[]),
-          ),
-        );
-        for (const list of extraLists) {
-          for (const s of list || []) {
-            if (byId.has(s.id)) continue;
-            byId.set(s.id, { ...s, providerKind: 'partner' });
-          }
-        }
       }
 
       setRows(Array.from(byId.values()));
@@ -298,11 +310,18 @@ export function OwnerExperiencesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [requestOwnerId, showOwnerFilter, ownerScopeUnset]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('section') === 'market' || params.get('tab') === 'market') {
+      setCatalogTab('sojori');
+    }
+  }, []);
 
   const partnersById = useMemo(() => {
     const map = new Map<string, string>();
@@ -329,22 +348,24 @@ export function OwnerExperiencesPage() {
   const scopedRows = catalogTab === 'own' ? ownRows : sojoriRows;
   const canEditCatalog = catalogTab === 'own';
 
-  /** Filtre provider uniquement sur l’onglet Sojori (Mes = une seule source). */
+  /** Filtre provider sur Mes (fiches) et Marché. */
   const providers = useMemo(() => {
-    if (catalogTab !== 'sojori') return [] as Array<{ id: string; name: string }>;
     const map = new Map<string, string>();
-    for (const p of partners) {
-      if (!p.ownerId && p.id && p.name) map.set(String(p.id), p.name);
-    }
-    for (const r of sojoriRows) {
-      const id = experienceProviderKey(r, partnersByOwnerId);
-      const name = experienceProviderLabel(r, partnersById, partnersByOwnerId);
-      if (!map.has(id)) map.set(id, name);
+    if (catalogTab === 'own') {
+      for (const p of partners) {
+        if (p.id && p.name) map.set(String(p.id), p.name);
+      }
+    } else {
+      for (const r of sojoriRows) {
+        const id = experienceProviderKey(r, partnersByOwnerId);
+        const name = experienceProviderLabel(r, partnersById, partnersByOwnerId);
+        if (!map.has(id)) map.set(id, name);
+      }
     }
     return Array.from(map.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
-  }, [catalogTab, sojoriRows, partners, partnersById, partnersByOwnerId]);
+  }, [catalogTab, partners, sojoriRows, partnersById, partnersByOwnerId]);
 
   useEffect(() => {
     if (providerFilter === 'all') return;
@@ -352,33 +373,66 @@ export function OwnerExperiencesPage() {
     setProviderFilter('all');
   }, [providers, providerFilter]);
 
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of CATS) set.add(c.v);
+    for (const r of scopedRows) {
+      if (r.category) set.add(String(r.category));
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [scopedRows]);
+
+  useEffect(() => {
+    if (categoryFilter === 'all') return;
+    if (categories.includes(categoryFilter)) return;
+    setCategoryFilter('all');
+  }, [categories, categoryFilter]);
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return scopedRows.filter((r) => {
-      if (catalogTab === 'sojori' && providerFilter !== 'all') {
-        const pid = experienceProviderKey(r, partnersByOwnerId);
+      if (providerFilter !== 'all') {
+        const pid =
+          catalogTab === 'own'
+            ? String(r.partnerId || '')
+            : experienceProviderKey(r, partnersByOwnerId);
         if (pid !== providerFilter) return false;
       }
+      if (categoryFilter !== 'all' && String(r.category || '') !== categoryFilter) return false;
       if (!needle) return true;
       const provider = experienceProviderLabel(r, partnersById, partnersByOwnerId);
       return (
         r.title.toLowerCase().includes(needle) ||
         r.category.toLowerCase().includes(needle) ||
         (r.description || '').toLowerCase().includes(needle) ||
-        (catalogTab === 'sojori' && provider.toLowerCase().includes(needle))
+        provider.toLowerCase().includes(needle)
       );
     });
-  }, [scopedRows, q, providerFilter, partnersById, partnersByOwnerId, catalogTab]);
+  }, [
+    scopedRows,
+    q,
+    providerFilter,
+    categoryFilter,
+    partnersById,
+    partnersByOwnerId,
+    catalogTab,
+  ]);
 
   const cityName = useCallback(
     (id: string) => cities.find((c) => c._id === id)?.name || id,
     [cities],
   );
 
-  /** Groupement Ensoconnect-style : par ville (all en premier). */
-  const groupedByCity = useMemo(() => {
+  /** Groupement : catégorie (défaut) ou ville. */
+  const groupedRows = useMemo(() => {
     const buckets = new Map<string, PartnerService[]>();
     for (const s of filtered) {
+      if (groupBy === 'category') {
+        const key = String(s.category || 'Autre');
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key)!.push(s);
+        continue;
+      }
       const ids =
         s.cityIds === 'all' || s.cityIds === undefined || s.cityIds === null
           ? ['all']
@@ -392,27 +446,42 @@ export function OwnerExperiencesPage() {
       }
     }
     const keys = Array.from(buckets.keys()).sort((a, b) => {
-      if (a === 'all') return -1;
-      if (b === 'all') return 1;
-      return cityName(a).localeCompare(cityName(b), 'fr');
+      if (groupBy === 'city') {
+        if (a === 'all') return -1;
+        if (b === 'all') return 1;
+        return cityName(a).localeCompare(cityName(b), 'fr');
+      }
+      return a.localeCompare(b, 'fr');
     });
     return keys.map((key) => ({
       key,
-      label: key === 'all' ? 'Toutes les villes' : cityName(key),
+      label:
+        groupBy === 'category'
+          ? key
+          : key === 'all'
+            ? 'Toutes les villes'
+            : cityName(key),
       items: buckets.get(key) || [],
     }));
-  }, [filtered, cityName]);
+  }, [filtered, cityName, groupBy]);
 
   const openNew = () => {
     if (!canEditCatalog) return;
+    if (!partners.length) {
+      toast.error('Déclarez d’abord une fiche provider (Expériences → Ma fiche)');
+      return;
+    }
     setIsNew(true);
     setSelectedId(null);
-    setDraft(emptyDraft());
+    const draft0 = emptyDraft();
+    const preferred =
+      partners.find((p) => p.active !== false)?.id || partners[0]?.id || '';
+    draft0.partnerId = preferred;
+    setDraft(draft0);
     setFormTab('config');
   };
 
   const openEdit = (s: PartnerService) => {
-    if (!canEditCatalog || !isOwnExperience(s)) return;
     setIsNew(false);
     setSelectedId(s.id);
     setDraft(toDraft(s));
@@ -430,13 +499,18 @@ export function OwnerExperiencesPage() {
     if (next === catalogTab) return;
     setCatalogTab(next);
     setProviderFilter('all');
+    setCategoryFilter('all');
     setQ('');
     closeEditor();
   };
 
   const save = async () => {
     if (!canEditCatalog) {
-      toast.error('Les expériences Sojori sont en lecture seule');
+      toast.error('Les expériences du marché sont en lecture seule');
+      return;
+    }
+    if (!draft.partnerId) {
+      toast.error('Choisissez une fiche provider pour cette activité');
       return;
     }
     if (!draft.title.trim() || !draft.category.trim()) {
@@ -465,6 +539,7 @@ export function OwnerExperiencesPage() {
       timing: draft.payment.timing === 'on_confirmation' ? 'on_confirmation' : 'instant',
     };
     const body = {
+      partnerId: draft.partnerId,
       category: draft.category.trim(),
       title: draft.title.trim(),
       description: draft.description,
@@ -495,12 +570,14 @@ export function OwnerExperiencesPage() {
       },
       active: draft.active,
       sortOrder: draft.sortOrder,
+      forSale: draft.forSale,
+      ...(requestOwnerId ? { ownerId: String(requestOwnerId) } : {}),
     };
     setSaving(true);
     try {
       const existing = !isNew && selectedId ? rows.find((r) => r.id === selectedId) : null;
       if (existing && !isOwnExperience(existing)) {
-        toast.error('Les expériences Sojori sont en lecture seule');
+        toast.error('Les expériences du marché sont en lecture seule');
         return;
       }
       if (isNew) {
@@ -509,13 +586,110 @@ export function OwnerExperiencesPage() {
         await load();
         openEdit(created);
       } else if (selectedId) {
-        // Own catalogue only — never mutate partner (Sojori) services from this page
         await partnersApi.updateExperience(selectedId, body);
         toast.success('Enregistré');
         await load();
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Enregistrement impossible');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleActiveQuick = async (s: PartnerService, nextActive: boolean) => {
+    if (!canEditCatalog || !isOwnExperience(s)) return;
+    setSaving(true);
+    try {
+      await partnersApi.updateExperience(s.id, { active: nextActive });
+      setRows((prev) =>
+        prev.map((r) => (r.id === s.id ? { ...r, active: nextActive } : r)),
+      );
+      if (selectedId === s.id) {
+        setDraft((d) => ({ ...d, active: nextActive }));
+      }
+      toast.success(
+        nextActive
+          ? 'Activée → dispo pour vos listings'
+          : 'Désactivée → hors picker listings',
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Mise à jour impossible');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleForSaleQuick = async (s: PartnerService, nextForSale: boolean) => {
+    if (!canEditCatalog || !isOwnExperience(s)) return;
+    setSaving(true);
+    try {
+      await partnersApi.updateExperience(s.id, { forSale: nextForSale });
+      setRows((prev) =>
+        prev.map((r) => (r.id === s.id ? { ...r, forSale: nextForSale } : r)),
+      );
+      if (selectedId === s.id) {
+        setDraft((d) => ({ ...d, forSale: nextForSale }));
+      }
+      toast.success(
+        nextForSale ? 'For sale → visible aux autres owners' : 'Retirée du marché',
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Mise à jour impossible');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleMarketAdopt = async (s: PartnerService, nextAdopted: boolean) => {
+    if (canEditCatalog) return;
+    setSaving(true);
+    try {
+      const ids = await partnersApi.setMarketAdoption({
+        experienceId: s.id,
+        adopted: nextAdopted,
+        ...(requestOwnerId ? { ownerId: String(requestOwnerId) } : {}),
+      });
+      setMarketAdopted(new Set(ids.map(String)));
+      toast.success(
+        nextAdopted
+          ? 'Activée → dispo pour vos listings'
+          : 'Désactivée → hors picker listings',
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Mise à jour impossible');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Activer / désactiver l’ensemble visible (Mes = active, Marché = adoption). */
+  const activateAllVisible = async (nextOn: boolean) => {
+    if (!filtered.length) return;
+    setSaving(true);
+    try {
+      if (catalogTab === 'own') {
+        await Promise.all(
+          filtered.map((s) => partnersApi.updateExperience(s.id, { active: nextOn })),
+        );
+        const ids = new Set(filtered.map((s) => s.id));
+        setRows((prev) => prev.map((r) => (ids.has(r.id) ? { ...r, active: nextOn } : r)));
+      } else {
+        const ids = await partnersApi.setMarketAdoption({
+          experienceIds: filtered.map((s) => s.id),
+          adopted: nextOn,
+          ...(requestOwnerId ? { ownerId: String(requestOwnerId) } : {}),
+        });
+        setMarketAdopted(new Set(ids.map(String)));
+      }
+      toast.success(
+        nextOn
+          ? `${filtered.length} activée(s) → vos listings`
+          : `${filtered.length} désactivée(s)`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Mise à jour impossible');
+      await load();
     } finally {
       setSaving(false);
     }
@@ -596,7 +770,22 @@ export function OwnerExperiencesPage() {
     });
   };
 
-  const showEditor = canEditCatalog && (isNew || !!selectedId);
+  const showEditor = isNew || !!selectedId;
+  useEffect(() => {
+    if (!showEditor) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeEditor();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- closeEditor is stable enough for escape
+  }, [showEditor]);
+
   const needsRemotePay = draft.payment.methods.some((m) => m === 'card' || m === 'transfer');
 
   return (
@@ -615,17 +804,39 @@ export function OwnerExperiencesPage() {
           <h1 className="pa-d" style={{ margin: '6px 0 8px', fontSize: 32 }}>
             Expériences
           </h1>
-          <p style={{ margin: 0, color: 'var(--pa-ink3)', fontSize: 14, maxWidth: 560 }}>
+          <p style={{ margin: 0, color: 'var(--pa-ink3)', fontSize: 14, maxWidth: 640 }}>
             {catalogTab === 'own'
-              ? 'Vos expériences uniquement — créez et modifiez. Les listings cochent celles à activer.'
-              : 'Catalogue Sojori (partenaires plateforme / à vendre) — lecture seule, filtrez par provider.'}
+              ? 'Activer → dispo pour vos listings. For sale = raccourci carte (déjà géré). Ensuite chaque listing coche.'
+              : 'Même chose : Activer → pousse l’activité marché vers vos listings. Puis chaque listing coche.'}
           </p>
         </div>
-        {canEditCatalog ? (
-          <button type="button" style={btnGold()} onClick={openNew}>
-            + Nouvelle expérience
-          </button>
-        ) : null}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {filtered.length > 0 ? (
+            <>
+              <button
+                type="button"
+                style={btnOutline({ padding: '8px 12px', fontSize: 13 })}
+                disabled={saving}
+                onClick={() => void activateAllVisible(true)}
+              >
+                Tout activer ({filtered.length})
+              </button>
+              <button
+                type="button"
+                style={btnOutline({ padding: '8px 12px', fontSize: 13 })}
+                disabled={saving}
+                onClick={() => void activateAllVisible(false)}
+              >
+                Tout désactiver
+              </button>
+            </>
+          ) : null}
+          {canEditCatalog ? (
+            <button type="button" style={btnGold()} onClick={openNew}>
+              + Nouvelle expérience
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div
@@ -639,7 +850,7 @@ export function OwnerExperiencesPage() {
         {(
           [
             { v: 'own' as const, l: 'Mes expériences', count: ownRows.length },
-            { v: 'sojori' as const, l: 'Expériences Sojori', count: sojoriRows.length },
+            { v: 'sojori' as const, l: 'Marché', count: sojoriRows.length },
           ] as const
         ).map((tb) => (
           <button
@@ -666,23 +877,34 @@ export function OwnerExperiencesPage() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: showEditor ? '340px 1fr' : '1fr', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
         <div>
-          {groupedByCity.length > 0 ? (
+          {groupedRows.length > 0 ? (
             <div
               style={{
                 display: 'flex',
                 flexWrap: 'wrap',
                 gap: 8,
                 marginBottom: 12,
+                alignItems: 'center',
               }}
             >
-              {groupedByCity.map((group) => (
+              <select
+                className="pa-in"
+                style={{ ...inpBase, width: 'auto', minWidth: 140 }}
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as 'city' | 'category')}
+                aria-label="Grouper par"
+              >
+                <option value="category">Grouper · catégorie</option>
+                <option value="city">Grouper · ville</option>
+              </select>
+              {groupedRows.map((group) => (
                 <button
                   key={`chip-${group.key}`}
                   type="button"
                   onClick={() => {
-                    const el = document.getElementById(`exp-city-${group.key}`);
+                    const el = document.getElementById(`exp-group-${group.key}`);
                     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                   }}
                   style={{
@@ -699,22 +921,22 @@ export function OwnerExperiencesPage() {
             style={{
               display: 'grid',
               gridTemplateColumns:
-                catalogTab === 'sojori' && providers.length > 0
-                  ? 'minmax(160px, 1fr) 1.4fr'
+                providers.length > 0 || categories.length > 0
+                  ? 'repeat(auto-fit, minmax(160px, 1fr))'
                   : '1fr',
               gap: 10,
               marginBottom: 12,
             }}
           >
-            {catalogTab === 'sojori' && providers.length > 0 ? (
+            {providers.length > 0 ? (
               <select
                 className="pa-in"
                 style={inpBase}
                 value={providerFilter}
                 onChange={(e) => setProviderFilter(e.target.value)}
-                aria-label="Filtrer par provider"
+                aria-label="Filtrer par provider / fiche"
               >
-                <option value="all">Tous les providers</option>
+                <option value="all">Toutes les fiches</option>
                 {providers.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -722,14 +944,26 @@ export function OwnerExperiencesPage() {
                 ))}
               </select>
             ) : null}
+            {categories.length > 0 ? (
+              <select
+                className="pa-in"
+                style={inpBase}
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                aria-label="Filtrer par catégorie"
+              >
+                <option value="all">Toutes les catégories</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <input
               className="pa-in"
               style={inpBase}
-              placeholder={
-                catalogTab === 'sojori'
-                  ? 'Rechercher… (titre, catégorie, provider)'
-                  : 'Rechercher… (titre, catégorie)'
-              }
+              placeholder="Rechercher… (titre, catégorie, provider)"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -765,8 +999,8 @@ export function OwnerExperiencesPage() {
                   {scopedRows.length !== filtered.length ? ` · sur ${scopedRows.length}` : ''}
                 </div>
               ) : null}
-              {groupedByCity.map((group) => (
-                <div key={group.key} id={`exp-city-${group.key}`}>
+              {groupedRows.map((group) => (
+                <div key={group.key} id={`exp-group-${group.key}`}>
                   <div
                     className="pa-lbl"
                     style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}
@@ -774,48 +1008,90 @@ export function OwnerExperiencesPage() {
                     <span>{group.label}</span>
                     <span style={{ color: 'var(--pa-ink4)' }}>{group.items.length}</span>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="exp-card-grid">
                     {group.items.map((s) => {
                       const prices = (s.formules || []).map((f) => Number(f.priceMad) || 0);
                       const min = prices.length ? Math.min(...prices) : 0;
-                      const active = canEditCatalog && selectedId === s.id && !isNew;
+                      const selected = selectedId === s.id && !isNew;
                       const provider =
-                        catalogTab === 'sojori'
-                          ? experienceProviderLabel(s, partnersById, partnersByOwnerId)
-                          : null;
-                      const cityLabel =
-                        s.cityIds === 'all' || !s.cityIds
-                          ? 'Toutes les villes'
-                          : Array.isArray(s.cityIds)
-                            ? s.cityIds.map(cityName).join(', ')
-                            : '';
+                        experienceProviderLabel(s, partnersById, partnersByOwnerId) || null;
+                      const photo = Array.isArray(s.photos) ? s.photos.find(Boolean) : undefined;
+                      const isOn = s.active !== false;
                       return (
                         <div
                           key={`${group.key}-${s.id}`}
                           style={{
                             display: 'flex',
-                            alignItems: 'stretch',
-                            gap: 8,
+                            flexDirection: 'column',
                             borderRadius: 'var(--pa-r-lg)',
-                            border: `1px solid ${active ? 'var(--pa-gold)' : 'var(--pa-line)'}`,
-                            background: active ? 'var(--pa-gold-wash)' : 'var(--pa-surface)',
+                            border: `1px solid ${selected ? 'var(--pa-gold)' : 'var(--pa-line)'}`,
+                            background: selected
+                              ? 'var(--pa-gold-wash)'
+                              : isOn
+                                ? 'var(--pa-surface)'
+                                : 'rgba(0,0,0,0.02)',
+                            overflow: 'hidden',
+                            minHeight: 196,
+                            opacity: isOn || catalogTab !== 'own' ? 1 : 0.72,
                           }}
                         >
-                          {canEditCatalog ? (
-                            <button
-                              type="button"
-                              onClick={() => openEdit(s)}
-                              style={{
-                                flex: 1,
-                                textAlign: 'left',
-                                padding: '14px 16px',
-                                border: 'none',
-                                background: 'transparent',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <div style={{ fontWeight: 600, fontSize: 14 }}>{s.title}</div>
-                              <div style={{ fontSize: 12, color: 'var(--pa-ink3)', marginTop: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => openEdit(s)}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              padding: 0,
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              flex: 1,
+                              display: 'flex',
+                              flexDirection: 'column',
+                            }}
+                          >
+                            {photo ? (
+                              <img
+                                src={photo}
+                                alt=""
+                                style={{
+                                  width: '100%',
+                                  height: 110,
+                                  objectFit: 'cover',
+                                  display: 'block',
+                                  background: 'var(--pa-line)',
+                                }}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  height: 72,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  background: 'rgba(0,0,0,0.04)',
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: 'var(--pa-ink4)',
+                                }}
+                              >
+                                {s.category || 'Expérience'}
+                              </div>
+                            )}
+                            <div style={{ padding: '12px 14px 8px', flex: 1 }}>
+                              <div
+                                style={{
+                                  fontWeight: 700,
+                                  fontSize: 14,
+                                  lineHeight: 1.3,
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                {s.title}
+                              </div>
+                              <div style={{ fontSize: 12, color: 'var(--pa-ink3)', marginTop: 6 }}>
                                 {provider ? (
                                   <span style={{ fontWeight: 700, color: 'var(--pa-ink2)' }}>
                                     {provider}
@@ -824,91 +1100,89 @@ export function OwnerExperiencesPage() {
                                 ) : null}
                                 {s.category}
                                 {min > 0 ? ` · dès ${money(min)} MAD` : ''}
-                                {!s.active ? ' · inactif' : ''}
                               </div>
-                            </button>
-                          ) : (
-                            <div style={{ flex: 1, textAlign: 'left', padding: '14px 16px' }}>
-                              <div style={{ fontWeight: 600, fontSize: 14 }}>{s.title}</div>
-                              <div style={{ fontSize: 12, color: 'var(--pa-ink3)', marginTop: 4 }}>
-                                {provider ? (
-                                  <span style={{ fontWeight: 700, color: 'var(--pa-ink2)' }}>
-                                    {provider}
-                                    {' · '}
-                                  </span>
-                                ) : null}
-                                {s.category}
-                                {min > 0 ? ` · dès ${money(min)} MAD` : ''}
-                                {!s.active ? ' · inactif' : ''}
-                              </div>
-                              {s.description ? (
-                                <div
-                                  style={{
-                                    fontSize: 12,
-                                    color: 'var(--pa-ink3)',
-                                    marginTop: 8,
-                                    lineHeight: 1.45,
-                                    display: '-webkit-box',
-                                    WebkitLineClamp: 2,
-                                    WebkitBoxOrient: 'vertical',
-                                    overflow: 'hidden',
-                                  }}
-                                >
-                                  {s.description}
-                                </div>
-                              ) : null}
-                              {(s.formules || []).length > 0 ? (
-                                <div style={{ fontSize: 12, color: 'var(--pa-ink2)', marginTop: 8 }}>
-                                  {(s.formules || [])
-                                    .slice(0, 3)
-                                    .map((f) => `${f.label} · ${money(Number(f.priceMad) || 0)} MAD`)
-                                    .join(' · ')}
-                                  {(s.formules || []).length > 3 ? '…' : ''}
-                                </div>
-                              ) : null}
-                              {cityLabel ? (
-                                <div style={{ fontSize: 11, color: 'var(--pa-ink4)', marginTop: 6 }}>
-                                  {cityLabel}
-                                </div>
-                              ) : null}
                             </div>
-                          )}
-                          {canEditCatalog ? (
-                            <button
-                              type="button"
-                              title="Supprimer"
-                              disabled={saving}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void (async () => {
-                                  if (!isOwnExperience(s)) {
-                                    toast.error('Les expériences Sojori sont en lecture seule');
-                                    return;
-                                  }
-                                  if (!window.confirm(`Supprimer « ${s.title} » ?`)) return;
-                                  setSaving(true);
-                                  try {
-                                    await partnersApi.removeExperience(s.id);
-                                    toast.success('Supprimée');
-                                    if (selectedId === s.id) closeEditor();
-                                    await load();
-                                  } catch (err) {
-                                    toast.error(
-                                      err instanceof Error ? err.message : 'Suppression impossible',
-                                    );
-                                  } finally {
-                                    setSaving(false);
-                                  }
-                                })();
-                              }}
+                          </button>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                              padding: '8px 12px 10px',
+                              borderTop: '1px solid var(--pa-line)',
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <label
                               style={{
-                                ...btnDanger({ padding: '8px 12px', alignSelf: 'center', marginRight: 8 }),
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
+                                cursor: saving ? 'wait' : 'pointer',
                                 fontSize: 12,
                               }}
                             >
-                              Supprimer
-                            </button>
-                          ) : null}
+                              <span
+                                style={{
+                                  fontWeight: 700,
+                                  color: (canEditCatalog ? isOn : marketAdopted.has(s.id))
+                                    ? '#1b6b3a'
+                                    : 'var(--pa-ink3)',
+                                }}
+                              >
+                                Activer
+                              </span>
+                              <input
+                                type="checkbox"
+                                checked={canEditCatalog ? isOn : marketAdopted.has(s.id)}
+                                disabled={saving}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (canEditCatalog) {
+                                    void toggleActiveQuick(s, e.target.checked);
+                                  } else {
+                                    void toggleMarketAdopt(s, e.target.checked);
+                                  }
+                                }}
+                                style={{ width: 18, height: 18 }}
+                              />
+                            </label>
+                            {canEditCatalog ? (
+                              <label
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: 8,
+                                  cursor: saving ? 'wait' : 'pointer',
+                                  fontSize: 12,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontWeight: 700,
+                                    color: s.forSale
+                                      ? 'var(--pa-gold-deep, #b0841c)'
+                                      : 'var(--pa-ink3)',
+                                  }}
+                                >
+                                  For sale
+                                </span>
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(s.forSale)}
+                                  disabled={saving}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    void toggleForSaleQuick(s, e.target.checked);
+                                  }}
+                                  style={{ width: 18, height: 18 }}
+                                />
+                              </label>
+                            ) : null}
+                          </div>
                         </div>
                       );
                     })}
@@ -921,16 +1195,36 @@ export function OwnerExperiencesPage() {
 
         {showEditor ? (
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={isNew ? 'Nouvelle expérience' : draft.title || 'Détail activité'}
+            onClick={closeEditor}
             style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1400,
+              background: 'rgba(20, 16, 10, 0.45)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+            }}
+          >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(720px, 100%)',
+              height: '100%',
               padding: 22,
-              borderRadius: 'var(--pa-r-lg)',
-              border: '1px solid var(--pa-line)',
+              borderLeft: '1px solid var(--pa-line)',
               background: 'var(--pa-surface)',
+              overflow: 'auto',
+              boxShadow: '-12px 0 40px rgba(0,0,0,0.18)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
               <div>
-                <div className="pa-lbl">{isNew ? 'Création' : 'Édition'}</div>
+                <div className="pa-lbl">
+                  {isNew ? 'Création' : canEditCatalog ? 'Édition' : 'Détail (lecture seule)'}
+                </div>
                 <h2 className="pa-d" style={{ margin: '4px 0 0', fontSize: 26 }}>
                   {isNew ? 'Nouvelle expérience' : draft.title || 'Sans titre'}
                 </h2>
@@ -939,12 +1233,18 @@ export function OwnerExperiencesPage() {
                 <button type="button" style={btnOutline()} onClick={closeEditor}>
                   Fermer
                 </button>
-                <button type="button" style={btnGold()} disabled={saving} onClick={() => void save()}>
-                  {isNew ? 'Créer' : 'Enregistrer'}
-                </button>
+                {canEditCatalog ? (
+                  <button type="button" style={btnGold()} disabled={saving} onClick={() => void save()}>
+                    {isNew ? 'Créer' : 'Enregistrer'}
+                  </button>
+                ) : null}
               </div>
             </div>
 
+            <fieldset
+              disabled={!canEditCatalog}
+              style={{ border: 'none', margin: 0, padding: 0, minInlineSize: 0 }}
+            >
             <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid var(--pa-line)' }}>
               {([
                 { v: 'config', l: '⚙️ Configuration' },
@@ -973,6 +1273,28 @@ export function OwnerExperiencesPage() {
 
             {formTab === 'config' && (
             <>
+            <section style={{ marginBottom: 22 }}>
+              <div className="pa-lbl">Provider (fiche)</div>
+              <select
+                className="pa-in"
+                style={{ ...inpBase, marginTop: 8 }}
+                value={draft.partnerId}
+                onChange={(e) => setDraft((d) => ({ ...d, partnerId: e.target.value }))}
+              >
+                <option value="">— Choisir une fiche —</option>
+                {partners.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.active === false ? ' (inactif)' : ''}
+                  </option>
+                ))}
+              </select>
+              {!partners.length ? (
+                <div style={{ marginTop: 8, fontSize: 13, color: 'var(--pa-ink3)' }}>
+                  Aucune fiche — créez-en une dans Expériences → Ma fiche.
+                </div>
+              ) : null}
+            </section>
             <section style={{ marginBottom: 22 }}>
               <div className="pa-lbl">Présentation</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 12, marginTop: 8 }}>
@@ -1481,25 +1803,37 @@ export function OwnerExperiencesPage() {
             </section>
             )}
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <input
                 type="checkbox"
                 checked={draft.active}
                 onChange={(e) => setDraft((d) => ({ ...d, active: e.target.checked }))}
               />
-              <span>Active (visible WhatsApp)</span>
+              <span>Activer — dispo pour le picker des listings</span>
             </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+              <input
+                type="checkbox"
+                checked={draft.forSale}
+                onChange={(e) => setDraft((d) => ({ ...d, forSale: e.target.checked }))}
+              />
+              <span>For sale — visible aux autres owners (marché)</span>
+            </label>
+            </fieldset>
 
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" style={btnGold()} disabled={saving} onClick={() => void save()}>
-                {isNew ? 'Créer' : 'Enregistrer'}
-              </button>
-              {!isNew && selectedId ? (
-                <button type="button" style={btnDanger()} disabled={saving} onClick={() => void remove()}>
-                  Supprimer
+            {canEditCatalog ? (
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="button" style={btnGold()} disabled={saving} onClick={() => void save()}>
+                  {isNew ? 'Créer' : 'Enregistrer'}
                 </button>
-              ) : null}
-            </div>
+                {!isNew && selectedId ? (
+                  <button type="button" style={btnDanger()} disabled={saving} onClick={() => void remove()}>
+                    Supprimer
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           </div>
         ) : null}
       </div>

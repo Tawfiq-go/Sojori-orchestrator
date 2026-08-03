@@ -146,27 +146,30 @@ export function patchWorkflowForCapability(
   row: CapabilityRowState,
 ): Workflow[] {
   if (!def.taskType) return workflows;
-  return workflows.map(wf => {
+  return workflows.map((wf) => {
     if (wf.taskTypeId !== def.taskType) return wf;
-    const relances = (wf.relances ?? []).map(r => ({
+    const relances = (wf.relances ?? []).map((r) => ({
       ...r,
       enabled: row.execution.clientReminders ? r.enabled !== false : false,
     }));
-    if (row.execution.clientReminders && relances.length === 0) {
-      // keep workflow as-is if no relances defined
-    }
     let assignment = wf.assignment;
     if (!row.execution.staffAssignment) {
       assignment = null;
     } else if (!assignment) {
       assignment = defaultWorkflowAssignment(def.taskType);
     }
+    const staffReminders = row.execution.staffReminders
+      ? (wf.staffReminders ?? []).map((r) => ({
+          ...r,
+          enabled: r.enabled !== false,
+        }))
+      : (wf.staffReminders ?? []).map((r) => ({ ...r, enabled: false }));
     return {
       ...wf,
       enabled: row.taskEnabled,
       relances,
       assignment,
-      staffReminders: wf.staffReminders ?? [],
+      staffReminders,
       escalationEnabled: row.execution.pmEscalation,
     };
   });

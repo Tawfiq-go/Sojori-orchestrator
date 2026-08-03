@@ -100,3 +100,23 @@
 .pa-fade {
   animation: pa-fade 0.26s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
+
+/* Catalogue expériences — grille 3 cartes */
+.exp-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1100px) {
+  .exp-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .exp-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

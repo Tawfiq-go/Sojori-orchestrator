@@ -19,7 +19,7 @@ export default function ListingExperiencesTab({
   listingOwnerId,
 }: Props) {
   const [loading, setLoading] = useState(true);
-  const [enabledIds, setEnabledIds] = useState<string[] | null>(null);
+  const [enabledIds, setEnabledIds] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,7 +32,7 @@ export default function ListingExperiencesTab({
       try {
         const conc = await fetchListingConciergeArrays(String(listingId));
         if (!cancelled) {
-          setEnabledIds(conc.enabledExperienceIds ?? null);
+          setEnabledIds(conc.enabledExperienceIds ?? []);
         }
       } catch {
         if (!cancelled) setEnabledIds([]);
@@ -64,7 +64,7 @@ export default function ListingExperiencesTab({
   }
 
   return (
-    <Box sx={{ p: { xs: 1.5, md: 2 }, maxWidth: 820 }}>
+    <Box sx={{ p: { xs: 1.5, md: 2 }, width: '100%' }}>
       <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: 'text.secondary', mb: 0.5 }}>
         LISTING
       </Typography>

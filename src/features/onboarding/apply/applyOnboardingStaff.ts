@@ -148,11 +148,12 @@ function scopeIdsForApi(scope: ResolvedScopeIds): { listingIds: string[]; cityId
   };
 }
 
-function wizardLangToStaffLang(language?: string): 'fr' | 'en' | 'ar' {
-  const l = String(language || '').toLowerCase();
-  if (l.includes('english') || l === 'en') return 'en';
-  if (l.includes('arab')) return 'ar';
-  return 'fr';
+function wizardLangToStaffLang(language?: string): 'fr' | 'da' | 'en' | 'ar' {
+  const l = String(language || '').toLowerCase()
+  if (l.includes('darija') || l.includes('darja') || l === 'da') return 'da'
+  if (l.includes('english') || l === 'en') return 'en'
+  if (l.includes('arab') || l === 'ar') return 'ar'
+  return 'fr'
 }
 
 function wizardRowToStaffDesign(row: WizardStaffRow, scope: ResolvedScopeIds): Record<string, unknown> {

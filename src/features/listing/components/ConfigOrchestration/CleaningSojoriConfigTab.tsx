@@ -1,44 +1,23 @@
 // Ménage Sojori — cleaningOrchestration (déclenchement · filet DIRTY · checklist)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Stack, Typography, CircularProgress, IconButton } from '@mui/material';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { Box, Stack, Typography, CircularProgress } from '@mui/material';
 import { listingsService } from '../../../../services/listingsService';
 import { SOJORI_TOKENS as T, CONFIG_ORCH_FONT } from './types';
 import {
   Card,
   FormRow,
-  TextInput,
   ConfigIntroBar,
-  PillButton,
   Toggle,
   NumInput,
-  AddRowBtn,
   TYPO,
 } from './SHARED';
 import {
-  createEmptyChecklistItem,
   canPersistListingConfig,
   mapCleaningSojoriTriggersPatch,
   mapListingToCleaningSojoriConfig,
-  type CleaningChecklistItem,
   type CleaningSojoriConfig,
 } from './cleaningSojoriConfigTypes';
+import CleaningChecklistPanel from './CleaningChecklistPanel';
 import { logOrchConfig, orchConfigError } from '../../utils/orchConfigDebugLog';
 import { V3BlockSaveBar } from '../../../orchestrationListingV3/V3BlockSaveBar';
 
@@ -60,71 +39,6 @@ interface Props {
   manualSaveMode?: boolean;
 }
 
-function SortableChecklistRow({
-  item,
-  onUpdate,
-  onDelete,
-}: {
-  item: CleaningChecklistItem;
-  onUpdate: (patch: Partial<CleaningChecklistItem>) => void;
-  onDelete: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: item.id,
-  });
-
-  return (
-    <Box
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.55 : 1 }}
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: '28px 1fr auto 32px',
-        gap: 1,
-        alignItems: 'center',
-        p: 1,
-        bgcolor: T.bg1,
-        border: `1px solid ${T.border}`,
-        borderRadius: 1,
-      }}
-    >
-      <Box
-        {...attributes}
-        {...listeners}
-        sx={{ cursor: 'grab', color: T.text3, fontSize: 14, textAlign: 'center', userSelect: 'none' }}
-      >
-        ⠿
-      </Box>
-      <TextInput
-        value={item.label}
-        onChange={e => onUpdate({ label: e.target.value })}
-        placeholder="Libellé de l'item…"
-        style={{ padding: '8px 10px', fontSize: 12.5 }}
-      />
-      <Stack direction="row" sx={{ gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
-        <PillButton compact active={item.required} onClick={() => onUpdate({ required: true, photoRequired: item.photoRequired })}>
-          REQUIS
-        </PillButton>
-        <PillButton
-          compact
-          active={!item.required}
-          onClick={() => onUpdate({ required: false, photoRequired: false })}
-        >
-          OPT
-        </PillButton>
-        {item.required && (
-          <PillButton compact active={item.photoRequired} onClick={() => onUpdate({ photoRequired: !item.photoRequired })}>
-            PHOTO
-          </PillButton>
-        )}
-      </Stack>
-      <IconButton size="small" onClick={onDelete} sx={{ color: T.error, p: 0.25 }} aria-label="Supprimer">
-        ✕
-      </IconButton>
-    </Box>
-  );
-}
-
 export default function CleaningSojoriConfigTab({
   listingId,
   listingValues = {},
@@ -142,11 +56,6 @@ export default function CleaningSojoriConfigTab({
   const hydratedRef = useRef(false);
   const dirtyRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
 
   useEffect(() => {
     hydratedRef.current = false;
@@ -229,16 +138,6 @@ export default function CleaningSojoriConfigTab({
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [config, persist, manualSaveMode]);
-
-  const handleDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return;
-    patch(prev => {
-      const o = prev.checklist.findIndex(i => i.id === active.id);
-      const n = prev.checklist.findIndex(i => i.id === over.id);
-      const moved = arrayMove(prev.checklist, o, n).map((item, i) => ({ ...item, order: i }));
-      return { ...prev, checklist: moved };
-    });
-  };
 
   if (!config) {
     return (
@@ -328,47 +227,12 @@ export default function CleaningSojoriConfigTab({
           </Card>
 
           {showChecklist && (
-            <Card
-              compact
-              icon="📋"
-              title="Checklist de ménage"
-              subtitle="Items obligatoires + photos requises"
-            >
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={config.checklist.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                  <Stack sx={{ gap: 0.75 }}>
-                    {config.checklist.map(item => (
-                      <SortableChecklistRow
-                        key={item.id}
-                        item={item}
-                        onUpdate={p =>
-                          patch(c => ({
-                            ...c,
-                            checklist: c.checklist.map(row => (row.id === item.id ? { ...row, ...p } : row)),
-                          }))
-                        }
-                        onDelete={() =>
-                          patch(c => ({
-                            ...c,
-                            checklist: c.checklist.filter(row => row.id !== item.id).map((row, i) => ({ ...row, order: i })),
-                          }))
-                        }
-                      />
-                    ))}
-                  </Stack>
-                </SortableContext>
-              </DndContext>
-              <AddRowBtn
-                onClick={() =>
-                  patch(c => ({
-                    ...c,
-                    checklist: [...c.checklist, createEmptyChecklistItem(c.checklist.length)],
-                  }))
-                }
-              >
-                + Ajouter un item checklist
-              </AddRowBtn>
-            </Card>
+            <CleaningChecklistPanel
+              listingId={listingId}
+              listingValues={listingValues}
+              onListingPatch={onListingPatch}
+              templateMode={templateMode}
+            />
           )}
         </>
       )}

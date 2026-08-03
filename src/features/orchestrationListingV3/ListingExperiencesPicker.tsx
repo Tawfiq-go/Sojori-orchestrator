@@ -2,10 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
-  Checkbox,
   CircularProgress,
-  FormControlLabel,
   MenuItem,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -20,7 +19,7 @@ type Props = {
   listingOwnerId?: string | null;
   enabledIds: string[] | null | undefined;
   onSaved?: (ids: string[]) => void;
-  /** Hauteur max de la liste (sidebar listing = plus haute). */
+  /** Hauteur max de la grille (sidebar listing = plus haute). */
   maxHeight?: number;
 };
 
@@ -31,8 +30,8 @@ function money(n: number) {
 }
 
 /**
- * Picker listing unifié : catalogue PM + Sojori, filtre provider / catégorie.
- * Plus de bascule « Source Sojori vs PM ».
+ * Picker listing : cartes 3/ligne + toggle Activer (own + marché forSale).
+ * Opt-in strict — rien d’activé tant que non basculé + enregistré.
  */
 export function ListingExperiencesPicker({
   listingId,
@@ -40,7 +39,7 @@ export function ListingExperiencesPicker({
   listingOwnerId,
   enabledIds,
   onSaved,
-  maxHeight = 480,
+  maxHeight = 560,
 }: Props) {
   const [rows, setRows] = useState<PartnerService[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +59,7 @@ export function ListingExperiencesPicker({
       });
       setRows(list);
       if (enabledIds === undefined || enabledIds === null) {
-        setSelected(new Set(list.map((r) => r.id)));
+        setSelected(new Set());
       } else {
         setSelected(new Set(enabledIds.map(String)));
       }
@@ -165,8 +164,9 @@ export function ListingExperiencesPicker({
   if (!rows.length) {
     return (
       <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.55 }}>
-        Aucune expérience pour la ville de ce listing. Créez-les dans{' '}
-        <b>Expériences → Catalogue</b>, ou activez le catalogue Sojori (Admin).
+        Aucune expérience pour la ville de ce listing. Créez les vôtres dans{' '}
+        <b>Expériences → Catalogue</b>, ou activez des activités for sale du Marché puis
+        activez-les ici.
       </Typography>
     );
   }
@@ -174,8 +174,8 @@ export function ListingExperiencesPicker({
   return (
     <Box>
       <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 1.5, lineHeight: 1.5 }}>
-        Cochez les expériences à activer sur ce listing. Le guest les verra en <b>J → Expériences</b>
-        (Transport et Courses restent dans le hub J).
+        Activez sur <b>ce listing</b> les expériences visibles pour le guest (vos activités +
+        for sale). Rien n’est activé automatiquement.
       </Typography>
 
       <Box
@@ -223,13 +223,13 @@ export function ListingExperiencesPicker({
         />
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1.25 }}>
         <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>
-          Activer sur ce listing ({selected.size}/{rows.length}
-          {filtered.length !== rows.length ? ` · filtre ${filtered.length}` : ''})
+          Actives {selected.size}/{rows.length}
+          {filtered.length !== rows.length ? ` · filtre ${filtered.length}` : ''}
         </Typography>
         <Button size="small" onClick={toggleAllFiltered} sx={{ textTransform: 'none', fontSize: 11.5 }}>
-          {allOn ? 'Tout décocher (filtre)' : 'Tout cocher (filtre)'}
+          {allOn ? 'Tout désactiver (filtre)' : 'Tout activer (filtre)'}
         </Button>
       </Box>
 
@@ -237,12 +237,7 @@ export function ListingExperiencesPicker({
         sx={{
           maxHeight,
           overflowY: 'auto',
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 1.5,
-          px: 1,
-          py: 0.5,
-          bgcolor: 'background.paper',
+          pr: 0.5,
         }}
       >
         {filtered.length === 0 ? (
@@ -250,51 +245,127 @@ export function ListingExperiencesPicker({
             Aucun résultat pour ces filtres.
           </Typography>
         ) : (
-          filtered.map((r) => {
-            const prices = (r.formules || []).map((f) => Number(f.priceMad) || 0);
-            const min = prices.length ? Math.min(...prices) : 0;
-            const provider = r.providerName || (r.partnerId ? 'Sojori' : 'Mes expériences');
-            return (
-              <FormControlLabel
-                key={r.id}
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={selected.has(r.id)}
-                    onChange={() => toggle(r.id)}
-                  />
-                }
-                label={
-                  <Box sx={{ py: 0.4 }}>
-                    <Typography sx={{ fontSize: 13.5, fontWeight: 650, lineHeight: 1.25 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: 'repeat(2, 1fr)',
+                sm: 'repeat(3, 1fr)',
+                md: 'repeat(4, 1fr)',
+                lg: 'repeat(6, 1fr)',
+              },
+              gap: 1,
+            }}
+          >
+            {filtered.map((r) => {
+              const prices = (r.formules || []).map((f) => Number(f.priceMad) || 0);
+              const min = prices.length ? Math.min(...prices) : 0;
+              const provider = r.providerName || (r.partnerId ? 'Sojori' : 'Mes expériences');
+              const on = selected.has(r.id);
+              const photo = Array.isArray(r.photos) ? r.photos.find(Boolean) : undefined;
+              return (
+                <Box
+                  key={r.id}
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: on ? 'warning.main' : 'divider',
+                    bgcolor: on ? 'rgba(184, 133, 26, 0.06)' : 'background.paper',
+                    overflow: 'hidden',
+                    minHeight: 140,
+                  }}
+                >
+                  {photo ? (
+                    <Box
+                      component="img"
+                      src={photo}
+                      alt=""
+                      sx={{
+                        width: '100%',
+                        height: 72,
+                        objectFit: 'cover',
+                        display: 'block',
+                        bgcolor: 'action.hover',
+                      }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        height: 72,
+                        bgcolor: 'action.hover',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Typography sx={{ fontSize: 11, color: 'text.disabled', fontWeight: 600 }}>
+                        {r.category || 'Expérience'}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  <Box sx={{ p: 1.25, display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 13.5,
+                        fontWeight: 700,
+                        lineHeight: 1.25,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
                       {r.title}
                     </Typography>
-                    <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
+                    <Typography sx={{ fontSize: 11.5, color: 'text.secondary', lineHeight: 1.35 }}>
                       <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
                         {provider}
                       </Box>
                       {r.category ? ` · ${r.category}` : ''}
                       {min > 0 ? ` · dès ${money(min)} MAD` : ''}
                     </Typography>
+
+                    <Box
+                      sx={{
+                        mt: 'auto',
+                        pt: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 1,
+                        borderTop: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: on ? 'success.dark' : 'text.secondary',
+                        }}
+                      >
+                        {on ? 'Activée' : 'Désactivée'}
+                      </Typography>
+                      <Switch
+                        size="small"
+                        checked={on}
+                        onChange={() => toggle(r.id)}
+                        inputProps={{ 'aria-label': on ? 'Désactiver' : 'Activer' }}
+                        color="warning"
+                      />
+                    </Box>
                   </Box>
-                }
-                sx={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  m: 0,
-                  py: 0.45,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                  '&:last-child': { borderBottom: 'none' },
-                  width: '100%',
-                }}
-              />
-            );
-          })
+                </Box>
+              );
+            })}
+          </Box>
         )}
       </Box>
 
-      <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
+      <Box sx={{ mt: 1.75, display: 'flex', justifyContent: 'flex-end' }}>
         <Button
           size="small"
           variant="contained"
@@ -302,7 +373,7 @@ export function ListingExperiencesPicker({
           onClick={() => void save()}
           sx={{ textTransform: 'none', fontWeight: 700 }}
         >
-          Enregistrer la sélection
+          Enregistrer
         </Button>
       </Box>
     </Box>
