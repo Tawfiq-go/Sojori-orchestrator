@@ -5,6 +5,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -20,6 +21,7 @@ import {
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import { toast } from 'react-toastify';
 import {
@@ -65,6 +67,7 @@ import type { CatalogMessage, ScheduledOrchestrationMessage } from '../taskHub/s
 import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
 import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
 import V3InformSyndicPanel from './V3InformSyndicPanel';
+import CleaningChecklistPanel from '../listing/components/ConfigOrchestration/CleaningChecklistPanel';
 import OrchestrationGlobalSwitch from './OrchestrationGlobalSwitch';
 import CapabilityAuditStrip from './CapabilityAuditStrip';
 import { V3Section } from './V3Primitives';
@@ -538,12 +541,14 @@ function defaultRefForTask(taskType: string): string {
   return 'scheduledDate';
 }
 
-/** Flags décisions du popup apercu (ops/staff = taskEnabled). */
+/** Flags décisions du popup apercu — Relances / Assignation / Rappels / Escalade séparés. */
 type DecisionFlags = {
   orchestrated: boolean;
   clientEnabled: boolean;
   taskEnabled: boolean;
   clientReminders: boolean;
+  /** Assignation auto dans le plan (indépendant de Créer tâche). */
+  staffAssignment: boolean;
   staffReminders: boolean;
   /** Rappel « il est temps de commencer » — défaut ON, sans heure. */
   staffStartReminder: boolean;
@@ -561,9 +566,10 @@ function readDecisionFlags(cap: CapDoc): DecisionFlags {
     clientEnabled: d.clientEnabled === true,
     taskEnabled: d.taskEnabled === true,
     clientReminders: reminders.length > 0,
+    staffAssignment: hasStaffAssign,
     staffReminders: staffRem.length > 0,
     staffStartReminder:
-      d.taskEnabled === true && hasStaffAssign
+      d.taskEnabled === true
         ? exec.staffStartReminderEnabled !== false
         : false,
     pmEscalation: exec.escalationEnabled === true,
@@ -578,8 +584,12 @@ function applyDecisionFlagRules(
   // orchestrated n’est plus géré en UI : toujours ON côté save (colonne ON = master).
   next.orchestrated = true;
   if (changed === 'taskEnabled' && !next.taskEnabled) {
+    next.staffAssignment = false;
     next.staffReminders = false;
     next.staffStartReminder = false;
+  }
+  if (changed === 'staffAssignment' && next.staffAssignment && !next.taskEnabled) {
+    next.taskEnabled = true;
   }
   if (changed === 'staffReminders' && next.staffReminders && !next.taskEnabled) {
     next.taskEnabled = true;
@@ -619,21 +629,36 @@ function buildExecutionFromFlags(
     ];
   }
 
+  // Créer tâche OFF ⇒ rien côté équipe dans le plan.
+  // Assignation OFF avec tâche ON ⇒ tâche créée, assignation manuelle (admin).
   if (!flags.taskEnabled) {
     staffAssignment = null;
     staffReminders = [];
-  } else if (!flags.staffReminders) {
-    staffReminders = [];
-  } else if (staffReminders.length === 0) {
-    staffReminders = [
-      {
-        label: 'Rappel J-1',
-        ref,
-        day: -1,
-        time: '11:00',
-        messageId: STAFF_MSG_ID[taskType] ?? '',
-      },
-    ];
+  } else {
+    if (!flags.staffAssignment) {
+      staffAssignment = null;
+    } else if (!staffAssignment) {
+      staffAssignment = {
+        startAt: { ref, day: -1, time: '10:00' },
+        endAt: { ref, day: 0, time: '18:00' },
+        autoAssign: true,
+        findAnotherStaff: true,
+        acceptToleranceHours: 2,
+      };
+    }
+    if (!flags.staffReminders) {
+      staffReminders = [];
+    } else if (staffReminders.length === 0) {
+      staffReminders = [
+        {
+          label: 'Rappel J-1',
+          ref,
+          day: -1,
+          time: '11:00',
+          messageId: STAFF_MSG_ID[taskType] ?? '',
+        },
+      ];
+    }
   }
 
   if (!flags.pmEscalation) {
@@ -867,6 +892,8 @@ export default function OrchestrationOverviewPanel({
   const [activationStatus, setActivationStatus] = useState<ServiceActivationStatusEntry[]>([]);
   const [orchestrationEnabled, setOrchestrationEnabled] = useState(true);
   const [openGroups, setOpenGroups] = useState<Set<CapabilityGroupId | 'messages'>>(new Set());
+  /** Checklist ménage sous Flows — repliée par défaut. */
+  const [cleaningChecklistOpen, setCleaningChecklistOpen] = useState(false);
 
   const reload = useCallback((_opts?: { silent?: boolean }) => {
     // Pas de setLoading(true) ici : évite de démonter la grille / les modals (effet « reload page »).
@@ -1193,7 +1220,13 @@ export default function OrchestrationOverviewPanel({
     const execution = buildExecutionFromFlags(
       cap,
       noOpsTask
-        ? { ...flagInput, taskEnabled: false, staffReminders: false, staffStartReminder: false }
+        ? {
+            ...flagInput,
+            taskEnabled: false,
+            staffAssignment: false,
+            staffReminders: false,
+            staffStartReminder: false,
+          }
         : flagInput,
       taskType,
       { onDemand },
@@ -1617,7 +1650,6 @@ export default function OrchestrationOverviewPanel({
               label="Fenêtre"
               onClick={() => write({ mode: 'window', startDay, endDay: Math.max(endDay, startDay) })}
             />
-            <SegChip on={mode === 'none'} label="—" onClick={() => write({ mode: 'none' })} />
           </Box>
           {mode === 'window' && (
             <>
@@ -1688,7 +1720,6 @@ export default function OrchestrationOverviewPanel({
             {[-2, -1, 0, 1].map((d) => (
               <SegChip key={d} on={day === d} label={d === 0 ? 'J0' : d > 0 ? `J+${d}` : `J${d}`} onClick={() => write(d, time)} />
             ))}
-            <SegChip on={day == null} label="—" onClick={() => write(null, time)} />
           </Box>
           {day != null && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1733,25 +1764,6 @@ export default function OrchestrationOverviewPanel({
 
       body = (
         <Box sx={{ display: 'grid', gap: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Switch
-              size="small"
-              checked={escOn}
-              onChange={(e) => {
-                if (!e.target.checked) {
-                  writeDay(false, day ?? 1, time);
-                  return;
-                }
-                if (postCreate) {
-                  if (hours != null) writeHours(true, hours);
-                  else writeDay(true, day ?? 1, time);
-                } else {
-                  writeDay(true, day ?? -1, time);
-                }
-              }}
-            />
-            <Typography sx={{ fontSize: 12, color: V3.t2 }}>Alerter l&apos;admin (escalade)</Typography>
-          </Box>
           {escOn && postCreate && (
             <>
               <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>
@@ -1808,6 +1820,117 @@ export default function OrchestrationOverviewPanel({
       );
     }
 
+    // Titre + toggles ON/OFF catégorie (Relances / Assignation / Rappels / Escalade).
+    const kindMeta: Record<
+      Exclude<EditorKind, 'availability'>,
+      { suffix: string; on: boolean; hintOff: string }
+    > = {
+      reminders: {
+        suffix: '· Relances client',
+        on: (exec.reminders ?? []).length > 0,
+        hintOff: 'OFF = pas de relance voyageur dans le plan.',
+      },
+      assign: {
+        suffix: '· Assignation',
+        on: Boolean(exec.staffAssignment),
+        hintOff: 'OFF = hors plan — attribution manuelle possible.',
+      },
+      staffRem: {
+        suffix: '· Rappels staff',
+        on: (exec.staffReminders ?? []).length > 0,
+        hintOff: 'OFF = pas de rappel staff dans le plan.',
+      },
+      escalation: {
+        suffix: '· Escalade',
+        on: exec.escalationEnabled === true,
+        hintOff: 'OFF = pas d’escalade admin dans le plan.',
+      },
+    };
+
+    const featureKind =
+      editor.kind === 'availability' ? null : (editor.kind as Exclude<EditorKind, 'availability'>);
+    const meta = featureKind ? kindMeta[featureKind] : null;
+
+    const toggleFeature = (on: boolean) => {
+      if (!featureKind) return;
+      if (featureKind === 'reminders') {
+        if (!on) {
+          patchExecution(editor.capKey, { reminders: [] });
+          return;
+        }
+        if ((exec.reminders ?? []).length > 0) return;
+        const ref = defaultRefForTask(taskType);
+        patchExecution(editor.capKey, {
+          reminders: [
+            {
+              ref,
+              day: -1,
+              time: '10:00',
+              label: 'Relance J-1',
+              messageId: CLIENT_MSG_ID[taskType] ?? '',
+            },
+          ],
+        });
+        return;
+      }
+      if (featureKind === 'assign') {
+        if (!on) {
+          patchExecution(editor.capKey, { staffAssignment: null });
+          return;
+        }
+        if (exec.staffAssignment) return;
+        const ref = defaultRefForTask(taskType);
+        patchExecution(editor.capKey, {
+          staffAssignment: {
+            startAt: { ref, day: -3, time: '09:00' },
+            endAt: { ref, day: 0, time: '11:00' },
+            autoAssign: false,
+            findAnotherStaff: true,
+            releaseWindows: ['11:00', '16:00'],
+            releaseMode: 'tolerance',
+            acceptToleranceHours: 3,
+            assignmentHoursMode: 'planning',
+          },
+        });
+        return;
+      }
+      if (featureKind === 'staffRem') {
+        if (!on) {
+          patchExecution(editor.capKey, { staffReminders: [] });
+          return;
+        }
+        if ((exec.staffReminders ?? []).length > 0) return;
+        const ref = defaultRefForTask(taskType);
+        patchExecution(editor.capKey, {
+          staffReminders: [
+            {
+              label: 'Rappel J-1',
+              ref,
+              day: -1,
+              time: '11:00',
+              messageId: STAFF_MSG_ID[taskType] ?? '',
+            },
+          ],
+        });
+        return;
+      }
+      if (featureKind === 'escalation') {
+        const postCreate = isPostCreationEscalation(taskType);
+        const dl = (exec.deadline ?? null) as DeadlineDoc;
+        if (!on) {
+          patchExecution(editor.capKey, { escalationEnabled: false });
+          return;
+        }
+        patchExecution(editor.capKey, {
+          escalationEnabled: true,
+          deadline: dl ?? {
+            ref: postCreate ? 'task_created' : defaultRefForTask(taskType),
+            ...(postCreate ? { hours: 4 } : { day: -1, time: '11:00' }),
+          },
+        });
+      }
+    };
+
     return (
       <Popover
         open
@@ -1816,15 +1939,37 @@ export default function OrchestrationOverviewPanel({
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
         <Box sx={{ p: 1.5, maxWidth: editor.kind === 'assign' ? 440 : 380 }}>
-          <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t, mb: 1 }}>
-            {def.emoji} {def.label}
-            {editor.kind === 'staffRem' ? (
-              <Box component="span" sx={{ ml: 0.75, fontWeight: 700, color: V3.t3, fontSize: 11 }}>
-                · Rappels staff
-              </Box>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+              mb: 1,
+            }}
+          >
+            <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t }}>
+              {def.emoji} {def.label}
+              {meta ? (
+                <Box component="span" sx={{ ml: 0.75, fontWeight: 700, color: V3.t3, fontSize: 11 }}>
+                  {meta.suffix}
+                </Box>
+              ) : null}
+            </Typography>
+            {meta ? (
+              <Switch
+                size="small"
+                checked={meta.on}
+                onChange={(e) => toggleFeature(e.target.checked)}
+                inputProps={{ 'aria-label': `Activer ${meta.suffix}` }}
+              />
             ) : null}
-          </Typography>
-          {body}
+          </Box>
+          {meta && !meta.on ? (
+            <Typography sx={{ fontSize: 12, color: V3.t3 }}>{meta.hintOff}</Typography>
+          ) : (
+            body
+          )}
         </Box>
       </Popover>
     );
@@ -2262,14 +2407,15 @@ export default function OrchestrationOverviewPanel({
                       py: 0.25,
                     }}
                     onClick={() => (r.on ? setDecisionsModal(r.key) : toast.warning('Activez d’abord ON'))}
-                    title="WhatsApp · Créer tâche · Relances · Staff · Escalade"
+                    title="WhatsApp · Tâche · Relances · Assignation · Rappels · Escalade"
                   >
                     {(
                       [
                         r.hasClient && { on: r.flags.clientEnabled, label: 'WA' },
                         r.hasTaskCol && { on: r.flags.taskEnabled, label: 'Tâche' },
                         r.hasClientReminders && { on: r.flags.clientReminders, label: 'Rel' },
-                        r.hasTaskCol && { on: r.flags.staffReminders, label: 'Staff' },
+                        r.hasTaskCol && { on: r.flags.staffAssignment, label: 'Assign' },
+                        r.hasTaskCol && { on: r.flags.staffReminders, label: 'Rappel' },
                         r.hasTaskCol && { on: r.flags.pmEscalation, label: 'Esc' },
                       ] as Array<{ on: boolean; label: string } | false>
                     )
@@ -2413,6 +2559,102 @@ export default function OrchestrationOverviewPanel({
               ))}
               </Box>
             </Box>
+
+            {group.id === 'cleaning' ? (
+              <Box
+                sx={{
+                  mt: 2,
+                  pt: 1.5,
+                  borderTop: `1px solid ${V3.b}`,
+                }}
+              >
+                <Box
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setCleaningChecklistOpen((v) => !v)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setCleaningChecklistOpen((v) => !v);
+                    }
+                  }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.75,
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    py: 0.5,
+                    px: 0.25,
+                    borderRadius: 1,
+                    '&:hover': { bgcolor: V3.alt },
+                  }}
+                >
+                  <ExpandMoreIcon
+                    sx={{
+                      fontSize: 18,
+                      color: V3.t3,
+                      transform: cleaningChecklistOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                      transition: 'transform 0.15s ease',
+                    }}
+                  />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t, lineHeight: 1.3 }}>
+                      📋 Checklist staff par catégories
+                    </Typography>
+                    {!cleaningChecklistOpen ? (
+                      <Typography sx={{ fontSize: 10.5, color: V3.t3, mt: 0.15 }}>
+                        Repliée · clic pour éditer (FR/EN/AR · thèmes)
+                      </Typography>
+                    ) : null}
+                  </Box>
+                  <Typography
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: V3.t4,
+                    }}
+                  >
+                    {cleaningChecklistOpen ? 'ouvert' : 'fermé'}
+                  </Typography>
+                </Box>
+                <Collapse in={cleaningChecklistOpen} unmountOnExit={false}>
+                  <Box sx={{ pt: 1 }}>
+                    <Typography sx={{ fontSize: 11, color: V3.t3, mb: 1.25, lineHeight: 1.4 }}>
+                      Thèmes (Chambres, SDB, Cuisine…) · FR/EN/AR · police compacte. WA Terminer = 1
+                      CheckboxGroup / cat sur le même écran (non bloquant au début).
+                    </Typography>
+                    <CleaningChecklistPanel
+                      listingId={listingId || ''}
+                      listingValues={listingValues}
+                      templateMode={!isListingScope}
+                      onListingPatch={async (patch) => {
+                        setListingValues((prev) => ({ ...prev, ...patch }));
+                        if (!isListingScope) {
+                          try {
+                            const next = { ...listingValues, ...patch };
+                            await listingsService.putListingOwnerConfigTemplateSection(
+                              ownerKey,
+                              'listing',
+                              next,
+                            );
+                            toast.success('Checklist template enregistrée');
+                          } catch (e: unknown) {
+                            toast.error(
+                              e instanceof Error
+                                ? e.message
+                                : 'Enregistrement checklist impossible',
+                            );
+                            throw e;
+                          }
+                        }
+                      }}
+                    />
+                  </Box>
+                </Collapse>
+              </Box>
+            ) : null}
           </V3Section>
         ))}
 
@@ -2606,8 +2848,8 @@ export default function OrchestrationOverviewPanel({
                 </Alert>
               )}
               <Typography sx={{ fontSize: 12, color: V3.t3, mb: 1.5 }}>
-                ON = service + plan. Créer tâche OFF ⇒ pas d&apos;équipe assignée — les relances
-                client et l&apos;escalade admin restent possibles.
+                Par service : coupez Relances / Assignation / Rappels / Escalade pour ne pas les
+                orchestrer dans le plan. Assignation OFF = tâche possible, mais attribution manuelle.
               </Typography>
               {hasClient && (
                 <DecisionSwitch
@@ -2621,7 +2863,7 @@ export default function OrchestrationOverviewPanel({
               {hasTaskCol && (
                 <DecisionSwitch
                   label="📋 Créer tâche"
-                  hint="Assigner l’équipe et suivre dans les tâches"
+                  hint="Créer la tâche ops (sans imposer l’auto-assign)"
                   checked={flags.taskEnabled}
                   disabled={locked}
                   onChange={(v) => toggle('taskEnabled', v)}
@@ -2630,7 +2872,7 @@ export default function OrchestrationOverviewPanel({
               {hasClientReminders && (
                 <DecisionSwitch
                   label="💌 Relances client"
-                  hint="Rappels voyageur automatiques"
+                  hint="Rappels voyageur automatiques — OFF = hors plan"
                   checked={flags.clientReminders}
                   disabled={locked}
                   onChange={(v) => toggle('clientReminders', v)}
@@ -2648,8 +2890,17 @@ export default function OrchestrationOverviewPanel({
               )}
               {hasTaskCol && (
                 <DecisionSwitch
-                  label="👷 Rappel staff"
-                  hint="Notif équipe avant le jour (J-1…) — nécessite Créer tâche"
+                  label="👷 Assignation auto"
+                  hint="Fenêtre d’assignation dans le plan — OFF = admin assigne manuellement"
+                  checked={flags.staffAssignment}
+                  disabled={locked || !flags.taskEnabled}
+                  onChange={(v) => toggle('staffAssignment', v)}
+                />
+              )}
+              {hasTaskCol && (
+                <DecisionSwitch
+                  label="🔔 Rappels staff"
+                  hint="Notif équipe (J-1…) — OFF = hors plan"
                   checked={flags.staffReminders}
                   disabled={locked || !flags.taskEnabled}
                   onChange={(v) => toggle('staffReminders', v)}
@@ -2667,7 +2918,7 @@ export default function OrchestrationOverviewPanel({
               {hasTaskCol && (
                 <DecisionSwitch
                   label="🚨 Escalade admin"
-                  hint="Alerte admin si deadline dépassée"
+                  hint="Alerte admin si deadline dépassée — OFF = hors plan"
                   checked={flags.pmEscalation}
                   disabled={locked}
                   onChange={(v) => toggle('pmEscalation', v)}

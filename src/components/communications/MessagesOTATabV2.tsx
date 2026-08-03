@@ -9,7 +9,6 @@ import ThreadsList from '../unified-inbox/ThreadsList';
 import ConversationThread from '../unified-inbox/ConversationThread';
 import ConversationDetails from '../unified-inbox/ConversationDetails';
 import AISuggestionModal from './AISuggestionModal';
-import InboxTriageModal from './InboxTriageModal';
 import { useCommsHubChrome } from './CommsHubChromeContext';
 import messagesService from '../../services/messagesService';
 import {
@@ -140,7 +139,6 @@ export default function MessagesOTATabV2() {
   const [appliedAdvanced, setAppliedAdvanced] = useState<OtaAdvancedSearch>(EMPTY_ADVANCED);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
-  const [showTriageModal, setShowTriageModal] = useState(false);
   const [composerDraft, setComposerDraft] = useState('');
   const [aiSourceDraft, setAiSourceDraft] = useState('');
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
@@ -750,33 +748,6 @@ export default function MessagesOTATabV2() {
         >
           Avancé {advancedExpanded ? '▲' : '▼'}
         </Box>
-        <Box
-          component="button"
-          type="button"
-          title="Triage IA de l'inbox (WhatsApp + OTA)"
-          onClick={() => setShowTriageModal(true)}
-          sx={{
-            flexShrink: 0,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 0.35,
-            px: '8px',
-            py: '5px',
-            border: `1px solid ${T.border}`,
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            fontSize: 10.5,
-            fontWeight: 700,
-            color: T.ai,
-            bgcolor: T.aiTint,
-            whiteSpace: 'nowrap',
-            lineHeight: 1.2,
-            '&:hover': { bgcolor: 'rgba(124,58,237,0.18)' },
-          }}
-        >
-          🌅 Triage IA
-        </Box>
       </Box>,
     );
   }, [
@@ -1381,7 +1352,6 @@ export default function MessagesOTATabV2() {
         }}
       />
 
-      <InboxTriageModal open={showTriageModal} onClose={() => setShowTriageModal(false)} />
     </Box>
   );
 }

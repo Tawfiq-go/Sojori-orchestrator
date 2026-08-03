@@ -19,6 +19,8 @@ export type Partner = {
   commissionFixedMad?: number;
   notes?: string;
   active: boolean;
+  /** Fiche vue marché (for sale) — lecture seule */
+  marketplace?: boolean;
 };
 
 export type PartnerServiceFormule = { label: string; priceMad: number };
@@ -147,6 +149,7 @@ export type PartnerService = {
   keywords: string[];
   active: boolean;
   sortOrder: number;
+  forSale?: boolean;
 };
 
 function unwrap<T>(res: { data?: { success?: boolean; data?: T; error?: string } }): T {
@@ -165,11 +168,14 @@ export const partnersApi = {
     ownerId?: string | 'platform';
     active?: boolean;
     includePlatform?: boolean;
+    /** Fiches d’autres owners avec activités forSale */
+    scope?: 'marketplace' | 'forsale';
   }): Promise<Partner[]> {
     const q = new URLSearchParams();
     if (params?.ownerId) q.set('ownerId', params.ownerId);
     if (params?.active) q.set('active', 'true');
     if (params?.includePlatform === false) q.set('includePlatform', 'false');
+    if (params?.scope) q.set('scope', params.scope);
     const url = q.toString() ? `${BASE}?${q}` : BASE;
     const res = await apiClient.get(url);
     return unwrap<Partner[]>(res) || [];
@@ -235,18 +241,43 @@ export const partnersApi = {
     return unwrap<PartnerService[]>(res) || [];
   },
 
-  /** Catalogue pour picker listing (all = PM + Sojori unifié). */
+  /** Catalogue pour picker listing (all = own actives + marché adopté). */
   async listExperienceCatalog(params: {
     scope?: 'own' | 'sojori' | 'all';
     cityId?: string | null;
     ownerId?: string;
+    /** browse = tout le marché · adopted = seulement Activées par moi */
+    marketMode?: 'browse' | 'adopted';
   }): Promise<PartnerService[]> {
     const q = new URLSearchParams();
     q.set('scope', params.scope || 'all');
     if (params.cityId) q.set('cityId', params.cityId);
     if (params.ownerId) q.set('ownerId', params.ownerId);
+    if (params.marketMode) q.set('marketMode', params.marketMode);
     const res = await apiClient.get(`${BASE}/experiences/catalog?${q}`);
     return unwrap<PartnerService[]>(res) || [];
+  },
+
+  async listMarketAdoptions(params?: { ownerId?: string }): Promise<string[]> {
+    const q = new URLSearchParams();
+    if (params?.ownerId) q.set('ownerId', params.ownerId);
+    const url = q.toString()
+      ? `${BASE}/experiences/market-adoptions?${q}`
+      : `${BASE}/experiences/market-adoptions`;
+    const res = await apiClient.get(url);
+    const data = unwrap<{ experienceIds?: string[] }>(res);
+    return Array.isArray(data?.experienceIds) ? data.experienceIds.map(String) : [];
+  },
+
+  async setMarketAdoption(body: {
+    experienceId?: string;
+    experienceIds?: string[];
+    adopted: boolean;
+    ownerId?: string;
+  }): Promise<string[]> {
+    const res = await apiClient.put(`${BASE}/experiences/market-adoptions`, body);
+    const data = unwrap<{ experienceIds?: string[] }>(res);
+    return Array.isArray(data?.experienceIds) ? data.experienceIds.map(String) : [];
   },
 
   async createExperience(

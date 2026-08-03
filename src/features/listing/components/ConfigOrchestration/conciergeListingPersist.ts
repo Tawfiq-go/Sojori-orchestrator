@@ -7,7 +7,7 @@ export type ConciergeServicesSlice = {
   conciergeSource?: 'own' | 'partner';
   /** Toujours null côté owner — Sojori résout par ville. */
   conciergePartnerId?: string | null;
-  /** Ids PartnerService cochés sur le listing (undefined = legacy all). */
+  /** Ids PartnerService cochés sur le listing (absent / [] = aucune expérience guest). */
   enabledExperienceIds?: string[];
 };
 
@@ -31,7 +31,7 @@ export async function fetchListingConciergeArrays(
   const enabledRaw = doc.enabledExperienceIds;
   const enabledExperienceIds =
     enabledRaw === undefined || enabledRaw === null
-      ? null
+      ? []
       : (Array.isArray(enabledRaw) ? enabledRaw : []).map(String).filter(Boolean);
   return {
     transportServices: Array.isArray(doc.transportServices) ? doc.transportServices : [],

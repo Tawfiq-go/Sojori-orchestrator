@@ -1243,6 +1243,26 @@ export function DataTable({
    * calendrier multi / réservations. Ignoré si `selectable` (checkbox en 1ʳᵉ).
    */
   pinFirstColumn = false,
+  /**
+   * Sticky CSS thead (legacy). Préférer `freezePanes` (header hors scroll V,
+   * comme le calendrier multi) pour éviter que toute la ligne header “monte”.
+   */
+  stickyHeader = false,
+  /**
+   * Freeze panes calendrier multi : header fixe (sibling) + body scroll H/V,
+   * sync scrollLeft. Ignore stickyHeader top.
+   */
+  freezePanes = false,
+  /** Sans bordure/paper interne (le parent Paper gère déjà). */
+  bare = false,
+  /** Remplit la hauteur parent quand freezePanes (flex chain). */
+  fillViewport = false,
+  /** Contrôle externe de l’ombre colonne épinglée (scroll parent). */
+  pinScrolled: pinScrolledProp,
+  /** Ref du body scroll (flèches clavier / sync externe). */
+  bodyScrollRef: bodyScrollRefProp,
+  /** Ref du header (sync H externe). */
+  headerScrollRef: headerScrollRefProp,
 }) {
   const toggleRow = (id) => {
     const next = selectedIds.includes(id)
@@ -1252,23 +1272,264 @@ export function DataTable({
   };
 
   const pinActive = pinFirstColumn && !selectable;
-  const [pinScrolled, setPinScrolled] = React.useState(false);
+  const [pinScrolledLocal, setPinScrolledLocal] = React.useState(false);
+  const pinScrolled = typeof pinScrolledProp === 'boolean' ? pinScrolledProp : pinScrolledLocal;
   const pinScrollRef = React.useRef(null);
+  const freezeHeaderRefLocal = React.useRef(null);
+  const freezeBodyRefLocal = React.useRef(null);
+  const freezeHeaderRef = headerScrollRefProp || freezeHeaderRefLocal;
+  const freezeBodyRef = bodyScrollRefProp || freezeBodyRefLocal;
+
   React.useEffect(() => {
-    if (!pinActive) return undefined;
+    if (!pinActive || bare || freezePanes || typeof pinScrolledProp === 'boolean') return undefined;
     const el = pinScrollRef.current;
     if (!el) return undefined;
     const onScroll = () => {
       const s = el.scrollLeft > 2;
-      setPinScrolled((prev) => (prev === s ? prev : s));
+      setPinScrolledLocal((prev) => (prev === s ? prev : s));
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, [pinActive]);
+  }, [pinActive, bare, freezePanes, pinScrolledProp]);
+
+  // Sync H header ↔ body (freeze panes) — même logic MultiView
+  React.useEffect(() => {
+    if (!freezePanes) return undefined;
+    const header = freezeHeaderRef.current;
+    const body = freezeBodyRef.current;
+    if (!header || !body) return undefined;
+    let syncing = false;
+    const onBody = () => {
+      if (syncing) return;
+      syncing = true;
+      header.scrollLeft = body.scrollLeft;
+      if (typeof pinScrolledProp !== 'boolean') {
+        const s = body.scrollLeft > 2;
+        setPinScrolledLocal((prev) => (prev === s ? prev : s));
+      }
+      requestAnimationFrame(() => { syncing = false; });
+    };
+    const onHead = () => {
+      if (syncing) return;
+      if (header.scrollWidth - header.clientWidth <= 1) return;
+      syncing = true;
+      body.scrollLeft = header.scrollLeft;
+      requestAnimationFrame(() => { syncing = false; });
+    };
+    body.addEventListener('scroll', onBody, { passive: true });
+    header.addEventListener('scroll', onHead, { passive: true });
+    return () => {
+      body.removeEventListener('scroll', onBody);
+      header.removeEventListener('scroll', onHead);
+    };
+  }, [freezePanes, freezeHeaderRef, freezeBodyRef, pinScrolledProp]);
+
   const pinEdge = t.borderStrong || t.border;
   const pinShadow = pinScrolled
     ? `inset -1px 0 0 ${pinEdge}, 8px 0 16px -2px rgba(26,20,8,0.28)`
     : `inset -1px 0 0 ${pinEdge}, 3px 0 8px rgba(26,20,8,0.10)`;
+
+  const tableSx = {
+    width: '100%',
+    minWidth: tableMinWidth || '100%',
+    borderCollapse: (pinActive || stickyHeader || freezePanes) ? 'separate' : 'collapse',
+    borderSpacing: 0,
+    fontSize: ultraCompact ? 11 : compact ? 12 : 12.5,
+    tableLayout: (tableMinWidth || compact || freezePanes) ? 'fixed' : 'auto',
+  };
+
+  const colGroup = (tableMinWidth || compact || freezePanes) ? (
+    <colgroup>
+      {selectable && <col style={{ width: 36 }} />}
+      {columns.map((col) => (
+        <col key={col.key} style={{ width: col.width || undefined }} />
+      ))}
+      {!hideRowActions && <col style={{ width: 60 }} />}
+    </colgroup>
+  ) : null;
+
+  const headerRow = (
+    <Box component="tr">
+      {selectable && <Box component="th" sx={thSx} style={{ width: 36 }}><Checkbox /></Box>}
+      {columns.map((col, colIndex) => (
+        <Box
+          component="th"
+          key={col.key}
+          sx={{
+            ...thSx,
+            ...(ultraCompact ? ultraCompactThSx : compact ? compactThSx : null),
+            textAlign: col.align || 'left',
+            width: col.width,
+            maxWidth: col.width,
+            textTransform: col.headerTextTransform ?? headerTextTransform,
+            bgcolor: t.bg2,
+            // stickyHeader legacy : sticky sur chaque th (pas thead — plus fiable)
+            ...((stickyHeader && !freezePanes) ? {
+              position: 'sticky', top: 0, zIndex: pinActive && colIndex === 0 ? 5 : 4,
+            } : {}),
+            ...(pinActive && colIndex === 0 ? {
+              position: 'sticky', left: 0,
+              zIndex: freezePanes ? 6 : ((stickyHeader && !freezePanes) ? 5 : 5),
+              top: (stickyHeader && !freezePanes) ? 0 : undefined,
+              boxShadow: pinShadow, transition: 'box-shadow 0.15s ease',
+            } : {}),
+          }}
+        >
+          {col.label} {col.sortable && <Box component="span" sx={{ opacity: 0.4, ml: 0.5, fontSize: 9 }}>↕</Box>}
+        </Box>
+      ))}
+      {!hideRowActions && <Box component="th" sx={thSx} style={{ width: 60 }} />}
+    </Box>
+  );
+
+  const bodyRows = rows.map(row => {
+    const selected = selectedIds.includes(row.id);
+    return (
+      <Box component="tr" key={row.id} onClick={() => onRowClick?.(row)} sx={{
+        transition: 'background 0.12s',
+        bgcolor: selected ? t.primaryTint : 'transparent',
+        '&:hover': { bgcolor: selected ? t.primaryTint : t.bg2 },
+        '&:hover .row-actions': { opacity: 1 },
+        cursor: onRowClick ? 'pointer' : 'default',
+        ...(pinActive ? {
+          '& > td:first-of-type': {
+            position: 'sticky', left: 0, zIndex: 2,
+            bgcolor: t.bg1,
+            backgroundImage: selected ? `linear-gradient(${t.primaryTint}, ${t.primaryTint})` : 'none',
+            boxShadow: pinShadow, transition: 'box-shadow 0.15s ease',
+          },
+          '&:hover > td:first-of-type': {
+            backgroundImage: `linear-gradient(${selected ? t.primaryTint : t.bg2}, ${selected ? t.primaryTint : t.bg2})`,
+          },
+        } : {}),
+      }}>
+        {selectable && (
+          <Box component="td" sx={{
+            ...tdSx,
+            boxShadow: selected ? `inset 3px 0 0 ${t.primary}` : 'none',
+          }}>
+            <Checkbox checked={selected} onChange={() => toggleRow(row.id)} />
+          </Box>
+        )}
+        {columns.map(col => (
+          <Box component="td" key={col.key} sx={{ ...tdSx, ...(ultraCompact ? ultraCompactTdSx : compact ? compactTdSx : null), textAlign: col.align || 'left', maxWidth: col.width, overflow: (compact || ultraCompact) ? 'hidden' : undefined }}>
+            {col.render ? col.render(row) : row[col.key]}
+          </Box>
+        ))}
+        {!hideRowActions && (
+          <Box component="td" sx={tdSx}>
+            <Stack direction="row" spacing={0.25} className="row-actions" sx={{
+              justifyContent: 'flex-end', opacity: 0, transition: 'opacity 0.15s',
+            }}>
+              <IconButton size="small" sx={rowActionSx}>💬</IconButton>
+              <IconButton size="small" sx={rowActionSx}>⋮</IconButton>
+            </Stack>
+          </Box>
+        )}
+      </Box>
+    );
+  });
+
+  const footerEl = footer ? (
+    <Stack direction="row" sx={{
+      alignItems: 'center', justifyContent: 'space-between',
+      p: '11px 16px', borderTop: `1px solid ${t.border}`,
+      fontSize: 12, color: t.text3, bgcolor: t.bg2, flexShrink: 0,
+    }}>{footer}</Stack>
+  ) : null;
+
+  if (freezePanes) {
+    const freezeInner = (
+      <>
+        <Box
+          ref={freezeHeaderRef}
+          sx={{
+            flexShrink: 0,
+            overflowX: 'hidden',
+            overflowY: 'hidden',
+            minWidth: 0,
+            width: '100%',
+            bgcolor: t.bg2,
+            borderBottom: `1px solid ${t.border}`,
+            zIndex: 5,
+          }}
+        >
+          <Box component="table" sx={tableSx}>
+            {colGroup}
+            <Box component="thead">{headerRow}</Box>
+          </Box>
+        </Box>
+        <Box
+          ref={freezeBodyRef}
+          sx={{
+            overflow: 'auto',
+            flex: 1,
+            minHeight: 0,
+            minWidth: 0,
+            width: '100%',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'pan-x pan-y',
+          }}
+        >
+          <Box component="table" sx={tableSx}>
+            {colGroup}
+            <Box component="tbody">{bodyRows}</Box>
+          </Box>
+        </Box>
+        {footerEl}
+      </>
+    );
+
+    if (bare) {
+      return (
+        <Box sx={{
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: fillViewport ? 1 : undefined,
+          minHeight: fillViewport ? 0 : undefined,
+          height: fillViewport ? '100%' : undefined,
+          overflow: 'hidden',
+        }}>
+          {freezeInner}
+        </Box>
+      );
+    }
+
+    return (
+      <Box sx={{
+        bgcolor: t.bg1, border: `1px solid ${t.border}`,
+        borderRadius: '12px', overflow: 'hidden',
+        boxShadow: '0 1px 2px rgba(26,20,8,0.03)',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: fillViewport ? 1 : undefined,
+        minHeight: fillViewport ? 0 : undefined,
+        height: fillViewport ? '100%' : undefined,
+        maxHeight: fillViewport ? '100%' : undefined,
+      }}>
+        {freezeInner}
+      </Box>
+    );
+  }
+
+  const table = (
+      <Box component="table" sx={tableSx}>
+        {colGroup}
+        <Box component="thead">{headerRow}</Box>
+        <Box component="tbody">{bodyRows}</Box>
+      </Box>
+  );
+
+  if (bare) {
+    return (
+      <Box sx={{ width: '100%' }}>
+        {table}
+        {footerEl}
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{
@@ -1277,103 +1538,9 @@ export function DataTable({
       boxShadow: '0 1px 2px rgba(26,20,8,0.03)',
     }}>
       <Box ref={pinScrollRef} sx={{ overflowX: tableMinWidth ? 'auto' : compact ? 'hidden' : 'visible', width: '100%' }}>
-      <Box
-        component="table"
-        sx={{
-          width: '100%',
-          minWidth: tableMinWidth || '100%',
-          borderCollapse: 'collapse',
-          fontSize: ultraCompact ? 11 : compact ? 12 : 12.5,
-          tableLayout: (tableMinWidth || compact) ? 'fixed' : 'auto',
-        }}
-      >
-        <Box component="thead" sx={ultraCompact ? { position: 'sticky', top: 0, zIndex: 2 } : undefined}>
-          <Box component="tr">
-            {selectable && <Box component="th" sx={thSx} style={{ width: 36 }}><Checkbox /></Box>}
-            {columns.map((col, colIndex) => (
-              <Box
-                component="th"
-                key={col.key}
-                sx={{
-                  ...thSx,
-                  ...(ultraCompact ? ultraCompactThSx : compact ? compactThSx : null),
-                  textAlign: col.align || 'left',
-                  width: col.width,
-                  maxWidth: col.width,
-                  textTransform: col.headerTextTransform ?? headerTextTransform,
-                  ...(ultraCompact ? { bgcolor: t.bg2 } : {}),
-                  ...(pinActive && colIndex === 0 ? {
-                    position: 'sticky', left: 0, zIndex: 3,
-                    boxShadow: pinShadow, transition: 'box-shadow 0.15s ease',
-                  } : {}),
-                }}
-              >
-                {col.label} {col.sortable && <Box component="span" sx={{ opacity: 0.4, ml: 0.5, fontSize: 9 }}>↕</Box>}
-              </Box>
-            ))}
-            {!hideRowActions && <Box component="th" sx={thSx} style={{ width: 60 }} />}
-          </Box>
-        </Box>
-        <Box component="tbody">
-          {rows.map(row => {
-            const selected = selectedIds.includes(row.id);
-            return (
-              <Box component="tr" key={row.id} onClick={() => onRowClick?.(row)} sx={{
-                transition: 'background 0.12s',
-                bgcolor: selected ? t.primaryTint : 'transparent',
-                '&:hover': { bgcolor: selected ? t.primaryTint : t.bg2 },
-                '&:hover .row-actions': { opacity: 1 },
-                cursor: onRowClick ? 'pointer' : 'default',
-                ...(pinActive ? {
-                  // Fond OPAQUE requis sur la cellule épinglée (le contenu passe dessous) ;
-                  // teintes sélection/hover réappliquées par-dessus via backgroundImage.
-                  '& > td:first-of-type': {
-                    position: 'sticky', left: 0, zIndex: 2,
-                    bgcolor: t.bg1,
-                    backgroundImage: selected ? `linear-gradient(${t.primaryTint}, ${t.primaryTint})` : 'none',
-                    boxShadow: pinShadow, transition: 'box-shadow 0.15s ease',
-                  },
-                  '&:hover > td:first-of-type': {
-                    backgroundImage: `linear-gradient(${selected ? t.primaryTint : t.bg2}, ${selected ? t.primaryTint : t.bg2})`,
-                  },
-                } : {}),
-              }}>
-                {selectable && (
-                  <Box component="td" sx={{
-                    ...tdSx,
-                    boxShadow: selected ? `inset 3px 0 0 ${t.primary}` : 'none',
-                  }}>
-                    <Checkbox checked={selected} onChange={() => toggleRow(row.id)} />
-                  </Box>
-                )}
-                {columns.map(col => (
-                  <Box component="td" key={col.key} sx={{ ...tdSx, ...(ultraCompact ? ultraCompactTdSx : compact ? compactTdSx : null), textAlign: col.align || 'left', maxWidth: col.width, overflow: (compact || ultraCompact) ? 'hidden' : undefined }}>
-                    {col.render ? col.render(row) : row[col.key]}
-                  </Box>
-                ))}
-                {!hideRowActions && (
-                  <Box component="td" sx={tdSx}>
-                    <Stack direction="row" spacing={0.25} className="row-actions" sx={{
-                      justifyContent: 'flex-end', opacity: 0, transition: 'opacity 0.15s',
-                    }}>
-                      <IconButton size="small" sx={rowActionSx}>💬</IconButton>
-                      <IconButton size="small" sx={rowActionSx}>⋮</IconButton>
-                    </Stack>
-                  </Box>
-                )}
-              </Box>
-            );
-          })}
-        </Box>
+        {table}
       </Box>
-      </Box>
-      {footer && (
-        <Stack direction="row" sx={{
-          alignItems: 'center', justifyContent: 'space-between',
-          p: '11px 16px', borderTop: `1px solid ${t.border}`,
-          fontSize: 12, color: t.text3, bgcolor: t.bg2,
-        }}>{footer}</Stack>
-      )}
+      {footerEl}
     </Box>
   );
 }

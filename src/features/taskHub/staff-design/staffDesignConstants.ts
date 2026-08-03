@@ -67,9 +67,10 @@ export const DAY_FULL_LABELS = [
 export const DAY_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
 
 export const LANG_OPTIONS = [
-  { value: 'fr', label: 'Français' },
-  { value: 'en', label: 'English' },
-  { value: 'ar', label: 'Darija' },
+  { value: 'fr', label: '🇫🇷 FR' },
+  { value: 'da', label: '🇲🇦 DA' },
+  { value: 'ar', label: '🇸🇦 AR' },
+  { value: 'en', label: '🇬🇧 EN' },
 ] as const;
 export type WorkLang = (typeof LANG_OPTIONS)[number]['value'];
 

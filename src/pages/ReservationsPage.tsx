@@ -2,8 +2,8 @@
 // Sojori — Reservations Page · édition « Atelier 2026 »
 // Route: /reservations
 //
-// Design moderne : header sticky, KPI strip, quick-filter pills,
-// table dense premium, hover row, status pills sémantiques, mobile cards.
+// Design moderne : freeze panes (header hors scroll V, calendrier multi),
+// KPI strip, quick-filter pills, table dense, mobile cards.
 // Tous les champs / handlers / appels API du fichier original sont conservés.
 // ════════════════════════════════════════════════════════════════════
 
@@ -21,6 +21,7 @@ import {
   usePageFullscreen,
 } from '../components/page-fullscreen';
 import { useArrowKeyScroll } from '../hooks/useArrowKeyScroll';
+import { useSyncedHorizontalScroll } from '../hooks/useSyncedHorizontalScroll';
 import {
   Visibility as VisibilityIcon,
   CalendarToday as CalendarIcon,
@@ -1052,6 +1053,33 @@ const Pill = ({ label, count, active, onClick, color }: { label: string; count: 
   </Button>
 );
 
+/** Largeurs fixes — header + body partagent le même colgroup (freeze panes). */
+const RESA_HEADERS = [
+  'Voyageur', 'Source', 'Propriété', 'Pays', 'Créé', 'Check-in', 'Check-out',
+  'Nuits', 'Présence', 'Statut', 'Payé', 'Voyageurs', 'Paiement', 'Actions',
+] as const;
+const RESA_COL_WIDTHS = [185, 56, 200, 88, 96, 118, 118, 56, 168, 108, 72, 148, 96, 88] as const;
+const RESA_TABLE_MIN_WIDTH = RESA_COL_WIDTHS.reduce((a, b) => a + b, 0);
+
+const resaTableSx = {
+  width: '100%',
+  minWidth: RESA_TABLE_MIN_WIDTH,
+  tableLayout: 'fixed' as const,
+  borderCollapse: 'separate' as const,
+  borderSpacing: 0,
+  fontSize: 12.5,
+};
+
+function ResaColGroup() {
+  return (
+    <colgroup>
+      {RESA_COL_WIDTHS.map((w, i) => (
+        <col key={RESA_HEADERS[i]} style={{ width: w }} />
+      ))}
+    </colgroup>
+  );
+}
+
 // ─── Desktop table ─────────────────────────────────────────────────
 function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdate, onRegistrationUpdate, fillViewport = false }: {
   rows: Reservation[];
@@ -1060,24 +1088,27 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
   onAcknowledge?: (r: Reservation) => void;
   onStayUpdate?: (reservationId: string, patch: StayFieldPatch) => void;
   onRegistrationUpdate?: (reservationId: string, patch: RegistrationFieldPatch) => void;
-  /** Remplit la hauteur parent — scroll interne + sticky 1re ligne */
+  /** Remplit la hauteur parent — header fixe + scroll body (calendrier multi) */
   fillViewport?: boolean;
 }) {
   /**
-   * Élévation de la colonne épinée (pattern Material) : à plat au repos,
-   * ombre marquée dès qu'on scrolle — les autres colonnes passent visuellement
-   * SOUS la colonne Voyageur.
+   * Freeze panes = calendrier multi : header dates hors scroll vertical,
+   * sync scrollLeft header ↔ body. Sticky top CSS faisait remonter toute
+   * la ligne header dans le flux ; ici le thead est un sibling fixe.
    */
   const [hScrolled, setHScrolled] = useState(false);
-  const scrollHostRef = useRef<HTMLDivElement | null>(null);
-  useArrowKeyScroll(scrollHostRef, {
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  useSyncedHorizontalScroll(headerRef, bodyRef);
+  useArrowKeyScroll(bodyRef, {
     horizontal: true,
     vertical: true,
     hStep: 120,
     vStep: 44,
+    syncHorizontalRef: headerRef,
   });
   useEffect(() => {
-    const el = scrollHostRef.current;
+    const el = bodyRef.current;
     if (!el) return undefined;
     const onScroll = () => {
       const scrolled = el.scrollLeft > 2;
@@ -1106,51 +1137,39 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
         maxHeight: fillViewport ? '100%' : 'calc(100dvh - 280px)',
       }}
     >
+      {/* Header fixe (hors scroll body) — pattern MultiView */}
       <Box
-        ref={scrollHostRef}
+        ref={headerRef}
         sx={{
-          overflow: 'auto',
-          flex: 1,
-          minHeight: 0,
-          overscrollBehavior: 'contain',
-          WebkitOverflowScrolling: 'touch',
+          flexShrink: 0,
+          overflowX: 'hidden',
+          overflowY: 'hidden',
+          minWidth: 0,
+          width: '100%',
+          bgcolor: T.bg2,
+          background: `linear-gradient(180deg, ${T.bg1} 0%, ${T.bg2} 100%)`,
+          borderBottom: `2px solid ${T.borderStrong}`,
+          zIndex: 5,
         }}
       >
-        <Box
-          component="table"
-          sx={{
-            width: '100%',
-            minWidth: 1520,
-            // separate : sticky thead fiable (collapse casse sticky)
-            borderCollapse: 'separate',
-            borderSpacing: 0,
-            fontSize: 12.5,
-          }}
-        >
+        <Box component="table" sx={resaTableSx}>
+          <ResaColGroup />
           <Box component="thead">
-            <Box component="tr" sx={{
-              bgcolor: T.bg2,
-              background: `linear-gradient(180deg, ${T.bg1} 0%, ${T.bg2} 100%)`,
-            }}>
-              {['Voyageur', 'Source', 'Propriété', 'Pays', 'Créé', 'Check-in', 'Check-out', 'Nuits', 'Présence', 'Statut', 'Payé', 'Voyageurs', 'Paiement', 'Actions'].map((h) => (
+            <Box component="tr">
+              {RESA_HEADERS.map((h) => (
                 <Box component="th" key={h} sx={{
                   textAlign: h === 'Nuits' || h === 'Présence' || h === 'Voyageurs' || h === 'Actions' ? 'center' : 'left',
                   px: 1.5, py: 1.25,
                   fontSize: 10.75, fontWeight: 700,
                   letterSpacing: '0.08em', textTransform: 'uppercase',
                   color: T.text2,
-                  borderBottom: `2px solid ${T.borderStrong}`,
                   whiteSpace: 'nowrap',
-                  // Sticky 1re ligne (comme dates calendrier)
-                  position: 'sticky',
-                  top: 0,
-                  zIndex: h === 'Voyageur' ? 5 : 3,
                   bgcolor: T.bg2,
                   background: `linear-gradient(180deg, ${T.bg1} 0%, ${T.bg2} 100%)`,
-                  // Colonne identité aussi sticky left (coin figé)
                   ...(h === 'Voyageur' && {
+                    position: 'sticky',
                     left: 0,
-                    minWidth: 185,
+                    zIndex: 6,
                     boxShadow: pinnedShadow,
                     transition: 'box-shadow 0.15s ease',
                   }),
@@ -1158,6 +1177,25 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
               ))}
             </Box>
           </Box>
+        </Box>
+      </Box>
+
+      {/* Body scrollable H+V — 1re colonne sticky left */}
+      <Box
+        ref={bodyRef}
+        sx={{
+          overflow: 'auto',
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+          width: '100%',
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-x pan-y',
+        }}
+      >
+        <Box component="table" sx={resaTableSx}>
+          <ResaColGroup />
           <Box component="tbody">
             {rows.map((r) => {
               const s = statusMeta(r.status);

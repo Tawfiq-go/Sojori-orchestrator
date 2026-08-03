@@ -1,6 +1,7 @@
 import { labelForTaskTypeId } from '../features/taskHub/staff-design/fulltaskTaskTypes';
 import { normalizeStaffAllowedTaskType } from '../features/taskHub/staff-design/staffDesignConstants';
 import { defaultStaffReminderMessageId } from '../features/taskHub/staff-design/staffReminderTemplates';
+import { DEFAULT_CLEANING_CHECKLIST_CATEGORIES } from '../features/listing/components/ConfigOrchestration/cleaningSojoriConfigTypes';
 import {
   inferTaskPlannedIso,
   type ReservationDatesLike,
@@ -154,6 +155,108 @@ function buildConciergeDetailLine(
   return note
 }
 
+/** Checklist tâche (flat ou catégories) + checklistDone staff — pour icône /tasks. */
+function extractChecklistItems(payload: Record<string, unknown>): Array<{
+  id?: string
+  label: string
+  labelDa?: string
+  labelEn?: string
+  labelAr?: string
+  categoryId?: string
+  categoryLabel?: string
+  done?: boolean
+  required?: boolean
+  photoRequired?: boolean
+}> {
+  /** Flow X → { [categoryId]: itemIds[] } ; legacy → itemIds[] ou [{id,done}]. */
+  const doneIds = new Set<string>()
+  const rawDone = payload.checklistDone
+  if (rawDone && typeof rawDone === 'object' && !Array.isArray(rawDone)) {
+    for (const ids of Object.values(rawDone as Record<string, unknown>)) {
+      if (!Array.isArray(ids)) continue
+      for (const id of ids) {
+        const s = String(id || '').trim()
+        if (s) doneIds.add(s)
+      }
+    }
+  } else if (Array.isArray(rawDone)) {
+    for (const row of rawDone) {
+      if (typeof row === 'string' && row.trim()) doneIds.add(row.trim())
+      else if (row && typeof row === 'object' && (row as { id?: unknown }).id != null) {
+        doneIds.add(String((row as { id: unknown }).id).trim())
+      }
+    }
+  }
+
+  const fromFlat = (
+    raw: unknown,
+    categoryId?: string,
+    categoryLabel?: string,
+  ) => {
+    if (!Array.isArray(raw)) return []
+    return raw
+      .map((row) => {
+        if (!row || typeof row !== 'object') return null
+        const o = row as Record<string, unknown>
+        const label = String(o.label || o.title || o.name || '').trim()
+        if (!label) return null
+        const id = o.id != null ? String(o.id) : undefined
+        const doneFlag =
+          o.done === true || (id != null && doneIds.has(id))
+        return {
+          id,
+          label,
+          labelDa: o.labelDa != null ? String(o.labelDa) : undefined,
+          labelEn: o.labelEn != null ? String(o.labelEn) : undefined,
+          labelAr: o.labelAr != null ? String(o.labelAr) : undefined,
+          categoryId,
+          categoryLabel,
+          done: doneFlag,
+          required: o.required === true,
+          photoRequired: o.photoRequired === true,
+        }
+      })
+      .filter(Boolean) as Array<{
+      id?: string
+      label: string
+      labelDa?: string
+      labelEn?: string
+      labelAr?: string
+      categoryId?: string
+      categoryLabel?: string
+      done?: boolean
+      required?: boolean
+      photoRequired?: boolean
+    }>
+  }
+
+  const flat = fromFlat(payload.checklist)
+  if (flat.length) return flat
+
+  const cats = payload.checklistCategories
+  if (Array.isArray(cats) && cats.length) {
+    const out: ReturnType<typeof fromFlat> = []
+    for (const cat of cats) {
+      if (!cat || typeof cat !== 'object') continue
+      const c = cat as Record<string, unknown>
+      const categoryId = c.id != null ? String(c.id) : undefined
+      const categoryLabel = String(c.label || c.title || '').trim() || undefined
+      out.push(...fromFlat(c.items, categoryId, categoryLabel))
+    }
+    if (out.length) return out
+  }
+
+  // Pas de checklist sur la tâche mais checklistDone → points faits seuls (ids)
+  if (doneIds.size > 0) {
+    return [...doneIds].map((id) => ({
+      id,
+      label: id,
+      done: true,
+    }))
+  }
+  return []
+}
+
 export function registrationCountsFromPayload(
   payload: Record<string, unknown>,
   reservationAdults?: number,
@@ -265,6 +368,25 @@ export function fullTaskToListItem(
     conciergeDetailLine ||
     (task.requestNote ? String(task.requestNote) : '')
 
+  const checklistItems = (() => {
+    const fromPayload = extractChecklistItems(payload)
+    if (fromPayload.length) return fromPayload
+    if (!isCleaningType) return []
+    // Tâches ménage sans categories en payload → defaults Sojori + checklistDone staff
+    return extractChecklistItems({
+      ...payload,
+      checklistCategories: DEFAULT_CLEANING_CHECKLIST_CATEGORIES,
+    })
+  })()
+  const notesText = [
+    task.requestNote ? String(task.requestNote).trim() : '',
+    task.executionNote ? String(task.executionNote).trim() : '',
+    String(payload.notes ?? payload.staffNotes ?? payload.notesStaff ?? '').trim(),
+  ]
+    .filter(Boolean)
+    .filter((v, i, arr) => arr.indexOf(v) === i)
+    .join('\n\n')
+
   const derivedPriority =
     task.priority &&
     typeof task.priority === 'object' &&
@@ -343,6 +465,8 @@ export function fullTaskToListItem(
     descriptions: descriptionLine ? [{ description: descriptionLine }] : [],
     conciergeDetailLine,
     conciergeGroupingKey,
+    checklistItems: checklistItems.length ? checklistItems : undefined,
+    notesText: notesText || undefined,
     supportCategoryLabel:
       taskType === 'support'
         ? String(payload.categoryLabel ?? payload.categoryTitle ?? '').trim() || undefined
@@ -446,7 +570,11 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
       }))
       .filter((a) => a._id && a.startDate && a.endDate),
     schedule: { daysOfWeek, timeWindows, dayWindows },
-    lang: (['fr', 'en', 'ar'].includes(String(row.lang)) ? row.lang : 'fr') as 'fr' | 'en' | 'ar',
+    lang: (['fr', 'da', 'ar', 'en'].includes(String(row.lang)) ? row.lang : 'fr') as
+      | 'fr'
+      | 'da'
+      | 'ar'
+      | 'en',
     notes: '',
   };
 }
@@ -906,7 +1034,9 @@ export function designOrchestrationToApi(
       type: (w as { taskTypeId?: string }).taskTypeId || w.triggerTaskType || w.kind,
       enabled: (w as { enabled?: boolean }).enabled !== false,
       escalationEnabled: (w as { escalationEnabled?: boolean }).escalationEnabled !== false,
-      reminders: ((w.relances as Record<string, unknown>[]) || []).map((r) => {
+      reminders: ((w.relances as Record<string, unknown>[]) || [])
+        .filter((r) => (r as { enabled?: boolean }).enabled !== false)
+        .map((r) => {
         const delay = r.delay as { value?: number; unit?: string };
         const messageId = (r as { catalogMessageId?: string }).catalogMessageId
           ? { messageId: (r as { catalogMessageId: string }).catalogMessageId }
@@ -937,7 +1067,9 @@ export function designOrchestrationToApi(
           ...messageId,
         };
       }),
-      staffReminders: ((w.staffReminders as Record<string, unknown>[]) || []).map((sr, idx) => {
+      staffReminders: ((w.staffReminders as Record<string, unknown>[]) || [])
+        .filter((sr) => (sr as { enabled?: boolean }).enabled !== false)
+        .map((sr, idx) => {
         const delay = sr.delay as { value?: number; unit?: string };
         const label = String(sr.label || `Rappel ${idx + 1}`);
         const ref = mapRefToApi((sr as { reference?: string }).reference);
