@@ -12,6 +12,7 @@ import PlanReservationPage from '../features/planReservation/PlanReservationPage
 import {
   buildPlanViewModel,
   buildReservationViewFromSummary,
+  collectPlanStaffIds,
   type FulltaskPlanDoc,
   type PlanListSummaryDoc,
 } from '../features/planReservation/buildPlanViewModel';
@@ -141,6 +142,32 @@ export default function PlansReservationPage() {
         ) {
           setReservations((prev) => prev.filter((r) => r.id !== reservationId));
         }
+
+        // Enrichir noms pour staffId du plan (évite « Staff · xxxx » si hors liste filtrée / race).
+        let mergedNames = { ...names };
+        const missingIds = collectPlanStaffIds(planDoc).filter((id) => {
+          const label = mergedNames[id];
+          return !label || label === id || /^Staff( · | )/.test(label);
+        });
+        if (missingIds.length) {
+          try {
+            const lookup = await fulltaskApi.lookupStaffByIds(missingIds);
+            const rows = lookup?.data ?? [];
+            if (Array.isArray(rows) && rows.length) {
+              const extra: Record<string, string> = {};
+              for (const s of rows) {
+                const id = String(s._id || '');
+                const label = (s.name || '').trim() || id;
+                if (id) extra[id] = label;
+              }
+              mergedNames = { ...mergedNames, ...extra };
+              setStaffNames((prev) => ({ ...prev, ...extra }));
+            }
+          } catch {
+            /* garde fallback */
+          }
+        }
+
         if (ownerKeys.length > 0) {
           setOrderByOwner((prev) => ({ ...prev, ...mergedCache }));
         }
@@ -148,7 +175,7 @@ export default function PlansReservationPage() {
           ...prev,
           [reservationId]: buildPlanViewModel(
             planDoc,
-            names,
+            mergedNames,
             uiPlanListOrderForPlan(planDoc, mergedCache),
           ),
         }));
@@ -310,13 +337,36 @@ export default function PlansReservationPage() {
   );
 
   const applyPlanDoc = useCallback(
-    (planDoc: FulltaskPlanDoc) => {
+    async (planDoc: FulltaskPlanDoc) => {
       const reservationId = planDoc.reservationId;
+      let mergedNames = { ...staffNames };
+      const missingIds = collectPlanStaffIds(planDoc).filter((id) => {
+        const label = mergedNames[id];
+        return !label || label === id || /^Staff( · | )/.test(label);
+      });
+      if (missingIds.length) {
+        try {
+          const lookup = await fulltaskApi.lookupStaffByIds(missingIds);
+          const rows = lookup?.data ?? [];
+          if (Array.isArray(rows) && rows.length) {
+            const extra: Record<string, string> = {};
+            for (const s of rows) {
+              const id = String(s._id || '');
+              const label = (s.name || '').trim() || id;
+              if (id) extra[id] = label;
+            }
+            mergedNames = { ...mergedNames, ...extra };
+            setStaffNames((prev) => ({ ...prev, ...extra }));
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       setPlans((prev) => ({
         ...prev,
         [reservationId]: buildPlanViewModel(
           planDoc,
-          staffNames,
+          mergedNames,
           uiPlanListOrderForPlan(planDoc, orderByOwner),
         ),
       }));
@@ -326,7 +376,7 @@ export default function PlansReservationPage() {
 
   const handlePlanUpdated = useCallback(
     (planDoc?: FulltaskPlanDoc) => {
-      if (planDoc?.reservationId) applyPlanDoc(planDoc);
+      if (planDoc?.reservationId) void applyPlanDoc(planDoc);
     },
     [applyPlanDoc],
   );

@@ -170,6 +170,7 @@ export interface FulltaskPlanDoc {
         window: string;
         tried: boolean;
         found: boolean;
+        staffId?: string | null;
         failureReason?: string;
         failureLabel?: string;
       }>;
@@ -234,6 +235,20 @@ export interface FulltaskPlanDoc {
     reason?: string;
     meta?: Record<string, unknown>;
   }>;
+}
+
+/** staffId présents sur le plan (assignation + tentatives) — pour lookup noms. */
+export function collectPlanStaffIds(plan: FulltaskPlanDoc): string[] {
+  const ids = new Set<string>();
+  for (const s of plan.sequences || []) {
+    if (s.assignation?.staffId) ids.add(String(s.assignation.staffId));
+    for (const a of s.assignation?.attempts || []) {
+      if ((a as { staffId?: string | null }).staffId) {
+        ids.add(String((a as { staffId?: string | null }).staffId));
+      }
+    }
+  }
+  return [...ids];
 }
 
 const MONTHS_SHORT = ['JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUL', 'AOÛ', 'SEP', 'OCT', 'NOV', 'DÉC'];
@@ -1049,6 +1064,15 @@ function computeLastAssignmentLabel(
   return `Dernière assignation · ${formatWhen(lastSlot)}`;
 }
 
+function resolveStaffLabel(
+  staffId: string | undefined | null,
+  staffNames: Record<string, string>,
+): string | undefined {
+  const id = staffId ? String(staffId) : '';
+  if (!id) return undefined;
+  return staffNames[id] || `Staff · ${id.slice(-4)}`;
+}
+
 function mapStaffAssignment(
   seq: FulltaskPlanDoc['sequences'][0],
   staffNames: Record<string, string>,
@@ -1061,7 +1085,7 @@ function mapStaffAssignment(
   if (!start || !end) return undefined;
 
   const staffId = a.staffId ? String(a.staffId) : '';
-  const staffName = staffId ? staffNames[staffId] : undefined;
+  const staffName = resolveStaffLabel(staffId, staffNames);
   const releaseWindows = a.releaseWindows?.length ? a.releaseWindows : ['11:00', '16:00'];
   const autoAssign = Boolean(a.autoAssign);
   const status = mapAssignationUiStatus(a.status);
@@ -1294,31 +1318,41 @@ function mapAttempts(
   staffNames: Record<string, string>,
 ): AssignAttempt[] | undefined {
   if (!seq.assignation?.attempts?.length) return undefined;
-  const staffId = seq.assignation?.staffId ? String(seq.assignation.staffId) : '';
-  const assignedName = staffNames[staffId] || (staffId ? `Staff ${staffId.slice(-4)}` : undefined);
+  const currentStaffId = seq.assignation?.staffId ? String(seq.assignation.staffId) : '';
   const accepted =
     isAssignationAcceptedStatus(String(seq.assignation.status || '')) ||
     Boolean(seq.assignation.staffAcceptedAt);
   const assignFailed = String(seq.assignation.status || '') === 'echec';
 
+  let lastFoundIdx = -1;
+  for (let i = 0; i < seq.assignation.attempts.length; i++) {
+    if (seq.assignation.attempts[i].found) lastFoundIdx = i;
+  }
+
   return seq.assignation.attempts.map((a, i) => {
     const isLm = a.window.startsWith('LM:');
     let result: AttemptResult = 'pending';
-    // found = staff proposé, PAS encore accepté — ne pas afficher SUCCÈS
-    if (a.found && accepted) result = 'accepted';
+    // found = staff proposé. SUCCÈS seulement sur la dernière proposition si acceptée.
+    if (a.found && accepted && i === lastFoundIdx) result = 'accepted';
+    else if (a.found && accepted) result = 'timeout';
     else if (a.found && assignFailed) result = 'timeout';
     else if (a.found) result = 'pending';
     else if (a.tried && !a.found) result = 'declined';
 
+    const attemptStaffId = a.staffId ? String(a.staffId) : '';
     let staffName = '—';
     let staffRole = isLm ? 'LM assignation' : 'Staff';
-    if (a.found && assignedName) {
-      staffName = assignedName;
+    if (a.found) {
+      const named =
+        resolveStaffLabel(attemptStaffId, staffNames) ||
+        (i === lastFoundIdx ? resolveStaffLabel(currentStaffId, staffNames) : undefined);
+      staffName = named || 'Staff proposé';
     } else if (a.tried && !a.found && a.failureLabel) {
       staffName = a.failureLabel;
       staffRole = isLm ? 'LM · échec' : 'Échec';
     } else if (a.tried && !a.found) {
       staffName = isLm ? 'Aucun staff disponible' : 'Aucun staff';
+      staffRole = isLm ? 'LM · échec' : 'Échec';
     }
 
     return {
@@ -1334,6 +1368,47 @@ function mapAttempts(
       isLm,
     };
   });
+}
+
+/** Résumé compact pour l’en-tête collapse Assignation (visible fermé). */
+export function assignationCollapseCountLabel(
+  assign: StaffAssignmentPlan | undefined,
+  attempts?: AssignAttempt[],
+  lmAssignSlots?: { executionStatus?: string }[],
+): string {
+  if (!assign) return '—';
+  if (assign.status === 'found' && assign.staffName) {
+    return `✓ ${assign.staffName}`;
+  }
+  if (assign.status === 'pending_accept' && assign.staffName) {
+    return `⏳ ${assign.staffName} · acceptation`;
+  }
+  const last = attempts?.length ? attempts[attempts.length - 1] : undefined;
+  if (last) {
+    if (last.result === 'accepted' && last.staffName && last.staffName !== '—') {
+      return `✓ ${last.staffName}`;
+    }
+    if (last.result === 'pending' && last.staffName && last.staffName !== '—') {
+      return `⏳ ${last.staffName}`;
+    }
+    if (last.result === 'declined' || last.result === 'timeout') {
+      const detail = last.failureLabel || last.staffName;
+      return detail && detail !== '—' ? `Échec · ${detail}` : 'Échec';
+    }
+  }
+  if (assign.assignationExhausted) {
+    return 'Échec · plus de relance';
+  }
+  if (assign.status === 'failed') {
+    return 'Échec assignation';
+  }
+  if (lmAssignSlots?.some((s) => s.executionStatus === 'prevision')) {
+    return assign.nextAssignmentLabel || 'Assignation LM';
+  }
+  if (attempts?.length) {
+    return `${attempts.length} tentative(s) · en cours`;
+  }
+  return assign.modeLabel;
 }
 
 function inferMessageCategory(label: string): 'simple' | 'relance' {

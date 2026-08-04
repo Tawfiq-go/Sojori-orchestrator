@@ -1669,6 +1669,8 @@ export default function OrchestrationOverviewPanel({
               autoAssign: nextAuto,
               findAnotherStaff: !nextAuto,
               startAt: { ref: 'task_created' },
+              // Immédiat : hors planning staff + hors cron (flush post-create).
+              assignmentHoursMode: 'always',
             },
             staffAssignmentMode: nextAuto ? 'auto' : 'manual',
           });
