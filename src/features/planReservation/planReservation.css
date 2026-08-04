@@ -427,6 +427,14 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 }
 .seq-reg-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .assign-winner{font-size:12px;color:var(--su);padding:8px 10px;background:var(--sut);border-radius:7px;margin-bottom:8px}
+.assign-winner--accepted{border:1px solid rgba(22,163,74,0.35)}
+.assign-winner--pending{color:#c2410c;background:rgba(194,65,12,0.1);border:1px solid rgba(194,65,12,0.28)}
+.assign-staff-accepted{font-weight:800;color:#15803d;letter-spacing:0.01em}
+.assign-staff-pending{font-weight:800;color:#c2410c;letter-spacing:0.01em}
+.assign-exec-line--accepted{color:var(--t2)}
+.assign-exec-line--accepted .assign-staff-accepted{font-size:12px}
+.ds .assign-staff-accepted,
+.ds .assign-staff-pending{font-size:inherit}
 .wa-slug{font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--in);background:var(--int);padding:2px 7px;border-radius:4px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
 
 /* Sub-block in sequence */
@@ -694,13 +702,14 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .seq-guest-ops-lbl{font-size:10px;font-family:var(--mono);font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--pd);margin-right:4px}
 .seq-guest-ops-btn{padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;border:1px solid var(--b);background:var(--bg1);color:var(--t2);cursor:pointer;transition:all .12s}
 .seq-guest-ops-btn:hover:not(:disabled){border-color:var(--p);background:var(--pt);color:var(--pd)}
-.seq-guest-ops-btn:disabled{opacity:0.5;cursor:wait}
+.seq-guest-ops-btn:disabled{opacity:0.45;cursor:not-allowed}
+.seq-guest-ops-btn--muted{opacity:0.4;color:var(--t3);background:var(--bg2);border-color:var(--b2)}
 .seq-guest-ops-btn--accent{border-color:rgba(194,65,12,0.35);background:rgba(194,65,12,0.08);color:#9a3412}
 .seq-guest-ops-btn--accent:hover:not(:disabled){background:rgba(194,65,12,0.16);border-color:#c2410c}
 .seq-guest-ops-link{font-size:11px;font-weight:700;color:var(--in);text-decoration:none;margin-left:auto}
 .seq-guest-ops-link:hover{text-decoration:underline}
-.seq-guest-ops-assign{display:inline-flex;align-items:center;gap:6px}
-.seq-guest-ops-assign .plan-assign-actions{margin:0}
+.seq-guest-ops-assign{display:inline-flex;align-items:center;gap:8px;margin-right:10px;padding-right:12px;border-right:1px solid rgba(184,133,26,0.28)}
+.seq-guest-ops-assign .plan-assign-actions{margin:0;gap:8px}
 
 /* Aperçu contenu message WA / email / OTA */
 .msg-body-preview{margin-top:8px}

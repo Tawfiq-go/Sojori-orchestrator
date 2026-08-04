@@ -1,6 +1,4 @@
 import { useState, type ReactNode } from 'react';
-import { toast } from 'react-toastify';
-import * as fulltaskApi from '../../services/fulltaskApi';
 import type {
   AssignAttempt,
   Channel,
@@ -29,45 +27,6 @@ import {
   showRelanceConfigHint,
 } from './planGroupStatus';
 import { formatSkipReason, formatSkipReasonShort } from '../../utils/planStatusMappers';
-
-function DeferRegistrationButton({
-  reservationId,
-  onDone,
-}: {
-  reservationId: string;
-  onDone?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <button
-      type="button"
-      className="btn-ghost"
-      disabled={busy}
-      onClick={() => {
-        if (busy) return;
-        setBusy(true);
-        void (async () => {
-          try {
-            const res = await fulltaskApi.deferRegistrationToArrival(reservationId);
-            if (res?.success === false) throw new Error(res?.error || 'Échec');
-            toast.success(
-              res?.alreadyDeferred
-                ? 'Déjà en mode à l’arrivée'
-                : 'Enregistrement → à l’arrivée (stop relances, accès OK)',
-            );
-            onDone?.(res?.data as import('./buildPlanViewModel').FulltaskPlanDoc | undefined);
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Échec mode à l’arrivée');
-          } finally {
-            setBusy(false);
-          }
-        })();
-      }}
-    >
-      {busy ? '…' : 'Passer à l’arrivée (stop relances)'}
-    </button>
-  );
-}
 
 function defaultOpenForStatus(_status: EventStatus): boolean {
   return false;
@@ -322,19 +281,41 @@ function AssignBlockBody({
           <div className="rel-row-top">
             <span className="nm">Assignation staff</span>
             <span className="when" style={{ minWidth: 'auto', fontWeight: 600 }}>
-              {staffAccepted
-                ? 'Staff accepté — relancer possible'
-                : hasStaffAssigned
-                  ? 'Staff assigné — en attente acceptation'
-                  : 'Auto ou choix manuel'}
+              {staffAccepted ? (
+                <span className="assign-staff-accepted">
+                  Staff accepté · {assign.staffName}
+                </span>
+              ) : hasStaffAssigned ? (
+                <span className="assign-staff-pending">
+                  Staff assigné · {assign.staffName}
+                </span>
+              ) : (
+                'Auto ou choix manuel'
+              )}
             </span>
           </div>
         </div>
       </div>
       <div
-        className={`assign-exec-line${assign.windowPast && !assign.hasPendingLmAssign ? ' past' : ''}`}
+        className={`assign-exec-line${assign.windowPast && !assign.hasPendingLmAssign ? ' past' : ''}${staffAccepted ? ' assign-exec-line--accepted' : ''}${hasStaffAssigned && !staffAccepted ? ' assign-exec-line--pending' : ''}`}
       >
-        {assignExecutionLine(assign)}
+        {staffAccepted ? (
+          <>
+            Exécution ·{' '}
+            <span className="assign-staff-accepted">
+              Staff accepté · {assign.staffName}
+            </span>
+          </>
+        ) : hasStaffAssigned ? (
+          <>
+            Exécution ·{' '}
+            <span className="assign-staff-pending">
+              Staff assigné · {assign.staffName}
+            </span>
+          </>
+        ) : (
+          assignExecutionLine(assign)
+        )}
       </div>
       {showConfig ? (
       <div className="assign-config-grid">
@@ -377,13 +358,19 @@ function AssignBlockBody({
         </>
       ) : null}
       {assign.staffName && assign.status === 'found' ? (
-        <div className="assign-winner">
-          ✓ Staff accepté · <b>{assign.staffName}</b>
+        <div className="assign-winner assign-winner--accepted">
+          ✓{' '}
+          <span className="assign-staff-accepted">
+            Staff accepté · {assign.staffName}
+          </span>
         </div>
       ) : null}
       {assign.staffName && assign.status === 'pending_accept' ? (
         <div className="assign-winner assign-winner--pending">
-          ⏳ Staff assigné · en attente acceptation · <b>{assign.staffName}</b>
+          ⏳{' '}
+          <span className="assign-staff-pending">
+            Staff assigné · {assign.staffName}
+          </span>
         </div>
       ) : null}
       {lmAssignSlots && lmAssignSlots.length > 0 ? (
@@ -556,24 +543,79 @@ function resultLabel(r: AssignAttempt['result']): string {
   return 'TROUVÉ';
 }
 
-/** Résumé ligne (comme cartes orchestration-config). */
-function sequenceConfigSubtitle(seq: PlanSequenceView): string {
+/** Résumé ligne fermée — uniquement infos utiles (pas de « 0 relances » / « escalade off »). */
+type SubtitlePart = {
+  text: string;
+  tone?: 'chosen' | 'accepted' | 'assigned';
+};
+
+function sequenceConfigSubtitleParts(seq: PlanSequenceView): SubtitlePart[] {
+  const parts: SubtitlePart[] = [];
+
   const rel = seq.relances?.length ?? 0;
+  if (rel > 0) {
+    parts.push({ text: `${rel} relance${rel !== 1 ? 's' : ''}` });
+  }
+
   const staffRel = seq.staffReminders?.length ?? 0;
-  const parts: string[] = [];
-  parts.push(`${rel} relance${rel !== 1 ? 's' : ''}`);
-  if (staffRel > 0) parts.push(`${staffRel} rappel staff`);
+  if (staffRel > 0) {
+    parts.push({ text: `${staffRel} rappel staff` });
+  }
+
+  const assign = seq.staffAssignment;
+  if (seq.hasAssignation && assign) {
+    const name = assign.staffName?.trim();
+    const withName = (label: string) => (name ? `${label} · ${name}` : label);
+    const taskSt = String(seq.taskStatus || '').trim();
+
+    if (taskSt === 'doing' && (assign.status === 'found' || assign.status === 'pending_accept')) {
+      parts.push({ text: withName('Staff commencé'), tone: 'accepted' });
+    } else if (assign.status === 'found') {
+      parts.push({
+        text: withName(taskSt === 'done' ? 'Staff terminé' : 'Staff accepté'),
+        tone: 'accepted',
+      });
+    } else if (assign.status === 'pending_accept') {
+      parts.push({ text: withName('Staff assigné'), tone: 'assigned' });
+    } else if (assign.status === 'failed') {
+      parts.push({ text: 'Assignation échouée' });
+    } else if (assign.status === 'searching') {
+      const lastFail = seq.attempts?.length
+        ? seq.attempts[seq.attempts.length - 1]
+        : undefined;
+      if (
+        lastFail &&
+        (lastFail.result === 'declined' || lastFail.result === 'timeout') &&
+        (lastFail.failureLabel || lastFail.staffName)
+      ) {
+        parts.push({ text: `Assignation · ${lastFail.failureLabel || lastFail.staffName}` });
+      } else {
+        parts.push({ text: 'Assignation en cours' });
+      }
+    }
+  }
+
   if (seq.clientActionCompleted && seq.clientChosenTime && seq.taskType !== 'registration') {
-    parts.push(
-      seq.taskType === 'departure_choose' || seq.taskType === 'departure_declare'
-        ? `départ · ${seq.clientChosenTime}`
-        : `arrivée · ${seq.clientChosenTime}`,
-    );
-  } else if (!seq.hasEscalade) parts.push('escalade off');
-  else if (seq.escalade?.scheduleOffsetLabel) {
-    parts.push(`escalade ${seq.escalade.scheduleOffsetLabel}`);
-  } else parts.push('escalade');
-  return parts.join(' · ');
+    parts.push({
+      text:
+        seq.taskType === 'departure_choose' || seq.taskType === 'departure_declare'
+          ? `départ · ${seq.clientChosenTime}`
+          : `arrivée · ${seq.clientChosenTime}`,
+      tone: 'chosen',
+    });
+  }
+
+  if (seq.hasEscalade && seq.escalade) {
+    if (seq.escalade.scheduleOffsetLabel) {
+      parts.push({ text: `escalade ${seq.escalade.scheduleOffsetLabel}` });
+    } else if (seq.escalade.status === 'active') {
+      parts.push({ text: 'escalade active' });
+    } else {
+      parts.push({ text: 'escalade' });
+    }
+  }
+
+  return parts;
 }
 
 function relanceCountSummary(
@@ -651,22 +693,22 @@ export default function SequencePlanCard({
             />
           </div>
           <div className="ds">
-            {sequenceConfigSubtitle(seq)
-              .split(' · ')
-              .map((part, i, arr) => {
-                const chosen =
-                  seq.clientActionCompleted &&
-                  seq.clientChosenTime &&
-                  (part === `arrivée · ${seq.clientChosenTime}` ||
-                    part === `départ · ${seq.clientChosenTime}` ||
-                    part === `enregistré · ${seq.clientChosenTime}`);
-                return (
-                  <span key={part}>
-                    {chosen ? <span className="client-chosen-time">{part}</span> : part}
-                    {i < arr.length - 1 ? ' · ' : null}
-                  </span>
-                );
-              })}
+            {sequenceConfigSubtitleParts(seq).map((part, i, arr) => {
+              const cls =
+                part.tone === 'chosen'
+                  ? 'client-chosen-time'
+                  : part.tone === 'accepted'
+                    ? 'assign-staff-accepted'
+                    : part.tone === 'assigned'
+                      ? 'assign-staff-pending'
+                      : undefined;
+              return (
+                <span key={`${part.text}-${i}`}>
+                  {cls ? <span className={cls}>{part.text}</span> : part.text}
+                  {i < arr.length - 1 ? ' · ' : null}
+                </span>
+              );
+            })}
           </div>
           <span className="when">
             {seq.taskType === 'registration' && seq.registrationProgress ? (
@@ -694,23 +736,22 @@ export default function SequencePlanCard({
             taskId={taskId}
             taskType={seq.taskType}
             hasAssignation={Boolean(seq.hasAssignation)}
+            staffAssigned={Boolean(
+              seq.staffAssignment &&
+                (seq.staffAssignment.status === 'found' ||
+                  seq.staffAssignment.status === 'pending_accept') &&
+                seq.staffAssignment.staffName,
+            )}
             actionCompleted={relancesResolved}
             clientChosenTime={seq.clientChosenTime}
             checkInIso={checkInIso}
             onDone={onDispatched}
           />
-          {seq.taskType === 'registration' && !relancesResolved ? (
+          {seq.taskType === 'registration' && seq.deferredToArrival && !relancesResolved ? (
             <div className="seq-reg-actions" style={{ marginBottom: 8 }}>
-              {seq.deferredToArrival ? (
-                <span className="registration-at-arrival-banner">
-                  Mode à l’arrivée — plus de relances · accès WhatsApp OK · enregistrement encore possible
-                </span>
-              ) : (
-                <DeferRegistrationButton
-                  reservationId={reservationId}
-                  onDone={onDispatched}
-                />
-              )}
+              <span className="registration-at-arrival-banner">
+                Mode à l’arrivée — plus de relances · accès WhatsApp OK · enregistrement encore possible
+              </span>
             </div>
           ) : null}
           {seq.hasRelances ? (
