@@ -550,8 +550,17 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     email: row.email ? String(row.email) : '',
     ownerId: row.ownerId ? String(row.ownerId) : undefined,
     status: (row.active === false ? 'off' : 'active') as 'active' | 'off',
-    isAdmin: Boolean(row.isAdmin),
     whatsappNotificationsEnabled: row.whatsappNotificationsEnabled !== false,
+    orchestrationNotify: (() => {
+      const raw = (row.orchestrationNotify || {}) as Record<string, unknown>;
+      const modeRaw = String(raw.mode || 'individual');
+      // Legacy « off » → individuel ; le silence = whatsappNotificationsEnabled.
+      const mode = (modeRaw === 'daily_digest' ? 'daily_digest' : 'individual') as
+        | 'individual'
+        | 'daily_digest';
+      const digestTime = String(raw.digestTime || '17:00');
+      return { mode, digestTime: /^\d{2}:\d{2}$/.test(digestTime) ? digestTime : '17:00' };
+    })(),
     contractType: row.contractType === 'salaried' ? ('employee' as const) : ('freelance' as const),
     rates,
     allowedTaskTypes: normalizeStaffAllowedTaskTypes(row.taskTypes as string[] | undefined),
@@ -658,8 +667,22 @@ export function designStaffToApi(
     readyToFinish,
     // Capacité : défaut moteur (plus exposé dans l’UI équipe).
     maxTasksPerDay: 8,
-    isAdmin: Boolean(staff.isAdmin),
     whatsappNotificationsEnabled: staff.whatsappNotificationsEnabled !== false,
+    orchestrationNotify: (() => {
+      const raw = (staff.orchestrationNotify || {}) as {
+        mode?: string;
+        digestTime?: string;
+      };
+      const modeRaw = String(raw.mode || 'individual');
+      const mode = (modeRaw === 'daily_digest' ? 'daily_digest' : 'individual') as
+        | 'individual'
+        | 'daily_digest';
+      const digestTime = String(raw.digestTime || '17:00');
+      return {
+        mode,
+        digestTime: /^\d{2}:\d{2}$/.test(digestTime) ? digestTime : '17:00',
+      };
+    })(),
     // Le bouton « désactiver » de l'UI n'envoyait rien : le staff restait assignable.
     active: staff.status !== 'off',
     pricing,

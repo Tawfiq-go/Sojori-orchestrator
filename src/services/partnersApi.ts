@@ -131,7 +131,7 @@ export type PartnerService = {
   subCategory?: string;
   title: string;
   description: string;
-  /** WhatsApp pour cette activité (E.164). Vide = WA du partenaire. */
+  /** WhatsApp provider (E.164) — notifs commande. Obligatoire. */
   whatsapp?: string;
   /** Villes de l’activité — filtre listing.cityId */
   cityIds?: 'all' | string[];

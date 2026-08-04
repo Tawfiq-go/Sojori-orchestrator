@@ -588,21 +588,36 @@ export default function ChatbotWhitelistView() {
       )}
 
       {tableReady && !showBlockingSpinner && sorted.length > 0 && (
-        <Stack direction="row" sx={{ mt: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
-            {page * limit + 1}–{Math.min((page + 1) * limit, sorted.length)} sur {sorted.length}
+        <Stack
+          direction="row"
+          sx={{
+            mt: 0.5,
+            minHeight: 28,
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 0.5,
+          }}
+        >
+          <Typography sx={{ fontSize: 11, color: T.text3, lineHeight: 1.2 }}>
+            {page * limit + 1}–{Math.min((page + 1) * limit, sorted.length)} / {sorted.length}
           </Typography>
-          <Stack direction="row" spacing={1}>
-            <Button size="small" disabled={page === 0} onClick={() => setPage(page - 1)} sx={{ textTransform: 'none' }}>
-              ← Précédent
+          <Stack direction="row" spacing={0.5}>
+            <Button
+              size="small"
+              disabled={page === 0}
+              onClick={() => setPage(page - 1)}
+              sx={{ textTransform: 'none', minHeight: 24, py: 0, px: 0.75, fontSize: 11 }}
+            >
+              ‹
             </Button>
             <Button
               size="small"
               disabled={(page + 1) * limit >= sorted.length}
               onClick={() => setPage(page + 1)}
-              sx={{ textTransform: 'none' }}
+              sx={{ textTransform: 'none', minHeight: 24, py: 0, px: 0.75, fontSize: 11 }}
             >
-              Suivant →
+              ›
             </Button>
           </Stack>
         </Stack>

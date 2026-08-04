@@ -580,58 +580,61 @@ export function LeadsTab() {
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalRecords > limit && (
+      {/* Pagination — une seule barre bas, compacte */}
+      {totalRecords > 0 && (
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginTop: 16,
-            padding: '10px 12px',
-            background: T.bg2,
-            borderRadius: 6,
-            fontSize: 12,
+            marginTop: 4,
+            padding: '2px 4px',
+            minHeight: 26,
+            fontSize: 11,
+            color: T.text3,
           }}
         >
-          <div style={{ color: T.text3 }}>
-            Page {page + 1} sur {Math.ceil(totalRecords / limit)} · {totalRecords} résultat
-            {totalRecords !== 1 ? 's' : ''}
+          <div>
+            {Math.min(page * limit + 1, totalRecords)}–{Math.min((page + 1) * limit, totalRecords)} / {totalRecords}
+            {' · '}
+            {page + 1}/{Math.max(1, Math.ceil(totalRecords / limit))}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 4 }}>
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
               style={{
-                padding: '6px 12px',
+                padding: '2px 8px',
                 borderRadius: 4,
                 border: `1px solid ${T.border}`,
                 background: T.bg1,
                 color: T.text,
-                fontSize: 12,
+                fontSize: 11,
                 cursor: page === 0 ? 'not-allowed' : 'pointer',
                 opacity: page === 0 ? 0.5 : 1,
                 fontFamily: 'inherit',
+                minHeight: 24,
               }}
             >
-              ← Précédent
+              ‹
             </button>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={page >= Math.ceil(totalRecords / limit) - 1}
               style={{
-                padding: '6px 12px',
+                padding: '2px 8px',
                 borderRadius: 4,
                 border: `1px solid ${T.border}`,
                 background: T.bg1,
                 color: T.text,
-                fontSize: 12,
+                fontSize: 11,
                 cursor: page >= Math.ceil(totalRecords / limit) - 1 ? 'not-allowed' : 'pointer',
                 opacity: page >= Math.ceil(totalRecords / limit) - 1 ? 0.5 : 1,
                 fontFamily: 'inherit',
+                minHeight: 24,
               }}
             >
-              Suivant →
+              ›
             </button>
           </div>
         </div>

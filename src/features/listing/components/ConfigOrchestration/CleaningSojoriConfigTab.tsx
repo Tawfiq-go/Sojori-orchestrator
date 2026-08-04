@@ -9,6 +9,7 @@ import {
   ConfigIntroBar,
   Toggle,
   NumInput,
+  PillButton,
   TYPO,
 } from './SHARED';
 import {

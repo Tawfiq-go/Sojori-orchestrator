@@ -15,7 +15,7 @@ import {
 } from './staffDesignConstants';
 import { MOCK_STAFF_DESIGN, MOCK_LISTINGS_DESIGN } from './mockStaffDesign';
 
-type FilterKey = 'all' | 'active' | 'admin' | 'freelance';
+type FilterKey = 'all' | 'active' | 'freelance';
 /** Panneau d’édition accès — un seul contenu visible à la fois. */
 type AccessPanel = 'all' | 'city' | 'listing' | null;
 type ListingOpt = { id: string; name: string; ownerId?: string; cityId?: string; city?: string };
@@ -68,8 +68,8 @@ function emptyStaff(): Staff {
     phoneE164: '',
     whatsappE164: '',
     status: 'active',
-    isAdmin: false,
     whatsappNotificationsEnabled: true,
+    orchestrationNotify: { mode: 'individual', digestTime: '17:00' },
     contractType: 'employee',
     // Aucun type par défaut — l’utilisateur choisit explicitement (salarié ou freelance).
     allowedTaskTypes: [],
@@ -114,7 +114,6 @@ function scheduleHours(s: Staff): string {
 
 function roleLine(s: Staff): string {
   if (s.status === 'off') return `${s.contractType === 'freelance' ? 'FREELANCE' : 'SALARIÉ'} · DÉSACTIVÉ`;
-  if (s.isAdmin) return `${s.contractType === 'freelance' ? 'FREELANCE' : 'SALARIÉ'} · ADMIN`;
   return s.contractType === 'freelance' ? 'FREELANCE' : 'SALARIÉ';
 }
 
@@ -201,7 +200,6 @@ export default function StaffPageView({
   const filtered = useMemo(() => {
     return staff.filter((s) => {
       if (filter === 'active') return s.status === 'active';
-      if (filter === 'admin') return s.isAdmin;
       if (filter === 'freelance') return s.contractType === 'freelance';
       return true;
     });
@@ -211,7 +209,6 @@ export default function StaffPageView({
     () => ({
       all: staff.length,
       active: staff.filter((s) => s.status === 'active').length,
-      admin: staff.filter((s) => s.isAdmin).length,
       freelance: staff.filter((s) => s.contractType === 'freelance').length,
     }),
     [staff],
@@ -562,7 +559,6 @@ export default function StaffPageView({
             [
               ['all', `TOUS · ${counts.all}`],
               ['active', `ACTIFS · ${counts.active}`],
-              ['admin', `ADMIN · ${counts.admin}`],
               ['freelance', `FREELANCE · ${counts.freelance}`],
             ] as const
           ).map(([key, label]) => (
@@ -607,7 +603,6 @@ export default function StaffPageView({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="nm">
                       {s.fullName}
-                      {s.isAdmin && <span className="admin">👑 ADMIN</span>}
                     </div>
                     <div className="role">{roleLine(s)}</div>
                   </div>
@@ -647,6 +642,10 @@ export default function StaffPageView({
                   <span style={{ fontFamily: 'var(--mono)', color: 'var(--t)' }}>
                     {s.whatsappE164 || s.phoneE164}
                     {s.whatsappNotificationsEnabled === false ? ' · notifs off' : ''}
+                    {s.whatsappNotificationsEnabled !== false &&
+                    s.orchestrationNotify?.mode === 'daily_digest'
+                      ? ` · digeste ${s.orchestrationNotify.digestTime || '17:00'}`
+                      : ''}
                   </span>
                 </div>
                 {firstRate && (
@@ -1059,7 +1058,7 @@ export default function StaffPageView({
             </div>
 
             <div className="form-section full">
-              <div className="form-section-h">Notifications &amp; admin</div>
+              <div className="form-section-h">Notifications</div>
               <div className="admin-row">
                 <span style={{ fontSize: 18 }}>💬</span>
                 <div style={{ flex: 1 }}>
@@ -1080,6 +1079,67 @@ export default function StaffPageView({
                   aria-checked={form.whatsappNotificationsEnabled !== false}
                 />
               </div>
+
+              <div style={{ marginTop: 14 }}>
+                <div className="nm" style={{ marginBottom: 4 }}>
+                  Rappels orchestration
+                </div>
+                <div className="ds" style={{ marginBottom: 8 }}>
+                  Individuel = 1 WA par rappel · Journalier = 1 push/jour (flow 7 jours). Silence =
+                  coupe WhatsApp ci-dessus.
+                </div>
+                <div className="pill-group" style={{ marginBottom: 10 }}>
+                  {(
+                    [
+                      { id: 'individual', label: 'Individuel' },
+                      { id: 'daily_digest', label: 'Journalier' },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className={`pill-toggle${
+                        (form.orchestrationNotify?.mode === 'daily_digest'
+                          ? 'daily_digest'
+                          : 'individual') === opt.id
+                          ? ' on'
+                          : ''
+                      }`}
+                      disabled={form.whatsappNotificationsEnabled === false}
+                      onClick={() =>
+                        patchForm({
+                          orchestrationNotify: {
+                            mode: opt.id,
+                            digestTime: form.orchestrationNotify?.digestTime || '17:00',
+                          },
+                        })
+                      }
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {form.orchestrationNotify?.mode === 'daily_digest' &&
+                  form.whatsappNotificationsEnabled !== false && (
+                  <div className="field" style={{ maxWidth: 180 }}>
+                    <div className="field-label">Heure digeste (Casablanca)</div>
+                    <input
+                      className="input"
+                      type="time"
+                      value={form.orchestrationNotify?.digestTime || '17:00'}
+                      onChange={(e) =>
+                        patchForm({
+                          orchestrationNotify: {
+                            mode: 'daily_digest',
+                            digestTime: e.target.value || '17:00',
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
               <div className="admin-row" style={{ marginTop: 10 }}>
                 <span style={{ fontSize: 18 }}>✓</span>
                 <div style={{ flex: 1 }}>
@@ -1111,20 +1171,6 @@ export default function StaffPageView({
                   onKeyDown={() => {}}
                   role="switch"
                   aria-checked={Boolean(form.readyToFinish)}
-                />
-              </div>
-              <div className="admin-row" style={{ marginTop: 10 }}>
-                <span style={{ fontSize: 18 }}>👑</span>
-                <div style={{ flex: 1 }}>
-                  <div className="nm">Admin · escalades</div>
-                  <div className="ds">Reçoit les tâches escaladées si personne ne les prend</div>
-                </div>
-                <div
-                  className={`toggle${form.isAdmin ? ' on' : ''}`}
-                  onClick={() => patchForm({ isAdmin: !form.isAdmin })}
-                  onKeyDown={() => {}}
-                  role="switch"
-                  aria-checked={form.isAdmin}
                 />
               </div>
             </div>

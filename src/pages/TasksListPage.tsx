@@ -2596,8 +2596,20 @@ export function TasksListPage() {
         ) : null}
 
         {!loading && displayTasks.length > 0 ? (
-          <Stack direction="row" sx={{ mt: isMobile ? 0.75 : 2, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, flexShrink: 0 }}>
-            <Typography sx={{ fontSize: isMobile ? 11 : 13, color: T.text3 }}>
+          <Stack
+            direction="row"
+            sx={{
+              mt: 0.25,
+              py: 0,
+              minHeight: 26,
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 0.5,
+              flexShrink: 0,
+            }}
+          >
+            <Typography sx={{ fontSize: 11, color: T.text3, lineHeight: 1.2 }}>
               {pagination.total > 0
                 ? `${page * rowsPerPage + 1}–${Math.min((page + 1) * rowsPerPage, pagination.total)} / ${pagination.total}`
                 : '0 tâche'}
@@ -2613,15 +2625,24 @@ export function TasksListPage() {
                 setPage(0);
               }}
               rowsPerPageOptions={[50, 100, 200, 500]}
-              labelRowsPerPage="Par page"
+              labelRowsPerPage=""
               labelDisplayedRows={() => ''}
               sx={{
                 border: 'none',
-                '& .MuiTablePagination-toolbar': { minHeight: isMobile ? 32 : 52, px: 0 },
-                '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                  fontSize: isMobile ? 11 : 13,
-                  color: T.text3,
+                m: 0,
+                overflow: 'hidden',
+                '& .MuiTablePagination-toolbar': {
+                  minHeight: 26,
+                  height: 26,
+                  px: 0,
+                  pl: 0.5,
                 },
+                '& .MuiTablePagination-spacer': { display: 'none' },
+                '& .MuiTablePagination-selectLabel': { display: 'none' },
+                '& .MuiTablePagination-displayedRows': { display: 'none' },
+                '& .MuiTablePagination-select': { fontSize: 11, py: 0 },
+                '& .MuiTablePagination-actions': { ml: 0.5 },
+                '& .MuiIconButton-root': { p: 0.25 },
               }}
             />
           </Stack>

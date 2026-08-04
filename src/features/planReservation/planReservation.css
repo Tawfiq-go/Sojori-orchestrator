@@ -699,6 +699,8 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .seq-guest-ops-btn--accent:hover:not(:disabled){background:rgba(194,65,12,0.16);border-color:#c2410c}
 .seq-guest-ops-link{font-size:11px;font-weight:700;color:var(--in);text-decoration:none;margin-left:auto}
 .seq-guest-ops-link:hover{text-decoration:underline}
+.seq-guest-ops-assign{display:inline-flex;align-items:center;gap:6px}
+.seq-guest-ops-assign .plan-assign-actions{margin:0}
 
 /* Aperçu contenu message WA / email / OTA */
 .msg-body-preview{margin-top:8px}

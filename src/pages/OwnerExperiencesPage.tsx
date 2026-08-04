@@ -528,6 +528,11 @@ export function OwnerExperiencesPage() {
       toast.error('Choisissez au moins un mode de paiement');
       return;
     }
+    const wa = draft.whatsapp.trim().replace(/[\s.-]/g, '');
+    if (!/^\+[1-9]\d{7,14}$/.test(wa)) {
+      toast.error('WhatsApp provider obligatoire (format E.164, ex. +2126…)');
+      return;
+    }
     const needsRemote = draft.payment.methods.some((m) => m === 'card' || m === 'transfer');
     const payment: PartnerServicePayment = {
       methods: draft.payment.methods,
@@ -543,7 +548,7 @@ export function OwnerExperiencesPage() {
       category: draft.category.trim(),
       title: draft.title.trim(),
       description: draft.description,
-      whatsapp: draft.whatsapp.trim(),
+      whatsapp: wa,
       cityIds: draft.cityIds,
       photos: draft.photos.slice(0, 3),
       formules,
@@ -1325,13 +1330,6 @@ export function OwnerExperiencesPage() {
                 value={draft.description}
                 onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
               />
-              <input
-                className="pa-in"
-                style={{ ...inpBase, marginTop: 12 }}
-                placeholder="WhatsApp E.164 (optionnel)"
-                value={draft.whatsapp}
-                onChange={(e) => setDraft((d) => ({ ...d, whatsapp: e.target.value }))}
-              />
             </section>
 
             <section style={{ marginBottom: 22 }}>
@@ -1477,6 +1475,23 @@ export function OwnerExperiencesPage() {
                 value={draft.contact.email || ''}
                 onChange={(e) => setDraft((d) => ({ ...d, contact: { ...d.contact, email: e.target.value } }))}
               />
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--pa-ink2)', marginBottom: 6 }}>
+                  WhatsApp provider <span style={{ color: '#b45309' }}>*</span>
+                </div>
+                <input
+                  className="pa-in"
+                  style={inpBase}
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="+2126… (E.164)"
+                  value={draft.whatsapp}
+                  onChange={(e) => setDraft((d) => ({ ...d, whatsapp: e.target.value }))}
+                />
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--pa-ink3)' }}>
+                  Obligatoire — numéro qui reçoit les notifications de commande (Accepter / Refuser).
+                </p>
+              </div>
             </section>
 
             <section style={{ marginBottom: 22 }}>

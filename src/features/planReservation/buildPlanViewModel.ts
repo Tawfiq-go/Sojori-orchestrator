@@ -100,8 +100,9 @@ export interface FulltaskPlanDoc {
       label: string;
       scheduledAt: string | Date;
       sentAt?: string | Date | null;
-      status: 'en_attente' | 'envoyee' | 'saute' | 'echec';
+      status: 'en_attente' | 'envoyee' | 'saute' | 'echec' | 'fait';
       reason?: string;
+      triggerMode?: 'auto' | 'manual';
       dispatchPreview?: import('./planDispatchPreview').MessageDispatchPreview;
       dispatchLog?: Array<{
         at: string | Date;
@@ -118,8 +119,9 @@ export interface FulltaskPlanDoc {
       label: string;
       scheduledAt: string | Date;
       sentAt?: string | Date | null;
-      status: 'en_attente' | 'envoyee' | 'saute' | 'echec';
+      status: 'en_attente' | 'envoyee' | 'saute' | 'echec' | 'fait';
       reason?: string;
+      triggerMode?: 'auto' | 'manual';
       messageId?: string;
       scheduleRef?: string;
       scheduleDay?: number;
@@ -779,6 +781,45 @@ function mapDispatchLog(
   return { lastDispatch, lastDispatchAttempt: lastAttempt, dispatchLog };
 }
 
+/** Assignation significative pour afficher le bloc (pas placeholder Manuel vide). */
+function isMeaningfulAssignation(a: {
+  staffId?: unknown;
+  foundAt?: string | Date | null;
+  status?: string;
+  triggerMode?: string;
+  autoAssign?: boolean;
+  attempts?: Array<{ tried?: boolean }>;
+} | null | undefined): boolean {
+  if (!a) return false;
+  if (a.staffId || a.foundAt) return true;
+  const st = String(a.status || '');
+  if (st === 'attente_acceptation' || st === 'termine' || st === 'en_cours') return true;
+  if ((a.attempts ?? []).some((x) => x.tried)) return true;
+  // Placeholder Manuel / lazy : Actions admin Assign seulement.
+  if (a.triggerMode === 'manual' || a.autoAssign === false) return false;
+  return true;
+}
+
+/** Lignes Manuel non envoyées = cockpit only (pas de bloc Relances). Historique envoyé = conservé. */
+function isScheduledManualRow(r: {
+  triggerMode?: string;
+  reason?: string;
+  status?: string;
+  sentAt?: string | Date | null;
+}): boolean {
+  const manual =
+    r.triggerMode === 'manual' ||
+    r.reason === 'manuel' ||
+    r.reason === 'admin_extra' ||
+    /^Relance manuelle/i.test(String((r as { label?: string }).label || '')) ||
+    /^Rappel staff manuel$/i.test(String((r as { label?: string }).label || ''));
+  if (!manual) return false;
+  if (r.sentAt) return false;
+  const st = String(r.status || '');
+  // Historique échec / sauté reste visible ; pending non-envoyé = cockpit only.
+  return st === 'en_attente' || st === '';
+}
+
 function mapRelanceExecution(
   r: {
     label: string;
@@ -1355,7 +1396,10 @@ function buildSequenceView(
     taskAnchorDate,
     now,
   );
-  const relances: PlanGuestRelanceItem[] = (seq.relances ?? []).map((r, i) => {
+  const relances: PlanGuestRelanceItem[] = (seq.relances ?? [])
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => !isScheduledManualRow(r))
+    .map(({ r, i }) => {
     const at = toDate(r.scheduledAt) || now;
     const m = mapRelanceExecution(r, i, 'wa', 'rel', now);
     const meta = catalogMetaForSequenceRelance(plan, seq, at, r.label);
@@ -1418,7 +1462,10 @@ function buildSequenceView(
   };
 
   const staffReminders: PlanStaffReminderItem[] = [
-    ...(seq.staffReminders ?? []).map((r, i) => mapStaffRemRow(r, i)),
+    ...(seq.staffReminders ?? [])
+      .map((r, i) => ({ r, i }))
+      .filter(({ r }) => !isScheduledManualRow(r))
+      .map(({ r, i }) => mapStaffRemRow(r, i)),
     ...(seq.staffStartReminders ?? []).map((r, i) =>
       mapStaffRemRow(r, (seq.staffReminders?.length ?? 0) + i),
     ),
@@ -1506,7 +1553,7 @@ function buildSequenceView(
     lmAssignSlots,
     escalade,
     hasRelances: relances.length > 0,
-    hasAssignation: Boolean(seq.assignation),
+    hasAssignation: isMeaningfulAssignation(seq.assignation),
     hasLmAssignSlots: lmAssignSlots.length > 0,
     hasStaffReminders: staffReminders.length > 0,
     hasEscalade: Boolean(escalade),
