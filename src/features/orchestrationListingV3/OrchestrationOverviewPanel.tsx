@@ -428,6 +428,10 @@ type CapDoc = {
     staffAssignment?: Record<string, unknown> | null;
     escalationEnabled?: boolean;
     deadline?: Record<string, unknown> | null;
+    remindersMode?: 'auto' | 'manual';
+    staffAssignmentMode?: 'auto' | 'manual';
+    staffRemindersMode?: 'auto' | 'manual';
+    escalationMode?: 'auto' | 'manual';
   } | null;
 };
 
@@ -561,18 +565,24 @@ function readDecisionFlags(cap: CapDoc): DecisionFlags {
   const reminders = exec.reminders ?? [];
   const staffRem = exec.staffReminders ?? [];
   const hasStaffAssign = Boolean(exec.staffAssignment);
+  const inferAuto = (mode: unknown, hasConfig: boolean) =>
+    mode === 'auto' || (mode !== 'manual' && hasConfig);
   return {
     orchestrated: d.orchestrated === true,
     clientEnabled: d.clientEnabled === true,
     taskEnabled: d.taskEnabled === true,
-    clientReminders: reminders.length > 0,
-    staffAssignment: hasStaffAssign,
-    staffReminders: staffRem.length > 0,
+    // true = Auto · false = Manuel (toujours présent au plan)
+    clientReminders: inferAuto(exec.remindersMode, reminders.length > 0),
+    staffAssignment: inferAuto(exec.staffAssignmentMode, hasStaffAssign),
+    staffReminders: inferAuto(exec.staffRemindersMode, staffRem.length > 0),
     staffStartReminder:
       d.taskEnabled === true
         ? exec.staffStartReminderEnabled !== false
         : false,
-    pmEscalation: exec.escalationEnabled === true,
+    pmEscalation: inferAuto(
+      exec.escalationMode,
+      exec.escalationEnabled === true && Boolean(exec.deadline),
+    ),
   };
 }
 
@@ -612,10 +622,14 @@ function buildExecutionFromFlags(
   let staffReminders = [...(prev.staffReminders ?? [])];
   let staffAssignment = prev.staffAssignment ?? null;
   let deadline = prev.deadline ?? null;
-  let escalationEnabled = flags.pmEscalation;
+  const remindersMode: 'auto' | 'manual' =
+    opts?.onDemand || !flags.clientReminders ? 'manual' : 'auto';
+  const staffAssignmentMode: 'auto' | 'manual' = flags.staffAssignment ? 'auto' : 'manual';
+  const staffRemindersMode: 'auto' | 'manual' = flags.staffReminders ? 'auto' : 'manual';
+  const escalationMode: 'auto' | 'manual' = flags.pmEscalation ? 'auto' : 'manual';
 
-  // À la demande (ménage payant, conciergerie…) : jamais de relances client.
-  if (opts?.onDemand || !flags.clientReminders) {
+  // Toujours garder une config (Auto = horaires·scheduler · Manuel = bouton cockpit).
+  if (opts?.onDemand) {
     reminders = [];
   } else if (reminders.length === 0) {
     reminders = [
@@ -623,35 +637,53 @@ function buildExecutionFromFlags(
         ref,
         day: -1,
         time: '10:00',
-        label: 'Relance J-1',
+        label: remindersMode === 'manual' ? 'Relance manuelle' : 'Relance J-1',
         messageId: CLIENT_MSG_ID[taskType] ?? '',
       },
     ];
   }
 
-  // Créer tâche OFF ⇒ rien côté équipe dans le plan.
-  // Assignation OFF avec tâche ON ⇒ tâche créée, assignation manuelle (admin).
   if (!flags.taskEnabled) {
-    staffAssignment = null;
-    staffReminders = [];
+    // Pas de tâche ops : assignation / rappels staff hors scope (manuel sans skeleton task).
+    staffAssignment =
+      staffAssignment ??
+      ({
+        startAt: { ref, day: -1, time: '10:00' },
+        endAt: { ref, day: 0, time: '18:00' },
+        autoAssign: false,
+        findAnotherStaff: true,
+        acceptToleranceHours: 2,
+      } as NonNullable<CapDoc['execution']>['staffAssignment']);
+    if (staffReminders.length === 0) {
+      staffReminders = [
+        {
+          label: 'Rappel staff manuel',
+          ref,
+          day: -1,
+          time: '11:00',
+          messageId: STAFF_MSG_ID[taskType] ?? '',
+        },
+      ];
+    }
   } else {
-    if (!flags.staffAssignment) {
-      staffAssignment = null;
-    } else if (!staffAssignment) {
+    if (!staffAssignment) {
       staffAssignment = {
         startAt: { ref, day: -1, time: '10:00' },
         endAt: { ref, day: 0, time: '18:00' },
-        autoAssign: true,
+        autoAssign: staffAssignmentMode === 'auto',
         findAnotherStaff: true,
         acceptToleranceHours: 2,
       };
+    } else {
+      staffAssignment = {
+        ...staffAssignment,
+        autoAssign: staffAssignmentMode === 'auto',
+      };
     }
-    if (!flags.staffReminders) {
-      staffReminders = [];
-    } else if (staffReminders.length === 0) {
+    if (staffReminders.length === 0) {
       staffReminders = [
         {
-          label: 'Rappel J-1',
+          label: staffRemindersMode === 'manual' ? 'Rappel staff manuel' : 'Rappel J-1',
           ref,
           day: -1,
           time: '11:00',
@@ -661,14 +693,11 @@ function buildExecutionFromFlags(
     }
   }
 
-  if (!flags.pmEscalation) {
-    escalationEnabled = false;
-  } else if (!deadline) {
+  if (!deadline) {
     deadline =
       taskType === 'support' || taskType === 'service_client'
         ? { ref: 'task_created', hours: 4 }
         : { ref, day: -1, time: '11:00' };
-    escalationEnabled = true;
   }
 
   return {
@@ -679,7 +708,11 @@ function buildExecutionFromFlags(
     staffStartReminderEnabled: Boolean(flags.taskEnabled && flags.staffStartReminder),
     staffAssignment,
     deadline,
-    escalationEnabled,
+    escalationEnabled: true,
+    remindersMode,
+    staffAssignmentMode,
+    staffRemindersMode,
+    escalationMode,
   };
 }
 
@@ -689,13 +722,27 @@ function DecisionSwitch({
   checked,
   disabled,
   onChange,
+  mode = 'onOff',
 }: {
   label: string;
   hint: string;
   checked: boolean;
   disabled?: boolean;
   onChange: (v: boolean) => void;
+  /** autoManual = Relances / Assignation / Rappels / Escalade · onOff = présence */
+  mode?: 'autoManual' | 'onOff';
 }) {
+  const modeLabel =
+    mode === 'autoManual' ? (checked ? 'Auto' : 'Manuel') : checked ? 'ON' : 'OFF';
+  const modeColor =
+    mode === 'autoManual'
+      ? checked
+        ? V3.su
+        : V3.t4
+      : checked
+        ? V3.su
+        : '#9b1c1c';
+
   return (
     <Box
       sx={{
@@ -721,7 +768,7 @@ function DecisionSwitch({
             onChange={(e) => onChange(e.target.checked)}
           />
         }
-        label={checked ? 'ON' : 'OFF'}
+        label={modeLabel}
         labelPlacement="start"
         sx={{
           m: 0,
@@ -729,8 +776,8 @@ function DecisionSwitch({
           '& .MuiFormControlLabel-label': {
             fontSize: 11,
             fontWeight: 800,
-            color: checked ? V3.su : V3.t4,
-            minWidth: 28,
+            color: modeColor,
+            minWidth: 52,
           },
         }}
       />
@@ -1585,7 +1632,7 @@ export default function OrchestrationOverviewPanel({
       const start = sa?.startAt as { ref?: string; day?: number; time?: string } | undefined;
       const end = sa?.endAt as { ref?: string; day?: number; time?: string } | undefined;
       const ref = String(start?.ref && start.ref !== 'task_created' ? start.ref : defaultRefForTask(taskType));
-      const auto = (sa as { autoAssign?: boolean } | null)?.autoAssign === true;
+      const assignAuto = exec.staffAssignmentMode !== 'manual';
       const startTime = String(start?.time ?? '09:00');
       const endTime = String(end?.time ?? '18:00');
       const startDay = start?.ref === 'task_created' ? -3 : Number(start?.day ?? -3);
@@ -1610,10 +1657,10 @@ export default function OrchestrationOverviewPanel({
         startTime?: string;
         endDay?: number;
         endTime?: string;
-        auto?: boolean;
       }) => {
         const nextMode = opts.mode ?? mode;
-        const nextAuto = opts.auto ?? auto;
+        // autoAssign = recherche scheduler (colonne Auto/Manuel). Auto-accept = fiche Staff.
+        const nextAuto = assignAuto;
         if (nextMode === 'none') return patchExecution(editor.capKey, { staffAssignment: null });
         if (nextMode === 'immediate') {
           return patchExecution(editor.capKey, {
@@ -1623,6 +1670,7 @@ export default function OrchestrationOverviewPanel({
               findAnotherStaff: !nextAuto,
               startAt: { ref: 'task_created' },
             },
+            staffAssignmentMode: nextAuto ? 'auto' : 'manual',
           });
         }
         const sd = opts.startDay ?? startDay;
@@ -1638,6 +1686,7 @@ export default function OrchestrationOverviewPanel({
             startAt: { ref, day: sd, time: st },
             endAt: { ref, day: ed, time: et },
           },
+          staffAssignmentMode: nextAuto ? 'auto' : 'manual',
         });
       };
       body = (
@@ -1684,18 +1733,6 @@ export default function OrchestrationOverviewPanel({
                 <HourSelect value={endTime} onChange={(t) => write({ mode: 'window', endTime: t })} />
               </Box>
             </>
-          )}
-          {mode !== 'none' && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Switch
-                size="small"
-                checked={auto}
-                onChange={(e) => write({ mode, auto: e.target.checked })}
-              />
-              <Typography sx={{ fontSize: 12, color: V3.t2 }}>
-                Auto-accepté (assigné sans acceptation staff)
-              </Typography>
-            </Box>
           )}
         </Box>
       );
@@ -1820,30 +1857,36 @@ export default function OrchestrationOverviewPanel({
       );
     }
 
-    // Titre + toggles ON/OFF catégorie (Relances / Assignation / Rappels / Escalade).
+    // Titre + toggles Auto/Manuel (Relances / Assignation / Rappels / Escalade).
+    const inferOn = (mode: unknown, hasConfig: boolean) =>
+      mode === 'auto' || (mode !== 'manual' && hasConfig);
     const kindMeta: Record<
       Exclude<EditorKind, 'availability'>,
-      { suffix: string; on: boolean; hintOff: string }
+      { suffix: string; on: boolean; hintManual: string }
     > = {
       reminders: {
         suffix: '· Relances client',
-        on: (exec.reminders ?? []).length > 0,
-        hintOff: 'OFF = pas de relance voyageur dans le plan.',
+        on: inferOn(exec.remindersMode, (exec.reminders ?? []).length > 0),
+        hintManual:
+          'Manuel = pas d’envoi auto. Relancer reste possible dans le plan (cockpit).',
       },
       assign: {
         suffix: '· Assignation',
-        on: Boolean(exec.staffAssignment),
-        hintOff: 'OFF = hors plan — attribution manuelle possible.',
+        on: inferOn(exec.staffAssignmentMode, Boolean(exec.staffAssignment)),
+        hintManual:
+          'Manuel = pas de recherche auto. Assigner reste possible dans le plan (cockpit).',
       },
       staffRem: {
         suffix: '· Rappels staff',
-        on: (exec.staffReminders ?? []).length > 0,
-        hintOff: 'OFF = pas de rappel staff dans le plan.',
+        on: inferOn(exec.staffRemindersMode, (exec.staffReminders ?? []).length > 0),
+        hintManual:
+          'Manuel = pas de notif auto. Rappeler reste possible dans le plan (cockpit).',
       },
       escalation: {
         suffix: '· Escalade',
-        on: exec.escalationEnabled === true,
-        hintOff: 'OFF = pas d’escalade admin dans le plan.',
+        on: inferOn(exec.escalationMode, exec.escalationEnabled === true && Boolean(exec.deadline)),
+        hintManual:
+          'Manuel = pas d’alerte auto. Escalader reste possible dans le plan (cockpit).',
       },
     };
 
@@ -1851,80 +1894,74 @@ export default function OrchestrationOverviewPanel({
       editor.kind === 'availability' ? null : (editor.kind as Exclude<EditorKind, 'availability'>);
     const meta = featureKind ? kindMeta[featureKind] : null;
 
-    const toggleFeature = (on: boolean) => {
+    const toggleFeature = (auto: boolean) => {
       if (!featureKind) return;
+      const mode = auto ? 'auto' : 'manual';
+      const ref = defaultRefForTask(taskType);
+
       if (featureKind === 'reminders') {
-        if (!on) {
-          patchExecution(editor.capKey, { reminders: [] });
-          return;
-        }
-        if ((exec.reminders ?? []).length > 0) return;
-        const ref = defaultRefForTask(taskType);
-        patchExecution(editor.capKey, {
-          reminders: [
-            {
-              ref,
-              day: -1,
-              time: '10:00',
-              label: 'Relance J-1',
-              messageId: CLIENT_MSG_ID[taskType] ?? '',
-            },
-          ],
-        });
+        const reminders =
+          (exec.reminders ?? []).length > 0
+            ? exec.reminders
+            : [
+                {
+                  ref,
+                  day: -1,
+                  time: '10:00',
+                  label: auto ? 'Relance J-1' : 'Relance manuelle',
+                  messageId: CLIENT_MSG_ID[taskType] ?? '',
+                },
+              ];
+        patchExecution(editor.capKey, { reminders, remindersMode: mode });
         return;
       }
       if (featureKind === 'assign') {
-        if (!on) {
-          patchExecution(editor.capKey, { staffAssignment: null });
-          return;
-        }
-        if (exec.staffAssignment) return;
-        const ref = defaultRefForTask(taskType);
-        patchExecution(editor.capKey, {
-          staffAssignment: {
+        const staffAssignment =
+          (exec.staffAssignment as Record<string, unknown> | null | undefined) ??
+          ({
             startAt: { ref, day: -3, time: '09:00' },
             endAt: { ref, day: 0, time: '11:00' },
-            autoAssign: false,
-            findAnotherStaff: true,
+            autoAssign: auto,
+            findAnotherStaff: !auto,
             releaseWindows: ['11:00', '16:00'],
             releaseMode: 'tolerance',
             acceptToleranceHours: 3,
             assignmentHoursMode: 'planning',
+          } as Record<string, unknown>);
+        patchExecution(editor.capKey, {
+          staffAssignment: {
+            ...staffAssignment,
+            autoAssign: auto ? staffAssignment.autoAssign !== false : false,
+            findAnotherStaff: !auto,
           },
+          staffAssignmentMode: mode,
         });
         return;
       }
       if (featureKind === 'staffRem') {
-        if (!on) {
-          patchExecution(editor.capKey, { staffReminders: [] });
-          return;
-        }
-        if ((exec.staffReminders ?? []).length > 0) return;
-        const ref = defaultRefForTask(taskType);
-        patchExecution(editor.capKey, {
-          staffReminders: [
-            {
-              label: 'Rappel J-1',
-              ref,
-              day: -1,
-              time: '11:00',
-              messageId: STAFF_MSG_ID[taskType] ?? '',
-            },
-          ],
-        });
+        const staffReminders =
+          (exec.staffReminders ?? []).length > 0
+            ? exec.staffReminders
+            : [
+                {
+                  label: auto ? 'Rappel J-1' : 'Rappel staff manuel',
+                  ref,
+                  day: -1,
+                  time: '11:00',
+                  messageId: STAFF_MSG_ID[taskType] ?? '',
+                },
+              ];
+        patchExecution(editor.capKey, { staffReminders, staffRemindersMode: mode });
         return;
       }
       if (featureKind === 'escalation') {
         const postCreate = isPostCreationEscalation(taskType);
         const dl = (exec.deadline ?? null) as DeadlineDoc;
-        if (!on) {
-          patchExecution(editor.capKey, { escalationEnabled: false });
-          return;
-        }
         patchExecution(editor.capKey, {
           escalationEnabled: true,
+          escalationMode: mode,
           deadline: dl ?? {
-            ref: postCreate ? 'task_created' : defaultRefForTask(taskType),
+            ref: postCreate ? 'task_created' : ref,
             ...(postCreate ? { hours: 4 } : { day: -1, time: '11:00' }),
           },
         });
@@ -1957,19 +1994,34 @@ export default function OrchestrationOverviewPanel({
               ) : null}
             </Typography>
             {meta ? (
-              <Switch
-                size="small"
-                checked={meta.on}
-                onChange={(e) => toggleFeature(e.target.checked)}
-                inputProps={{ 'aria-label': `Activer ${meta.suffix}` }}
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={meta.on}
+                    onChange={(e) => toggleFeature(e.target.checked)}
+                    slotProps={{ input: { 'aria-label': `Mode ${meta.suffix}` } }}
+                  />
+                }
+                label={meta.on ? 'Auto' : 'Manuel'}
+                labelPlacement="start"
+                sx={{
+                  m: 0,
+                  gap: 0.5,
+                  '& .MuiFormControlLabel-label': {
+                    fontSize: 11,
+                    fontWeight: 800,
+                    color: meta.on ? V3.su : V3.t4,
+                    minWidth: 52,
+                  },
+                }}
               />
             ) : null}
           </Box>
           {meta && !meta.on ? (
-            <Typography sx={{ fontSize: 12, color: V3.t3 }}>{meta.hintOff}</Typography>
-          ) : (
-            body
-          )}
+            <Typography sx={{ fontSize: 12, color: V3.t3, mb: 1 }}>{meta.hintManual}</Typography>
+          ) : null}
+          {body}
         </Box>
       </Popover>
     );
@@ -2351,7 +2403,7 @@ export default function OrchestrationOverviewPanel({
                 <Typography sx={head} title="Rappels WhatsApp au voyageur si pas encore fait">
                   Relances client
                 </Typography>
-                <Typography sx={head} title="Fenêtre d’assignation équipe + auto-accept">
+                <Typography sx={head} title="Fenêtre d’assignation équipe">
                   Assignation
                 </Typography>
                 <Typography sx={head} title="Notification pour rappeler le staff à J / heure (pas l’assignation)">
@@ -2504,16 +2556,11 @@ export default function OrchestrationOverviewPanel({
                     onClick={r.on && r.hasTaskCol ? open('assign', r.key) : undefined}
                     title={
                       r.hasTaskCol
-                        ? 'Assignation staff — début / fin / auto-accept'
+                        ? 'Assignation staff — début / fin'
                         : 'N/A — pas de tâche ops staff (choix heure / enregistrement)'
                     }
                   >
                     {r.assign}
-                    {r.autoAssign != null && r.assign !== '—' && r.assign !== 'N/A' && (
-                      <Box component="span" sx={{ ml: 0.5, fontSize: 11, color: r.autoAssign ? V3.task : V3.t4 }}>
-                        · Auto {r.autoAssign ? '✓' : '✗'}
-                      </Box>
-                    )}
                   </Typography>
                   <Typography
                     component="div"
@@ -2848,8 +2895,8 @@ export default function OrchestrationOverviewPanel({
                 </Alert>
               )}
               <Typography sx={{ fontSize: 12, color: V3.t3, mb: 1.5 }}>
-                Par service : coupez Relances / Assignation / Rappels / Escalade pour ne pas les
-                orchestrer dans le plan. Assignation OFF = tâche possible, mais attribution manuelle.
+                Sur Relances / Assignation / Rappels / Escalade : <b>Auto</b> = horaire + envoi
+                scheduler · <b>Manuel</b> = présent au plan, boutons cockpit (pas d&apos;envoi auto).
               </Typography>
               {hasClient && (
                 <DecisionSwitch
@@ -2858,6 +2905,7 @@ export default function OrchestrationOverviewPanel({
                   checked={flags.clientEnabled}
                   disabled={locked}
                   onChange={(v) => toggle('clientEnabled', v)}
+                  mode="onOff"
                 />
               )}
               {hasTaskCol && (
@@ -2867,15 +2915,17 @@ export default function OrchestrationOverviewPanel({
                   checked={flags.taskEnabled}
                   disabled={locked}
                   onChange={(v) => toggle('taskEnabled', v)}
+                  mode="onOff"
                 />
               )}
               {hasClientReminders && (
                 <DecisionSwitch
                   label="💌 Relances client"
-                  hint="Rappels voyageur automatiques — OFF = hors plan"
+                  hint="Horaire scheduler vs bouton Relancer"
                   checked={flags.clientReminders}
                   disabled={locked}
                   onChange={(v) => toggle('clientReminders', v)}
+                  mode="autoManual"
                 />
               )}
               {onDemand && hasOrch && (
@@ -2890,20 +2940,22 @@ export default function OrchestrationOverviewPanel({
               )}
               {hasTaskCol && (
                 <DecisionSwitch
-                  label="👷 Assignation auto"
-                  hint="Fenêtre d’assignation dans le plan — OFF = admin assigne manuellement"
+                  label="👷 Assignation"
+                  hint="Recherche staff à la fenêtre vs bouton Assigner"
                   checked={flags.staffAssignment}
                   disabled={locked || !flags.taskEnabled}
                   onChange={(v) => toggle('staffAssignment', v)}
+                  mode="autoManual"
                 />
               )}
               {hasTaskCol && (
                 <DecisionSwitch
                   label="🔔 Rappels staff"
-                  hint="Notif équipe (J-1…) — OFF = hors plan"
+                  hint="Notif à J/heure vs bouton Rappeler"
                   checked={flags.staffReminders}
                   disabled={locked || !flags.taskEnabled}
                   onChange={(v) => toggle('staffReminders', v)}
+                  mode="autoManual"
                 />
               )}
               {hasTaskCol && (
@@ -2913,15 +2965,17 @@ export default function OrchestrationOverviewPanel({
                   checked={flags.staffStartReminder}
                   disabled={locked || !flags.taskEnabled}
                   onChange={(v) => toggle('staffStartReminder', v)}
+                  mode="onOff"
                 />
               )}
               {hasTaskCol && (
                 <DecisionSwitch
                   label="🚨 Escalade admin"
-                  hint="Alerte admin si deadline dépassée — OFF = hors plan"
+                  hint="Alerte à la deadline vs bouton Escalader"
                   checked={flags.pmEscalation}
                   disabled={locked}
                   onChange={(v) => toggle('pmEscalation', v)}
+                  mode="autoManual"
                 />
               )}
             </DialogContent>

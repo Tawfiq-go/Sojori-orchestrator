@@ -31,33 +31,38 @@ export function TeamHubPagination({
     <Stack
       direction="row"
       sx={{
-        mt: 1.5,
-        pt: 1.5,
+        mt: 0.5,
+        pt: 0.5,
+        minHeight: 28,
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: 1,
+        gap: 0.5,
         borderTop: `1px solid ${TEAM_T.border}`,
       }}
     >
-      <Typography sx={{ fontSize: 12.5, color: TEAM_T.text3 }}>
-        {from}–{to} sur {total} {itemLabel}
+      <Typography sx={{ fontSize: 11, color: TEAM_T.text3, lineHeight: 1.2 }}>
+        {from}–{to} / {total} {itemLabel}
       </Typography>
 
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
         {onLimitChange ? (
-          <FormControl size="small" sx={{ minWidth: 110 }}>
+          <FormControl size="small" sx={{ minWidth: 56 }}>
             <Select
               value={limit}
               onChange={(e) => {
                 onLimitChange(Number(e.target.value));
                 onPageChange(0);
               }}
-              sx={{ fontSize: 12.5 }}
+              sx={{
+                fontSize: 11,
+                height: 24,
+                '& .MuiSelect-select': { py: 0, px: 1 },
+              }}
             >
               {limitOptions.map((n) => (
                 <MenuItem key={n} value={n}>
-                  {n} / page
+                  {n}
                 </MenuItem>
               ))}
             </Select>
@@ -67,17 +72,17 @@ export function TeamHubPagination({
           size="small"
           disabled={!canPrev}
           onClick={() => onPageChange(page - 1)}
-          sx={{ textTransform: 'none', color: TEAM_T.text2 }}
+          sx={{ textTransform: 'none', color: TEAM_T.text2, minHeight: 24, py: 0, px: 0.75, fontSize: 11 }}
         >
-          ← Précédent
+          ‹
         </Button>
         <Button
           size="small"
           disabled={!canNext}
           onClick={() => onPageChange(page + 1)}
-          sx={{ textTransform: 'none', color: TEAM_T.text2 }}
+          sx={{ textTransform: 'none', color: TEAM_T.text2, minHeight: 24, py: 0, px: 0.75, fontSize: 11 }}
         >
-          Suivant →
+          ›
         </Button>
       </Stack>
     </Stack>

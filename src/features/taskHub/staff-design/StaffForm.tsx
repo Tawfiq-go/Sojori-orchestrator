@@ -26,7 +26,6 @@ export default function StaffForm({ initial, allListings, onSave, onCancel, onDe
     email: initial?.email || '',
     avatarColor: initial?.avatarColor || 1,
     status: initial?.status || 'active',
-    isAdmin: initial?.isAdmin || false,
     contractType: initial?.contractType || 'employee',
     rates: initial?.rates || {},
     allowedTaskTypes: initial?.allowedTaskTypes || [],
@@ -131,10 +130,6 @@ export default function StaffForm({ initial, allListings, onSave, onCancel, onDe
               </PillBtn>
             ))}
           </Stack>
-        </Field>
-        <Field label="Admin" help="Accès complet au dashboard PM">
-          <Switch checked={s.isAdmin} onChange={e => patch({ isAdmin: e.target.checked })}
-            sx={{ '& .Mui-checked': { color: T.primary } }} />
         </Field>
       </Section>
 

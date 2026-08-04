@@ -863,51 +863,7 @@ export function ReservationsPage() {
         </Box>
       )}
 
-      {!isLoading && totalReservations > 0 && (
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          sx={{ mb: 1.5, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 1.5, flexShrink: 0 }}
-        >
-          <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
-            {page * limit + 1}–{Math.min((page + 1) * limit, totalReservations)} sur {totalReservations}
-            {' · '}page {page + 1}/{totalPages}
-          </Typography>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Typography sx={{ fontSize: 12, color: T.text3 }}>Par page</Typography>
-            <Select
-              size="small"
-              value={limit}
-              onChange={(e) => {
-                setLimit(Number(e.target.value));
-                setPage(0);
-              }}
-              sx={{ minWidth: 72, fontSize: 13, height: 32 }}
-            >
-              {PAGE_SIZE_OPTIONS.map((size) => (
-                <MenuItem key={size} value={size}>{size}</MenuItem>
-              ))}
-            </Select>
-            <Button
-              size="small"
-              disabled={page === 0 || isLoading}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              sx={{ textTransform: 'none' }}
-            >
-              ← Précédent
-            </Button>
-            <Button
-              size="small"
-              disabled={page + 1 >= totalPages || isLoading}
-              onClick={() => setPage((p) => p + 1)}
-              sx={{ textTransform: 'none' }}
-            >
-              Suivant →
-            </Button>
-          </Stack>
-        </Stack>
-      )}
-
-      {/* Contenu liste — scroll interne (sticky header tableau) */}
+      {/* Contenu liste — scroll interne (freeze panes) */}
       <Box
         sx={{
           flex: 1,
@@ -928,31 +884,59 @@ export function ReservationsPage() {
           </Paper>
         )}
 
-        {!isLoading && totalReservations > limit && (
+        {/* Une seule pagination bas, ultra-compacte (plus de doublon haut) */}
+        {!isLoading && totalReservations > 0 && (
           <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            sx={{ mt: 2, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 1.5 }}
+            direction="row"
+            sx={{
+              mt: 0.5,
+              py: 0,
+              minHeight: 28,
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 0.75,
+              flexShrink: 0,
+              flexWrap: 'wrap',
+            }}
           >
-            <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
-              {page * limit + 1}–{Math.min((page + 1) * limit, totalReservations)} sur {totalReservations}
-              {' · '}page {page + 1}/{totalPages}
+            <Typography sx={{ fontSize: 11, color: T.text3, lineHeight: 1.2 }}>
+              {page * limit + 1}–{Math.min((page + 1) * limit, totalReservations)} / {totalReservations}
+              {' · '}{page + 1}/{totalPages}
             </Typography>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+              <Select
+                size="small"
+                value={limit}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  setPage(0);
+                }}
+                sx={{
+                  minWidth: 56,
+                  fontSize: 11,
+                  height: 24,
+                  '& .MuiSelect-select': { py: 0, px: 1 },
+                }}
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <MenuItem key={size} value={size}>{size}</MenuItem>
+                ))}
+              </Select>
               <Button
                 size="small"
                 disabled={page === 0 || isLoading}
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
-                sx={{ textTransform: 'none' }}
+                sx={{ textTransform: 'none', minHeight: 24, py: 0, px: 0.75, fontSize: 11 }}
               >
-                ← Précédent
+                ‹
               </Button>
               <Button
                 size="small"
                 disabled={page + 1 >= totalPages || isLoading}
                 onClick={() => setPage((p) => p + 1)}
-                sx={{ textTransform: 'none' }}
+                sx={{ textTransform: 'none', minHeight: 24, py: 0, px: 0.75, fontSize: 11 }}
               >
-                Suivant →
+                ›
               </Button>
             </Stack>
           </Stack>

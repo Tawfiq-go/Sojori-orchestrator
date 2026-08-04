@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import * as fulltaskApi from '../../services/fulltaskApi';
 import EscaladeForceSlotModal from './EscaladeForceSlotModal';
+import PlanAssignButtons from './PlanAssignButtons';
 import type { FulltaskPlanDoc } from './buildPlanViewModel';
 
 const GUEST_SLOT_TYPES = new Set([
@@ -12,11 +13,37 @@ const GUEST_SLOT_TYPES = new Set([
   'departure_declare',
 ]);
 
+/** Relancer client (Actions admin) — pas de bloc Relances en mode Manuel. */
+const GUEST_RELANCE_TYPES = new Set([
+  'arrival_choose',
+  'departure_choose',
+  'arrival_declare',
+  'departure_declare',
+  'registration',
+]);
+
+/**
+ * Tâches ops staff — Assigner / Rappeler dans Actions admin (sans dépendre des blocs Auto).
+ * Inclut checkout_cleaning (Ménage Sojori) + aliases grocery/groceries/concierge.
+ */
+const GUEST_ONLY_TYPES = new Set([
+  'arrival_choose',
+  'departure_choose',
+  'arrival_declare',
+  'departure_declare',
+  'registration',
+]);
+
+function isStaffAssignableType(taskType: string): boolean {
+  if (!taskType || GUEST_ONLY_TYPES.has(taskType)) return false;
+  return true;
+}
+
 export default function SequenceGuestOpsBar({
   reservationId,
   taskId,
   taskType,
-  hasRelances,
+  hasAssignation,
   actionCompleted,
   clientChosenTime,
   checkInIso,
@@ -25,21 +52,28 @@ export default function SequenceGuestOpsBar({
   reservationId: string;
   taskId: string;
   taskType: string;
-  hasRelances: boolean;
+  /** true si séquence a un bloc Assignation significatif (staff / Auto). */
+  hasAssignation?: boolean;
   actionCompleted?: boolean;
-  /** Heure déjà choisie (HH:mm) — workflow terminé mais toujours modifiable. */
   clientChosenTime?: string;
   checkInIso?: string;
   onDone?: (planDoc?: FulltaskPlanDoc) => void;
 }) {
-  const [busy, setBusy] = useState<'wa' | 'ota' | null>(null);
+  const [busy, setBusy] = useState<'wa' | 'ota' | 'staff' | null>(null);
   const [slotOpen, setSlotOpen] = useState(false);
 
-  const showManualRelance = hasRelances && !actionCompleted;
+  const showManualRelance =
+    !actionCompleted && GUEST_RELANCE_TYPES.has(taskType);
   const showForceSlot = GUEST_SLOT_TYPES.has(taskType);
+  // Assigner dans Actions admin tant que pas déjà un bloc Assignation (évite doublon).
+  const showManualAssign = isStaffAssignableType(taskType) && !hasAssignation;
+  // Rappeler staff toujours dispo hors guest (Manuel = pas de lignes Auto).
+  const showManualStaffRappel = isStaffAssignableType(taskType);
   const isModify = Boolean(actionCompleted && clientChosenTime);
 
-  if (!showManualRelance && !showForceSlot) return null;
+  if (!showManualRelance && !showForceSlot && !showManualAssign && !showManualStaffRappel) {
+    return null;
+  }
 
   const sendExtra = async (channel: 'whatsapp' | 'OTA') => {
     if (busy) return;
@@ -55,6 +89,21 @@ export default function SequenceGuestOpsBar({
       onDone?.(res?.data as FulltaskPlanDoc | undefined);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Échec relance manuelle');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const sendStaffReminder = async () => {
+    if (busy) return;
+    setBusy('staff');
+    try {
+      const res = await fulltaskApi.sendExtraPlanStaffReminder(reservationId, taskId);
+      if (res?.success === false) throw new Error(res?.error || 'Échec');
+      toast.success('Rappel staff envoyé');
+      onDone?.(res?.data as FulltaskPlanDoc | undefined);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Échec rappel staff');
     } finally {
       setBusy(null);
     }
@@ -78,9 +127,9 @@ export default function SequenceGuestOpsBar({
               className="seq-guest-ops-btn"
               disabled={Boolean(busy)}
               onClick={() => void sendExtra('whatsapp')}
-              title="Relance hors planning (WhatsApp) — distincte des ▶ programmées"
+              title="Relance hors planning (WhatsApp)"
             >
-              {busy === 'wa' ? '…' : 'Relance manuelle WA'}
+              {busy === 'wa' ? '…' : 'Relancer WA'}
             </button>
             <button
               type="button"
@@ -89,7 +138,7 @@ export default function SequenceGuestOpsBar({
               onClick={() => void sendExtra('OTA')}
               title="Relance hors planning (OTA)"
             >
-              {busy === 'ota' ? '…' : 'Relance manuelle OTA'}
+              {busy === 'ota' ? '…' : 'Relancer OTA'}
             </button>
           </>
         ) : null}
@@ -106,6 +155,28 @@ export default function SequenceGuestOpsBar({
           >
             {slotBtnLabel}
           </button>
+        ) : null}
+        {showManualStaffRappel ? (
+          <button
+            type="button"
+            className="seq-guest-ops-btn"
+            disabled={Boolean(busy)}
+            onClick={() => void sendStaffReminder()}
+            title="Rappel staff hors planning (nécessite un staff assigné)"
+          >
+            {busy === 'staff' ? '…' : 'Rappeler'}
+          </button>
+        ) : null}
+        {showManualAssign ? (
+          <span className="seq-guest-ops-assign" title="Assignation manuelle (sans créneau auto)">
+            <PlanAssignButtons
+              reservationId={reservationId}
+              taskId={taskId}
+              wasAssigned={false}
+              disabled={false}
+              onDone={onDone}
+            />
+          </span>
         ) : null}
         <Link
           className="seq-guest-ops-link"

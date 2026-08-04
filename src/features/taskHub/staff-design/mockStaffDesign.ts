@@ -8,7 +8,6 @@ export const MOCK_STAFF_DESIGN: Staff[] = [
     phoneE164: '+212612345678',
     whatsappE164: '+212 6 12 34 56 78',
     status: 'active',
-    isAdmin: false,
     contractType: 'employee',
     allowedTaskTypes: ['cleaning_free', 'arrival_choose', 'departure_choose'],
     allowedListingIds: ['listing-majorelle', 'listing-riad'],
@@ -27,7 +26,6 @@ export const MOCK_STAFF_DESIGN: Staff[] = [
     phoneE164: '+212698765432',
     whatsappE164: '+212 6 98 76 54 32',
     status: 'active',
-    isAdmin: true,
     contractType: 'freelance',
     rates: { cleaning_free: 150, arrival_choose: 80 },
     allowedTaskTypes: [
@@ -53,7 +51,6 @@ export const MOCK_STAFF_DESIGN: Staff[] = [
     phoneE164: '+212611223344',
     whatsappE164: '+212 6 11 22 33 44',
     status: 'off',
-    isAdmin: false,
     contractType: 'freelance',
     rates: { transport: 80 },
     allowedTaskTypes: ['transport'],

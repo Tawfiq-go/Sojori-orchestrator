@@ -368,6 +368,62 @@ export default function WhatsappAdminPageView({
             </div>
 
             <div className="form-section full">
+              <div className="form-section-h">Notifs orchestration</div>
+              <div style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 8 }}>
+                Préférence digeste aussi sur fiche Staff. Silence = désactiver les notifs WhatsApp.
+                Ici : Individuel ou Journalier.
+              </div>
+              <div className="pill-group" style={{ marginBottom: 10 }}>
+                {(
+                  [
+                    { id: 'individual', label: 'Individuel' },
+                    { id: 'daily_digest', label: 'Journalier' },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`pill-toggle${
+                      (form.orchestrationNotify?.mode === 'daily_digest'
+                        ? 'daily_digest'
+                        : 'individual') === opt.id
+                        ? ' on'
+                        : ''
+                    }`}
+                    onClick={() =>
+                      patchForm({
+                        orchestrationNotify: {
+                          mode: opt.id,
+                          digestTime: form.orchestrationNotify?.digestTime || '17:00',
+                        },
+                      })
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {form.orchestrationNotify?.mode === 'daily_digest' && (
+                <div className="field" style={{ maxWidth: 160 }}>
+                  <div className="field-label">Heure digeste</div>
+                  <input
+                    className="input"
+                    type="time"
+                    value={form.orchestrationNotify?.digestTime || '17:00'}
+                    onChange={(e) =>
+                      patchForm({
+                        orchestrationNotify: {
+                          mode: 'daily_digest',
+                          digestTime: e.target.value || '17:00',
+                        },
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="form-section full">
               <div className="form-section-h">Menus · N → R → W</div>
               <div className="pill-group">
                 {form.permissions.map((p, idx) => {

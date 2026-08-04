@@ -392,58 +392,6 @@ export function ListingsOverviewPage() {
             : `${totalListings} annonce(s) ${statusFilter === 'active' ? 'active(s)' : 'inactive(s)'}`
         }
       >
-        {!loading && totalListings === 0 ? null : (
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 1.5,
-              mb: 2,
-              pb: 2,
-              borderBottom: `1px solid ${t.border}`,
-            }}
-          >
-            <Typography sx={{ fontSize: 12, color: t.text3 }}>
-              {loading && listings.length === 0
-                ? 'Chargement…'
-                : totalListings === 0
-                  ? 'Aucun résultat'
-                  : `${pageStart}–${pageEnd} sur ${totalListings} · page ${page + 1}/${totalPages}`}
-              {!statsLoading && stats.total > 0 ? ` · ${stats.total} total (stats)` : ''}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Typography sx={{ fontSize: 12, color: t.text3, mr: 0.5 }}>Par page</Typography>
-              <Select
-                size="small"
-                value={pageSize}
-                onChange={(event) => {
-                  setPageSize(Number(event.target.value));
-                  setPage(0);
-                }}
-                sx={{ minWidth: 72, fontSize: 13, height: 32 }}
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <MenuItem key={size} value={size}>
-                    {size}
-                  </MenuItem>
-                ))}
-              </Select>
-              <Button sx={btnGhostSx} disabled={page === 0 || loading} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-                Précédent
-              </Button>
-              <Button
-                sx={btnGhostSx}
-                disabled={page + 1 >= totalPages || loading || totalListings === 0}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Suivant
-              </Button>
-            </Box>
-          </Box>
-        )}
-
         {loading ? (
           <Typography sx={{ py: 6, textAlign: 'center', color: t.text3 }}>Chargement des annonces...</Typography>
         ) : listings.length === 0 ? (
@@ -595,32 +543,58 @@ export function ListingsOverviewPage() {
           </Box>
         )}
 
-        {!loading && totalListings > pageSize ? (
+        {!loading && totalListings > 0 ? (
           <Box
             sx={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               flexWrap: 'wrap',
-              gap: 1.5,
-              mt: 2,
-              pt: 2,
+              gap: 0.75,
+              mt: 0.5,
+              pt: 0.5,
+              minHeight: 28,
               borderTop: `1px solid ${t.border}`,
             }}
           >
-            <Typography sx={{ fontSize: 12, color: t.text3 }}>
-              {pageStart}–{pageEnd} sur {totalListings} · page {page + 1}/{totalPages}
+            <Typography sx={{ fontSize: 11, color: t.text3, lineHeight: 1.2 }}>
+              {pageStart}–{pageEnd} / {totalListings} · {page + 1}/{totalPages}
+              {!statsLoading && stats.total > 0 ? ` · ${stats.total} total` : ''}
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Button sx={btnGhostSx} disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-                Précédent
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Select
+                size="small"
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPage(0);
+                }}
+                sx={{
+                  minWidth: 56,
+                  fontSize: 11,
+                  height: 24,
+                  '& .MuiSelect-select': { py: 0, px: 1 },
+                }}
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <MenuItem key={size} value={size}>
+                    {size}
+                  </MenuItem>
+                ))}
+              </Select>
+              <Button
+                sx={{ ...btnGhostSx, minHeight: 24, py: 0, px: 0.75, fontSize: 11 }}
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                ‹
               </Button>
               <Button
-                sx={btnGhostSx}
+                sx={{ ...btnGhostSx, minHeight: 24, py: 0, px: 0.75, fontSize: 11 }}
                 disabled={page + 1 >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
               >
-                Suivant
+                ›
               </Button>
             </Box>
           </Box>

@@ -33,9 +33,17 @@ export interface Staff {
   lang?: 'fr' | 'da' | 'ar' | 'en';
   avatarColor?: 1 | 2 | 3 | 4 | 5 | 6;
   status: StaffStatus;
-  isAdmin: boolean;
   /** false = pas de notifs WhatsApp tâches (assign / cancel). Défaut true. */
   whatsappNotificationsEnabled?: boolean;
+  /**
+   * Rappels orchestration (quand WhatsApp notifs ON) :
+   * individual = 1 WA / rappel · daily_digest = 1 notif/jour à digestTime.
+   * Silence = whatsappNotificationsEnabled false (pas de mode off ici).
+   */
+  orchestrationNotify?: {
+    mode: 'individual' | 'daily_digest';
+    digestTime?: string;
+  };
   contractType: ContractType;
   /** Prix par type de tâche en MAD (clés fulltask) — salarié ou freelance. */
   rates?: Record<string, number>;

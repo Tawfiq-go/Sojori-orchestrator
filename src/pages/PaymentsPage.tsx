@@ -633,15 +633,25 @@ export function PaymentsPage() {
         )}
 
         {tableReady && total > PAGE_SIZE ? (
-          <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: 'center', alignItems: 'center' }}>
-            <Button disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-              Précédent
+          <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, minHeight: 28, justifyContent: 'center', alignItems: 'center' }}>
+            <Button
+              size="small"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              sx={{ textTransform: 'none', minHeight: 24, py: 0, px: 0.75, fontSize: 11 }}
+            >
+              ‹
             </Button>
-            <Typography sx={{ alignSelf: 'center', fontSize: 13 }}>
-              Page {page + 1} · {total} paiements
+            <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+              {page + 1}/{Math.max(1, Math.ceil(total / PAGE_SIZE))} · {total}
             </Typography>
-            <Button disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage((p) => p + 1)}>
-              Suivant
+            <Button
+              size="small"
+              disabled={(page + 1) * PAGE_SIZE >= total}
+              onClick={() => setPage((p) => p + 1)}
+              sx={{ textTransform: 'none', minHeight: 24, py: 0, px: 0.75, fontSize: 11 }}
+            >
+              ›
             </Button>
           </Stack>
         ) : null}

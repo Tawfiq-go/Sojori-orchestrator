@@ -22,6 +22,14 @@ export type WhatsappAdminDesign = {
   permissions: WhatsappAdminPermission[];
   /** Clés srv-fulltask — false = ne pas envoyer (opt-out si absent en base). */
   notifications: Record<string, boolean>;
+  /**
+   * Notif orchestration : individuel | digest journalier à HH:mm | off.
+   * Un seul mode à la fois.
+   */
+  orchestrationNotify: {
+    mode: 'individual' | 'daily_digest';
+    digestTime: string;
+  };
   ownerId?: string;
 };
 
@@ -96,8 +104,9 @@ export const DEFAULT_TASK_NOTIFY_ENABLED: Record<(typeof FULLTASK_TASK_TYPES)[nu
   transport: true,
   groceries: true,
   concierge: true,
-  support: true,
-  service_client: true,
+  // Support / SC → Flows W/Z staff uniquement (hors catalogue admin).
+  support: false,
+  service_client: false,
 };
 
 /** Types tâches exposés dans l’UI admin (simplifié). */
@@ -105,8 +114,6 @@ export const WA_ADMIN_TASK_NOTIFY_TYPES = [
   'transport',
   'groceries',
   'concierge',
-  'support',
-  'service_client',
 ] as const;
 
 export function defaultTaskNotifyFlags(): Record<string, boolean> {
@@ -289,6 +296,7 @@ export function emptyWhatsappAdmin(): WhatsappAdminDesign {
       access: (t.type.startsWith('Task:') ? 'none' : 'write') as 'read' | 'write' | 'none',
     })),
     notifications: defaultAdminNotifications(),
+    orchestrationNotify: { mode: 'individual', digestTime: '17:00' },
   };
 }
 
@@ -324,6 +332,12 @@ export function apiWhatsappAdminToDesign(row: Record<string, unknown>): Whatsapp
 
   const listingIds = normalizeListingIds(row.listingIds as unknown[] | undefined);
   const cityIds = normalizeCityIds(row.cityIds as unknown[] | undefined);
+  const rawNotify = (row.orchestrationNotify || {}) as Record<string, unknown>;
+  const modeRaw = String(rawNotify.mode || 'individual');
+  const orchestrationNotify = {
+    mode: (modeRaw === 'daily_digest' ? 'daily_digest' : 'individual') as WhatsappAdminDesign['orchestrationNotify']['mode'],
+    digestTime: String(rawNotify.digestTime || '17:00').slice(0, 5) || '17:00',
+  };
 
   return {
     _id: String(row._id),
@@ -338,6 +352,7 @@ export function apiWhatsappAdminToDesign(row: Record<string, unknown>): Whatsapp
       access: permMap.get(t.type) || 'none',
     })),
     notifications: notificationsFromApi(row.notifications),
+    orchestrationNotify,
     ownerId: row.ownerId ? String(row.ownerId) : undefined,
   };
 }
@@ -381,6 +396,10 @@ export function designWhatsappAdminToApi(
       write: p.access === 'write',
     })),
     notifications,
+    orchestrationNotify: {
+      mode: form.orchestrationNotify?.mode || 'individual',
+      digestTime: form.orchestrationNotify?.digestTime || '17:00',
+    },
   };
   const resolvedOwnerId = normalizeOwnerId(ownerId ?? form.ownerId);
   if (resolvedOwnerId) body.ownerId = resolvedOwnerId;

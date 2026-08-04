@@ -390,6 +390,14 @@ export async function sendExtraPlanRelance(
   );
 }
 
+/** Rappel staff admin hors planning — nouvelle ligne d'historique. */
+export async function sendExtraPlanStaffReminder(reservationId: string, taskId: string) {
+  return postPlanDispatch(
+    `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/staff-reminders/extra`,
+    {},
+  );
+}
+
 /** Aperçu corps message (WA / email / OTA) — mêmes interpolations que l’envoi. */
 export async function previewPlanDispatch(
   reservationId: string,

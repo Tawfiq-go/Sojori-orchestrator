@@ -57,7 +57,7 @@ export default function OrchestrationGlobalSwitch({
             checked={checked}
             disabled={disabled}
             onChange={(_, v) => onChange(v)}
-            inputProps={{ 'aria-label': 'Orchestration globale' }}
+            slotProps={{ input: { 'aria-label': 'Orchestration globale' } }}
             sx={{ my: -0.5 }}
           />
         </Stack>

@@ -57,7 +57,6 @@ export default function StaffList({ staff, loading, onCreate, onEdit, onDelete }
           <Typography sx={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.025em' }}>Staff actif</Typography>
           <Typography sx={{ fontSize: 13, color: T.text3, mt: 0.625, lineHeight: 1.55 }}>
             {staff.length} membres · {staff.filter(s => s.status === 'active').length} actifs ·
-            {' '}{staff.filter(s => s.isAdmin).length} admin
           </Typography>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate} sx={{
@@ -154,13 +153,6 @@ function StaffCard({ staff, onClick }: { staff: Staff; onClick: () => void }) {
             <Typography sx={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.005em' }}>
               {staff.fullName}
             </Typography>
-            {staff.isAdmin && (
-              <Box sx={{
-                fontSize: 9, fontFamily: '"Geist Mono", monospace', fontWeight: 800,
-                bgcolor: T.primaryTint, color: T.primaryDeep, px: 0.625, borderRadius: 0.5,
-                letterSpacing: '0.04em',
-              }}>ADMIN</Box>
-            )}
           </Stack>
           <Typography sx={{
             fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace',

@@ -1330,32 +1330,39 @@ export default function StayView({
       />
       )}
 
-      {/* Grid */}
+      {/* Grid — remplit la hauteur restante (même 1 listing) */}
       <Box
         ref={gridScrollRef}
         sx={{
           overflowX: 'auto',
-          overflowY: flexFill ? 'auto' : 'auto',
+          overflowY: 'auto',
           flex: flexFill ? 1 : undefined,
           minHeight: flexFill ? 0 : undefined,
           maxHeight: flexFill ? undefined : 'calc(100dvh - 160px)',
-          borderRadius: 1.75,
+          borderRadius: flexFill ? '10px 10px 0 0' : 1.75,
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'contain',
         }}
       >
       <Box sx={{
-        bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.75,
+        bgcolor: T.bg1, border: `1px solid ${T.border}`,
+        borderRadius: flexFill ? '10px 10px 0 0' : 1.75,
+        borderBottom: flexFill ? 'none' : undefined,
         // 'clip' (pas 'hidden') : hidden créerait un conteneur de défilement
         // et casserait le position:sticky de la colonne épinglée.
         overflow: 'clip', boxShadow: '0 1px 2px rgba(20,17,10,0.04)',
         minWidth: m.STICKY_W + VISIBLE_DAYS * m.CELL_W,
+        // Étire le bloc tableau jusqu'en bas du viewport (peu de listings)
+        minHeight: flexFill ? '100%' : undefined,
+        display: flexFill ? 'flex' : undefined,
+        flexDirection: flexFill ? 'column' : undefined,
       }}>
         {/* Header */}
         <Box sx={{
           display: 'grid', gridTemplateColumns: `${m.STICKY_W}px repeat(${VISIBLE_DAYS}, ${m.CELL_W}px)`,
           bgcolor: T.bg2, borderBottom: `1px solid ${T.borderStrong}`,
           position: 'sticky', top: 0, zIndex: 7,
+          flexShrink: 0,
         }}>
           <Box sx={{
             p: compactLayout ? '4px 6px' : '12px 14px', fontSize: compactLayout ? 9 : 10.5, fontWeight: 700, color: T.text3,
@@ -1377,6 +1384,7 @@ export default function StayView({
               fontSize: compactLayout ? 8 : 10.5, fontWeight: 700, color: T.text3,
               fontFamily: '"Geist Mono", monospace',
               textTransform: 'uppercase', letterSpacing: '0.06em',
+              flexShrink: 0,
             }}>
               {!compactLayout && <Box component="span" sx={{ fontSize: 13 }}>📍</Box>}
               {city}
@@ -1413,8 +1421,42 @@ export default function StayView({
             ))}
           </React.Fragment>
         ))}
+        {/* Remplissage sous les lignes → bas du tableau collé en bas de page */}
+        {flexFill ? <Box sx={{ flex: 1, minHeight: 8, bgcolor: T.bg1 }} aria-hidden /> : null}
       </Box>
       </Box>
+
+      {/* Barre bas fixe (comme /tasks) — toujours en pied de page */}
+      {flexFill ? (
+        <Box
+          sx={{
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 0.75,
+            minHeight: 26,
+            px: 1,
+            py: 0,
+            mt: 0,
+            border: `1px solid ${T.border}`,
+            borderTop: `1px solid ${T.borderStrong}`,
+            borderRadius: '0 0 10px 10px',
+            bgcolor: T.bg2,
+          }}
+        >
+          <Typography sx={{ fontSize: 11, color: T.text3, lineHeight: 1.2, fontFamily: '"Geist Mono", monospace' }}>
+            {filteredByGroup.filter((x) => !x.isRoomTypeRow).length} prop.
+            {' · '}
+            {days[0]?.frShort || ''}→{days[days.length - 1]?.frShort || ''}
+          </Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+            <PlanningNavBtn dense title="−1 jour" onClick={onPrevDay}>&lt;</PlanningNavBtn>
+            <PlanningNavBtn dense title="Aujourd'hui" onClick={onGoToday}>⊙</PlanningNavBtn>
+            <PlanningNavBtn dense title="+1 jour" onClick={onNextDay}>&gt;</PlanningNavBtn>
+          </Box>
+        </Box>
+      ) : null}
     </Box>
   );
 }

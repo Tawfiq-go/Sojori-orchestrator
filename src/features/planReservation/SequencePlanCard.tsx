@@ -681,7 +681,7 @@ export default function SequencePlanCard({
             reservationId={reservationId}
             taskId={taskId}
             taskType={seq.taskType}
-            hasRelances={Boolean(seq.hasRelances)}
+            hasAssignation={Boolean(seq.hasAssignation)}
             actionCompleted={relancesResolved}
             clientChosenTime={seq.clientChosenTime}
             checkInIso={checkInIso}
@@ -835,9 +835,6 @@ export default function SequencePlanCard({
             </CollapseBlock>
           ) : null}
 
-          {!seq.hasRelances && !seq.hasAssignation && !seq.hasStaffReminders && !seq.hasEscalade ? (
-            <div className="l3-empty">Aucun bloc configuré pour cette séquence.</div>
-          ) : null}
         </div>
       ) : null}
     </div>
