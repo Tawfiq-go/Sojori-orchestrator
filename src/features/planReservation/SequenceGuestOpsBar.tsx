@@ -44,6 +44,7 @@ export default function SequenceGuestOpsBar({
   taskId,
   taskType,
   hasAssignation,
+  staffAssigned,
   actionCompleted,
   clientChosenTime,
   checkInIso,
@@ -54,6 +55,8 @@ export default function SequenceGuestOpsBar({
   taskType: string;
   /** true si séquence a un bloc Assignation significatif (staff / Auto). */
   hasAssignation?: boolean;
+  /** Staff déjà trouvé / en attente acceptation — active « Rappeler ». */
+  staffAssigned?: boolean;
   actionCompleted?: boolean;
   clientChosenTime?: string;
   checkInIso?: string;
@@ -67,8 +70,9 @@ export default function SequenceGuestOpsBar({
   const showForceSlot = GUEST_SLOT_TYPES.has(taskType);
   // Assigner dans Actions admin tant que pas déjà un bloc Assignation (évite doublon).
   const showManualAssign = isStaffAssignableType(taskType) && !hasAssignation;
-  // Rappeler staff toujours dispo hors guest (Manuel = pas de lignes Auto).
+  // Rappeler staff : visible pour ops staff, actif seulement si staff assigné.
   const showManualStaffRappel = isStaffAssignableType(taskType);
+  const canRappeler = Boolean(staffAssigned);
   const isModify = Boolean(actionCompleted && clientChosenTime);
 
   if (!showManualRelance && !showForceSlot && !showManualAssign && !showManualStaffRappel) {
@@ -95,7 +99,7 @@ export default function SequenceGuestOpsBar({
   };
 
   const sendStaffReminder = async () => {
-    if (busy) return;
+    if (busy || !canRappeler) return;
     setBusy('staff');
     try {
       const res = await fulltaskApi.sendExtraPlanStaffReminder(reservationId, taskId);
@@ -120,6 +124,32 @@ export default function SequenceGuestOpsBar({
     <>
       <div className="seq-guest-ops" onClick={(e) => e.stopPropagation()}>
         <span className="seq-guest-ops-lbl">Actions admin</span>
+        {showManualAssign ? (
+          <span className="seq-guest-ops-assign" title="Assignation manuelle (sans créneau auto)">
+            <PlanAssignButtons
+              reservationId={reservationId}
+              taskId={taskId}
+              wasAssigned={false}
+              disabled={false}
+              onDone={onDone}
+            />
+          </span>
+        ) : null}
+        {showManualStaffRappel ? (
+          <button
+            type="button"
+            className={`seq-guest-ops-btn${canRappeler ? '' : ' seq-guest-ops-btn--muted'}`}
+            disabled={Boolean(busy) || !canRappeler}
+            onClick={() => void sendStaffReminder()}
+            title={
+              canRappeler
+                ? 'Rappel staff hors planning'
+                : 'Assignez un staff (Auto / Manuel) avant de rappeler'
+            }
+          >
+            {busy === 'staff' ? '…' : 'Rappeler'}
+          </button>
+        ) : null}
         {showManualRelance ? (
           <>
             <button
@@ -155,28 +185,6 @@ export default function SequenceGuestOpsBar({
           >
             {slotBtnLabel}
           </button>
-        ) : null}
-        {showManualStaffRappel ? (
-          <button
-            type="button"
-            className="seq-guest-ops-btn"
-            disabled={Boolean(busy)}
-            onClick={() => void sendStaffReminder()}
-            title="Rappel staff hors planning (nécessite un staff assigné)"
-          >
-            {busy === 'staff' ? '…' : 'Rappeler'}
-          </button>
-        ) : null}
-        {showManualAssign ? (
-          <span className="seq-guest-ops-assign" title="Assignation manuelle (sans créneau auto)">
-            <PlanAssignButtons
-              reservationId={reservationId}
-              taskId={taskId}
-              wasAssigned={false}
-              disabled={false}
-              onDone={onDone}
-            />
-          </span>
         ) : null}
         <Link
           className="seq-guest-ops-link"
