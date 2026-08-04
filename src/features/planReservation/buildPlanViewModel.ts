@@ -982,6 +982,17 @@ function computeNextAssignmentLabel(
     return 'Fenêtre assignation terminée';
   }
 
+  // Fenêtre déjà ouverte (ex. résa mid-window) : prochain cron :00, pas le 11h du lendemain.
+  if (now.getTime() >= start.getTime()) {
+    const nextCron = new Date(now);
+    nextCron.setSeconds(0, 0);
+    nextCron.setMinutes(0, 0, 0);
+    nextCron.setHours(nextCron.getHours() + 1);
+    if (nextCron.getTime() <= end.getTime()) {
+      return `Prochaine assignation · ${formatWhen(nextCron)}`;
+    }
+  }
+
   const dayStart = new Date(start);
   dayStart.setHours(0, 0, 0, 0);
   const endDay = new Date(end);
