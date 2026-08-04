@@ -113,6 +113,20 @@ export async function listStaff(params: Record<string, unknown> = {}) {
   return data;
 }
 
+/** Noms staff par ids (présents sur un plan — hors filtre liste). */
+export async function lookupStaffByIds(ids: string[]) {
+  const cleaned = [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))].slice(0, 50);
+  if (!cleaned.length) return { success: true as const, data: [] as Array<{ _id: string; name?: string }> };
+  const { data } = await apiClient.get(`${BASE}/staff/lookup`, {
+    params: { ids: cleaned.join(',') },
+  });
+  return data as {
+    success: boolean;
+    data?: Array<{ _id: string; name?: string; phone?: string; active?: boolean }>;
+    count?: number;
+  };
+}
+
 export async function createStaff(body: Record<string, unknown>) {
   const { data } = await apiClient.post(`${BASE}/staff`, body);
   return data;

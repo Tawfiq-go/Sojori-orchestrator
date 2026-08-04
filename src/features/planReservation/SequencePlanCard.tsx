@@ -18,6 +18,7 @@ import PlanAssignButtons from './PlanAssignButtons';
 import PlanDispatchButton from './PlanDispatchButton';
 import EscaladeActionsPanel from './EscaladeActionsPanel';
 import SequenceGuestOpsBar from './SequenceGuestOpsBar';
+import { assignationCollapseCountLabel } from './buildPlanViewModel';
 import {
   groupStatusLabel,
   relancesGroupStatusLabel,
@@ -419,7 +420,17 @@ function AssignBlockBody({
 }
 
 function AttemptsHistoryCollapse({ attempts }: { attempts: AssignAttempt[] }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
+  const last = attempts[attempts.length - 1];
+  const headHint = last
+    ? last.result === 'accepted'
+      ? ` · dernier ✓ ${last.staffName}`
+      : last.result === 'declined' || last.result === 'timeout'
+        ? ` · dernier échec · ${last.failureLabel || last.staffName}`
+        : last.result === 'pending'
+          ? ` · dernier ⏳ ${last.staffName}`
+          : ''
+    : '';
   return (
     <div className={`assign-track assign-attempts${open ? ' open' : ''}`}>
       <button
@@ -430,6 +441,7 @@ function AttemptsHistoryCollapse({ attempts }: { attempts: AssignAttempt[] }) {
       >
         <span>
           Historique tentatives · {attempts.length}
+          {!open ? headHint : ''}
         </span>
         <span className="l2-arr" aria-hidden>
           ▶
@@ -733,17 +745,11 @@ export default function SequencePlanCard({
               icon="🎯"
               title="Assignation staff"
               groupStatus={assignGroup}
-              countLabel={
-                seq.staffAssignment?.status === 'pending_accept' && seq.staffAssignment.staffName
-                  ? `En attente acceptation · ${seq.staffAssignment.staffName}`
-                  : seq.staffAssignment?.status === 'found' && seq.staffAssignment.staffName
-                    ? `Staff accepté · ${seq.staffAssignment.staffName}`
-                    : seq.lmAssignSlots?.some((s) => s.executionStatus === 'prevision')
-                      ? seq.staffAssignment?.nextAssignmentLabel || 'Assignation LM'
-                      : seq.attempts?.length
-                        ? `${seq.attempts.length} tentative(s)`
-                        : seq.staffAssignment.modeLabel
-              }
+              countLabel={assignationCollapseCountLabel(
+                seq.staffAssignment,
+                seq.attempts,
+                seq.lmAssignSlots,
+              )}
               defaultOpen={defaultOpenForStatus(assignGroup)}
             >
               <AssignBlockBody
