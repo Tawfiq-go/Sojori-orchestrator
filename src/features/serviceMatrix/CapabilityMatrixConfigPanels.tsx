@@ -216,6 +216,9 @@ export function CapabilityGestionPanel({
       <Box sx={embeddedSx}>
         <AccessConfigTab
           {...commonListing}
+          // Accès must dual-write listing_access + gestion; autosave so
+          // « Enregistrer décisions » reload cannot wipe unsaved Accès fields.
+          manualSaveMode={false}
           templateOwnerKey={templateMode ? templateOwnerKey : undefined}
         />
       </Box>

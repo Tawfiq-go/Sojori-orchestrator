@@ -104,8 +104,8 @@ export default function V3ServicePanel({
   const gestionValues = useMemo(() => {
     const capGestion = orchestrationDoc.capabilities?.[def.key]?.gestion ?? {};
     const merged: Record<string, unknown> = { ...listingValues, ...capGestion };
-    if (def.key === 'cleaning_sojori' && capGestion.cleaningOrchestration != null) {
-      merged.cleaningOrchestration = capGestion.cleaningOrchestration;
+    if (def.key === 'cleaning_sojori' && (capGestion as Record<string, unknown>).cleaningOrchestration != null) {
+      merged.cleaningOrchestration = (capGestion as Record<string, unknown>).cleaningOrchestration;
     }
     return merged;
   }, [listingValues, orchestrationDoc, def.key]);
@@ -378,8 +378,8 @@ export default function V3ServicePanel({
             >
               Enregistrer décisions
             </Button>
-            <Typography sx={{ fontSize: 9, color: V3.t4, mt: 0.35, lineHeight: 1.2, maxWidth: 140 }}>
-              Pills Gérer · Client · Orchestrer · Tâche
+            <Typography sx={{ fontSize: 9, color: V3.t4, mt: 0.35, lineHeight: 1.2, maxWidth: 160 }}>
+              Pills Gérer · Client · Orchestrer · Tâche (pas le contenu Accès)
             </Typography>
           </Box>
         </Box>

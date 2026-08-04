@@ -149,7 +149,16 @@ export default function OrchestrationListingV3View({
     }
     try {
       const doc = await listingsService.getListingDocument(effectiveListingId);
-      const vals = (doc ?? {}) as Record<string, unknown>;
+      let vals = { ...((doc ?? {}) as Record<string, unknown>) };
+      try {
+        const accessRes = await listingsService.getListingAccessConfig(effectiveListingId);
+        const accessData = (accessRes as { data?: Record<string, unknown> })?.data;
+        if (accessData && typeof accessData === 'object') {
+          vals = { ...vals, ...accessData };
+        }
+      } catch {
+        /* listing_access optional */
+      }
       listingRef.current = vals;
       setListingValues(vals);
     } catch {
@@ -404,6 +413,7 @@ export default function OrchestrationListingV3View({
           doc: doc as ListingOrchestrationDoc,
         });
         toast.success('Service enregistré (listing)');
+        await loadListingValues();
         await load({ silent: true, discardLocalKey: key });
       }
     } catch (e: unknown) {

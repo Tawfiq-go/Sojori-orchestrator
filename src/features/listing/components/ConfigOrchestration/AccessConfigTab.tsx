@@ -163,6 +163,23 @@ export default function AccessConfigTab({
       dirtyRef.current = false;
       setDirty(false);
       logV3Orch('gestion.access.persist.ok', { receptionType: payload.receptionMode.type });
+      // Re-read listing_access so a later décisions reload cannot resurrect stale gestion.
+      if (!templateMode && listingId) {
+        try {
+          const accessRes = await listingsService.getListingAccessConfig(listingId);
+          if (accessRes.data && typeof accessRes.data === 'object') {
+            const next = normalizeAccessFromApi(
+              accessRes.data as Record<string, unknown>,
+              contextId,
+              listingName || 'Template',
+            );
+            setForm(next);
+            formRef.current = next;
+          }
+        } catch {
+          /* keep in-memory form */
+        }
+      }
       if (!manualSaveMode) {
         window.setTimeout(() => setSavingState('idle'), 2200);
       }
@@ -178,6 +195,8 @@ export default function AccessConfigTab({
   }, [
     isOwnerTemplate,
     listingId,
+    listingName,
+    contextId,
     manualSaveMode,
     onListingPatch,
     persistListingAccess,
@@ -226,11 +245,13 @@ export default function AccessConfigTab({
     setLoading(true);
     (async () => {
       try {
-        let source = listingValues;
-        if (!templateMode && listingId && listingValues.receptionMode == null) {
+        // Always reload listing_access for listing scope — it is the chatbot source of
+        // truth and must win over a stale capabilities.access.gestion copy.
+        let source: Record<string, unknown> = { ...listingValues };
+        if (!templateMode && listingId) {
           const accessRes = await listingsService.getListingAccessConfig(listingId);
-          if (accessRes.data) {
-            source = { ...listingValues, ...(accessRes.data as Record<string, unknown>) };
+          if (accessRes.data && typeof accessRes.data === 'object') {
+            source = { ...source, ...(accessRes.data as Record<string, unknown>) };
           }
         }
         if (cancelled) return;
@@ -464,7 +485,7 @@ export default function AccessConfigTab({
         <Typography sx={{ ...TYPO.caption, mt: 1 }}>
           {isOwnerTemplate
             ? 'Sauvegarde automatique du mode d’accueil uniquement. La sync vers les annonces ne modifie pas les codes d’accès déjà saisis par listing.'
-            : 'Sauvegarde automatique après modification. Premier enregistrement : création du document listing_access si absent.'}
+            : 'Sauvegarde automatique (listing_access + orchestration). Attendez « Enregistré » avant de rafraîchir ou de cliquer « Enregistrer décisions ».'}
         </Typography>
       )}
 
