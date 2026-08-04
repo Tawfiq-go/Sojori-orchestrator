@@ -2224,6 +2224,16 @@ export default function OrchestrationOverviewPanel({
   const configGestionValues = useMemo(() => {
     if (!configModal) return {};
     const capGestion = (caps[configModal.capKey]?.gestion ?? {}) as Record<string, unknown>;
+    // Accès: listing_access fields on listingValues win over stale gestion.
+    if (configModal.capKey === 'access') {
+      const fromListing: Record<string, unknown> = {};
+      if (listingValues.receptionMode != null) fromListing.receptionMode = listingValues.receptionMode;
+      if (Array.isArray(listingValues.instructions)) {
+        fromListing.instructions = listingValues.instructions;
+      }
+      if (listingValues.listingName != null) fromListing.listingName = listingValues.listingName;
+      return { ...capGestion, ...fromListing };
+    }
     const merged: Record<string, unknown> = { ...listingValues };
     for (const [k, v] of Object.entries(capGestion)) {
       if (v !== null && v !== undefined) merged[k] = v;
