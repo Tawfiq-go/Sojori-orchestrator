@@ -173,6 +173,15 @@ export function aggregateAssignGroupStatus(
   if (!assign) return 'future';
   if (assign.status === 'found') return 'done';
   if (assign.status === 'pending_accept') return 'now';
+  // Auto + jours restants : pas Bloqué tant que la fenêtre globale n’est pas close.
+  if (
+    assign.status === 'failed' &&
+    assign.triggerMode === 'auto' &&
+    assign.assignDaysLabel &&
+    !assign.windowPast
+  ) {
+    return assign.windowOpen ? 'now' : 'future';
+  }
   if (assign.status === 'failed') return 'blocked';
 
   if (assign.hasPendingLmAssign) {

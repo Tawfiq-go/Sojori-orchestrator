@@ -59,10 +59,25 @@ export interface Staff {
    */
   alwaysAvailable?: boolean;
   /**
-   * true = à l’assignation (manuelle ou auto), la tâche est acceptée tout de suite.
+   * Config **par activité** (clé = taskType).
+   * Notifier assignation, rappels, auto, fin (Fin gagne sur Auto).
+   */
+  taskTypeModes?: Record<
+    string,
+    {
+      notifyAssign: boolean;
+      remindMode: 'individual' | 'daily_digest';
+      /** HH:mm Casa — requis si remindMode = daily_digest (par activité). */
+      digestTime?: string;
+      autoAccept: boolean;
+      readyToFinish: boolean;
+    }
+  >;
+  /**
+   * @deprecated Préférer taskTypeModes — fallback API legacy.
    */
   autoAccept?: boolean;
-  /** Assignation → déjà en cours ; staff confirme seulement la fin. */
+  /** @deprecated Préférer taskTypeModes. */
   readyToFinish?: boolean;
   /** Absences calendaires (jour1 → jour2 + motif). */
   absences?: StaffAbsence[];

@@ -22,7 +22,6 @@ import AccessConfigTab from '../listing/components/ConfigOrchestration/AccessCon
 import ArrivalDepartureConfigTab from '../listing/components/ConfigOrchestration/ArrivalDepartureConfigTab';
 import CleaningConfigTab from '../listing/components/ConfigOrchestration/CleaningConfigTab';
 import CleaningSojoriConfigTab from '../listing/components/ConfigOrchestration/CleaningSojoriConfigTab';
-import ConciergeConfigTab from '../listing/components/ConfigOrchestration/ConciergeConfigTab';
 import GroceryConfigTab from '../listing/components/ConfigOrchestration/GroceryConfigTab';
 import PropertyWifiConfigTab from '../listing/components/ConfigOrchestration/PropertyWifiConfigTab';
 import RulesConfigTab from '../listing/components/ConfigOrchestration/RulesConfigTab';
@@ -32,6 +31,7 @@ import TransportConfigTab from '../listing/components/ConfigOrchestration/Transp
 import { V3BlockSaveBar } from '../orchestrationListingV3/V3BlockSaveBar';
 import PreArrivalRequiredToggle from './PreArrivalRequiredToggle';
 import RegistrationLevelSelect from './RegistrationLevelSelect';
+import type { CapabilityDefinition } from './capabilityRegistry';
 import type { MatrixScopeMode } from './types';
 import { SOJORI_TOKENS as T } from '../listing/components/ConfigOrchestration/types';
 
@@ -202,12 +202,12 @@ export function CapabilityGestionPanel({
   }
   if (key === 'concierge') {
     return (
-      <Box sx={embeddedSx}>
-        <ConciergeConfigTab
-          {...commonListing}
-          templateOwnerKey={templateMode ? templateOwnerKey : undefined}
-          adminCatalogOnly={templateOwnerKey === 'global'}
-        />
+      <Box sx={{ ...embeddedSx, py: 2 }}>
+        <Alert severity="info" sx={{ borderRadius: 2 }}>
+          Les expériences Conciergerie (J3) se cochent dans l&apos;onglet listing{' '}
+          <strong>Expériences</strong> — plus de catalogue / tarifs custom ici. Transport &amp;
+          Courses restent configurables dans leurs lignes.
+        </Alert>
       </Box>
     );
   }

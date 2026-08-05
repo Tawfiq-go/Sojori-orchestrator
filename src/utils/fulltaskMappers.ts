@@ -568,6 +568,75 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     allowedCityIds: ((row.cityIds as unknown[]) || []).map(String),
     maxTasksPerDay: row.maxTasksPerDay as number | undefined,
     alwaysAvailable: row.alwaysAvailable === true,
+    taskTypeModes: (() => {
+      const out: Record<
+        string,
+        {
+          notifyAssign: boolean;
+          remindMode: 'individual' | 'daily_digest';
+          digestTime?: string;
+          autoAccept: boolean;
+          readyToFinish: boolean;
+        }
+      > = {};
+      const rows =
+        (row.taskTypeModes as Array<Record<string, unknown>> | undefined) || [];
+      for (const m of rows) {
+        const t = String(m.taskType || '').trim();
+        if (!t) continue;
+        const readyToFinish = m.readyToFinish === true || m.mode === 'ready_to_finish';
+        const autoAccept =
+          readyToFinish || m.autoAccept === true || m.mode === 'auto_accept' || m.mode === 'ready_to_finish';
+        const remindMode = m.remindMode === 'daily_digest' ? 'daily_digest' : 'individual';
+        const digestRaw = String(m.digestTime || '').trim();
+        out[t] = {
+          notifyAssign: m.notifyAssign === false ? false : true,
+          remindMode,
+          ...(remindMode === 'daily_digest'
+            ? { digestTime: /^\d{1,2}:\d{2}$/.test(digestRaw) ? digestRaw.slice(0, 5) : '17:00' }
+            : {}),
+          autoAccept: Boolean(autoAccept && !readyToFinish) || (autoAccept && readyToFinish),
+          readyToFinish,
+        };
+        // Auto flag when only auto (not fin): autoAccept true ready false
+        if (readyToFinish) {
+          out[t].autoAccept = true;
+          out[t].readyToFinish = true;
+        } else if (m.autoAccept === true || m.mode === 'auto_accept') {
+          out[t].autoAccept = true;
+          out[t].readyToFinish = false;
+        } else {
+          out[t].autoAccept = false;
+          out[t].readyToFinish = false;
+        }
+      }
+      if (Object.keys(out).length === 0) {
+        const legacyReady = row.readyToFinish === true;
+        const legacyAuto = row.autoAccept === true || legacyReady;
+        const remind =
+          (row.orchestrationNotify as { mode?: string } | undefined)?.mode === 'daily_digest'
+            ? ('daily_digest' as const)
+            : ('individual' as const);
+        for (const t of normalizeStaffAllowedTaskTypes(row.taskTypes as string[] | undefined)) {
+          out[t] = {
+            notifyAssign: row.whatsappNotificationsEnabled !== false,
+            remindMode: remind,
+            ...(remind === 'daily_digest'
+              ? {
+                  digestTime:
+                    String(
+                      (row.orchestrationNotify as { digestTime?: string } | undefined)
+                        ?.digestTime || '17:00',
+                    ).slice(0, 5) || '17:00',
+                }
+              : {}),
+            autoAccept: legacyAuto,
+            readyToFinish: legacyReady,
+          };
+        }
+      }
+      return out;
+    })(),
     autoAccept: row.autoAccept === true,
     readyToFinish: row.readyToFinish === true,
     absences: ((row.absences as Array<Record<string, unknown>>) || [])
@@ -600,8 +669,56 @@ export function designStaffToApi(
   opts?: { isCreate?: boolean; ownerId?: string },
 ) {
   const alwaysAvailable = staff.alwaysAvailable === true;
-  const autoAccept = staff.autoAccept === true;
-  const readyToFinish = staff.readyToFinish === true;
+  const taskTypeModesMap =
+    (staff.taskTypeModes as
+      | Record<
+          string,
+          {
+            notifyAssign?: boolean;
+            remindMode?: string;
+            digestTime?: string;
+            autoAccept?: boolean;
+            readyToFinish?: boolean;
+          }
+        >
+      | undefined) || {};
+  const allowedTypes = (staff.allowedTaskTypes as string[]) || [];
+  const taskTypeModes = allowedTypes.map((taskType) => {
+    const cfg = taskTypeModesMap[taskType] || {};
+    const readyToFinish = cfg.readyToFinish === true;
+    const autoAccept = readyToFinish || cfg.autoAccept === true;
+    const mode = readyToFinish
+      ? ('ready_to_finish' as const)
+      : autoAccept
+        ? ('auto_accept' as const)
+        : ('normal' as const);
+    const remindMode =
+      cfg.remindMode === 'daily_digest'
+        ? ('daily_digest' as const)
+        : ('individual' as const);
+    const digestRaw = String(cfg.digestTime || '').trim();
+    return {
+      taskType,
+      mode,
+      notifyAssign: cfg.notifyAssign === false ? false : true,
+      remindMode,
+      ...(remindMode === 'daily_digest'
+        ? {
+            digestTime: /^\d{1,2}:\d{2}$/.test(digestRaw)
+              ? digestRaw.slice(0, 5)
+              : '17:00',
+          }
+        : {}),
+      autoAccept,
+      readyToFinish,
+    };
+  });
+  const modes = taskTypeModes.map((m) => m.mode);
+  const allReady = modes.length > 0 && modes.every((m) => m === 'ready_to_finish');
+  const allAuto =
+    modes.length > 0 && modes.every((m) => m === 'auto_accept' || m === 'ready_to_finish');
+  const autoAccept = allAuto && !allReady;
+  const readyToFinish = allReady;
   const sched = staff.schedule as {
     daysOfWeek?: number[];
     timeWindows?: { start: string; end: string }[];
@@ -663,24 +780,23 @@ export function designStaffToApi(
     cityIds: staff.allowedCityIds || [],
     schedule,
     alwaysAvailable,
+    taskTypeModes,
+    // Legacy global flags : dérivés des activités (plus d’UI globale Auto/Fin).
     autoAccept,
     readyToFinish,
     // Capacité : défaut moteur (plus exposé dans l’UI équipe).
     maxTasksPerDay: 8,
-    whatsappNotificationsEnabled: staff.whatsappNotificationsEnabled !== false,
+    // Silence global retiré de l’UI — Notifier / Rappels = par activité.
+    whatsappNotificationsEnabled: true,
+    // Miroir legacy pour vieux code : si ≥1 activité Journalier → digeste global.
     orchestrationNotify: (() => {
-      const raw = (staff.orchestrationNotify || {}) as {
-        mode?: string;
-        digestTime?: string;
-      };
-      const modeRaw = String(raw.mode || 'individual');
-      const mode = (modeRaw === 'daily_digest' ? 'daily_digest' : 'individual') as
-        | 'individual'
-        | 'daily_digest';
-      const digestTime = String(raw.digestTime || '17:00');
+      const digestEntry = taskTypeModes.find((m) => m.remindMode === 'daily_digest');
+      if (!digestEntry) {
+        return { mode: 'individual' as const, digestTime: '17:00' };
+      }
       return {
-        mode,
-        digestTime: /^\d{2}:\d{2}$/.test(digestTime) ? digestTime : '17:00',
+        mode: 'daily_digest' as const,
+        digestTime: digestEntry.digestTime || '17:00',
       };
     })(),
     // Le bouton « désactiver » de l'UI n'envoyait rien : le staff restait assignable.

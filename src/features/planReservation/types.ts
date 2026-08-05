@@ -82,6 +82,8 @@ export interface Escalade {
   description: string;
   /** Ex. J-1 · check-in · 23:00 */
   scheduleOffsetLabel?: string;
+  /** manual = actions admin only (pas de deadline cron / pas d’EN RETARD). */
+  triggerMode?: 'auto' | 'manual';
 }
 
 export type PlanEventKind = 'message' | 'sequence';
@@ -160,14 +162,20 @@ export interface StaffAssignmentPlan {
   windowEnd: string;
   /** Ex. 24 AVR · 10:00 → 30 AVR · 12:00 */
   windowRange: string;
+  /** Ex. J-7 · J-4 · J-1 (jours relatifs config). */
+  assignDaysLabel?: string;
+  /** Ex. 10h–18h */
+  assignHoursLabel?: string;
   autoAssign: boolean;
   assignmentHoursMode: 'planning' | 'always';
   findAnotherStaff: boolean;
   acceptToleranceHours: number;
   releaseWindows: string[];
-  /** Manuel | Auto-accept */
+  /** Auto (cron) | Manuel (cockpit) */
   modeLabel: string;
-  /** Ex. 3 h (vide si auto-accept) */
+  /** auto = recherche cron · manual = cockpit only */
+  triggerMode?: 'auto' | 'manual';
+  /** Ex. 3 h (vide si auto) */
   toleranceLabel?: string;
   /** Créneaux 11:00 / 16:00 */
   slotsLabel: string;

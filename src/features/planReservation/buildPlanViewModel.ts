@@ -166,6 +166,8 @@ export interface FulltaskPlanDoc {
       foundAt?: string | Date | null;
       staffId?: string | null;
       staffAcceptedAt?: string | Date | null;
+      assignDays?: number[];
+      dayWindows?: Array<{ startAt: string | Date; endAt: string | Date }>;
       attempts: Array<{
         window: string;
         tried: boolean;
@@ -175,6 +177,7 @@ export interface FulltaskPlanDoc {
         failureLabel?: string;
       }>;
       autoAssign?: boolean;
+      triggerMode?: 'auto' | 'manual';
       assignmentHoursMode?: 'planning' | 'always';
       findAnotherStaff?: boolean;
       acceptToleranceHours?: number;
@@ -193,6 +196,7 @@ export interface FulltaskPlanDoc {
       scheduledAt: string | Date;
       status: 'en_attente' | 'active' | 'fait' | 'saute' | 'declenchee' | 'resolue';
       triggeredAt?: string | Date | null;
+      triggerMode?: 'auto' | 'manual';
       scheduleRef?: string;
       scheduleDay?: number;
       scheduleTime?: string;
@@ -498,7 +502,10 @@ function normalizeEscaladeStatus(raw: string): EscaladeViewStatus {
   return 'en_attente';
 }
 
-function escaladeDescription(status: EscaladeViewStatus): string {
+function escaladeDescription(
+  status: EscaladeViewStatus,
+  triggerMode?: 'auto' | 'manual',
+): string {
   switch (status) {
     case 'active':
       return 'Escalade active — intervention admin';
@@ -507,7 +514,9 @@ function escaladeDescription(status: EscaladeViewStatus): string {
     case 'fait':
       return 'Escalade traitée';
     default:
-      return 'Escalade PM si non confirmé avant deadline';
+      return triggerMode === 'manual'
+        ? 'Escalade Manuel — actions admin uniquement'
+        : 'Escalade PM si non confirmé avant deadline';
   }
 }
 
@@ -526,6 +535,20 @@ function mapEscaladeView(
   now: Date,
 ) {
   const status = normalizeEscaladeStatus(esc.status);
+  const triggerMode = esc.triggerMode === 'manual' ? 'manual' : 'auto';
+  const isManual = triggerMode === 'manual' && status === 'en_attente';
+
+  if (isManual) {
+    return {
+      scheduled: false,
+      status,
+      dueAt: '',
+      scheduleOffsetLabel: undefined,
+      description: escaladeDescription(status, 'manual'),
+      triggerMode: 'manual' as const,
+    };
+  }
+
   const escRef = normalizeScheduleRef(esc.scheduleRef, taskType);
   const escAnchor =
     resolveScheduleAnchorDate(plan, escRef, seqAnchors, esc.scheduledAt) || now;
@@ -542,7 +565,8 @@ function mapEscaladeView(
         esc.scheduleTime,
         taskType,
       ),
-    description: escaladeDescription(status),
+    description: escaladeDescription(status, triggerMode),
+    triggerMode,
   };
 }
 
@@ -972,8 +996,8 @@ function computeNextAssignmentLabel(
   if (status === 'failed' || now.getTime() >= end.getTime()) {
     const pendingLm = lmAttempts?.find((lm) => lm.status === 'en_attente');
     if (pendingLm) {
-      const at = toDate(pendingLm.scheduledAt);
-      if (at) return `Prochaine assignation LM · ${formatWhen(at)}`;
+      // Assign LM = immédiat (backend) — ne pas afficher un prochain :00.
+      return 'Assignation LM · immédiat (1 tentative)';
     }
     const failedLm = lmAttempts?.find((lm) => lm.status === 'echec');
     if (failedLm?.failureLabel) {
@@ -1099,10 +1123,18 @@ function mapStaffAssignment(
   const staffName = resolveStaffLabel(staffId, staffNames);
   const releaseWindows = a.releaseWindows?.length ? a.releaseWindows : ['11:00', '16:00'];
   const autoAssign = Boolean(a.autoAssign);
-  const status = mapAssignationUiStatus(a.status);
-  const windowPast = end.getTime() <= now.getTime();
-  const windowOpen = start.getTime() <= now.getTime() && end.getTime() > now.getTime();
-  const windowFuture = start.getTime() > now.getTime();
+  const triggerMode: 'auto' | 'manual' = a.triggerMode === 'manual' ? 'manual' : 'auto';
+  let status = mapAssignationUiStatus(a.status);
+  // Auto + jours restants : ne pas afficher Bloqué/Échec tant que endAt n’est pas passé.
+  if (
+    status === 'failed' &&
+    triggerMode === 'auto' &&
+    end.getTime() > now.getTime() &&
+    Array.isArray(a.assignDays) &&
+    a.assignDays.length > 0
+  ) {
+    status = 'searching';
+  }
   const foundAt = toDate(a.foundAt);
   const lmAttempts = a.lmAttempts ?? [];
   const hasPendingLmAssign = lmAttempts.some((lm) => lm.status === 'en_attente');
@@ -1111,17 +1143,59 @@ function mapStaffAssignment(
     status === 'failed' && Boolean(failedLm) && !hasPendingLmAssign;
   const lmFailureLabel = failedLm?.failureLabel;
 
+  const assignDays = Array.isArray(a.assignDays)
+    ? a.assignDays.map(Number).filter((d) => Number.isFinite(d))
+    : [];
+  const assignDaysLabel =
+    assignDays.length > 0
+      ? [...assignDays]
+          .sort((x, y) => x - y)
+          .map((d) => (d === 0 ? 'J0' : d > 0 ? `J+${d}` : `J${d}`))
+          .join(' · ')
+      : undefined;
+  const hourFmt = (d: Date | null) => {
+    if (!d) return '';
+    const h = d.getHours();
+    const m = d.getMinutes();
+    return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, '0')}`;
+  };
+  const sampleWin = Array.isArray(a.dayWindows) && a.dayWindows[0] ? a.dayWindows[0] : null;
+  const hourStart = sampleWin ? toDate(sampleWin.startAt) : start;
+  const hourEnd = sampleWin ? toDate(sampleWin.endAt) : end;
+  const assignHoursLabel =
+    hourStart && hourEnd ? `${hourFmt(hourStart)}–${hourFmt(hourEnd)}` : undefined;
+
+  // windowOpen = créneau journées si dayWindows, sinon fenêtre continue.
+  const windowOpen = (() => {
+    if (start.getTime() > now.getTime() || end.getTime() <= now.getTime()) return false;
+    if (Array.isArray(a.dayWindows) && a.dayWindows.length > 0) {
+      return a.dayWindows.some((w) => {
+        const ws = toDate(w.startAt);
+        const we = toDate(w.endAt);
+        return Boolean(ws && we && ws.getTime() <= now.getTime() && we.getTime() > now.getTime());
+      });
+    }
+    return true;
+  })();
+  const windowPast = end.getTime() <= now.getTime();
+  const windowFuture = start.getTime() > now.getTime();
+
   return {
     status,
     windowStart: formatWhen(start),
     windowEnd: formatWhen(end),
-    windowRange: `${formatWhen(start)} → ${formatWhen(end)}`,
+    windowRange: assignDaysLabel
+      ? `${assignDaysLabel}${assignHoursLabel ? ` · ${assignHoursLabel}` : ''}`
+      : `${formatWhen(start)} → ${formatWhen(end)}`,
+    assignDaysLabel,
+    assignHoursLabel,
     autoAssign,
     assignmentHoursMode: a.assignmentHoursMode === 'always' ? 'always' : 'planning',
     findAnotherStaff: a.findAnotherStaff !== false,
     acceptToleranceHours: a.acceptToleranceHours ?? 3,
     releaseWindows,
-    modeLabel: autoAssign ? 'Auto-accept' : 'Manuel',
+    modeLabel: triggerMode === 'manual' ? 'Manuel' : 'Auto',
+    triggerMode,
     toleranceLabel:
       autoAssign || a.releaseMode === 'windows'
         ? undefined
@@ -1162,15 +1236,24 @@ function mapLmAssignSlots(
 ): import('./types').PlanAssignLmItem[] {
   const slots = seq.assignation?.lmAttempts ?? [];
   return slots.map((lm, i) => {
-    const m = mapRelanceExecution(lm, i, 'wa', 'lm-assign', now);
+    // Assign LM = immédiat : forcer due = now pour ne pas afficher « Prévu · 19:00 ».
+    const scheduledForMap =
+      lm.status === 'en_attente'
+        ? { ...lm, scheduledAt: now }
+        : lm;
+    const m = mapRelanceExecution(scheduledForMap, i, 'wa', 'lm-assign', now);
     const failureNote =
       lm.status === 'echec' && lm.failureLabel ? lm.failureLabel : undefined;
+    const pendingImmediate = lm.status === 'en_attente';
     return {
       ...m,
+      dueAt: pendingImmediate ? 'Immédiat' : m.dueAt,
       relanceIndex: i,
       scheduleOffsetLabel: failureNote
         ? `LM · échec · ${failureNote}`
-        : 'LM · hors fenêtre',
+        : pendingImmediate
+          ? 'LM · 1 tentative immédiate'
+          : 'LM · hors fenêtre',
     };
   });
 }
@@ -1292,18 +1375,35 @@ function buildSequenceFlow(
   }
 
   if (seq.escalade) {
-    const at = toDate(seq.escalade.scheduledAt) || now;
     const escStatus = normalizeEscaladeStatus(seq.escalade.status);
     const escRaw = mapEscaladeAtomRaw(escStatus);
-    items.push({
-      id: 'escalade',
-      phase: 'escalade',
-      sortAt: at.toISOString(),
-      title: 'Escalade PM',
-      when: formatWhen(at),
-      status: mapRelanceStatus(at, escRaw, now),
-      detail: escaladeDescription(escStatus),
-    });
+    const escManual =
+      seq.escalade.triggerMode === 'manual' && escStatus === 'en_attente';
+    if (escManual) {
+      items.push({
+        id: 'escalade',
+        phase: 'escalade',
+        sortAt: (toDate(seq.escalade.scheduledAt) || now).toISOString(),
+        title: 'Escalade PM',
+        when: 'Manuel',
+        status: 'future',
+        detail: escaladeDescription(escStatus, 'manual'),
+      });
+    } else {
+      const at = toDate(seq.escalade.scheduledAt) || now;
+      items.push({
+        id: 'escalade',
+        phase: 'escalade',
+        sortAt: at.toISOString(),
+        title: 'Escalade PM',
+        when: formatWhen(at),
+        status: mapRelanceStatus(at, escRaw, now),
+        detail: escaladeDescription(
+          escStatus,
+          seq.escalade.triggerMode === 'manual' ? 'manual' : 'auto',
+        ),
+      });
+    }
   }
 
   items.sort((x, y) => new Date(x.sortAt).getTime() - new Date(y.sortAt).getTime());
@@ -1394,6 +1494,18 @@ export function assignationCollapseCountLabel(
   if (assign.status === 'pending_accept' && assign.staffName) {
     return `⏳ ${assign.staffName} · acceptation`;
   }
+  // Auto : jours config toujours visibles en résumé (même si tentative échouée).
+  if (assign.triggerMode !== 'manual' && assign.assignDaysLabel) {
+    if (assign.status === 'failed' && assign.windowPast) {
+      return `Échec · ${assign.assignDaysLabel}`;
+    }
+    if (assign.status === 'failed' && !assign.windowPast) {
+      return `En cours · ${assign.assignDaysLabel}`;
+    }
+    if (assign.status === 'searching' || assign.windowOpen || assign.windowFuture) {
+      return `${assign.modeLabel} · ${assign.assignDaysLabel}`;
+    }
+  }
   const last = attempts?.length ? attempts[attempts.length - 1] : undefined;
   if (last) {
     if (last.result === 'accepted' && last.staffName && last.staffName !== '—') {
@@ -1404,6 +1516,9 @@ export function assignationCollapseCountLabel(
     }
     if (last.result === 'declined' || last.result === 'timeout') {
       const detail = last.failureLabel || last.staffName;
+      if (assign.triggerMode !== 'manual' && assign.assignDaysLabel && !assign.windowPast) {
+        return `Tentative · ${assign.assignDaysLabel}`;
+      }
       return detail && detail !== '—' ? `Échec · ${detail}` : 'Échec';
     }
   }
@@ -1411,7 +1526,9 @@ export function assignationCollapseCountLabel(
     return 'Échec · plus de relance';
   }
   if (assign.status === 'failed') {
-    return 'Échec assignation';
+    return assign.assignDaysLabel && !assign.windowPast
+      ? `En cours · ${assign.assignDaysLabel}`
+      : 'Échec assignation';
   }
   if (lmAssignSlots?.some((s) => s.executionStatus === 'prevision')) {
     return assign.nextAssignmentLabel || 'Assignation LM';
@@ -1419,7 +1536,9 @@ export function assignationCollapseCountLabel(
   if (attempts?.length) {
     return `${attempts.length} tentative(s) · en cours`;
   }
-  return assign.modeLabel;
+  return assign.assignDaysLabel
+    ? `${assign.modeLabel} · ${assign.assignDaysLabel}`
+    : assign.modeLabel;
 }
 
 function inferMessageCategory(label: string): 'simple' | 'relance' {
@@ -1607,20 +1726,26 @@ function buildSequenceView(
     status = 'done';
   }
 
-  const blockStatuses = blockStatusesFromApi ?? {
-    relances: aggregateRelancesGroupStatus(relances, clientActionCompleted),
-    assignation: aggregateAssignGroupStatus(staffAssignment, attempts, lmAssignSlots),
-    staffReminders: aggregateStaffRemindersGroupStatus(staffReminders),
-    escalade: seq.escalade
-      ? mapBackendOrchestrationStatus(
-          seq.escalade.status === 'saute' || seq.escalade.status === 'fait'
-            ? 'termine'
-            : seq.escalade.status === 'active' || seq.escalade.status === 'declenchee'
-              ? 'en_cours'
-              : 'en_attente',
-        )
-      : 'future',
+  const blockStatuses = {
+    ...(blockStatusesFromApi ?? {
+      relances: aggregateRelancesGroupStatus(relances, clientActionCompleted),
+      assignation: aggregateAssignGroupStatus(staffAssignment, attempts, lmAssignSlots),
+      staffReminders: aggregateStaffRemindersGroupStatus(staffReminders),
+      escalade: seq.escalade
+        ? mapBackendOrchestrationStatus(
+            seq.escalade.status === 'saute' || seq.escalade.status === 'fait'
+              ? 'termine'
+              : seq.escalade.status === 'active' || seq.escalade.status === 'declenchee'
+                ? 'en_cours'
+                : 'en_attente',
+          )
+        : 'future',
+    }),
   };
+  // Filet UI : Manuel ne doit jamais afficher EN RETARD sur une deadline fantôme.
+  if (escalade?.triggerMode === 'manual' && escalade.status === 'en_attente') {
+    blockStatuses.escalade = 'future';
+  }
 
   return {
     id: sequenceId || String(seq.taskId || seq.taskType),

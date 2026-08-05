@@ -18,7 +18,7 @@ interface Props {
   className?: string
 }
 
-type AuditTypeFilter = 'all' | 'messages' | 'assignations' | 'lm' | 'status_changes'
+type AuditTypeFilter = 'all' | 'messages' | 'assignations' | 'notifs' | 'lm' | 'status_changes'
 
 const AUDIT_TYPE_LABELS: Record<string, string> = {
   message_sent: '💬 Message envoyé',
@@ -28,7 +28,14 @@ const AUDIT_TYPE_LABELS: Record<string, string> = {
   assignation_found: '✅ Staff trouvé',
   assignation_accepted: '👍 Staff accepté',
   assignation_failed: '❌ Assignation échouée',
-  reminder_sent: '⏰ Rappel staff envoyé',
+  assignation_lm_failed: '❌ Assignation LM échouée',
+  reminder_sent: '⏰ Rappel staff · Individuel',
+  reminder_skipped: '⏭️ Rappel staff sauté',
+  staff_assign_notified: '📲 Notif assignation',
+  staff_assign_notify_skipped: '⏭️ Notif assignation sautée',
+  staff_assign_notify_failed: '❌ Notif assignation échouée',
+  staff_digest_sent: '📰 Digeste journalier',
+  staff_digest_failed: '❌ Digeste journalier échoué',
   escalade_triggered: '🚨 Escalade déclenchée',
   lm_relance_created: '⚡ Relance LM créée',
   lm_assignation_created: '⚡ Slot assignation LM créé',
@@ -37,6 +44,13 @@ const AUDIT_TYPE_LABELS: Record<string, string> = {
 }
 
 function getAuditTypeCategory(type: string): AuditTypeFilter {
+  if (
+    type.includes('reminder') ||
+    type.startsWith('staff_assign_notify') ||
+    type.startsWith('staff_digest')
+  ) {
+    return 'notifs'
+  }
   if (type.includes('message') || type.includes('relance')) return 'messages'
   if (type.includes('assignation')) return 'assignations'
   if (type.includes('lm_')) return 'lm'
@@ -105,6 +119,16 @@ export default function AuditLogView({ auditLog, className = '' }: Props) {
           }`}
         >
           Assignations
+        </button>
+        <button
+          onClick={() => setFilter('notifs')}
+          className={`px-3 py-1 text-sm rounded ${
+            filter === 'notifs'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          Notifs staff
         </button>
         <button
           onClick={() => setFilter('lm')}
@@ -190,6 +214,17 @@ export default function AuditLogView({ auditLog, className = '' }: Props) {
                   <div className="text-sm text-gray-600 mt-1 space-y-0.5">
                     <div>
                       <span className="font-medium">{String(entry.meta.label)}</span>
+                      {entry.meta.remindMode === 'daily_digest' ? (
+                        <span>
+                          {' '}
+                          · Journalier
+                          {typeof entry.meta.digestTime === 'string'
+                            ? ` · ${String(entry.meta.digestTime)}`
+                            : ''}
+                        </span>
+                      ) : entry.meta.remindMode === 'individual' ? (
+                        <span> · Individuel</span>
+                      ) : null}
                       {typeof entry.meta.channel === 'string' ? (
                         <span> · {String(entry.meta.channel).toUpperCase()}</span>
                       ) : null}
@@ -197,6 +232,10 @@ export default function AuditLogView({ auditLog, className = '' }: Props) {
                         <span className="text-gray-500"> · Manuel</span>
                       ) : entry.meta.source === 'scheduler' ? (
                         <span className="text-gray-500"> · Auto</span>
+                      ) : entry.meta.source === 'digest' ? (
+                        <span className="text-gray-500"> · Digeste</span>
+                      ) : entry.meta.source === 'assign' ? (
+                        <span className="text-gray-500"> · Assignation</span>
                       ) : null}
                       {entry.meta.ok === false ? (
                         <span className="text-red-600"> · Échec</span>
@@ -211,12 +250,44 @@ export default function AuditLogView({ auditLog, className = '' }: Props) {
                       <div className="text-xs text-red-600">{String(entry.meta.error)}</div>
                     ) : null}
                   </div>
+                ) : entry.meta &&
+                  typeof entry.meta === 'object' &&
+                  (entry.meta.remindMode === 'daily_digest' ||
+                    entry.meta.remindMode === 'individual') ? (
+                  <div className="text-sm text-gray-600 mt-1">
+                    {entry.meta.remindMode === 'daily_digest' ? (
+                      <span>
+                        Journalier
+                        {typeof entry.meta.digestTime === 'string'
+                          ? ` · ${String(entry.meta.digestTime)}`
+                          : ''}
+                      </span>
+                    ) : (
+                      <span>Individuel</span>
+                    )}
+                  </div>
                 ) : null}
 
                 {/* Meta technique (reste) */}
                 {entry.meta &&
                 Object.keys(entry.meta).some(
-                  (k) => !['label', 'channel', 'source', 'ok', 'error', 'messageId', 'template'].includes(k),
+                  (k) =>
+                    ![
+                      'label',
+                      'channel',
+                      'source',
+                      'ok',
+                      'error',
+                      'messageId',
+                      'template',
+                      'remindMode',
+                      'digestTime',
+                      'intentional',
+                      'staffId',
+                      'staffName',
+                      'taskType',
+                      'wamid',
+                    ].includes(k),
                 ) ? (
                   <details className="mt-2">
                     <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">

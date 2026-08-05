@@ -138,7 +138,9 @@ export default function EscaladeActionsPanel({
       >
         {escaladeActive
           ? 'Escalade active — intervention admin.'
-          : 'Actions admin — disponibles à tout moment (même avant deadline).'}
+          : escalade.triggerMode === 'manual'
+            ? 'Actions admin — disponibles à tout moment (Escalade Manuel).'
+            : 'Actions admin — disponibles à tout moment (même avant deadline).'}
       </p>
 
       <div className="escalade-actions-grid">
