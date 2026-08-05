@@ -338,8 +338,7 @@ export default function StaffPageView({
       readyToFinish: false,
     };
     let next = { ...prev, ...patch };
-    // Fin seule gagne : si Fin=oui → Auto forcé oui (status doing).
-    if (next.readyToFinish) next = { ...next, autoAccept: true };
+    // Auto accept et Auto start sont orthogonaux (ne pas forcer l’un via l’autre).
     if (next.remindMode === 'daily_digest') {
       next = {
         ...next,
@@ -852,7 +851,7 @@ export default function StaffPageView({
                 Activités<span className="req">*</span>
               </div>
               <div className="ds" style={{ marginBottom: 8 }}>
-                Accès Oui = staff assignable. Ouvrir ▶ pour Notifier · Rappels · Auto · Fin.
+                Accès Oui = staff assignable. Ouvrir ▶ pour Notifier · Rappels · Auto accept · Auto start.
               </div>
               {form.allowedTaskTypes.length === 0 ? (
                 <p className="staff-recap-warn">
@@ -1050,10 +1049,10 @@ export default function StaffPageView({
                             <div
                               className="activity-cfg-item"
                               style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                              title="Assignation → acceptée"
+                              title="Auto accept : pas de Refuser · assignation → À commencer"
                             >
                               <span className="nm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                                Auto
+                                Auto accept
                               </span>
                               <div className="pill-group">
                                 {(
@@ -1066,27 +1065,13 @@ export default function StaffPageView({
                                     key={`auto-${String(opt.id)}`}
                                     type="button"
                                     className={`pill-toggle${
-                                      cfg.readyToFinish
-                                        ? opt.id
-                                          ? ' on'
-                                          : ''
-                                        : Boolean(cfg.autoAccept) === opt.id
-                                          ? ' on'
-                                          : ''
+                                      Boolean(cfg.autoAccept) === opt.id ? ' on' : ''
                                     }`}
-                                    onClick={() => {
-                                      if (opt.id) {
-                                        patchTaskTypeCfg(p.key, {
-                                          autoAccept: true,
-                                          readyToFinish: false,
-                                        });
-                                      } else {
-                                        patchTaskTypeCfg(p.key, {
-                                          autoAccept: false,
-                                          readyToFinish: false,
-                                        });
-                                      }
-                                    }}
+                                    onClick={() =>
+                                      patchTaskTypeCfg(p.key, {
+                                        autoAccept: opt.id,
+                                      })
+                                    }
                                   >
                                     {opt.label}
                                   </button>
@@ -1097,10 +1082,10 @@ export default function StaffPageView({
                             <div
                               className="activity-cfg-item"
                               style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                              title="Déjà en cours (prioritaire sur Auto)"
+                              title="Auto start : saute Commencer · va direct à Terminer"
                             >
                               <span className="nm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                                Fin
+                                Auto start
                               </span>
                               <div className="pill-group">
                                 {(
@@ -1118,7 +1103,6 @@ export default function StaffPageView({
                                     onClick={() =>
                                       patchTaskTypeCfg(p.key, {
                                         readyToFinish: opt.id,
-                                        autoAccept: opt.id ? true : cfg.autoAccept,
                                       })
                                     }
                                   >

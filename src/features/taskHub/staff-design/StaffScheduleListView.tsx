@@ -502,12 +502,12 @@ export default function StaffScheduleListView({
       await onToggleAutoAccept(s._id, next);
       toast.success(
         next
-          ? `Auto-accepte · ${s.fullName}`
+          ? `Auto accept · ${s.fullName}`
           : `Acceptation manuelle · ${s.fullName}`,
       );
     } catch (e: unknown) {
       const err = e as { message?: string };
-      toast.error(err.message || 'Impossible de mettre à jour auto-accepte');
+      toast.error(err.message || 'Impossible de mettre à jour Auto accept');
     } finally {
       setAutoAcceptBusyId(null);
     }
@@ -521,12 +521,12 @@ export default function StaffScheduleListView({
       await onToggleReadyToFinish(s._id, next);
       toast.success(
         next
-          ? `Fin seule · ${s.fullName} (assignation → à terminer)`
-          : `Fin seule off · ${s.fullName}`,
+          ? `Auto start · ${s.fullName} (direct Terminer)`
+          : `Auto start off · ${s.fullName}`,
       );
     } catch (e: unknown) {
       const err = e as { message?: string };
-      toast.error(err.message || 'Impossible de mettre à jour Fin seule');
+      toast.error(err.message || 'Impossible de mettre à jour Auto start');
     } finally {
       setReadyToFinishBusyId(null);
     }
@@ -800,8 +800,8 @@ export default function StaffScheduleListView({
             Horaires <span className="badge">{rows.length} membres</span>
           </h1>
           <p className="sub">
-            Cliquez une case jour · Off/On + créneaux · Auto-accepte = tâche acceptée dès
-            l’assignation. Colonnes = tâches & accès.
+            Cliquez une case jour · Off/On + créneaux · Auto accept = pas de refus · Auto start = direct
+            Terminer. Colonnes = tâches & accès.
           </p>
         </div>
         {onOpenConfig ? (
@@ -885,7 +885,7 @@ export default function StaffScheduleListView({
                 <th className="staff-sched-col-meta">Ville</th>
                 <th
                   className="staff-sched-col-auto"
-                  title="Mode par activité (Normal / Auto-accepte / Fin seule) — modifier dans la fiche staff"
+                  title="Mode par activité (Normal / Auto accept / Auto start) — modifier dans la fiche staff"
                 >
                   Modes
                 </th>
@@ -907,13 +907,18 @@ export default function StaffScheduleListView({
                   (t) => {
                     const cfg = modes[t];
                     if (!cfg) return 'normal';
-                    if (cfg.readyToFinish) return 'ready_to_finish';
+                    if (cfg.readyToFinish && cfg.autoAccept) return 'ready_to_finish';
+                    if (cfg.readyToFinish) return 'auto_start';
                     if (cfg.autoAccept) return 'auto_accept';
                     return 'normal';
                   },
                 );
-                const nFin = modeValues.filter((m) => m === 'ready_to_finish').length;
-                const nAuto = modeValues.filter((m) => m === 'auto_accept').length;
+                const nFin = modeValues.filter(
+                  (m) => m === 'ready_to_finish' || m === 'auto_start',
+                ).length;
+                const nAuto = modeValues.filter(
+                  (m) => m === 'auto_accept' || m === 'ready_to_finish',
+                ).length;
                 const nNorm = modeValues.filter((m) => m === 'normal').length;
                 const dirty = dirtyIds.has(s._id);
                 const saving = savingId === s._id;
@@ -936,17 +941,17 @@ export default function StaffScheduleListView({
                             {nAuto > 0 ? (
                               <span
                                 className="staff-sched-auto-badge"
-                                title={`${nAuto} activité(s) en auto-accepte`}
+                                title={`${nAuto} activité(s) en Auto accept`}
                               >
-                                Auto {nAuto}
+                                Accept {nAuto}
                               </span>
                             ) : null}
                             {nFin > 0 ? (
                               <span
                                 className="staff-sched-auto-badge"
-                                title={`${nFin} activité(s) en fin seule`}
+                                title={`${nFin} activité(s) en Auto start`}
                               >
-                                Fin {nFin}
+                                Start {nFin}
                               </span>
                             ) : null}
                             {nNorm > 0 && nAuto === 0 && nFin === 0 ? null : null}
@@ -1001,7 +1006,7 @@ export default function StaffScheduleListView({
                               <span className="staff-sched-auto-badge">A·{nAuto}</span>
                             ) : null}
                             {nFin > 0 ? (
-                              <span className="staff-sched-auto-badge">F·{nFin}</span>
+                              <span className="staff-sched-auto-badge">S·{nFin}</span>
                             ) : null}
                           </>
                         )}
