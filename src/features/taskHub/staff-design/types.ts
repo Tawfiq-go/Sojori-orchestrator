@@ -60,7 +60,10 @@ export interface Staff {
   alwaysAvailable?: boolean;
   /**
    * Config **par activité** (clé = taskType).
-   * Notifier assignation, rappels, auto, fin (Fin gagne sur Auto).
+   * Notifier assignation, rappels, Auto accept, Auto start (flags orthogonaux).
+   * Auto accept = pas de Refuser · assign → À commencer.
+   * Auto start = saute Commencer · À terminer.
+   * Les deux Oui → assign → directement À terminer.
    */
   taskTypeModes?: Record<
     string,

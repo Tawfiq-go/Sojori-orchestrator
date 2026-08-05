@@ -584,9 +584,10 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
       for (const m of rows) {
         const t = String(m.taskType || '').trim();
         if (!t) continue;
-        const readyToFinish = m.readyToFinish === true || m.mode === 'ready_to_finish';
+        const readyToFinish =
+          m.readyToFinish === true || m.mode === 'ready_to_finish' || m.mode === 'auto_start';
         const autoAccept =
-          readyToFinish || m.autoAccept === true || m.mode === 'auto_accept' || m.mode === 'ready_to_finish';
+          m.autoAccept === true || m.mode === 'auto_accept' || m.mode === 'ready_to_finish';
         const remindMode = m.remindMode === 'daily_digest' ? 'daily_digest' : 'individual';
         const digestRaw = String(m.digestTime || '').trim();
         out[t] = {
@@ -595,20 +596,9 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
           ...(remindMode === 'daily_digest'
             ? { digestTime: /^\d{1,2}:\d{2}$/.test(digestRaw) ? digestRaw.slice(0, 5) : '17:00' }
             : {}),
-          autoAccept: Boolean(autoAccept && !readyToFinish) || (autoAccept && readyToFinish),
+          autoAccept,
           readyToFinish,
         };
-        // Auto flag when only auto (not fin): autoAccept true ready false
-        if (readyToFinish) {
-          out[t].autoAccept = true;
-          out[t].readyToFinish = true;
-        } else if (m.autoAccept === true || m.mode === 'auto_accept') {
-          out[t].autoAccept = true;
-          out[t].readyToFinish = false;
-        } else {
-          out[t].autoAccept = false;
-          out[t].readyToFinish = false;
-        }
       }
       if (Object.keys(out).length === 0) {
         const legacyReady = row.readyToFinish === true;
@@ -686,12 +676,15 @@ export function designStaffToApi(
   const taskTypeModes = allowedTypes.map((taskType) => {
     const cfg = taskTypeModesMap[taskType] || {};
     const readyToFinish = cfg.readyToFinish === true;
-    const autoAccept = readyToFinish || cfg.autoAccept === true;
-    const mode = readyToFinish
-      ? ('ready_to_finish' as const)
-      : autoAccept
-        ? ('auto_accept' as const)
-        : ('normal' as const);
+    const autoAccept = cfg.autoAccept === true;
+    const mode =
+      autoAccept && readyToFinish
+        ? ('ready_to_finish' as const)
+        : autoAccept
+          ? ('auto_accept' as const)
+          : readyToFinish
+            ? ('auto_start' as const)
+            : ('normal' as const);
     const remindMode =
       cfg.remindMode === 'daily_digest'
         ? ('daily_digest' as const)
@@ -714,10 +707,11 @@ export function designStaffToApi(
     };
   });
   const modes = taskTypeModes.map((m) => m.mode);
-  const allReady = modes.length > 0 && modes.every((m) => m === 'ready_to_finish');
-  const allAuto =
-    modes.length > 0 && modes.every((m) => m === 'auto_accept' || m === 'ready_to_finish');
-  const autoAccept = allAuto && !allReady;
+  const allReady = modes.length > 0 && modes.every((m) => m === 'ready_to_finish' || m === 'auto_start');
+  const allAutoAccept =
+    modes.length > 0 &&
+    modes.every((m) => m === 'auto_accept' || m === 'ready_to_finish');
+  const autoAccept = allAutoAccept;
   const readyToFinish = allReady;
   const sched = staff.schedule as {
     daysOfWeek?: number[];
