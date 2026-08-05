@@ -5,8 +5,7 @@
 
 import type { ReservationTask } from './reservationTask.types';
 import type { ReservationSourceKind } from '../components/reservations/ReservationSourceIcon';
-import type { ProcessingTrace } from './messages.types';
-import type { MessageContentType } from './messages.types';
+import type { ProcessingTrace, AiPromptAudit, AiUsageAudit, MessageContentType } from './messages.types';
 
 export type ChannelType = 'all' | 'wa' | 'ab' | 'bk' | 'em' | 'vrbo';
 
@@ -99,6 +98,8 @@ export interface Message {
   processingTrace?: ProcessingTrace;
   aiModel?: string;
   tokensUsed?: number;
+  aiPrompt?: AiPromptAudit | null;
+  aiUsage?: AiUsageAudit | null;
   contentType?: MessageContentType | null;
   /** Résumé PM (ownerSummary) — libellé non technique. */
   ownerSummary?: string | null;
