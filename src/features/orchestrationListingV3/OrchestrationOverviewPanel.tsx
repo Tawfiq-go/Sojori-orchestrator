@@ -28,6 +28,7 @@ import {
   CAPABILITY_GROUPS,
   CAPABILITY_REGISTRY,
   getCapabilityDefinition,
+  getCapabilityOrchestrationActivities,
   isOnDemandCapability,
   type CapabilityGroupId,
 } from '../serviceMatrix/capabilityRegistry';
@@ -385,9 +386,34 @@ function assignHuman(sa: Record<string, unknown> | null | undefined): string {
   if (!sa) return '—';
   const start = sa.startAt as { ref?: string; day?: number; time?: string } | undefined;
   const end = sa.endAt as { ref?: string; day?: number; time?: string } | undefined;
+  if (start?.ref === 'task_created') return 'Immédiat';
+
+  const daysRaw = Array.isArray(sa.days)
+    ? (sa.days as unknown[])
+        .map((d) => Number(d))
+        .filter((d) => Number.isFinite(d))
+    : [];
+  const days = [...new Set(daysRaw)].sort((a, b) => a - b);
+  const st = start?.time ? hourOf(start.time) : '';
+  const et = end?.time ? hourOf(end.time) : '';
+
+  if (days.length > 0) {
+    const allDay =
+      sa.allDay === true ||
+      (String(start?.time || '') === '00:00' &&
+        (String(end?.time || '') === '23:59' || String(end?.time || '') === '23:00'));
+    const hours = allDay
+      ? ' · 24h'
+      : st && et
+        ? ` · ${st}–${et}`
+        : st
+          ? ` · ${st}`
+          : '';
+    return `${daysHuman(days)}${hours}`;
+  }
+
   let s: string;
-  if (start?.ref === 'task_created') s = 'Immédiat';
-  else if (start?.day != null) {
+  if (start?.day != null) {
     const d = Number(start.day);
     s = d === 0 ? 'Jour J' : d < 0 ? `Dès J${d}` : `Dès J+${d}`;
     if (start.time) s += ` à ${hourOf(start.time)}`;
@@ -455,15 +481,6 @@ function configHints(cap: CapDoc, key: string): string[] {
     if (extras.length) hints.push(`${extras.length} option${extras.length > 1 ? 's' : ''}`);
   }
 
-  if (key === 'concierge') {
-    const services = (
-      Array.isArray(g.services) ? g.services : Array.isArray(g.customServices) ? g.customServices : []
-    ) as Array<{ enabled?: boolean }>;
-    const on = services.filter((s) => s.enabled !== false);
-    if (on.length) hints.push(`${on.length} service${on.length > 1 ? 's' : ''}`);
-    else if (services.length) hints.push(`${services.length} au catalogue`);
-  }
-
   if (key === 'transport') {
     const zones = Array.isArray(g.transportServices)
       ? g.transportServices
@@ -500,6 +517,9 @@ function configHints(cap: CapDoc, key: string): string[] {
 
 const HOURS = ['08:00', '09:00', '10:00', '11:00', '14:00', '16:00', '18:00'] as const;
 
+/** 24 créneaux horaires (HH:00) pour assignation début/fin. */
+const ALL_DAY_HOURS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
+
 const CLIENT_MSG_ID: Record<string, string> = {
   arrival_choose: 'msg_relance_arrival_choose',
   departure_choose: 'msg_relance_departure_choose',
@@ -516,6 +536,7 @@ const STAFF_MSG_ID: Record<string, string> = {
   receive_departure: 'staff_reminder_receive_departure',
   cleaning_free: 'staff_reminder_cleaning',
   cleaning_paid: 'staff_reminder_cleaning',
+  cleaning_sojori: 'staff_reminder_cleaning',
   checkout_cleaning: 'staff_reminder_cleaning',
   transport: 'staff_reminder_transport',
   groceries: 'staff_reminder_groceries',
@@ -614,7 +635,7 @@ function buildExecutionFromFlags(
   cap: CapDoc,
   flags: DecisionFlags,
   taskType: string,
-  opts?: { onDemand?: boolean },
+  opts?: { onDemand?: boolean; noStaffReminders?: boolean },
 ): NonNullable<CapDoc['execution']> {
   const prev = cap.execution ?? { enabled: true };
   const ref = defaultRefForTask(taskType);
@@ -625,7 +646,8 @@ function buildExecutionFromFlags(
   const remindersMode: 'auto' | 'manual' =
     opts?.onDemand || !flags.clientReminders ? 'manual' : 'auto';
   const staffAssignmentMode: 'auto' | 'manual' = flags.staffAssignment ? 'auto' : 'manual';
-  const staffRemindersMode: 'auto' | 'manual' = flags.staffReminders ? 'auto' : 'manual';
+  const staffRemindersMode: 'auto' | 'manual' =
+    opts?.noStaffReminders || !flags.staffReminders ? 'manual' : 'auto';
   const escalationMode: 'auto' | 'manual' = flags.pmEscalation ? 'auto' : 'manual';
 
   // Toujours garder une config (Auto = horaires·scheduler · Manuel = bouton cockpit).
@@ -643,18 +665,23 @@ function buildExecutionFromFlags(
     ];
   }
 
+  if (opts?.noStaffReminders) {
+    staffReminders = [];
+  }
+
   if (!flags.taskEnabled) {
     // Pas de tâche ops : assignation / rappels staff hors scope (manuel sans skeleton task).
     staffAssignment =
       staffAssignment ??
       ({
-        startAt: { ref, day: -1, time: '10:00' },
-        endAt: { ref, day: 0, time: '18:00' },
+        days: [-1, 0],
+        startAt: { ref, day: -1, time: '09:00' },
+        endAt: { ref, day: 0, time: '11:00' },
         autoAssign: false,
         findAnotherStaff: true,
         acceptToleranceHours: 2,
       } as NonNullable<CapDoc['execution']>['staffAssignment']);
-    if (staffReminders.length === 0) {
+    if (!opts?.noStaffReminders && staffReminders.length === 0) {
       staffReminders = [
         {
           label: 'Rappel staff manuel',
@@ -668,8 +695,9 @@ function buildExecutionFromFlags(
   } else {
     if (!staffAssignment) {
       staffAssignment = {
-        startAt: { ref, day: -1, time: '10:00' },
-        endAt: { ref, day: 0, time: '18:00' },
+        days: [-1, 0],
+        startAt: { ref, day: -1, time: '09:00' },
+        endAt: { ref, day: 0, time: '11:00' },
         autoAssign: staffAssignmentMode === 'auto',
         findAnotherStaff: true,
         acceptToleranceHours: 2,
@@ -680,7 +708,7 @@ function buildExecutionFromFlags(
         autoAssign: staffAssignmentMode === 'auto',
       };
     }
-    if (staffReminders.length === 0) {
+    if (!opts?.noStaffReminders && staffReminders.length === 0) {
       staffReminders = [
         {
           label: staffRemindersMode === 'manual' ? 'Rappel staff manuel' : 'Rappel J-1',
@@ -833,8 +861,18 @@ function SegChip({ on, label, onClick }: { on: boolean; label: string; onClick: 
   );
 }
 
-function HourSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const options = HOURS.includes(value as (typeof HOURS)[number]) ? [...HOURS] : [value, ...HOURS];
+function HourSelect({
+  value,
+  onChange,
+  fullDay = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  /** true = 00h→23h (assignation) · false = liste courte (relances) */
+  fullDay?: boolean;
+}) {
+  const pool = fullDay ? ALL_DAY_HOURS : [...HOURS];
+  const options = pool.includes(value) ? pool : [value, ...pool];
   return (
     <Select size="small" value={value} onChange={(e) => onChange(String(e.target.value))} sx={{ fontSize: 12, height: 28, minWidth: 70 }}>
       {options.map((h) => (
@@ -1254,16 +1292,23 @@ export default function OrchestrationOverviewPanel({
       }
     }
     const taskType = def.taskType ?? capKey;
-    const noOpsTask = def.columns.task === 'na';
+    const actx = getCapabilityOrchestrationActivities(def);
+    const noOpsTask = !actx.hasOpsTask;
     const decisions = {
       managed: true,
-      clientEnabled: flags.clientEnabled,
+      clientEnabled: actx.whatsapp ? flags.clientEnabled : false,
       // Colonne ON = master ; plus de bouton Orchestrer en UI.
       orchestrated: true,
       taskEnabled: noOpsTask ? false : flags.taskEnabled,
     };
-    const onDemand = isOnDemandCapability(def);
-    const flagInput = onDemand ? { ...flags, clientReminders: false } : flags;
+    const flagInput: DecisionFlags = {
+      ...flags,
+      clientReminders: actx.clientReminders ? flags.clientReminders : false,
+      staffAssignment: actx.staffAssignment ? flags.staffAssignment : false,
+      staffReminders: actx.staffReminders ? flags.staffReminders : false,
+      staffStartReminder: actx.staffStartReminder ? flags.staffStartReminder : false,
+      pmEscalation: actx.escalation ? flags.pmEscalation : false,
+    };
     const execution = buildExecutionFromFlags(
       cap,
       noOpsTask
@@ -1276,7 +1321,7 @@ export default function OrchestrationOverviewPanel({
           }
         : flagInput,
       taskType,
-      { onDemand },
+      { onDemand: actx.onDemand, noStaffReminders: !actx.staffReminders },
     );
     void saveCapPatch(capKey, { decisions, execution });
   };
@@ -1633,17 +1678,36 @@ export default function OrchestrationOverviewPanel({
       const end = sa?.endAt as { ref?: string; day?: number; time?: string } | undefined;
       const ref = String(start?.ref && start.ref !== 'task_created' ? start.ref : defaultRefForTask(taskType));
       const assignAuto = exec.staffAssignmentMode !== 'manual';
-      const startTime = String(start?.time ?? '09:00');
-      const endTime = String(end?.time ?? '18:00');
-      const startDay = start?.ref === 'task_created' ? -3 : Number(start?.day ?? -3);
-      const endDay = end?.day != null ? Number(end.day) : startDay === 0 ? 0 : 0;
+      const allDay =
+        sa?.allDay === true ||
+        (String(start?.time || '') === '00:00' &&
+          (String(end?.time || '') === '23:59' || String(end?.time || '') === '23:00'));
+      const startTime = allDay ? '00:00' : String(start?.time ?? '09:00');
+      const endTime = allDay ? '23:59' : String(end?.time ?? '11:00');
+      const fromDaysField = Array.isArray(sa?.days)
+        ? (sa!.days as unknown[])
+            .map((d) => Number(d))
+            .filter((d) => Number.isFinite(d))
+        : [];
+      const legacyDays =
+        start?.ref !== 'task_created' && start?.day != null
+          ? (() => {
+              const sd = Number(start.day);
+              const ed = end?.day != null ? Number(end.day) : sd;
+              const out: number[] = [];
+              for (let d = Math.min(sd, ed); d <= Math.max(sd, ed); d += 1) out.push(d);
+              return out;
+            })()
+          : [-1];
+      const selectedDays = [...new Set(fromDaysField.length > 0 ? fromDaysField : legacyDays)].sort(
+        (a, b) => a - b,
+      );
       const mode: 'immediate' | 'none' | 'window' = !sa
         ? 'none'
         : start?.ref === 'task_created'
           ? 'immediate'
           : 'window';
-      const ASSIGN_DAYS = [-7, -6, -5, -4, -3, -2, -1, 0] as const;
-      const ASSIGN_END_DAYS = [-7, -6, -5, -4, -3, -2, -1, 0, 1] as const;
+      const ASSIGN_DAYS = [-7, -6, -5, -4, -3, -2, -1, 0, 1] as const;
       const dayLabel = (d: number) => (d === 0 ? 'J0' : d > 0 ? `J+${d}` : `J${d}`);
       const base = {
         releaseWindows: (sa as { releaseWindows?: string[] } | null)?.releaseWindows ?? ['11:00', '16:00'],
@@ -1653,13 +1717,12 @@ export default function OrchestrationOverviewPanel({
       };
       const write = (opts: {
         mode?: 'immediate' | 'none' | 'window';
-        startDay?: number;
+        days?: number[];
         startTime?: string;
-        endDay?: number;
         endTime?: string;
+        allDay?: boolean;
       }) => {
         const nextMode = opts.mode ?? mode;
-        // autoAssign = recherche scheduler (colonne Auto/Manuel). Auto-accept = fiche Staff.
         const nextAuto = assignAuto;
         if (nextMode === 'none') return patchExecution(editor.capKey, { staffAssignment: null });
         if (nextMode === 'immediate') {
@@ -1669,22 +1732,27 @@ export default function OrchestrationOverviewPanel({
               autoAssign: nextAuto,
               findAnotherStaff: !nextAuto,
               startAt: { ref: 'task_created' },
-              // Immédiat : hors planning staff + hors cron (flush post-create).
               assignmentHoursMode: 'always',
             },
             staffAssignmentMode: nextAuto ? 'auto' : 'manual',
           });
         }
-        const sd = opts.startDay ?? startDay;
-        const st = opts.startTime ?? startTime;
-        let ed = opts.endDay ?? (end?.day != null ? endDay : Math.max(sd, 0));
-        if (ed < sd) ed = sd;
-        const et = opts.endTime ?? endTime;
+        const days = [...new Set(opts.days ?? selectedDays)]
+          .filter((d) => Number.isFinite(d))
+          .sort((a, b) => a - b);
+        if (days.length === 0) return;
+        const nextAllDay = opts.allDay ?? allDay;
+        const st = nextAllDay ? '00:00' : opts.startTime ?? startTime;
+        const et = nextAllDay ? '23:59' : opts.endTime ?? endTime;
+        const sd = days[0]!;
+        const ed = days[days.length - 1]!;
         patchExecution(editor.capKey, {
           staffAssignment: {
             ...base,
             autoAssign: nextAuto,
             findAnotherStaff: !nextAuto,
+            days,
+            allDay: nextAllDay,
             startAt: { ref, day: sd, time: st },
             endAt: { ref, day: ed, time: et },
           },
@@ -1698,42 +1766,89 @@ export default function OrchestrationOverviewPanel({
             <SegChip on={mode === 'immediate'} label="Immédiat" onClick={() => write({ mode: 'immediate' })} />
             <SegChip
               on={mode === 'window'}
-              label="Fenêtre"
-              onClick={() => write({ mode: 'window', startDay, endDay: Math.max(endDay, startDay) })}
+              label="Jours"
+              onClick={() =>
+                write({
+                  mode: 'window',
+                  days: selectedDays.length ? selectedDays : [-1],
+                  allDay: false,
+                  startTime: '09:00',
+                  endTime: '11:00',
+                })
+              }
             />
           </Box>
           {mode === 'window' && (
             <>
-              <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>DÉBUT (1ʳᵉ tentative)</Typography>
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>
+                JOURS D&apos;ASSIGNATION
+              </Typography>
+              <Typography sx={{ fontSize: 11, color: V3.t3, mb: 0.25 }}>
+                Cliquez pour cocher / décocher librement (ex. seulement J-7 et J-1). Recherche active
+                ces jours entre les heures ci-dessous.
+              </Typography>
               <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                {ASSIGN_DAYS.map((d) => (
-                  <SegChip
-                    key={`s${d}`}
-                    on={startDay === d}
-                    label={dayLabel(d)}
-                    onClick={() => write({ mode: 'window', startDay: d })}
+                {ASSIGN_DAYS.map((d) => {
+                  const on = selectedDays.includes(d);
+                  return (
+                    <SegChip
+                      key={`d${d}`}
+                      on={on}
+                      label={dayLabel(d)}
+                      onClick={() => {
+                        const next = on
+                          ? selectedDays.filter((x) => x !== d)
+                          : [...selectedDays, d];
+                        if (next.length === 0) return;
+                        write({ mode: 'window', days: next });
+                      }}
+                    />
+                  );
+                })}
+              </Box>
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3, mt: 0.5 }}>
+                HEURES
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 0.5 }}>
+                <SegChip
+                  on={allDay}
+                  label="24h"
+                  onClick={() => write({ mode: 'window', allDay: true })}
+                />
+                <SegChip
+                  on={!allDay}
+                  label="Créneau"
+                  onClick={() =>
+                    write({
+                      mode: 'window',
+                      allDay: false,
+                      startTime: startTime === '00:00' ? '09:00' : startTime,
+                      endTime: endTime === '23:59' || endTime === '23:00' ? '11:00' : endTime,
+                    })
+                  }
+                />
+              </Box>
+              {allDay ? (
+                <Typography sx={{ fontSize: 11.5, color: V3.t3 }}>
+                  24h · recherche toute la journée sur les jours cochés (l’heure n’entre pas en
+                  compte).
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontSize: 12, color: V3.t3 }}>Heure début</Typography>
+                  <HourSelect
+                    fullDay
+                    value={startTime}
+                    onChange={(t) => write({ mode: 'window', allDay: false, startTime: t })}
                   />
-                ))}
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography sx={{ fontSize: 12, color: V3.t3 }}>Heure début</Typography>
-                <HourSelect value={startTime} onChange={(t) => write({ mode: 'window', startTime: t })} />
-              </Box>
-              <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>FIN (arrêt assignation)</Typography>
-              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                {ASSIGN_END_DAYS.filter((d) => d >= startDay).map((d) => (
-                  <SegChip
-                    key={`e${d}`}
-                    on={endDay === d}
-                    label={dayLabel(d)}
-                    onClick={() => write({ mode: 'window', endDay: d })}
+                  <Typography sx={{ fontSize: 12, color: V3.t3 }}>Heure fin</Typography>
+                  <HourSelect
+                    fullDay
+                    value={endTime === '23:59' ? '23:00' : endTime}
+                    onChange={(t) => write({ mode: 'window', allDay: false, endTime: t })}
                   />
-                ))}
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography sx={{ fontSize: 12, color: V3.t3 }}>Heure fin</Typography>
-                <HourSelect value={endTime} onChange={(t) => write({ mode: 'window', endTime: t })} />
-              </Box>
+                </Box>
+              )}
             </>
           )}
         </Box>
@@ -1921,6 +2036,7 @@ export default function OrchestrationOverviewPanel({
         const staffAssignment =
           (exec.staffAssignment as Record<string, unknown> | null | undefined) ??
           ({
+            days: [-3, -2, -1, 0],
             startAt: { ref, day: -3, time: '09:00' },
             endAt: { ref, day: 0, time: '11:00' },
             autoAssign: auto,
@@ -2150,11 +2266,10 @@ export default function OrchestrationOverviewPanel({
         const escOn = exec?.escalationEnabled === true;
         const dl = exec?.deadline as DeadlineDoc;
         const hints = configHints(cap, def.key);
-        const hasClient = def.columns.client !== 'na';
-        const hasTaskCol = def.columns.task !== 'na' && Boolean(def.taskType);
+        const actx = getCapabilityOrchestrationActivities(def);
+        const hasClient = actx.whatsapp;
+        const hasTaskCol = actx.hasOpsTask;
         const hasOrch = def.columns.orchestrated !== 'na';
-        const onDemand = isOnDemandCapability(def);
-        const hasClientReminders = hasOrch && !onDemand;
         const flags = readDecisionFlags(cap);
         return {
           key: def.key,
@@ -2168,27 +2283,52 @@ export default function OrchestrationOverviewPanel({
           hasTask: Boolean(def.taskType),
           hasTaskCol,
           hasOrch,
-          hasClientReminders,
-          onDemand,
-          flags: onDemand ? { ...flags, clientReminders: false } : flags,
+          hasClientReminders: actx.clientReminders,
+          hasStaffReminders: actx.staffReminders,
+          hasEscalation: actx.escalation,
+          onDemand: actx.onDemand,
+          flags: {
+            ...flags,
+            ...(actx.onDemand || !actx.clientReminders ? { clientReminders: false } : null),
+            ...(!actx.staffReminders ? { staffReminders: false } : null),
+          },
           hints,
-          availability: on
-            ? hasClient
+          // N/A = activité absente · Manuel = mode Manuel · créneaux = mode Auto · — = Auto sans config
+          availability: !actx.whatsapp
+            ? 'N/A'
+            : on
               ? availabilityHuman(cap.whatsapp?.menuOptions?.[0]?.availability as Availability)
-              : '—'
-            : 'Off',
-          reminders: reminders.length
-            ? `${daysHuman(reminders.map((r) => Number(r.day ?? 0)))} à ${hourOf(String(reminders[0]?.time ?? ''))}`
-            : '—',
-          // Choisir heure / enregistrement : pas de tâche ops → assignation & rappels staff N/A
-          assign: hasTaskCol ? (sa ? assignHuman(sa) : '—') : 'N/A',
-          autoAssign: hasTaskCol && sa ? (sa as { autoAssign?: boolean }).autoAssign === true : null,
-          staffReminder: hasTaskCol
-            ? staffRem.length
-              ? `${daysHuman(staffRem.map((r) => Number(r.day ?? 0)))} à ${hourOf(String(staffRem[0]?.time ?? ''))}`
-              : '—'
-            : 'N/A',
-          escalation: escalationHuman(escOn, dl),
+              : 'Off',
+          reminders: !actx.clientReminders
+            ? 'N/A'
+            : !flags.clientReminders
+              ? 'Manuel'
+              : reminders.length
+                ? `${daysHuman(reminders.map((r) => Number(r.day ?? 0)))} à ${hourOf(String(reminders[0]?.time ?? ''))}`
+                : '—',
+          assign: !actx.staffAssignment
+            ? 'N/A'
+            : !flags.staffAssignment
+              ? 'Manuel'
+              : sa
+                ? assignHuman(sa)
+                : '—',
+          autoAssign:
+            actx.staffAssignment && flags.staffAssignment && sa
+              ? (sa as { autoAssign?: boolean }).autoAssign === true
+              : null,
+          staffReminder: !actx.staffReminders
+            ? 'N/A'
+            : !flags.staffReminders
+              ? 'Manuel'
+              : staffRem.length
+                ? `${daysHuman(staffRem.map((r) => Number(r.day ?? 0)))} à ${hourOf(String(staffRem[0]?.time ?? ''))}`
+                : '—',
+          escalation: !actx.escalation
+            ? 'N/A'
+            : !flags.pmEscalation
+              ? 'Manuel'
+              : escalationHuman(escOn, dl),
         };
       }),
     [caps, activationStatus, isListingScope],
@@ -2290,7 +2430,7 @@ export default function OrchestrationOverviewPanel({
       case 'transport':
         return 'Ajoutez des trajets et fixez le prix de chaque course — puis Enregistrer.';
       case 'concierge':
-        return 'Choisissez les services conciergerie du catalogue, tarifs et détails — puis Enregistrer.';
+        return 'Les expériences (J3) se cochent dans l’onglet listing Expériences — pas ici.';
       case 'groceries':
         return 'Configurez les articles / paniers courses et leurs prix — puis Enregistrer.';
       default:
@@ -2479,8 +2619,8 @@ export default function OrchestrationOverviewPanel({
                         r.hasTaskCol && { on: r.flags.taskEnabled, label: 'Tâche' },
                         r.hasClientReminders && { on: r.flags.clientReminders, label: 'Rel' },
                         r.hasTaskCol && { on: r.flags.staffAssignment, label: 'Assign' },
-                        r.hasTaskCol && { on: r.flags.staffReminders, label: 'Rappel' },
-                        r.hasTaskCol && { on: r.flags.pmEscalation, label: 'Esc' },
+                        r.hasStaffReminders && { on: r.flags.staffReminders, label: 'Rappel' },
+                        r.hasEscalation && { on: r.flags.pmEscalation, label: 'Esc' },
                       ] as Array<{ on: boolean; label: string } | false>
                     )
                       .filter(Boolean)
@@ -2505,18 +2645,31 @@ export default function OrchestrationOverviewPanel({
                   </Box>
                   <Box
                     sx={{
-                      ...editCell,
+                      ...(r.key === 'concierge' ? cell : editCell),
                       display: 'flex',
                       flexWrap: 'wrap',
                       gap: 0.35,
                       minHeight: 28,
                       alignItems: 'center',
                       py: 0.25,
+                      ...(r.key === 'concierge' ? { cursor: 'default', opacity: 0.85 } : null),
                     }}
-                    onClick={() => setConfigModal({ capKey: r.key, tab: 'gestion' })}
-                    title="Contenu (prix, créneaux, catalogue…)"
+                    onClick={
+                      r.key === 'concierge'
+                        ? undefined
+                        : () => setConfigModal({ capKey: r.key, tab: 'gestion' })
+                    }
+                    title={
+                      r.key === 'concierge'
+                        ? 'Expériences (J3) — onglet listing Expériences'
+                        : 'Contenu (prix, créneaux, catalogue…)'
+                    }
                   >
-                    {r.hints.length === 0 ? (
+                    {r.key === 'concierge' ? (
+                      <Typography sx={{ ...cell, color: V3.t3, fontSize: 11.5, fontWeight: 700 }}>
+                        → Expériences
+                      </Typography>
+                    ) : r.hints.length === 0 ? (
                       <Typography sx={{ ...cell, color: V3.p, fontSize: 11.5, fontWeight: 700 }}>
                         + Contenu
                       </Typography>
@@ -2542,25 +2695,27 @@ export default function OrchestrationOverviewPanel({
                     component="div"
                     sx={r.on && r.hasClient ? editCell : { ...cell, opacity: 0.5 }}
                     onClick={r.on && r.hasClient ? open('availability', r.key) : undefined}
-                    title="Visibilité WhatsApp — fenêtre proposée au voyageur"
+                    title={
+                      r.hasClient
+                        ? 'Visibilité WhatsApp — fenêtre proposée au voyageur'
+                        : 'N/A — pas de menu voyageur'
+                    }
                   >
                     {r.availability}
                   </Typography>
                   <Typography
                     component="div"
-                    sx={r.on && r.hasClientReminders && r.hasTask ? editCell : cell}
+                    sx={r.on && r.hasClientReminders ? editCell : cell}
                     onClick={
-                      r.on && r.hasClientReminders && r.hasTask
-                        ? open('reminders', r.key)
-                        : undefined
+                      r.on && r.hasClientReminders ? open('reminders', r.key) : undefined
                     }
                     title={
-                      r.onDemand
-                        ? 'Pas de relances client (à la demande / ménage Sojori)'
-                        : 'Relances client (voyageur)'
+                      r.hasClientReminders
+                        ? 'Relances client (voyageur)'
+                        : 'N/A — pas de relances client'
                     }
                   >
-                    {r.onDemand ? 'N/A' : r.reminders}
+                    {r.reminders}
                   </Typography>
                   <Typography
                     component="div"
@@ -2569,50 +2724,82 @@ export default function OrchestrationOverviewPanel({
                     title={
                       r.hasTaskCol
                         ? 'Assignation staff — début / fin'
-                        : 'N/A — pas de tâche ops staff (choix heure / enregistrement)'
+                        : 'N/A — pas de tâche ops staff'
                     }
                   >
                     {r.assign}
+                    {r.assign !== 'Flow' &&
+                    r.assign !== 'Manuel' &&
+                    r.assign !== 'N/A' &&
+                    r.assign !== '—'
+                      ? r.autoAssign === true
+                        ? ' · Auto ✓'
+                        : r.autoAssign === false
+                          ? ' · Auto ✗'
+                          : ''
+                      : ''}
                   </Typography>
                   <Typography
                     component="div"
-                    sx={r.on && r.hasTaskCol ? editCell : cell}
-                    onClick={r.on && r.hasTaskCol ? open('staffRem', r.key) : undefined}
+                    sx={r.on && r.hasStaffReminders ? editCell : cell}
+                    onClick={r.on && r.hasStaffReminders ? open('staffRem', r.key) : undefined}
                     title={
-                      r.hasTaskCol
+                      r.hasStaffReminders
                         ? 'Rappels staff — notification équipe (jour + heure)'
-                        : 'N/A — pas de rappel staff (pas de tâche ops)'
+                        : 'N/A — pas de rappel staff horaire'
                     }
                   >
                     {r.staffReminder}
                   </Typography>
                   <Typography
                     component="div"
-                    sx={r.on && r.hasTask ? editCell : cell}
-                    onClick={r.on && r.hasTask ? open('escalation', r.key) : undefined}
-                    title="Escalade admin si non traité"
+                    sx={r.on && r.hasEscalation ? editCell : cell}
+                    onClick={r.on && r.hasEscalation ? open('escalation', r.key) : undefined}
+                    title={
+                      r.hasEscalation
+                        ? 'Escalade admin si non traité'
+                        : 'N/A — pas d’escalade'
+                    }
                   >
                     {r.escalation}
                   </Typography>
                   <Box>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      startIcon={<SettingsOutlinedIcon sx={{ fontSize: 14 }} />}
-                      onClick={() => setConfigModal({ capKey: r.key, tab: 'gestion' })}
-                      sx={{
-                        fontSize: 11,
-                        py: 0.35,
-                        px: 1,
-                        minWidth: 0,
-                        textTransform: 'none',
-                        bgcolor: V3.p,
-                        boxShadow: 'none',
-                        '&:hover': { bgcolor: V3.pd, boxShadow: 'none' },
-                      }}
-                    >
-                      Éditer
-                    </Button>
+                    {r.key === 'concierge' ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled
+                        sx={{
+                          fontSize: 11,
+                          py: 0.35,
+                          px: 1,
+                          minWidth: 0,
+                          textTransform: 'none',
+                        }}
+                        title="Contenu Conciergerie = onglet Expériences"
+                      >
+                        Expériences
+                      </Button>
+                    ) : (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<SettingsOutlinedIcon sx={{ fontSize: 14 }} />}
+                        onClick={() => setConfigModal({ capKey: r.key, tab: 'gestion' })}
+                        sx={{
+                          fontSize: 11,
+                          py: 0.35,
+                          px: 1,
+                          minWidth: 0,
+                          textTransform: 'none',
+                          bgcolor: V3.p,
+                          boxShadow: 'none',
+                          '&:hover': { bgcolor: V3.pd, boxShadow: 'none' },
+                        }}
+                      >
+                        Éditer
+                      </Button>
+                    )}
                   </Box>
                 </Box>
               ))}
@@ -2866,16 +3053,23 @@ export default function OrchestrationOverviewPanel({
           const act = activationStatus.find((s) => s.serviceId === dKey);
           return act ? act.effectiveEnabled === true : true;
         })();
-        const hasClient = dDef.columns.client !== 'na';
-        const hasTaskCol = dDef.columns.task !== 'na' && Boolean(dDef.taskType);
+        const actx = getCapabilityOrchestrationActivities(dDef);
+        const hasClient = actx.whatsapp;
+        const hasTaskCol = actx.hasOpsTask;
         const hasOrch = dDef.columns.orchestrated !== 'na';
-        const onDemand = isOnDemandCapability(dDef);
-        const hasClientReminders = hasOrch && !onDemand;
+        const onDemand = actx.onDemand;
+        const hasClientReminders = actx.clientReminders;
+        const hasStaffReminders = actx.staffReminders;
+        const hasEscalation = actx.escalation;
         const locked = !serviceOn;
 
         const toggle = (field: keyof DecisionFlags, value: boolean) => {
           const next = applyDecisionFlagRules({ ...flags, [field]: value }, field);
-          if (onDemand) next.clientReminders = false;
+          if (!hasClientReminders) next.clientReminders = false;
+          if (!hasStaffReminders) next.staffReminders = false;
+          if (!hasEscalation) next.pmEscalation = false;
+          if (!actx.staffAssignment) next.staffAssignment = false;
+          if (!actx.staffStartReminder) next.staffStartReminder = false;
           saveDecisionFlags(dKey, next);
         };
 
@@ -2940,17 +3134,17 @@ export default function OrchestrationOverviewPanel({
                   mode="autoManual"
                 />
               )}
-              {onDemand && hasOrch && (
+              {!hasClientReminders && (hasOrch || hasClient || onDemand) && (
                 <Box sx={{ py: 1, borderBottom: `1px solid ${V3.b}` }}>
                   <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: V3.t4 }}>
                     💌 Relances client
                   </Typography>
                   <Typography sx={{ fontSize: 11.5, color: V3.t3 }}>
-                    N/A — pas de relance voyageur (à la demande / ménage Sojori)
+                    N/A — pas de relance voyageur pour cette capacité
                   </Typography>
                 </Box>
               )}
-              {hasTaskCol && (
+              {actx.staffAssignment && (
                 <DecisionSwitch
                   label="👷 Assignation"
                   hint="Recherche staff à la fenêtre vs bouton Assigner"
@@ -2960,7 +3154,17 @@ export default function OrchestrationOverviewPanel({
                   mode="autoManual"
                 />
               )}
-              {hasTaskCol && (
+              {!actx.staffAssignment && hasOrch && (
+                <Box sx={{ py: 1, borderBottom: `1px solid ${V3.b}` }}>
+                  <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: V3.t4 }}>
+                    👷 Assignation
+                  </Typography>
+                  <Typography sx={{ fontSize: 11.5, color: V3.t3 }}>
+                    N/A — pas de tâche ops staff
+                  </Typography>
+                </Box>
+              )}
+              {hasStaffReminders && (
                 <DecisionSwitch
                   label="🔔 Rappels staff"
                   hint="Notif à J/heure vs bouton Rappeler"
@@ -2970,7 +3174,17 @@ export default function OrchestrationOverviewPanel({
                   mode="autoManual"
                 />
               )}
-              {hasTaskCol && (
+              {!hasStaffReminders && actx.staffAssignment && (
+                <Box sx={{ py: 1, borderBottom: `1px solid ${V3.b}` }}>
+                  <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: V3.t4 }}>
+                    🔔 Rappels staff
+                  </Typography>
+                  <Typography sx={{ fontSize: 11.5, color: V3.t3 }}>
+                    N/A — pas de rappel staff horaire pour cette activité
+                  </Typography>
+                </Box>
+              )}
+              {actx.staffStartReminder && (
                 <DecisionSwitch
                   label="⏰ Rappel début tâche"
                   hint="Une fois : heure de début passée et pas encore commencé — pas d’heure à choisir"
@@ -2980,7 +3194,7 @@ export default function OrchestrationOverviewPanel({
                   mode="onOff"
                 />
               )}
-              {hasTaskCol && (
+              {hasEscalation && (
                 <DecisionSwitch
                   label="🚨 Escalade admin"
                   hint="Alerte à la deadline vs bouton Escalader"
@@ -2990,21 +3204,33 @@ export default function OrchestrationOverviewPanel({
                   mode="autoManual"
                 />
               )}
+              {!hasEscalation && hasOrch && (
+                <Box sx={{ py: 1, borderBottom: `1px solid ${V3.b}` }}>
+                  <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: V3.t4 }}>
+                    🚨 Escalade admin
+                  </Typography>
+                  <Typography sx={{ fontSize: 11.5, color: V3.t3 }}>
+                    N/A — pas d’escalade pour cette capacité
+                  </Typography>
+                </Box>
+              )}
             </DialogContent>
             <DialogActions sx={{ px: 2, py: 1.5 }}>
               <Button onClick={() => setDecisionsModal(null)} sx={{ textTransform: 'none' }}>
                 Fermer
               </Button>
-              <Button
-                variant="contained"
-                onClick={() => {
-                  setDecisionsModal(null);
-                  setConfigModal({ capKey: dKey, tab: 'gestion' });
-                }}
-                sx={{ textTransform: 'none', bgcolor: V3.p, '&:hover': { bgcolor: V3.pd } }}
-              >
-                Configurer le contenu…
-              </Button>
+              {dKey !== 'concierge' ? (
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    setDecisionsModal(null);
+                    setConfigModal({ capKey: dKey, tab: 'gestion' });
+                  }}
+                  sx={{ textTransform: 'none', bgcolor: V3.p, '&:hover': { bgcolor: V3.pd } }}
+                >
+                  Configurer le contenu…
+                </Button>
+              ) : null}
             </DialogActions>
           </Dialog>
         );

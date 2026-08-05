@@ -15,10 +15,7 @@ import type { CapabilityRowState } from '../serviceMatrix/types';
 import V3Header, { type V3ScopeMode } from './V3Header';
 import V3Rail from './V3Rail';
 import V3ServicePanel from './V3ServicePanel';
-import OrchestrationModelSubTabs, {
-  SCHEDULED_MESSAGES_RAIL_KEY,
-  type OrchestrationModelSection,
-} from './OrchestrationModelSubTabs';
+import { SCHEDULED_MESSAGES_RAIL_KEY } from './OrchestrationModelSubTabs';
 import V3ScheduledMessagesPanel from './V3ScheduledMessagesPanel';
 import OrchestrationOverviewPanel from './OrchestrationOverviewPanel';
 import { V3 } from './theme';
@@ -89,7 +86,7 @@ export default function OrchestrationListingV3View({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(CAPABILITY_REGISTRY[0]?.key ?? null);
-  const [listingSection, setListingSection] = useState<OrchestrationModelSection>('apercu');
+  // Fiche listing : plus de sous-onglet Services & workflows — Vue d'ensemble uniquement.
   const [serviceActivationStatus, setServiceActivationStatus] = useState<
     ServiceActivationStatusEntry[] | undefined
   >(undefined);
@@ -303,7 +300,6 @@ export default function OrchestrationListingV3View({
     effectiveListingId,
     selectedKey,
     serviceActivationStatus,
-    listingSection,
     activationLoaded,
   ]);
 
@@ -497,20 +493,14 @@ export default function OrchestrationListingV3View({
       )}
 
       {showListingOrchestrationTabs ? (
-        <Box sx={{ px: embedded ? 1 : 2, pt: 1, flexShrink: 0 }}>
-          <OrchestrationModelSubTabs value={listingSection} onChange={setListingSection} />
-        </Box>
-      ) : null}
-
-      {showListingOrchestrationTabs && listingSection === 'apercu' ? (
-        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: embedded ? 1 : 2, pb: 2 }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: embedded ? 1 : 2, pb: 2, pt: 1 }}>
           <OrchestrationOverviewPanel
             ownerKey={ownerKey}
             listingId={effectiveListingId ?? undefined}
             listingName={listings.find(l => l.id === effectiveListingId)?.name}
           />
         </Box>
-      ) : showListingOrchestrationTabs && listingSection !== 'services' ? null : (
+      ) : (
       <Box
         sx={{
           flex: 1,
@@ -595,7 +585,7 @@ export default function OrchestrationListingV3View({
           effectiveListingId &&
           activationLoaded &&
           !listingHasEffectiveServices &&
-          (!showListingOrchestrationTabs || listingSection === 'services') ? (
+          !showListingOrchestrationTabs ? (
             <Alert severity="info" sx={{ m: 2 }}>
               Aucun service actif pour cette annonce. Activez des services dans la{' '}
               <strong>Vue d&apos;ensemble</strong> (colonne ON).

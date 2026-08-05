@@ -885,15 +885,9 @@ export default function StaffScheduleListView({
                 <th className="staff-sched-col-meta">Ville</th>
                 <th
                   className="staff-sched-col-auto"
-                  title="Assignation → acceptée tout de suite (le staff démarre puis termine)"
+                  title="Mode par activité (Normal / Auto-accepte / Fin seule) — modifier dans la fiche staff"
                 >
-                  Auto-accepte
-                </th>
-                <th
-                  className="staff-sched-col-auto"
-                  title="Assignation → déjà en cours. Le staff confirme seulement la fin (sans accepter ni démarrer)"
-                >
-                  Fin seule
+                  Modes
                 </th>
                 <th className="staff-sched-col-absence">Absence</th>
                 {DAY_DISPLAY_ORDER.map((d) => (
@@ -908,12 +902,21 @@ export default function StaffScheduleListView({
               {rows.map((s) => {
                 const dw = dayWindowsFor(s);
                 const always = alwaysFor(s);
-                const autoOn = s.autoAccept === true;
-                const finishOn = s.readyToFinish === true;
+                const modes = s.taskTypeModes || {};
+                const modeValues = sanitizeStaffAllowedTaskTypes(s.allowedTaskTypes as string[]).map(
+                  (t) => {
+                    const cfg = modes[t];
+                    if (!cfg) return 'normal';
+                    if (cfg.readyToFinish) return 'ready_to_finish';
+                    if (cfg.autoAccept) return 'auto_accept';
+                    return 'normal';
+                  },
+                );
+                const nFin = modeValues.filter((m) => m === 'ready_to_finish').length;
+                const nAuto = modeValues.filter((m) => m === 'auto_accept').length;
+                const nNorm = modeValues.filter((m) => m === 'normal').length;
                 const dirty = dirtyIds.has(s._id);
                 const saving = savingId === s._id;
-                const autoBusy = autoAcceptBusyId === s._id;
-                const finishBusy = readyToFinishBusyId === s._id;
                 const chipTypes = sanitizeStaffAllowedTaskTypes(s.allowedTaskTypes as string[]).slice(
                   0,
                   4,
@@ -930,19 +933,23 @@ export default function StaffScheduleListView({
                           <div className="nm">
                             {s.fullName}
                             {always ? <span className="staff-sched-always-badge">24/7</span> : null}
-                            {autoOn ? (
-                              <span className="staff-sched-auto-badge" title="Auto-accepte">
-                                Auto ✓
-                              </span>
-                            ) : null}
-                            {finishOn ? (
+                            {nAuto > 0 ? (
                               <span
                                 className="staff-sched-auto-badge"
-                                title="Fin seule — assignation → à terminer"
+                                title={`${nAuto} activité(s) en auto-accepte`}
                               >
-                                Fin ✓
+                                Auto {nAuto}
                               </span>
                             ) : null}
+                            {nFin > 0 ? (
+                              <span
+                                className="staff-sched-auto-badge"
+                                title={`${nFin} activité(s) en fin seule`}
+                              >
+                                Fin {nFin}
+                              </span>
+                            ) : null}
+                            {nNorm > 0 && nAuto === 0 && nFin === 0 ? null : null}
                           </div>
                           <div className="ph">{s.whatsappE164 || s.phoneE164}</div>
                         </div>
@@ -982,50 +989,23 @@ export default function StaffScheduleListView({
                       </span>
                     </td>
                     <td className="staff-sched-col-auto">
-                      <button
-                        type="button"
-                        className={`staff-sched-auto-switch${autoOn ? ' is-on' : ''}`}
-                        disabled={autoBusy}
-                        onClick={() => {
-                          if (!autoBusy) void handleToggleAutoAccept(s);
-                        }}
-                        aria-pressed={autoOn}
-                        title={
-                          autoOn
-                            ? 'Auto-accepte ON — assignation → acceptée (à démarrer)'
-                            : 'Auto-accepte OFF — le staff doit accepter sur WhatsApp'
-                        }
-                      >
-                        <span className="lbl off-lbl">No</span>
-                        <span
-                          className={`toggle${autoOn ? ' on' : ''}${autoBusy ? ' busy' : ''}`}
-                          aria-hidden
-                        />
-                        <span className="lbl on-lbl">Yes</span>
-                      </button>
-                    </td>
-                    <td className="staff-sched-col-auto">
-                      <button
-                        type="button"
-                        className={`staff-sched-auto-switch${finishOn ? ' is-on' : ''}`}
-                        disabled={finishBusy}
-                        onClick={() => {
-                          if (!finishBusy) void handleToggleReadyToFinish(s);
-                        }}
-                        aria-pressed={finishOn}
-                        title={
-                          finishOn
-                            ? 'Fin seule ON — assignation → à terminer (pas d’accepter ni démarrer)'
-                            : 'Fin seule OFF — parcours normal accepter → démarrer → terminer'
-                        }
-                      >
-                        <span className="lbl off-lbl">No</span>
-                        <span
-                          className={`toggle${finishOn ? ' on' : ''}${finishBusy ? ' busy' : ''}`}
-                          aria-hidden
-                        />
-                        <span className="lbl on-lbl">Yes</span>
-                      </button>
+                      <div className="staff-sched-task-chips" title="Configurer dans Modifier → Tâches autorisées">
+                        {modeValues.length === 0 ? (
+                          <span className="staff-sched-meta-muted">—</span>
+                        ) : (
+                          <>
+                            {nNorm > 0 ? (
+                              <span className="staff-sched-meta-muted">N·{nNorm}</span>
+                            ) : null}
+                            {nAuto > 0 ? (
+                              <span className="staff-sched-auto-badge">A·{nAuto}</span>
+                            ) : null}
+                            {nFin > 0 ? (
+                              <span className="staff-sched-auto-badge">F·{nFin}</span>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
                     </td>
                     <td className="staff-sched-col-absence">
                       <div className="staff-sched-abs-cell">

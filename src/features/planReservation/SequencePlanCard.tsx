@@ -228,9 +228,7 @@ function assignExecutionLine(assign: StaffAssignmentPlan): string {
     return 'Exécution · échec assignation';
   }
   if (assign.hasPendingLmAssign) {
-    return assign.nextAssignmentLabel.startsWith('Prochaine assignation LM ·')
-      ? `Exécution · ${assign.nextAssignmentLabel}`
-      : 'Exécution · assignation LM prévue';
+    return `Exécution · ${assign.nextAssignmentLabel || 'Assignation LM · immédiat (1 tentative)'}`;
   }
   if (assign.windowPast) return 'Exécution · fenêtre passée sans assignation confirmée';
   if (assign.windowOpen) return 'Exécution · fenêtre ouverte';
@@ -259,6 +257,8 @@ function AssignBlockBody({
     Boolean(assign.staffName);
   const staffAccepted = assign.status === 'found' && Boolean(assign.staffName);
   const showConfig =
+    assign.triggerMode === 'auto' ||
+    Boolean(assign.assignDaysLabel) ||
     !assign.windowPast ||
     assign.status === 'searching' ||
     assign.hasPendingLmAssign ||
@@ -320,7 +320,7 @@ function AssignBlockBody({
       {showConfig ? (
       <div className="assign-config-grid">
         <div className="cfg-cell">
-          <span className="cfg-lbl">Fenêtre</span>
+          <span className="cfg-lbl">{assign.assignDaysLabel ? 'Jours' : 'Fenêtre'}</span>
           <span className="cfg-val">{assign.windowRange}</span>
         </div>
         <div className="cfg-cell">
@@ -606,7 +606,9 @@ function sequenceConfigSubtitleParts(seq: PlanSequenceView): SubtitlePart[] {
   }
 
   if (seq.hasEscalade && seq.escalade) {
-    if (seq.escalade.scheduleOffsetLabel) {
+    if (seq.escalade.triggerMode === 'manual' && seq.escalade.status === 'en_attente') {
+      parts.push({ text: 'escalade manuel' });
+    } else if (seq.escalade.scheduleOffsetLabel) {
       parts.push({ text: `escalade ${seq.escalade.scheduleOffsetLabel}` });
     } else if (seq.escalade.status === 'active') {
       parts.push({ text: 'escalade active' });
@@ -826,21 +828,32 @@ export default function SequencePlanCard({
             <CollapseBlock
               icon={seq.escalade.status === 'active' ? '🚨' : '🛡'}
               title="Escalade PM"
-              groupStatus={escaladeGroup}
-              countLabel={
-                seq.escalade.scheduleOffsetLabel ||
-                (seq.escalade.status === 'active'
-                  ? 'Active · intervention'
-                  : seq.escalade.status === 'saute'
-                    ? 'Non nécessaire'
-                    : seq.escalade.scheduled
-                      ? 'Prévue si non confirmé'
-                      : escaladeGroup === 'done'
-                        ? 'Non nécessaire'
-                        : 'Prévue si non confirmé')
+              groupStatus={
+                seq.escalade.triggerMode === 'manual' && seq.escalade.status === 'en_attente'
+                  ? 'future'
+                  : escaladeGroup
               }
-              defaultOpen={defaultOpenForStatus(escaladeGroup)}
+              countLabel={
+                seq.escalade.triggerMode === 'manual' && seq.escalade.status === 'en_attente'
+                  ? 'Manuel · actions admin'
+                  : seq.escalade.scheduleOffsetLabel ||
+                    (seq.escalade.status === 'active'
+                      ? 'Active · intervention'
+                      : seq.escalade.status === 'saute'
+                        ? 'Non nécessaire'
+                        : seq.escalade.scheduled
+                          ? 'Prévue si non confirmé'
+                          : escaladeGroup === 'done'
+                            ? 'Non nécessaire'
+                            : 'Prévue si non confirmé')
+              }
+              defaultOpen={defaultOpenForStatus(
+                seq.escalade.triggerMode === 'manual' && seq.escalade.status === 'en_attente'
+                  ? 'future'
+                  : escaladeGroup,
+              )}
             >
+              {seq.escalade.triggerMode === 'manual' && seq.escalade.status === 'en_attente' ? null : (
               <div
                 className={`escalade-row${
                   seq.escalade.status === 'active'
@@ -863,10 +876,11 @@ export default function SequencePlanCard({
                 </div>
                 <div className="info">
                   <b>{seq.escalade.description}</b>
-                  <div className="ds">{seq.escalade.dueAt}</div>
+                  {seq.escalade.dueAt ? <div className="ds">{seq.escalade.dueAt}</div> : null}
                 </div>
-                <div className="when">{seq.escalade.dueAt}</div>
+                {seq.escalade.dueAt ? <div className="when">{seq.escalade.dueAt}</div> : null}
               </div>
+              )}
               <EscaladeActionsPanel
                 reservationId={reservationId}
                 taskId={taskId}
@@ -877,6 +891,7 @@ export default function SequencePlanCard({
                 reservationRef={reservationRef}
                 staffAssignment={seq.staffAssignment}
                 clientChosenTime={seq.clientChosenTime}
+                checkInIso={checkInIso}
                 onDispatched={onDispatched}
               />
             </CollapseBlock>

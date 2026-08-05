@@ -77,6 +77,7 @@ function emptyStaff(): Staff {
     allowedListingIds: [],
     allowedCityIds: [],
     alwaysAvailable: false,
+    taskTypeModes: {},
     autoAccept: false,
     readyToFinish: false,
     lang: 'fr',
@@ -170,6 +171,8 @@ export default function StaffPageView({
   const [listingCityFilter, setListingCityFilter] = useState<string | null>(null);
   /** Jour sélectionné pour éditer ses créneaux (null = panneau fermé). */
   const [planningDay, setPlanningDay] = useState<number | null>(1);
+  /** Activités ouvertes (collapse) — toutes repliées par défaut. */
+  const [expandedActivities, setExpandedActivities] = useState<Record<string, boolean>>({});
 
   const staff = useMemo(() => {
     if (staffProp.length > 0) return staffProp;
@@ -223,6 +226,7 @@ export default function StaffPageView({
     setAccessPanel(null);
     setListingCityFilter(null);
     setPlanningDay(1);
+    setExpandedActivities({});
     setDrawerOpen(true);
     setSelectedId(null);
   };
@@ -273,6 +277,7 @@ export default function StaffPageView({
       ...s,
       rates: { ...s.rates },
       alwaysAvailable: s.alwaysAvailable === true,
+      taskTypeModes: { ...(s.taskTypeModes || {}) },
       autoAccept: s.autoAccept === true,
       readyToFinish: s.readyToFinish === true,
       allowedTaskTypes: sanitizeStaffAllowedTaskTypes(s.allowedTaskTypes as string[]),
@@ -285,17 +290,67 @@ export default function StaffPageView({
     setAccessPanel(deriveAccessPanel(s));
     setListingCityFilter(null);
     setPlanningDay(daysOfWeek[0] ?? null);
+    setExpandedActivities({});
     setDrawerOpen(true);
     setSelectedId(s._id);
   };
 
   const patchForm = (patch: Partial<Staff>) => setForm((f) => ({ ...f, ...patch }));
 
-  const toggleTaskType = (key: string) => {
+  const setActivityAccess = (key: string, on: boolean) => {
     const set = new Set(form.allowedTaskTypes as string[]);
-    if (set.has(key)) set.delete(key);
-    else set.add(key);
-    patchForm({ allowedTaskTypes: [...set] as Staff['allowedTaskTypes'] });
+    const modes = { ...(form.taskTypeModes || {}) };
+    if (on) {
+      set.add(key);
+      modes[key] = modes[key] || {
+        notifyAssign: true,
+        remindMode: 'individual',
+        autoAccept: false,
+        readyToFinish: false,
+      };
+    } else {
+      set.delete(key);
+    }
+    patchForm({
+      allowedTaskTypes: [...set] as Staff['allowedTaskTypes'],
+      taskTypeModes: modes,
+    });
+  };
+
+  const toggleActivityExpanded = (key: string) => {
+    setExpandedActivities((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const patchTaskTypeCfg = (
+    key: string,
+    patch: Partial<{
+      notifyAssign: boolean;
+      remindMode: 'individual' | 'daily_digest';
+      digestTime: string;
+      autoAccept: boolean;
+      readyToFinish: boolean;
+    }>,
+  ) => {
+    const prev = form.taskTypeModes?.[key] || {
+      notifyAssign: true,
+      remindMode: 'individual' as const,
+      autoAccept: false,
+      readyToFinish: false,
+    };
+    let next = { ...prev, ...patch };
+    // Fin seule gagne : si Fin=oui → Auto forcé oui (status doing).
+    if (next.readyToFinish) next = { ...next, autoAccept: true };
+    if (next.remindMode === 'daily_digest') {
+      next = {
+        ...next,
+        // Journalier = digeste seul ; pas de WA unitaire à l’assign.
+        notifyAssign: false,
+        digestTime: next.digestTime || '17:00',
+      };
+    }
+    patchForm({
+      taskTypeModes: { ...(form.taskTypeModes || {}), [key]: next },
+    });
   };
 
   const selectedCityIds = useMemo(
@@ -641,11 +696,18 @@ export default function StaffPageView({
                   </span>
                   <span style={{ fontFamily: 'var(--mono)', color: 'var(--t)' }}>
                     {s.whatsappE164 || s.phoneE164}
-                    {s.whatsappNotificationsEnabled === false ? ' · notifs off' : ''}
-                    {s.whatsappNotificationsEnabled !== false &&
-                    s.orchestrationNotify?.mode === 'daily_digest'
-                      ? ` · digeste ${s.orchestrationNotify.digestTime || '17:00'}`
-                      : ''}
+                    {(() => {
+                      const digestModes = Object.values(s.taskTypeModes || {}).filter(
+                        (m) => m?.remindMode === 'daily_digest',
+                      );
+                      if (!digestModes.length) return '';
+                      const hours = [
+                        ...new Set(
+                          digestModes.map((m) => m.digestTime || '17:00'),
+                        ),
+                      ];
+                      return ` · digeste ${hours.join('/')}`;
+                    })()}
                   </span>
                 </div>
                 {firstRate && (
@@ -784,31 +846,294 @@ export default function StaffPageView({
               </div>
             </div>
 
-            {/* Types de tâches terrain (plus de « Métier » ni parcours voyageur) */}
+            {/* Activités : liste complète en collapse — Accès Oui/Non + options. */}
             <div className="form-section full">
               <div className="form-section-h">
-                Tâches autorisées<span className="req">*</span>
+                Activités<span className="req">*</span>
               </div>
-              <div className="pill-group">
-                {STAFF_TASK_PILLS.map((p) => (
-                  <button
-                    key={p.key}
-                    type="button"
-                    className={`pill-toggle${
-                      (form.allowedTaskTypes as string[]).includes(p.key) ? ' on' : ''
-                    }`}
-                    onClick={() => toggleTaskType(p.key)}
-                  >
-                    <span style={{ marginRight: 3 }}>{p.emoji}</span>
-                    {p.label}
-                  </button>
-                ))}
+              <div className="ds" style={{ marginBottom: 8 }}>
+                Accès Oui = staff assignable. Ouvrir ▶ pour Notifier · Rappels · Auto · Fin.
               </div>
               {form.allowedTaskTypes.length === 0 ? (
                 <p className="staff-recap-warn">
-                  ⚠ Aucune tâche autorisée — ce staff ne recevra jamais d&apos;assignation.
+                  ⚠ Aucune activité active — ce staff ne recevra jamais d&apos;assignation.
                 </p>
               ) : null}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {STAFF_TASK_PILLS.map((p) => {
+                  const accessOn = (form.allowedTaskTypes as string[]).includes(p.key);
+                  const expanded = expandedActivities[p.key] === true;
+                  const cfg = form.taskTypeModes?.[p.key] || {
+                    notifyAssign: true,
+                    remindMode: 'individual' as const,
+                    autoAccept: false,
+                    readyToFinish: false,
+                  };
+                  return (
+                    <div
+                      key={p.key}
+                      style={{
+                        border: '1px solid var(--bd, #e5e7eb)',
+                        borderRadius: 10,
+                        overflow: 'hidden',
+                        opacity: accessOn ? 1 : 0.72,
+                      }}
+                    >
+                      <div
+                        className="admin-row"
+                        style={{
+                          padding: '8px 10px',
+                          margin: 0,
+                          gap: 8,
+                          cursor: 'pointer',
+                          background: expanded ? 'var(--bg2, #f8fafc)' : undefined,
+                        }}
+                        onClick={() => toggleActivityExpanded(p.key)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleActivityExpanded(p.key);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={expanded}
+                      >
+                        <span
+                          style={{
+                            width: 18,
+                            fontSize: 12,
+                            color: 'var(--t3)',
+                            flexShrink: 0,
+                          }}
+                          aria-hidden
+                        >
+                          {expanded ? '▼' : '▶'}
+                        </span>
+                        <span style={{ fontSize: 16 }}>{p.emoji}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="nm" style={{ fontSize: 13 }}>
+                            {p.label}
+                          </div>
+                        </div>
+                        <div
+                          className="pill-group"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          {(
+                            [
+                              { id: true, label: 'Oui' },
+                              { id: false, label: 'Non' },
+                            ] as const
+                          ).map((opt) => (
+                            <button
+                              key={String(opt.id)}
+                              type="button"
+                              className={`pill-toggle${accessOn === opt.id ? ' on' : ''}`}
+                              onClick={() => setActivityAccess(p.key, opt.id)}
+                              title="Accès activité"
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {expanded ? (
+                        <div style={{ padding: '6px 12px 10px', borderTop: '1px solid var(--bd, #e5e7eb)' }}>
+                          {!accessOn ? (
+                            <div className="ds" style={{ marginBottom: 6 }}>
+                              Accès Non — options mémorisées, actives seulement si Accès Oui.
+                            </div>
+                          ) : null}
+                          <div
+                            className="activity-cfg-compact"
+                            style={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              alignItems: 'center',
+                              gap: '6px 14px',
+                            }}
+                          >
+                            <div
+                              className="activity-cfg-item"
+                              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                              title={
+                                cfg.remindMode === 'daily_digest'
+                                  ? `Inclus dans digeste ${cfg.digestTime || '17:00'} (pas de WA à l’assign)`
+                                  : 'Notif WhatsApp à l’assignation'
+                              }
+                            >
+                              <span className="nm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                                Notifier
+                              </span>
+                              <div className="pill-group">
+                                {(
+                                  [
+                                    { id: true, label: 'Oui' },
+                                    { id: false, label: 'Non' },
+                                  ] as const
+                                ).map((opt) => (
+                                  <button
+                                    key={String(opt.id)}
+                                    type="button"
+                                    disabled={cfg.remindMode === 'daily_digest'}
+                                    className={`pill-toggle${
+                                      (cfg.remindMode === 'daily_digest'
+                                        ? false
+                                        : cfg.notifyAssign) === opt.id
+                                        ? ' on'
+                                        : ''
+                                    }`}
+                                    onClick={() => {
+                                      if (cfg.remindMode === 'daily_digest') return;
+                                      patchTaskTypeCfg(p.key, { notifyAssign: opt.id });
+                                    }}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div
+                              className="activity-cfg-item"
+                              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                              title="Rappels orchestration"
+                            >
+                              <span className="nm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                                Rappels
+                              </span>
+                              <div className="pill-group">
+                                {(
+                                  [
+                                    { id: 'individual' as const, label: 'Indiv.' },
+                                    { id: 'daily_digest' as const, label: 'Journ.' },
+                                  ] as const
+                                ).map((opt) => (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    className={`pill-toggle${
+                                      cfg.remindMode === opt.id ? ' on' : ''
+                                    }`}
+                                    onClick={() =>
+                                      patchTaskTypeCfg(p.key, { remindMode: opt.id })
+                                    }
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                              {cfg.remindMode === 'daily_digest' ? (
+                                <input
+                                  className="input"
+                                  type="time"
+                                  title="Heure digeste (Casablanca)"
+                                  style={{
+                                    width: 92,
+                                    padding: '2px 6px',
+                                    fontSize: 12,
+                                    height: 26,
+                                  }}
+                                  value={cfg.digestTime || '17:00'}
+                                  onChange={(e) =>
+                                    patchTaskTypeCfg(p.key, {
+                                      remindMode: 'daily_digest',
+                                      digestTime: e.target.value || '17:00',
+                                    })
+                                  }
+                                />
+                              ) : null}
+                            </div>
+
+                            <div
+                              className="activity-cfg-item"
+                              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                              title="Assignation → acceptée"
+                            >
+                              <span className="nm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                                Auto
+                              </span>
+                              <div className="pill-group">
+                                {(
+                                  [
+                                    { id: true, label: 'Oui' },
+                                    { id: false, label: 'Non' },
+                                  ] as const
+                                ).map((opt) => (
+                                  <button
+                                    key={`auto-${String(opt.id)}`}
+                                    type="button"
+                                    className={`pill-toggle${
+                                      cfg.readyToFinish
+                                        ? opt.id
+                                          ? ' on'
+                                          : ''
+                                        : Boolean(cfg.autoAccept) === opt.id
+                                          ? ' on'
+                                          : ''
+                                    }`}
+                                    onClick={() => {
+                                      if (opt.id) {
+                                        patchTaskTypeCfg(p.key, {
+                                          autoAccept: true,
+                                          readyToFinish: false,
+                                        });
+                                      } else {
+                                        patchTaskTypeCfg(p.key, {
+                                          autoAccept: false,
+                                          readyToFinish: false,
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div
+                              className="activity-cfg-item"
+                              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                              title="Déjà en cours (prioritaire sur Auto)"
+                            >
+                              <span className="nm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                                Fin
+                              </span>
+                              <div className="pill-group">
+                                {(
+                                  [
+                                    { id: true, label: 'Oui' },
+                                    { id: false, label: 'Non' },
+                                  ] as const
+                                ).map((opt) => (
+                                  <button
+                                    key={`fin-${String(opt.id)}`}
+                                    type="button"
+                                    className={`pill-toggle${
+                                      Boolean(cfg.readyToFinish) === opt.id ? ' on' : ''
+                                    }`}
+                                    onClick={() =>
+                                      patchTaskTypeCfg(p.key, {
+                                        readyToFinish: opt.id,
+                                        autoAccept: opt.id ? true : cfg.autoAccept,
+                                      })
+                                    }
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="form-section">
@@ -1055,124 +1380,6 @@ export default function StaffPageView({
                   )}
                 </div>
               ) : null}
-            </div>
-
-            <div className="form-section full">
-              <div className="form-section-h">Notifications</div>
-              <div className="admin-row">
-                <span style={{ fontSize: 18 }}>💬</span>
-                <div style={{ flex: 1 }}>
-                  <div className="nm">WhatsApp · notifs tâches</div>
-                  <div className="ds">
-                    Yes = reçoit assignation / annulation sur WhatsApp · No = silencieux
-                  </div>
-                </div>
-                <div
-                  className={`toggle${form.whatsappNotificationsEnabled !== false ? ' on' : ''}`}
-                  onClick={() =>
-                    patchForm({
-                      whatsappNotificationsEnabled: form.whatsappNotificationsEnabled === false,
-                    })
-                  }
-                  onKeyDown={() => {}}
-                  role="switch"
-                  aria-checked={form.whatsappNotificationsEnabled !== false}
-                />
-              </div>
-
-              <div style={{ marginTop: 14 }}>
-                <div className="nm" style={{ marginBottom: 4 }}>
-                  Rappels orchestration
-                </div>
-                <div className="ds" style={{ marginBottom: 8 }}>
-                  Individuel = 1 WA par rappel · Journalier = 1 push/jour (flow 7 jours). Silence =
-                  coupe WhatsApp ci-dessus.
-                </div>
-                <div className="pill-group" style={{ marginBottom: 10 }}>
-                  {(
-                    [
-                      { id: 'individual', label: 'Individuel' },
-                      { id: 'daily_digest', label: 'Journalier' },
-                    ] as const
-                  ).map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      className={`pill-toggle${
-                        (form.orchestrationNotify?.mode === 'daily_digest'
-                          ? 'daily_digest'
-                          : 'individual') === opt.id
-                          ? ' on'
-                          : ''
-                      }`}
-                      disabled={form.whatsappNotificationsEnabled === false}
-                      onClick={() =>
-                        patchForm({
-                          orchestrationNotify: {
-                            mode: opt.id,
-                            digestTime: form.orchestrationNotify?.digestTime || '17:00',
-                          },
-                        })
-                      }
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                {form.orchestrationNotify?.mode === 'daily_digest' &&
-                  form.whatsappNotificationsEnabled !== false && (
-                  <div className="field" style={{ maxWidth: 180 }}>
-                    <div className="field-label">Heure digeste (Casablanca)</div>
-                    <input
-                      className="input"
-                      type="time"
-                      value={form.orchestrationNotify?.digestTime || '17:00'}
-                      onChange={(e) =>
-                        patchForm({
-                          orchestrationNotify: {
-                            mode: 'daily_digest',
-                            digestTime: e.target.value || '17:00',
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="admin-row" style={{ marginTop: 10 }}>
-                <span style={{ fontSize: 18 }}>✓</span>
-                <div style={{ flex: 1 }}>
-                  <div className="nm">Auto-accepte</div>
-                  <div className="ds">
-                    Assignation → acceptée. Le staff démarre puis termine (pas d’attente WhatsApp).
-                  </div>
-                </div>
-                <div
-                  className={`toggle${form.autoAccept ? ' on' : ''}`}
-                  onClick={() => patchForm({ autoAccept: !form.autoAccept })}
-                  onKeyDown={() => {}}
-                  role="switch"
-                  aria-checked={Boolean(form.autoAccept)}
-                />
-              </div>
-              <div className="admin-row" style={{ marginTop: 10 }}>
-                <span style={{ fontSize: 18 }}>✔️</span>
-                <div style={{ flex: 1 }}>
-                  <div className="nm">Fin seule</div>
-                  <div className="ds">
-                    Assignation → déjà en cours. Le staff confirme seulement la fin (sans
-                    accepter ni démarrer).
-                  </div>
-                </div>
-                <div
-                  className={`toggle${form.readyToFinish ? ' on' : ''}`}
-                  onClick={() => patchForm({ readyToFinish: !form.readyToFinish })}
-                  onKeyDown={() => {}}
-                  role="switch"
-                  aria-checked={Boolean(form.readyToFinish)}
-                />
-              </div>
             </div>
 
             <div className="form-section full">

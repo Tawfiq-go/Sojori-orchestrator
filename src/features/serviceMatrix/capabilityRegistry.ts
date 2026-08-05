@@ -320,7 +320,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     orchestrationFlag: 'orchestration_custom',
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'yes', execution: 'yes' },
     durationKind: 'na',
-    gestionHint: 'customServices · formules · villes',
+    gestionHint: 'Expériences listing (onglet Expériences) — pas de catalogue ici',
     whatsappHint: 'Option J3 · request_custom_service',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
@@ -413,6 +413,29 @@ export function defaultListingRailCapabilityKey(): string {
   return row?.key ?? 'cleaning_free';
 }
 
+/**
+ * Activités d’orchestration affichées dans la matrice (WA / Rel / Assign / Rappels / Esc).
+ * N/A = l’activité n’existe pas pour cette capacité ; sinon Auto/Manuel ou horaires / « — ».
+ */
+export type CapabilityOrchestrationActivities = {
+  /** Colonne WhatsApp / disponibilité menu voyageur */
+  whatsapp: boolean;
+  /** Relances client (scheduler vs cockpit) */
+  clientReminders: boolean;
+  /** Assignation staff (fenêtre + Auto/Manuel) */
+  staffAssignment: boolean;
+  /** Rappels staff J/heure (hors « rappel début » ponctuel) */
+  staffReminders: boolean;
+  /** Rappel début tâche (une fois, pas d’horaire configurable) */
+  staffStartReminder: boolean;
+  /** Escalade admin */
+  escalation: boolean;
+  /** true = pas de tâche ops (taskType ou colonne task) */
+  hasOpsTask: boolean;
+  /** true = à la demande / staff-only sans push voyageur planifié */
+  onDemand: boolean;
+};
+
 /** Tâches sans relances voyageur (à la demande + ménage Sojori checkout + accueil staff). */
 export const NO_CLIENT_REMINDER_TASK_TYPES = [
   'cleaning_paid',
@@ -424,25 +447,71 @@ export const NO_CLIENT_REMINDER_TASK_TYPES = [
   'checkout_cleaning',
   'receive_arrival',
   'receive_departure',
-] as const
+] as const;
+
+/**
+ * Capacités avec tâche ops mais sans rappels staff horaires (J/heure).
+ * Liste vide : ménage Sojori peut rappeler le staff comme les autres ménages.
+ */
+export const NO_STAFF_REMINDER_CAPABILITY_KEYS = [] as const;
 
 /** @deprecated alias — préférer NO_CLIENT_REMINDER_TASK_TYPES */
-export const ON_DEMAND_TASK_TYPES = NO_CLIENT_REMINDER_TASK_TYPES
+export const ON_DEMAND_TASK_TYPES = NO_CLIENT_REMINDER_TASK_TYPES;
 
 export function isOnDemandCapability(
   def: Pick<CapabilityDefinition, 'taskType' | 'key'> | null | undefined,
 ): boolean {
-  if (!def) return false
-  if (def.key === 'cleaning_sojori') return true
-  const t = def.taskType ?? def.key
-  return (NO_CLIENT_REMINDER_TASK_TYPES as readonly string[]).includes(String(t))
+  if (!def) return false;
+  if (def.key === 'cleaning_sojori') return true;
+  const t = def.taskType ?? def.key;
+  return (NO_CLIENT_REMINDER_TASK_TYPES as readonly string[]).includes(String(t));
 }
 
 /** true = pas de toggle Relances client (N/A). */
 export function hasNoClientReminders(
   def: Pick<CapabilityDefinition, 'taskType' | 'key'> | null | undefined,
 ): boolean {
-  return isOnDemandCapability(def)
+  if (!def) return false;
+  // Infos séjour (H) : WA menu seulement — pas de relances planifiées.
+  if (def.key === 'house_rules') return true;
+  return isOnDemandCapability(def);
+}
+
+/**
+ * Source de vérité unique pour N/A vs éditable sur toute la matrice.
+ * Dérivé des colonnes registry + listes d’exclusion métier.
+ */
+export function getCapabilityOrchestrationActivities(
+  def: Pick<CapabilityDefinition, 'key' | 'taskType' | 'columns'> | null | undefined,
+): CapabilityOrchestrationActivities {
+  if (!def) {
+    return {
+      whatsapp: false,
+      clientReminders: false,
+      staffAssignment: false,
+      staffReminders: false,
+      staffStartReminder: false,
+      escalation: false,
+      hasOpsTask: false,
+      onDemand: false,
+    };
+  }
+  const whatsapp = def.columns.client !== 'na';
+  const hasOrch = def.columns.orchestrated !== 'na';
+  const hasOpsTask = def.columns.task !== 'na' && Boolean(def.taskType);
+  const onDemand = isOnDemandCapability(def);
+  const noClientRem = hasNoClientReminders(def);
+  const noStaffRem = (NO_STAFF_REMINDER_CAPABILITY_KEYS as readonly string[]).includes(def.key);
+  return {
+    whatsapp,
+    clientReminders: whatsapp && hasOrch && !noClientRem,
+    staffAssignment: hasOpsTask,
+    staffReminders: hasOpsTask && !noStaffRem,
+    staffStartReminder: hasOpsTask,
+    escalation: hasOpsTask,
+    hasOpsTask,
+    onDemand,
+  };
 }
 
 export function defaultExecutionState(): import('./types').CapabilityExecutionState {
