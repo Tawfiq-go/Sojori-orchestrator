@@ -239,6 +239,8 @@ export default function ConversationThread({
   const [sending, setSending] = useState(false);
   const [inspectedMessage, setInspectedMessage] = useState<Message | null>(null);
   const [expandedTraceSteps, setExpandedTraceSteps] = useState<Record<string, boolean>>({});
+  const [inspectTab, setInspectTab] = useState<'process' | 'prompt' | 'cost'>('process');
+  const [expandedPromptParts, setExpandedPromptParts] = useState<Record<string, boolean>>({});
   const [flowMenuOpen, setFlowMenuOpen] = useState(false);
   const hasRenderableMessages =
     messages.filter((m) => m.type !== 'day-separator').length > 0;
@@ -313,6 +315,8 @@ export default function ConversationThread({
     }
     if (!canInspectAi || !message.isAI || message.isAdmin) return;
     setExpandedTraceSteps({});
+    setExpandedPromptParts({});
+    setInspectTab('process');
     setInspectedMessage(message);
   };
 
@@ -1870,7 +1874,12 @@ export default function ConversationThread({
                   {[
                     `Route: ${inspectedMessage.processingTrace.route || 'unknown'}`,
                     `Categories: ${inspectedCategories.length ? inspectedCategories.join(', ') : 'none'}`,
-                    `Tokens: ${inspectedMessage.tokensUsed ?? 'n/a'}`,
+                    `Tokens: ${
+                      inspectedMessage.aiUsage?.promptTokens != null ||
+                      inspectedMessage.aiUsage?.completionTokens != null
+                        ? `${inspectedMessage.aiUsage.promptTokens ?? '—'} in / ${inspectedMessage.aiUsage.completionTokens ?? '—'} out`
+                        : inspectedMessage.tokensUsed ?? 'n/a'
+                    }`,
                   ].map((label) => (
                     <Box
                       key={label}
@@ -1890,8 +1899,40 @@ export default function ConversationThread({
                   ))}
                 </Box>
               )}
+              <Box sx={{ display: 'flex', gap: 0.5, mt: 1.75 }}>
+                {(
+                  [
+                    { id: 'process' as const, label: 'Process' },
+                    { id: 'prompt' as const, label: 'AI Prompt' },
+                    { id: 'cost' as const, label: 'AI Cost' },
+                  ] as const
+                ).map((tab) => (
+                  <Box
+                    key={tab.id}
+                    component="button"
+                    type="button"
+                    onClick={() => setInspectTab(tab.id)}
+                    sx={{
+                      flex: 1,
+                      py: 0.85,
+                      px: 1,
+                      borderRadius: '8px',
+                      border: `1px solid ${inspectTab === tab.id ? T.ai : T.border}`,
+                      bgcolor: inspectTab === tab.id ? 'rgba(99,102,241,0.08)' : T.bg2,
+                      color: inspectTab === tab.id ? T.ai : T.text3,
+                      fontSize: 11,
+                      fontWeight: 750,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {tab.label}
+                  </Box>
+                ))}
+              </Box>
             </Box>
             <Stack spacing={1.25} sx={{ p: 2.5, overflowY: 'auto' }}>
+              {inspectTab === 'process' && (
+                <>
               {!inspectedMessage.processingTrace && (
                 <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#fff7ed', border: '1px solid #fed7aa' }}>
                   <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: '#9a3412' }}>
@@ -1980,6 +2021,167 @@ export default function ConversationThread({
                   </Box>
                 </Box>
               ))}
+                </>
+              )}
+
+              {inspectTab === 'prompt' && (
+                <>
+                  {!inspectedMessage.aiPrompt?.parts?.length ? (
+                    <Box sx={{ p: 2, borderRadius: 2, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>No AI prompt for this reply</Typography>
+                      <Typography sx={{ mt: 0.75, fontSize: 12, color: T.text3, lineHeight: 1.55 }}>
+                        Deterministic menu/flow routes do not call the LLM. Prompt sections are saved only on conversational AI replies (new messages after this deploy).
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <>
+                      <Box
+                        sx={{
+                          p: 1.25,
+                          borderRadius: 1.5,
+                          bgcolor: T.bg2,
+                          border: `1px solid ${T.border}`,
+                          fontSize: 11,
+                          color: T.text3,
+                          fontFamily: '"Geist Mono", monospace',
+                        }}
+                      >
+                        Total input ≈ {inspectedMessage.aiPrompt.totalEstimatedInputTokens.toLocaleString()} tokens
+                        {inspectedMessage.aiPrompt.scaledToProvider
+                          ? ' (scaled to provider usage)'
+                          : ' (char estimate ~4 chars/token)'}
+                      </Box>
+                      {inspectedMessage.aiPrompt.parts.map((part) => (
+                        <Box
+                          key={part.key}
+                          sx={{ borderBottom: `1px solid ${T.border}`, pb: 1.25 }}
+                        >
+                          <Box
+                            component="button"
+                            type="button"
+                            onClick={() =>
+                              setExpandedPromptParts((c) => ({ ...c, [part.key]: !c[part.key] }))
+                            }
+                            sx={{
+                              width: '100%',
+                              p: 0,
+                              border: 0,
+                              bgcolor: 'transparent',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              color: 'inherit',
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+                              <Typography sx={{ fontSize: 12.5, fontWeight: 750 }}>{part.label}</Typography>
+                              <Typography
+                                sx={{ fontSize: 9.5, color: T.text4, fontFamily: '"Geist Mono", monospace' }}
+                              >
+                                {part.estimatedTokens.toLocaleString()} tok
+                              </Typography>
+                            </Box>
+                            <Typography sx={{ mt: 0.5, fontSize: 9.5, color: T.ai, fontWeight: 700 }}>
+                              {expandedPromptParts[part.key] ? '▾ Hide content' : '› Show content'}
+                            </Typography>
+                          </Box>
+                          {expandedPromptParts[part.key] && (
+                            <Box
+                              component="pre"
+                              sx={{
+                                mt: 1,
+                                mb: 0,
+                                p: 1.25,
+                                borderRadius: 1.5,
+                                bgcolor: T.bg2,
+                                color: T.text3,
+                                fontSize: 10,
+                                lineHeight: 1.55,
+                                whiteSpace: 'pre-wrap',
+                                overflowWrap: 'anywhere',
+                                maxHeight: 320,
+                                overflowY: 'auto',
+                              }}
+                            >
+                              {part.content}
+                            </Box>
+                          )}
+                        </Box>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+
+              {inspectTab === 'cost' && (
+                <>
+                  {!inspectedMessage.aiUsage && inspectedMessage.tokensUsed == null ? (
+                    <Box sx={{ p: 2, borderRadius: 2, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>No AI cost for this reply</Typography>
+                      <Typography sx={{ mt: 0.75, fontSize: 12, color: T.text3, lineHeight: 1.55 }}>
+                        No LLM call was billed for this message (menu shortcut / backend template). Meta WhatsApp messaging fees are tracked separately.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                      <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
+                        <Typography sx={{ fontSize: 11, color: T.text3, fontWeight: 700 }}>Provider / model</Typography>
+                        <Typography sx={{ mt: 0.5, fontSize: 13, fontFamily: '"Geist Mono", monospace' }}>
+                          {inspectedMessage.aiUsage?.provider ?? '—'} ·{' '}
+                          {inspectedMessage.aiUsage?.model ?? inspectedMessage.aiModel ?? '—'}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
+                        <Typography sx={{ fontSize: 11, color: T.text3, fontWeight: 700 }}>Input tokens</Typography>
+                        <Typography sx={{ mt: 0.5, fontSize: 18, fontWeight: 800, fontFamily: '"Geist Mono", monospace' }}>
+                          {inspectedMessage.aiUsage?.promptTokens?.toLocaleString() ?? 'n/a'}
+                        </Typography>
+                        {(inspectedMessage.aiUsage?.cacheReadTokens ||
+                          inspectedMessage.aiUsage?.cacheWriteTokens) && (
+                          <Typography sx={{ mt: 0.5, fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
+                            cache read {inspectedMessage.aiUsage.cacheReadTokens ?? 0} · cache write{' '}
+                            {inspectedMessage.aiUsage.cacheWriteTokens ?? 0}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
+                        <Typography sx={{ fontSize: 11, color: T.text3, fontWeight: 700 }}>Output tokens</Typography>
+                        <Typography sx={{ mt: 0.5, fontSize: 18, fontWeight: 800, fontFamily: '"Geist Mono", monospace' }}>
+                          {inspectedMessage.aiUsage?.completionTokens?.toLocaleString() ?? 'n/a'}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: '#ecfdf5', border: '1px solid #a7f3d0' }}>
+                        <Typography sx={{ fontSize: 11, color: '#047857', fontWeight: 700 }}>Approx. cost</Typography>
+                        {inspectedMessage.aiUsage?.costEquation ? (
+                          <Typography
+                            sx={{
+                              mt: 0.75,
+                              fontSize: 11,
+                              lineHeight: 1.55,
+                              color: '#065f46',
+                              fontFamily: '"Geist Mono", monospace',
+                              whiteSpace: 'pre-wrap',
+                              overflowWrap: 'anywhere',
+                            }}
+                          >
+                            {inspectedMessage.aiUsage.costEquation}
+                          </Typography>
+                        ) : (
+                          <Typography sx={{ mt: 0.75, fontSize: 12, color: '#065f46' }}>
+                            {inspectedMessage.tokensUsed != null
+                              ? `Total tokens recorded: ${inspectedMessage.tokensUsed} (no split / equation for this older message)`
+                              : 'Cost equation unavailable'}
+                          </Typography>
+                        )}
+                        {inspectedMessage.aiUsage?.costUsd != null && (
+                          <Typography sx={{ mt: 1, fontSize: 20, fontWeight: 800, color: '#047857' }}>
+                            ${inspectedMessage.aiUsage.costUsd.toFixed(6)}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  )}
+                </>
+              )}
             </Stack>
           </Box>
         </>

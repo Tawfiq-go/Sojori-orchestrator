@@ -51,10 +51,14 @@ export interface MessageExchange {
   user_message_status?: UserMessageStatus;
   ai_model?: string;
   tokens_used?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
   cache_hit?: boolean;
   response_time_ms?: number;
   trace_id?: string;
   processing_trace?: ProcessingTrace;
+  ai_prompt?: AiPromptAudit;
+  ai_usage?: AiUsageAudit;
   ai_intent?: any;
   user_context?: any;
   /** Outbound WhatsApp delivery (srv-fullchatbot assistant row). */
@@ -62,6 +66,31 @@ export interface MessageExchange {
   ai_response_send_error?: string | null;
   /** Résumé PM (jamais le jargon technique). */
   owner_summary?: string | null;
+}
+
+export interface AiPromptPart {
+  key: string;
+  label: string;
+  content: string;
+  estimatedTokens: number;
+}
+
+export interface AiPromptAudit {
+  parts: AiPromptPart[];
+  totalEstimatedInputTokens: number;
+  scaledToProvider?: boolean;
+}
+
+export interface AiUsageAudit {
+  provider?: 'claude' | 'openai' | 'gemini' | null;
+  model?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  tokensUsed?: number;
+  costUsd?: number;
+  costEquation?: string;
 }
 
 export interface ProcessingTraceStep {

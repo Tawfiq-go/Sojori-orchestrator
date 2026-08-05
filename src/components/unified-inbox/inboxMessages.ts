@@ -87,6 +87,8 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
           processingTrace: exchange.processing_trace,
           aiModel: exchange.ai_model,
           tokensUsed: exchange.tokens_used,
+          aiPrompt: exchange.ai_prompt ?? null,
+          aiUsage: exchange.ai_usage ?? null,
           contentType: exchange.ai_response_content_type,
           ownerSummary: exchange.owner_summary ?? null,
         });
