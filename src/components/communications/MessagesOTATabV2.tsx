@@ -47,6 +47,7 @@ import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import {
   buildOtaThreadContextForAi,
   getLastGuestMessageFromInbox,
+  getLastGuestOriginalLanguageFromInbox,
 } from '../../services/communicationsAi.helpers';
 import { formatThreadWhen, normalizeBookingSource } from '../unified-inbox/inboxFormat';
 import {
@@ -1094,6 +1095,11 @@ export default function MessagesOTATabV2() {
     [inbox.messages],
   );
 
+  const otaPreferredLanguage = useMemo(
+    () => getLastGuestOriginalLanguageFromInbox(inbox.messages),
+    [inbox.messages],
+  );
+
   const handleOtaSend = useCallback(
     async (text: string, opts?: { aiAssisted?: boolean }) => {
       if (!inbox.activeRow) return;
@@ -1344,6 +1350,7 @@ export default function MessagesOTATabV2() {
         context={{
           threadContext: otaThreadContext,
           lastGuestMessage: otaLastGuestMessage,
+          preferredLanguage: otaPreferredLanguage || undefined,
           draft: aiSourceDraft,
           guestName: inbox.activeRow?.guestName,
           reservationNumber: inbox.reservation?.reservationNumber,

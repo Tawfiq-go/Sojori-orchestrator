@@ -29,6 +29,7 @@ import {
   resolveOtaListLastMessage,
   resolveOtaProgrammedAutoLine,
 } from './otaExchangePresence';
+import { inferOtaOriginalLanguage, normalizeOtaOriginalLanguage } from './otaOriginalLanguage';
 
 export interface OtaThreadRow {
   id: string;
@@ -670,6 +671,10 @@ export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Me
     // Traductions opérateur : messages VOYAGEUR seulement (pas Host/Cohost).
     const translatedFr = isGuestSide ? cleanTranslation(msg.translatedFr) : null;
     const translatedAry = isGuestSide ? cleanTranslation(msg.translatedAry) : null;
+    const originalLanguage = isGuestSide
+      ? normalizeOtaOriginalLanguage(msg.originalLanguage) ||
+        (translatedFr || translatedAry ? inferOtaOriginalLanguage(body) : null)
+      : null;
 
     out.push({
       id: msg._id || msg.messageId || `m-${index}`,
@@ -682,6 +687,7 @@ export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Me
       ...(originTag && !isGuestSide ? { tags: [originTag] } : {}),
       ...(translatedFr ? { translatedFr } : {}),
       ...(translatedAry ? { translatedAry } : {}),
+      ...(originalLanguage ? { originalLanguage } : {}),
       // `body` reste la source de vérité affichable ; on garde l'original pour le
       // révéler sous la traduction (bouton 🌐).
       ...(translatedFr || translatedAry ? { originalText: body } : {}),

@@ -35,6 +35,11 @@ interface AISuggestionModalProps {
     threadContext?: string;
     /** Dernier message client affiche en haut du popup */
     lastGuestMessage?: string;
+    /**
+     * Langue d'origine du dernier message voyageur (ISO).
+     * Prioritaire sur la langue réservation / pays pour la génération IA.
+     */
+    preferredLanguage?: string;
     draft?: string;
     reviewContent?: string;
     isRatingOnly?: boolean;
@@ -72,6 +77,8 @@ export default function AISuggestionModal({
   const [provider, setProvider] = useState<string | null>(null);
   const [sendingSuggestion, setSendingSuggestion] = useState(false);
   const [targetLanguage, setTargetLanguage] = useState('fr');
+  /** true tant que la langue UI n'a pas été touchée et qu'on n'a pas de preferredLanguage. */
+  const [autoDetectLanguage, setAutoDetectLanguage] = useState(false);
 
   const handleGenerate = useCallback(
     async (mode: 'improve' | 'regenerate' = 'improve') => {
@@ -99,6 +106,7 @@ export default function AISuggestionModal({
           draft: draftToImprove,
           targetLanguage,
           guestLanguage: targetLanguage,
+          detectClientLanguage: autoDetectLanguage,
           dashboardLanguage: i18nLanguageToApiCode(
             typeof navigator !== 'undefined' ? navigator.language : 'fr',
           ),
@@ -118,6 +126,18 @@ export default function AISuggestionModal({
         setSuggestion(data.responseClient.trim());
         setStaffPreview(data.responseAdmin?.trim() || '');
         setProvider(data.provider || 'claude');
+        // Après détection serveur : verrouiller sur la langue utilisée.
+        if (autoDetectLanguage) {
+          const code = String(data.targetLanguage || '')
+            .trim()
+            .toLowerCase()
+            .slice(0, 2);
+          const allowed = LANGUAGE_OPTIONS.some((o) => o.value === code);
+          if (allowed) {
+            setTargetLanguage(code);
+            setAutoDetectLanguage(false);
+          }
+        }
       } catch (err: unknown) {
         console.error('Erreur generation suggestion:', err);
         const msg =
@@ -130,7 +150,7 @@ export default function AISuggestionModal({
         setLoading(false);
       }
     },
-    [context, suggestion, targetLanguage],
+    [context, suggestion, targetLanguage, autoDetectLanguage],
   );
 
   const handleUse = () => {
@@ -178,7 +198,23 @@ export default function AISuggestionModal({
     setError(null);
     setProvider(null);
     setSendingSuggestion(false);
-  }, [open, context.draft]);
+    const preferred = String(context.preferredLanguage || '')
+      .trim()
+      .toLowerCase()
+      .slice(0, 2);
+    const allowed = LANGUAGE_OPTIONS.some((o) => o.value === preferred);
+    if (allowed) {
+      setTargetLanguage(preferred);
+      setAutoDetectLanguage(false);
+    } else if (context.type === 'ota' || context.type === 'leads') {
+      // Pas de langue stockée → détecter à la génération (pas la langue pays/résa).
+      setTargetLanguage('fr');
+      setAutoDetectLanguage(true);
+    } else {
+      setTargetLanguage('fr');
+      setAutoDetectLanguage(false);
+    }
+  }, [open, context.draft, context.preferredLanguage, context.type]);
 
   const lastGuest = context.lastGuestMessage?.trim();
   const reviewText = context.reviewContent?.trim();
@@ -314,7 +350,10 @@ export default function AISuggestionModal({
               size="small"
               label="Langue"
               value={targetLanguage}
-              onChange={(e) => setTargetLanguage(e.target.value)}
+              onChange={(e) => {
+                setTargetLanguage(e.target.value);
+                setAutoDetectLanguage(false);
+              }}
               sx={{
                 width: 220,
                 mt: 0.5,
