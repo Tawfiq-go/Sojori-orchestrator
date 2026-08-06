@@ -2269,6 +2269,7 @@ export function ChatThread({ conv, messages, aiSuggestions = [], onSend, onAISug
                     translatedFr={m.translatedFr}
                     translatedAry={m.translatedAry}
                     originalText={m.originalText}
+                    originalLanguage={m.originalLanguage}
                   />
             )}
             {loading && messages.length > 0 && (
@@ -2365,7 +2366,7 @@ function DayLabel({ children }) {
   );
 }
 
-function Message({ from, text, when, status, readAt, translatedFr, translatedAry, originalText }) {
+function Message({ from, text, when, status, readAt, translatedFr, translatedAry, originalText, originalLanguage }) {
   const you = from === 'you' || from === 'host';
   // Original masqué par défaut (clic sur 🌐 plutôt que hover : le survol ne marche pas
   // au doigt et se déclenche au scroll).
@@ -2378,6 +2379,21 @@ function Message({ from, text, when, status, readAt, translatedFr, translatedAry
   // Ne pas reproposer l'original s'il est identique à ce qui est déjà affiché
   // (message déjà en français, ou traduction absente).
   const originalDiffers = hasTranslation && original.trim() !== String(mainText || '').trim();
+  const langCode = String(originalLanguage || '')
+    .trim()
+    .toLowerCase()
+    .slice(0, 2);
+  const langFlag =
+    langCode === 'fr' ? '🇫🇷'
+      : langCode === 'en' ? '🇬🇧'
+        : langCode === 'ar' ? '🇲🇦'
+          : langCode === 'es' ? '🇪🇸'
+            : langCode === 'de' ? '🇩🇪'
+              : langCode === 'it' ? '🇮🇹'
+                : langCode === 'pt' ? '🇵🇹'
+                  : langCode === 'nl' ? '🇳🇱'
+                    : '';
+  const langBadge = langCode && langFlag ? `${langFlag} ${langCode.toUpperCase()}` : null;
 
   return (
     <Box sx={{
@@ -2439,6 +2455,29 @@ function Message({ from, text, when, status, readAt, translatedFr, translatedAry
               {original}
             </Box>
           )}
+        </Box>
+      )}
+
+      {langBadge && !you && (
+        <Box sx={{ mt: 0.6, display: 'flex', justifyContent: 'flex-end' }}>
+          <Box
+            component="span"
+            title={`Langue d’origine : ${langCode.toUpperCase()}`}
+            sx={{
+              fontFamily: 'Geist Mono',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              px: 0.55,
+              py: '2px',
+              borderRadius: '4px',
+              border: `1px solid ${t.border}`,
+              color: t.text3,
+              bgcolor: t.bg2 || 'rgba(0,0,0,0.03)',
+            }}
+          >
+            {langBadge}
+          </Box>
         </Box>
       )}
       {/* ✅ Status indicators + timestamp */}

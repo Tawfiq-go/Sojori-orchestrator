@@ -5,7 +5,10 @@ export function buildOtaThreadContextForAi(messages: Message[]): string {
   return messages
     .filter((m) => m.type !== 'day-separator' && m.type !== 'system-note')
     .map((m) => {
-      const line = String(m.text || '').trim();
+      // Client : texte d'origine (pas la traduction FR opérateur).
+      const line = String(
+        m.from === 'guest' ? m.originalText || m.text : m.text || '',
+      ).trim();
       if (!line) return null;
       const prefix = m.from === 'guest' ? 'Client' : 'Staff';
       return `${prefix}: ${line}`;
@@ -18,9 +21,29 @@ export function getLastGuestMessageFromInbox(messages: Message[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m.type === 'day-separator' || m.type === 'system-note') continue;
-    if (m.from === 'guest') return String(m.text || '').trim();
+    if (m.from === 'guest') return String(m.originalText || m.text || '').trim();
   }
   return '';
+}
+
+/**
+ * Langue d'origine du dernier message voyageur (priorité sur langue résa / pays).
+ * Utilisée pour préremplir la génération IA OTA.
+ */
+export function getLastGuestOriginalLanguageFromInbox(messages: Message[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.type === 'day-separator' || m.type === 'system-note') continue;
+    if (m.from !== 'guest') continue;
+    const code = String(m.originalLanguage || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z]/g, '')
+      .slice(0, 2);
+    if (code) return code === 'dz' ? 'ar' : code;
+    return null;
+  }
+  return null;
 }
 
 export function buildWhatsappThreadContextForAi(exchanges: MessageExchange[] = []): string {

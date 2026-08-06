@@ -12,6 +12,7 @@ import { extractHttpErrorMessage } from '../../utils/extractHttpErrorMessage';
 import { useAuth } from '../../hooks/useAuth';
 import { useWriteAccess } from '../../hooks/useWriteAccess';
 import { Roles } from '../../constants/roles';
+import { formatOtaOriginalLanguageBadge } from './otaOriginalLanguage';
 
 function interactiveContentBadge(
   contentType?: Message['contentType'] | null,
@@ -32,6 +33,7 @@ function hasFailedTraceStep(message: Message): boolean {
 
 /**
  * Bulle OTA : FR principal + darija discret + original au clic.
+ * Badge langue d'origine en bas à droite (en / fr / ar…).
  * (WhatsApp n'utilise pas ces champs — auto-piloté IA.)
  */
 function OtaTranslatedBody({
@@ -39,12 +41,14 @@ function OtaTranslatedBody({
   translatedFr,
   translatedAry,
   originalText,
+  originalLanguage,
   keyword,
 }: {
   text: string;
   translatedFr?: string | null;
   translatedAry?: string | null;
   originalText?: string | null;
+  originalLanguage?: string | null;
   keyword?: string;
 }) {
   const [showOriginal, setShowOriginal] = useState(false);
@@ -54,6 +58,7 @@ function OtaTranslatedBody({
   const originalDiffers =
     hasTranslation && original.trim() !== String(mainText || '').trim();
   const kw = keyword?.trim() || '';
+  const langBadge = formatOtaOriginalLanguageBadge(originalLanguage);
 
   return (
     <Box>
@@ -137,6 +142,37 @@ function OtaTranslatedBody({
               {original}
             </Box>
           ) : null}
+        </Box>
+      ) : null}
+
+      {langBadge ? (
+        <Box
+          sx={{
+            mt: 0.6,
+            display: 'flex',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <Box
+            component="span"
+            title={`Langue d’origine du voyageur : ${String(originalLanguage || '').toUpperCase()}`}
+            sx={{
+              fontFamily: '"Geist Mono", monospace',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              lineHeight: 1.2,
+              px: 0.55,
+              py: '2px',
+              borderRadius: '4px',
+              border: `1px solid ${T.border}`,
+              color: T.text3,
+              bgcolor: T.bg2,
+              userSelect: 'none',
+            }}
+          >
+            {langBadge}
+          </Box>
         </Box>
       ) : null}
     </Box>
@@ -1240,6 +1276,7 @@ export default function ConversationThread({
                     translatedFr={message.translatedFr}
                     translatedAry={message.translatedAry}
                     originalText={message.originalText}
+                    originalLanguage={message.originalLanguage}
                     keyword={kw}
                   />
                 ) : (

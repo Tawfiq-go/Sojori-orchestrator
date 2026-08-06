@@ -11,6 +11,8 @@ export interface CommunicationsAiDraftRequest {
   draft?: string;
   targetLanguage?: string;
   guestLanguage?: string;
+  /** Demande au backend de détecter la langue du message client (si inconnue côté UI). */
+  detectClientLanguage?: boolean;
   dashboardLanguage?: string;
   reservationId?: string;
   channelName?: string;
@@ -28,6 +30,7 @@ export interface CommunicationsAiDraftResponse {
   responseAdmin?: string;
   provider?: string;
   guestLanguage?: string;
+  targetLanguage?: string;
   dashboardLanguage?: string;
   message?: string;
 }

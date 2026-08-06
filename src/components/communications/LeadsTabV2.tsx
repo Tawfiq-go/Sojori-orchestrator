@@ -24,6 +24,7 @@ import {
 import {
   buildOtaThreadContextForAi,
   getLastGuestMessageFromInbox,
+  getLastGuestOriginalLanguageFromInbox,
 } from '../../services/communicationsAi.helpers';
 import { formatThreadWhen, nightsBetween, normalizeBookingSource } from '../unified-inbox/inboxFormat';
 import { T } from '../unified-inbox/_tokens';
@@ -393,6 +394,11 @@ export default function LeadsTabV2() {
     return active?.lastMessage?.trim() || '';
   }, [messages, active?.lastMessage]);
 
+  const leadsPreferredLanguage = useMemo(
+    () => getLastGuestOriginalLanguageFromInbox(messages),
+    [messages],
+  );
+
   const handleLeadSend = useCallback(
     async (text: string) => {
       if (!active) return;
@@ -511,6 +517,7 @@ export default function LeadsTabV2() {
         context={{
           threadContext: leadsThreadContext,
           lastGuestMessage: leadsLastGuestMessage,
+          preferredLanguage: leadsPreferredLanguage || undefined,
           draft: aiSourceDraft,
           guestName: active?.guestName,
           reservationNumber: active?.reservationNumber,

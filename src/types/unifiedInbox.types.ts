@@ -119,6 +119,11 @@ export interface Message {
    */
   translatedFr?: string | null;
   translatedAry?: string | null;
+  /**
+   * Langue d'origine du message voyageur (ISO 639-1 : en, fr, ar…).
+   * Détectée à la traduction — pas la langue réservation / pays.
+   */
+  originalLanguage?: string | null;
   /** Texte d'origine, conservé quand une traduction prend sa place dans la bulle. */
   originalText?: string | null;
 }
