@@ -15,6 +15,7 @@
 import { Box, Slider, Stack, Typography } from '@mui/material';
 import type React from 'react';
 import { useState } from 'react';
+import LeverEditDialog from './LeverEditDialog';
 import { T, kickerSx } from './tokens';
 
 const MONTHS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
@@ -63,6 +64,9 @@ export default function SeasonWeekLevers({
   // — d'où les sauts, et l'impression que « bouger un curseur bouge les autres »
   // (on voyait en fait la réponse d'un appel précédent écraser le geste en cours).
   // Ici : `draft` suit le doigt, le serveur n'est prévenu qu'au relâchement.
+  /** Popups d'édition au chiffre (les curseurs restent, ils se complètent). */
+  const [editSeason, setEditSeason] = useState(false);
+  const [editDow, setEditDow] = useState(false);
   const [draft, setDraft] = useState<number[] | null>(null);
   const coefs = draft ?? seasonalCoefs;
   const [dowDraft, setDowDraft] = useState<number[] | null>(null);
@@ -109,15 +113,35 @@ export default function SeasonWeekLevers({
         <Typography sx={{ fontWeight: 700, fontSize: 13.5, color: T.ink }}>
           Saisonnalité du marché — réglez un mois
         </Typography>
-        <Box
-          component="button"
-          type="button"
-          disabled={busy}
-          onClick={onResetSeasonal}
-          sx={{ all: 'unset', cursor: 'pointer', fontSize: 11.5, color: T.gold, fontWeight: 700 }}
-        >
-          revenir au marché
-        </Box>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'baseline' }}>
+          {/* Saisir les 12 mois d'un coup : viser douze barres à la souris est
+              pénible, et impossible pour poser une valeur exacte. */}
+          <Box
+            component="button"
+            type="button"
+            disabled={busy}
+            onClick={() => setEditSeason(true)}
+            sx={{
+              all: 'unset',
+              cursor: 'pointer',
+              fontSize: 11.5,
+              color: T.ink2,
+              fontWeight: 700,
+              '&:hover': { color: T.ink },
+            }}
+          >
+            saisir les 12 mois
+          </Box>
+          <Box
+            component="button"
+            type="button"
+            disabled={busy}
+            onClick={onResetSeasonal}
+            sx={{ all: 'unset', cursor: 'pointer', fontSize: 11.5, color: T.gold, fontWeight: 700 }}
+          >
+            revenir au marché
+          </Box>
+        </Stack>
       </Stack>
 
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 110, display: 'block' }}>
@@ -205,15 +229,33 @@ export default function SeasonWeekLevers({
         <Typography sx={{ fontWeight: 700, fontSize: 13.5, color: T.ink }}>
           Semaine — défaut Marrakech ±4 %
         </Typography>
-        <Box
-          component="button"
-          type="button"
-          disabled={busy}
-          onClick={onResetDow}
-          sx={{ all: 'unset', cursor: 'pointer', fontSize: 11.5, color: T.gold, fontWeight: 700 }}
-        >
-          revenir au marché
-        </Box>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'baseline' }}>
+          <Box
+            component="button"
+            type="button"
+            disabled={busy}
+            onClick={() => setEditDow(true)}
+            sx={{
+              all: 'unset',
+              cursor: 'pointer',
+              fontSize: 11.5,
+              color: T.ink2,
+              fontWeight: 700,
+              '&:hover': { color: T.ink },
+            }}
+          >
+            saisir les 7 jours
+          </Box>
+          <Box
+            component="button"
+            type="button"
+            disabled={busy}
+            onClick={onResetDow}
+            sx={{ all: 'unset', cursor: 'pointer', fontSize: 11.5, color: T.gold, fontWeight: 700 }}
+          >
+            revenir au marché
+          </Box>
+        </Stack>
       </Stack>
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5 }}>
         {dows.map((m, i) => (
@@ -253,6 +295,33 @@ export default function SeasonWeekLevers({
         La moyenne des 7 jours est ramenée à 1 par le moteur : régler un week-end ne gonfle pas
         votre prix annuel, ça le redistribue.
       </Typography>
+
+      {/* ── Édition au chiffre ── Un seul appel serveur à « Appliquer », au lieu
+          d'un par curseur. Les bornes reprennent celles du moteur. */}
+      <LeverEditDialog
+        open={editSeason}
+        title="Saisonnalité — les 12 mois"
+        hint="Écart de prix appliqué à chaque mois par rapport à votre année. Un mois haute saison monte, un mois creux descend."
+        labels={MONTHS_FULL.map((m) => m.slice(0, 3).toUpperCase())}
+        values={coefs}
+        minPct={-30}
+        maxPct={40}
+        busy={busy}
+        onClose={() => setEditSeason(false)}
+        onApply={(next) => onSeasonalChange(next)}
+      />
+      <LeverEditDialog
+        open={editDow}
+        title="Semaine — les 7 jours"
+        hint="Écart appliqué à chaque jour. La moyenne est ramenée à 1 par le moteur : monter le week-end redistribue le prix, il ne le gonfle pas."
+        labels={DOW}
+        values={dows}
+        minPct={-20}
+        maxPct={30}
+        busy={busy}
+        onClose={() => setEditDow(false)}
+        onApply={(next) => onDowChange(next)}
+      />
     </Box>
   );
 }

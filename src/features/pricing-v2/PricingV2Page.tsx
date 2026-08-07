@@ -307,8 +307,8 @@ export default function PricingV2Page() {
             size="small"
             label={
               lowConfidence
-                ? `Faible confiance — ${result.meta.compsetSize} biens seulement`
-                : `Marché mesuré sur ${result.meta.compsetSize} biens similaires`
+                ? 'Peu de biens comparables — prix à confirmer'
+                : 'Mesuré sur les biens similaires au vôtre'
             }
             color={lowConfidence ? 'warning' : 'default'}
           />
