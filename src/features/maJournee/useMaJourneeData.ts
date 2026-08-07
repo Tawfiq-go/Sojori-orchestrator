@@ -65,11 +65,26 @@ function listingIdOf(r: Reservation): string {
   return String(r.sojoriId || r.listingMapId || r.listing?._id || '');
 }
 
+/** Aligné sur /reservations (compteurs 3/3) — pas seulement guestsRegistrationStatus. */
 function isRegistered(r: Reservation): boolean {
-  const st = String(
-    r.guestsRegistrationStatus || r.guestRegistration?.registration_status || '',
-  ).toLowerCase();
-  if (!st) return false;
+  const gr = r.guestRegistration;
+  const total = Number(gr?.nbre_guest_to_register ?? r.adults ?? 0) || 0;
+  const registered = Number(gr?.nbre_guest_registered ?? 0) || 0;
+  const complete = Number(gr?.nbre_guest_complete ?? 0) || 0;
+  if (total > 0 && (registered >= total || complete >= total)) return true;
+
+  const members = Array.isArray(gr?.members) ? gr.members : [];
+  if (total > 0) {
+    const doneMembers = members.filter((m) => {
+      const s = String((m as { status?: string; done?: boolean })?.status || '').toLowerCase();
+      return (m as { done?: boolean })?.done === true || s === 'done' || s === 'complete' || s === 'completed';
+    }).length;
+    if (doneMembers >= total) return true;
+  }
+
+  // Prefer nested registration_status — top-level guestsRegistrationStatus is often stuck PENDING.
+  const st = String(gr?.registration_status || r.guestsRegistrationStatus || '').toLowerCase();
+  if (!st || /pending|not[_ ]?started|in[_ ]?progress|draft/.test(st)) return false;
   return /complete|done|ok|registered|finished|valid/.test(st);
 }
 
@@ -502,11 +517,11 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
         messagesService
           .getConversations({ filter: 'smart', limit: 80, silent: true })
           .catch(() => null),
+        // Pas unreplied=true seul : le statut Mongo est souvent périmé (hôte a répondu).
+        // On charge les fils récents et on classe côté client (otaThreadNeedsReply).
         messagesService
-          .getOTAThreads({ page: 0, limit: 80, sortBy: 'lastMessageAt', unreplied: true })
-          .catch(() =>
-            messagesService.getOTAThreads({ page: 0, limit: 80, sortBy: 'lastMessageAt' }).catch(() => null),
-          ),
+          .getOTAThreads({ page: 0, limit: 80, sortBy: 'lastMessageAt' })
+          .catch(() => null),
         listTasks({ audience: 'STAFF', limit: 200 }).catch(() => null),
         getDayPlan(date).catch(() => null),
       ]);
@@ -652,11 +667,12 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
               ? otaRes
               : [];
 
-      for (const raw of otaItems.slice(0, 40)) {
+      for (const raw of otaItems.slice(0, 60)) {
         try {
           const row = mapApiItemToOtaThread(raw as never);
           if (!row) continue;
           const effective = resolveOtaListLastMessage(row);
+          if (effective.empty && !row.lastMessage && !row.lastGuestMessage) continue;
           const preview =
             inboxMessagePreview(effective.text) ||
             inboxMessagePreview(row.lastGuestMessage) ||
@@ -680,7 +696,15 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
         }
       }
 
-      messages.sort((a, b) => Number(b.unread) - Number(a.unread));
+      messages.sort((a, b) => {
+        if (Number(b.unread) !== Number(a.unread)) return Number(b.unread) - Number(a.unread);
+        return 0;
+      });
+
+      // Liste : d’abord les vrais « À répondre », puis quelques vus (contexte).
+      const todo = messages.filter((m) => m.unread);
+      const done = messages.filter((m) => !m.unread);
+      const messagesForDay = [...todo, ...done.slice(0, Math.max(0, 16 - todo.length))].slice(0, 16);
 
       setModel({
         date,
@@ -692,7 +716,7 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
         cancelledCount: cancelled.length,
         cancelledDetail,
         experiences,
-        messages: messages.slice(0, 16),
+        messages: messagesForDay,
         arrivalDetail,
         departureDetail,
       });
