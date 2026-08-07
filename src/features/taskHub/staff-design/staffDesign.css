@@ -747,6 +747,70 @@
   color: var(--t3);
   margin-top: 1px;
 }
+.so-staff-root .day-timeline {
+  background: var(--bg2);
+  border: 1px solid var(--b);
+  border-radius: 10px;
+  padding: 12px 14px 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+.so-staff-root .day-timeline-h {
+  display: flex;
+  margin-bottom: 6px;
+}
+.so-staff-root .day-timeline-hours {
+  position: relative;
+  flex: 1;
+  min-width: 640px;
+  height: 14px;
+  font-size: 10px;
+  color: var(--t3);
+}
+.so-staff-root .day-timeline-hours span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.so-staff-root .day-timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 34px;
+  border-top: 1px dashed var(--b);
+}
+.so-staff-root .day-timeline-row:first-of-type {
+  border-top: 1px solid var(--b);
+}
+.so-staff-root .day-timeline-name {
+  width: 140px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 8px;
+}
+.so-staff-root .day-timeline-track {
+  position: relative;
+  flex: 1;
+  min-width: 640px;
+  height: 26px;
+}
+.so-staff-root .day-timeline-task {
+  position: absolute;
+  top: 2px;
+  height: 22px;
+  border-radius: 5px;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 3px 6px;
+  cursor: default;
+}
 .so-staff-root .add-btn {
   padding: 9px;
   background: #fff;

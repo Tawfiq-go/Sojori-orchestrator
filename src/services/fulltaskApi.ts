@@ -176,6 +176,26 @@ export async function getStaffStats(
   return data?.data || [];
 }
 
+export interface DayTimelineTask {
+  _id: string;
+  taskCode: string;
+  type: string;
+  status: string;
+  assignedTo: string;
+  scheduledAt?: string;
+  dueAt?: string;
+  estimatedMinutes: number;
+  guestName?: string;
+}
+
+/** Tâches de tous les staff de l'owner pour un jour — base de la timeline planning. */
+export async function getStaffDayTimeline(date?: string): Promise<DayTimelineTask[]> {
+  const { data } = await apiClient.get(`${BASE}/staff/tasks/day`, {
+    params: date ? { date } : undefined,
+  });
+  return data?.data || [];
+}
+
 export async function listWhatsappAdmins(params: Record<string, unknown> = {}) {
   const { data } = await apiClient.get(`${BASE}/whatsapp-admins`, { params });
   return data;
