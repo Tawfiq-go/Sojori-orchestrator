@@ -171,7 +171,12 @@ export default function DistributionChart({
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 1 }}>
         <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink }}>Le marché, et vous dessus</Typography>
         <Typography sx={{ ...kickerSx, color: T.ok }}>
-          {compsetSize} BIENS DU MARCHÉ · CLIQUEZ UNE GAMME OU GLISSEZ LE CURSEUR DORÉ
+          {/* ⚠️ On n'affiche PAS le nombre de biens du compset. Le client n'a
+              pas à savoir sur combien d'annonces on s'appuie : c'est notre
+              méthode, et un chiffre bas ferait douter du prix sans rien lui
+              apprendre d'utile. `compsetSize` sert uniquement en interne (seuil
+              de faible confiance). */}
+          LE MARCHÉ AUTOUR DE VOUS · CLIQUEZ UNE GAMME OU GLISSEZ LE CURSEUR DORÉ
         </Typography>
       </Stack>
 
