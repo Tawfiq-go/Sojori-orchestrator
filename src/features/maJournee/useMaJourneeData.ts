@@ -44,6 +44,20 @@ function hhmm(v?: string | Date | null): string | null {
   return null;
 }
 
+/** Affichage ops : 15h / 15h30 (aligné réservations). */
+function hourLabel(v?: string | Date | number | null): string | null {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v === 'number') {
+    const h = Math.floor(v / 100);
+    const m = v % 100;
+    return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+  }
+  const t = hhmm(v);
+  if (!t) return null;
+  const [h, m] = t.split(':');
+  return m === '00' ? `${Number(h)}h` : `${Number(h)}h${m}`;
+}
+
 function nightsBetween(from?: Date | string, to?: Date | string): number | null {
   const a = dayKey(from);
   const b = dayKey(to);
@@ -109,7 +123,12 @@ function relativeWhen(iso?: string): string {
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
-export type StayCheck = { cls: 'ok' | 'no' | 'bad' | 'done'; text: string };
+export type StayCheck = {
+  cls: 'ok' | 'no' | 'bad' | 'done';
+  text: string;
+  /** Badge principal (Arrivé à / Attendu) — le reste est secondaire. */
+  primary?: boolean;
+};
 
 export type StayRow = {
   id: string;
@@ -187,47 +206,68 @@ function reservationKeysOf(r: Reservation): string[] {
 }
 
 function mapArrival(r: Reservation, cleanMap: Map<string, string>): StayRow {
-  const time =
-    hhmm(r.checkInTime) ||
-    hhmm(r.arrival_time) ||
-    hhmm(r.actualArrivalTime as string | undefined) ||
-    null;
-  const hourOk = Boolean(r.confirmedCheckInTime || r.arrival_time_chosen || time);
+  const plannedLabel =
+    hourLabel(r.checkInTime) || hourLabel(r.arrival_time as string | undefined) || null;
+  const declaredLabel = hourLabel(r.actualArrivalTime as string | undefined);
+  const presence = presenceMetaFromReservation(r);
+  const arrived = presence.label === 'Arrivé' || Boolean(r.actualArrivalTime);
+  const hourOk = Boolean(
+    r.confirmedCheckInTime || r.arrival_time_chosen || plannedLabel,
+  );
   const lid = listingIdOf(r);
   const regOk = isRegistered(r);
   const clean = cleanLabel(cleanMap.get(lid));
-  const presence = presenceMetaFromReservation(r);
-  const arrived = presence.label === 'Arrivé';
   const n = nightsBetween(r.arrivalDate, r.departureDate);
   const meta = [listingNameOf(r), n ? `${n} nuit${n > 1 ? 's' : ''}` : null, channelOf(r)]
     .filter(Boolean)
     .join(' · ');
+
+  // Colonne heure : réelle si arrivé, sinon prévue.
+  const time = arrived
+    ? declaredLabel || plannedLabel || '?'
+    : plannedLabel || '?';
+
+  const checks: StayCheck[] = [];
+  if (arrived) {
+    checks.push({
+      cls: 'ok',
+      primary: true,
+      text: declaredLabel ? `Arrivé à ${declaredLabel}` : 'Arrivé',
+    });
+    // Plus besoin de « 15h confirmée » une fois sur place.
+  } else {
+    checks.push({
+      cls: 'no',
+      primary: true,
+      text: plannedLabel
+        ? hourOk
+          ? `Attendu · ${plannedLabel}`
+          : `Attendu · ${plannedLabel}?`
+        : 'Attendu · heure ?',
+    });
+    if (!hourOk) {
+      checks.push({ cls: 'no', text: 'Heure à confirmer' });
+    }
+  }
+
+  checks.push(
+    { cls: regOk ? 'ok' : 'no', text: regOk ? 'Enregistré' : 'Non enregistré' },
+    {
+      cls: clean === 'clean' ? 'ok' : clean === 'dirty' ? 'bad' : 'no',
+      text: clean === 'clean' ? 'Propre' : clean === 'dirty' ? 'Sale' : 'Propreté ?',
+    },
+  );
 
   return {
     id: r.id,
     reservationId: r.id,
     listingId: lid,
     reservationKeys: reservationKeysOf(r),
-    time: time || '?',
-    timeTbd: !hourOk,
+    time,
+    timeTbd: !arrived && !hourOk,
     guestName: r.guestName || 'Voyageur',
     meta,
-    checks: [
-      {
-        cls: arrived ? 'ok' : 'no',
-        text: arrived ? '✓ Arrivé' : presence.label === 'Attendu' ? 'Attendu' : presence.label,
-      },
-      {
-        cls: hourOk ? 'ok' : 'no',
-        text: hourOk ? `✓ ${time || ''} confirmée`.trim() : 'Heure non confirmée',
-      },
-      { cls: regOk ? 'ok' : 'no', text: regOk ? '✓ Enregistré' : 'Non enregistré' },
-      {
-        cls: clean === 'clean' ? 'ok' : clean === 'dirty' ? 'bad' : 'no',
-        text:
-          clean === 'clean' ? '✓ Propre' : clean === 'dirty' ? 'Ménage pas fait' : 'Propreté ?',
-      },
-    ],
+    checks,
     staffName: UNASSIGNED,
     cleanerName: UNASSIGNED,
   };
@@ -571,13 +611,14 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
       let attendu = 0;
       let arrived = 0;
       for (const a of arrivals) {
-        const hourOk = !a.timeTbd;
         const regOk = a.checks.some((c) => c.text.includes('Enregistré') && c.cls === 'ok');
-        const cleanOk = a.checks.some((c) => c.text.includes('Propre') && c.cls === 'ok');
-        if (a.checks.some((c) => c.text === '✓ Arrivé')) arrived += 1;
-        else if (a.checks.some((c) => c.text === 'Attendu')) attendu += 1;
-        if (hourOk && regOk && cleanOk) ready += 1;
-        if (!hourOk) hourTbd += 1;
+        const cleanOk = a.checks.some((c) => c.text === 'Propre' && c.cls === 'ok');
+        const isArrived = a.checks.some((c) => c.primary && c.text.startsWith('Arrivé'));
+        if (isArrived) arrived += 1;
+        else if (a.checks.some((c) => c.primary && c.text.startsWith('Attendu'))) attendu += 1;
+        // Prête ops = enregistré + propre (l’heure choisie n’a plus de sens une fois arrivé).
+        if (regOk && cleanOk) ready += 1;
+        if (!isArrived && a.timeTbd) hourTbd += 1;
         if (a.checks.some((c) => c.cls === 'bad')) dirty += 1;
       }
       const arrivalDetail = [
