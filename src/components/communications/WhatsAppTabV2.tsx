@@ -100,7 +100,13 @@ export default function WhatsAppTabV2() {
   const [appliedAdvanced, setAppliedAdvanced] = useState<WaAdvancedSearch>(EMPTY_WA_ADVANCED);
   const [globalSearchPending, setGlobalSearchPending] = useState(false);
   const [waChannelFilter, setWaChannelFilter] = useState<WaChannelFilter>('all');
-  const [waView, setWaView] = useState<WaInboxView>('exchanges');
+  const [waView, setWaView] = useState<WaInboxView>(() => {
+    const v = new URLSearchParams(window.location.search).get('view');
+    if (v === 'unreplied' || v === 'exchanges' || v === 'created_today' || v === 'stay') {
+      return v;
+    }
+    return 'exchanges';
+  });
   const [showAIModal, setShowAIModal] = useState(false);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [composerDraft, setComposerDraft] = useState('');
@@ -565,6 +571,13 @@ export default function WhatsAppTabV2() {
   const deepLinkReservation =
     searchParams.get('reservation') || searchParams.get('res') || null;
   const waDeepLinkedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const v = searchParams.get('view');
+    if (v === 'unreplied' || v === 'exchanges' || v === 'created_today' || v === 'stay') {
+      setWaView(v);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (loading) return;

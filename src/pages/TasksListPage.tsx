@@ -1394,7 +1394,21 @@ export function TasksListPage() {
   const [tempListFilters, setTempListFilters] = useState(listFilters);
   const [tempSortField, setTempSortField] = useState<TaskListSortField>('createdAt');
   const [tempSortDirection, setTempSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [quickFilterKey, setQuickFilterKey] = useState<QuickFilterKey>('none');
+  const [quickFilterKey, setQuickFilterKey] = useState<QuickFilterKey>(() => {
+    const due = new URLSearchParams(window.location.search).get('due');
+    if (due === 'today') return 'dueToday';
+    if (due === 'tomorrow') return 'dueTomorrow';
+    if (due === '7d') return 'due7d';
+    return 'none';
+  });
+
+  useEffect(() => {
+    const due = searchParams.get('due');
+    if (due === 'today') setQuickFilterKey('dueToday');
+    else if (due === 'tomorrow') setQuickFilterKey('dueTomorrow');
+    else if (due === '7d') setQuickFilterKey('due7d');
+  }, [searchParams]);
+
   const [tempAdvanced, setTempAdvanced] = useState(advancedFilters);
   const [tempPayment, setTempPayment] = useState('all');
   const [tempHasAssociation, setTempHasAssociation] = useState<'all' | 'with' | 'without'>('all');
