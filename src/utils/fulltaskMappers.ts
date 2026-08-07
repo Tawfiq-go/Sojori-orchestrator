@@ -576,6 +576,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
       return { mode, digestTime: /^\d{2}:\d{2}$/.test(digestTime) ? digestTime : '17:00' };
     })(),
     contractType: row.contractType === 'salaried' ? ('employee' as const) : ('freelance' as const),
+    salary: row.salary != null ? Number(row.salary) : undefined,
     rates,
     allowedTaskTypes: normalizeStaffAllowedTaskTypes(row.taskTypes as string[] | undefined),
     allowedListingIds: ((row.listingIds as unknown[]) || []).map(String),
@@ -783,6 +784,11 @@ export function designStaffToApi(
     lang: staff.lang || 'fr',
     // Défaut salarié (UI) — freelance seulement si choisi explicitement.
     contractType: staff.contractType === 'freelance' ? 'freelance' : 'salaried',
+    // Salaire mensuel (salariés) — null explicite pour effacer côté API.
+    salary:
+      staff.contractType !== 'freelance' && staff.salary != null && Number.isFinite(Number(staff.salary))
+        ? Number(staff.salary)
+        : null,
     taskTypes: staff.allowedTaskTypes || [],
     listingIds: staff.allowedListingIds || [],
     cityIds: staff.allowedCityIds || [],

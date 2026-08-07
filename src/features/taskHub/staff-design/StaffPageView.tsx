@@ -1144,10 +1144,36 @@ export default function StaffPageView({
                   ))}
                 </div>
               </div>
+              {form.contractType !== 'freelance' && (
+                <div className="field">
+                  <div className="field-label">
+                    Salaire (MAD/mois)
+                    <span className="hint">Montant mensuel fixe — enregistré en base</span>
+                  </div>
+                  <div className="price-row">
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      placeholder="ex. 4000"
+                      value={form.salary ?? ''}
+                      onChange={(e) =>
+                        patchForm({
+                          salary: e.target.value === '' ? undefined : Number(e.target.value),
+                        })
+                      }
+                    />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)' }}>
+                      MAD / mois
+                    </span>
+                  </div>
+                </div>
+              )}
+              {form.contractType === 'freelance' && (
               <div className="field">
                 <div className="field-label">
                   Tarifs (MAD)
-                  <span className="hint">Optionnel · ajoutez un type avec son montant</span>
+                  <span className="hint">Prix par activité — ex. ménage 100 MAD</span>
                 </div>
                 <div className="pricing-grid">
                   {STAFF_TASK_PILLS.filter(
@@ -1203,6 +1229,7 @@ export default function StaffPageView({
                   + Ajouter un type
                 </button>
               </div>
+              )}
             </div>
 
             <div className="form-section full">
