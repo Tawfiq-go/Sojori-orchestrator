@@ -384,6 +384,9 @@ export default function PricingV2Page() {
               compsetSize={market.compsetSize}
               gamme={config?.gamme ?? 'normal'}
               busy={saving}
+              /* Clic sur le curseur VOUS → le détail complet (même ticket que
+                 le calendrier) : base, saison, jour, remplissage, bornes. */
+              onExplainYours={() => setTicketDay(today)}
               /* Cliquer une gamme = raccourci pour poser le curseur doré sur ce
                  palier. On remet donc annualTilt à 1 : sinon un réglage fin
                  précédent resterait appliqué par-dessus et le curseur ne
