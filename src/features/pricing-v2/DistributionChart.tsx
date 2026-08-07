@@ -17,6 +17,7 @@
 // - SVG pur, zéro dépendance graphique (le module reste autonome).
 // ════════════════════════════════════════════════════════════════════════════
 import { Box, Stack, Typography } from '@mui/material';
+import { type default as React, useState } from 'react';
 import type { PricingV2Comp } from './api';
 
 import { T, cardSx, kickerSx } from './tokens';
@@ -78,7 +79,60 @@ export default function DistributionChart({ scale, comps, yourPrice, compsetSize
     { key: 'premium', label: 'PREMIUM', value: scale.p75, sub: 'au-dessus du lot' },
     { key: 'luxe', label: 'LUXE', value: scale.p90, sub: 'le haut du marché' },
   ];
+  const luxeValue = scale.p90;
   const active = markers.find((m) => m.key === gamme) ?? markers[1];
+
+  // ── Glissement du curseur VOUS ────────────────────────────────────────────
+  // Inverse de `x()`. On borne à [lo, hi] : au-delà, le repère sortirait du
+  // cadre et l'utilisateur perdrait son curseur hors écran.
+  const priceAt = (px: number) =>
+    Math.round(
+      Math.min(hi, Math.max(lo, lo + ((px - PAD_X) / (W - 2 * PAD_X)) * (hi - lo))),
+    );
+
+  /** La gamme dont le prix de référence est le plus proche de `v`. */
+  const nearestGamme = (v: number): Gamme => {
+    const all: Array<{ key: Gamme; value: number }> = markers.map((m) => ({
+      key: m.key,
+      value: m.value,
+    }));
+    return all.reduce((best, c) =>
+      Math.abs(c.value - v) < Math.abs(best.value - v) ? c : best,
+    ).key;
+  };
+
+  const [dragging, setDragging] = useState(false);
+  const [ghost, setGhost] = useState<number | null>(null);
+
+  const dragYou = (e: React.PointerEvent<SVGGElement>) => {
+    if (busy) return;
+    const svg = e.currentTarget.ownerSVGElement;
+    if (!svg) return;
+    e.preventDefault();
+    setDragging(true);
+    // Pendant le geste on ne montre qu'un aperçu local (`ghost`) : déclencher un
+    // recalcul serveur à chaque pixel saturerait l'API pour rien.
+    const toPrice = (clientX: number) => {
+      const r = svg.getBoundingClientRect();
+      return priceAt(((clientX - r.left) * W) / r.width);
+    };
+    setGhost(toPrice(e.clientX));
+    const move = (ev: PointerEvent) => setGhost(toPrice(ev.clientX));
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setDragging(false);
+      setGhost(null);
+      const next = nearestGamme(toPrice(ev.clientX));
+      if (next !== gamme) onGammeChange(next);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  // Position affichée : l'aperçu pendant le geste, le vrai prix sinon.
+  const shownPrice = ghost ?? yourPrice;
+
 
   // Position du bien vs sa propre échelle → phrase de lecture immédiate.
   const position =
@@ -97,7 +151,7 @@ export default function DistributionChart({ scale, comps, yourPrice, compsetSize
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 1 }}>
         <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink }}>Le marché, et vous dessus</Typography>
         <Typography sx={{ ...kickerSx, color: T.ok }}>
-          {compsetSize} COMPARABLES · CLIQUEZ UN REPÈRE
+          {compsetSize} COMPARABLES · GLISSEZ VOTRE CURSEUR
         </Typography>
       </Stack>
 
@@ -123,10 +177,10 @@ export default function DistributionChart({ scale, comps, yourPrice, compsetSize
               >
                 {/* Zone de clic généreuse (le trait seul serait trop fin) */}
                 <rect
-                  x={x(m.value) - 34}
-                  y={labelY - 12}
-                  width={68}
-                  height={BASE_Y - labelY + 30}
+                  x={x(m.value) - 15}
+                  y={labelY - 11}
+                  width={30}
+                  height={26}
                   fill="transparent"
                 />
                 <line
@@ -134,23 +188,22 @@ export default function DistributionChart({ scale, comps, yourPrice, compsetSize
                   y1={labelY + 6}
                   x2={x(m.value)}
                   y2={BASE_Y}
-                  stroke={isActive ? T.goldPure : T.line}
-                  strokeDasharray={isActive ? undefined : '3 3'}
-                  strokeWidth={isActive ? 2 : 1}
+                  stroke={T.line}
+                  strokeDasharray="3 3"
+                  strokeWidth={1}
                 />
-                {/* Pastille du repère actif */}
-                {isActive ? (
-                  <circle cx={x(m.value)} cy={BASE_Y} r={4.5} fill={T.goldPure} />
-                ) : null}
+                {/* Plus de pastille dorée sur le repère actif : la gamme
+                    sélectionnée se lit sur le curseur VOUS, qui est le seul
+                    élément saillant. Deux marqueurs dorés se disputaient l'œil. */}
                 <text
                   x={x(m.value)}
                   y={labelY}
                   textAnchor="middle"
                   style={{
-                    fontSize: isActive ? 10 : 9,
+                    fontSize: 9,
                     fontFamily: T.mono,
-                    fill: isActive ? T.gold : T.mut,
-                    fontWeight: isActive ? 700 : 400,
+                    fill: T.mut,
+                    fontWeight: 400,
                     letterSpacing: 0.54,
                   }}
                 >
@@ -190,20 +243,51 @@ export default function DistributionChart({ scale, comps, yourPrice, compsetSize
             </circle>
           ))}
 
-          {/* Le curseur VOUS */}
-          <line
-            x1={x(yourPrice)}
-            y1={BASE_Y - curveH - 8}
-            x2={x(yourPrice)}
-            y2={BASE_Y + 4}
-            stroke={T.ink}
-            strokeWidth={2.5}
-          />
-          <circle cx={x(yourPrice)} cy={BASE_Y - curveH - 8} r={9} fill={T.ink} />
+          {/* ── Le curseur VOUS : le SEUL élément manipulable de ce graphique ──
+              On le glisse ; au relâchement, la gamme dont le prix est le plus
+              proche est sélectionnée. Les repères restent de simples jalons. */}
+          <g
+            onPointerDown={dragYou}
+            style={{ cursor: busy ? 'default' : 'ew-resize', touchAction: 'none' }}
+          >
+            {/* Zone d'accroche large : viser un trait de 2,5 px est impossible. */}
+            <rect
+              x={x(shownPrice) - 30}
+              y={BASE_Y - curveH - 26}
+              width={60}
+              height={curveH + 44}
+              fill="transparent"
+            />
+            <line
+              x1={x(shownPrice)}
+              y1={BASE_Y - curveH - 8}
+              x2={x(shownPrice)}
+              y2={BASE_Y + 4}
+              stroke={T.ink}
+              strokeWidth={2.5}
+              style={{ pointerEvents: 'none' }}
+            />
+            <circle
+              cx={x(shownPrice)}
+              cy={BASE_Y - curveH - 8}
+              r={dragging ? 13 : 11}
+              fill={T.ink}
+              style={{ pointerEvents: 'none' }}
+            />
+            {/* Deux chevrons : signale que ça se tire latéralement. */}
+            <path
+              d={`M${x(shownPrice) - 3.5},${BASE_Y - curveH - 11.5} l-2.5,3.5 l2.5,3.5 M${x(shownPrice) + 3.5},${BASE_Y - curveH - 11.5} l2.5,3.5 l-2.5,3.5`}
+              stroke={T.card}
+              strokeWidth={1.4}
+              fill="none"
+              strokeLinecap="round"
+              style={{ pointerEvents: 'none' }}
+            />
+          </g>
           {/* Légende du curseur — sous la ligne des valeurs, jamais dessus.
               Fond blanc pour rester lisible si un repère tombe juste derrière. */}
           <rect
-            x={x(yourPrice) - 62}
+            x={x(shownPrice) - 62}
             y={BASE_Y + 24}
             width={124}
             height={17}
@@ -212,12 +296,12 @@ export default function DistributionChart({ scale, comps, yourPrice, compsetSize
             fillOpacity={0.94}
           />
           <text
-            x={x(yourPrice)}
+            x={x(shownPrice)}
             y={BASE_Y + 36}
             textAnchor="middle"
             style={{ fontSize: 11, fontFamily: T.mono, fontWeight: 700, fill: T.ink }}
           >
-            VOUS · {yourPrice} MAD
+            VOUS · {shownPrice} MAD
           </text>
         </svg>
       </Box>

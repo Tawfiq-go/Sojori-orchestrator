@@ -24,6 +24,12 @@ export type PricingV2Day = {
   status?: 'booked' | 'blocked' | 'free';
   /** Prix RÉELLEMENT payé, figé à la réservation (null si non vendue). */
   bookedPriceMad?: number | null;
+  /**
+   * Nuit invendable : suite libre plus courte que le minStay, coincée entre deux
+   * nuits occupées. `minStay` = celui à appliquer ce jour-là (taille du trou),
+   * sinon la remise ne sert à rien — personne ne peut réserver.
+   */
+  gap?: { size: number; minStay: number; adjustPct: number };
   breakdown: {
     base: number;
     seasonal: number;
