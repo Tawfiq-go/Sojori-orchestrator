@@ -265,8 +265,21 @@ export default function PricingV2Page() {
         </Stack>
       </Stack>
 
-      {/* ── Hero : le prix de ce soir + phrase-preuve ── */}
-      <Box sx={{ ...cardSx, textAlign: 'center', py: 3.5, mb: 3 }}>
+      {/* ── Hero sur DEUX colonnes ──────────────────────────────────────────
+          Gauche : le prix de ce soir (le chiffre qu'on vient lire en premier).
+          Droite : la fourchette et l'interrupteur — les deux réglages qui
+          décident si ce prix s'applique et entre quelles bornes. Ils étaient
+          dispersés plus bas dans la page alors qu'ils commentent ce chiffre. */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+          gap: 1.75,
+          mb: 3,
+          alignItems: 'stretch',
+        }}
+      >
+      <Box sx={{ ...cardSx, textAlign: 'center', py: 3.5, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <Typography sx={{ ...kickerSx, fontSize: 10, letterSpacing: '1.2px', color: T.gold }}>
           CE SOIR CHEZ VOUS
         </Typography>
@@ -294,10 +307,66 @@ export default function PricingV2Page() {
         </Stack>
       </Box>
 
+        {/* Colonne droite du hero : bornes + interrupteur */}
+        <Stack spacing={1.75}>
+          <Box sx={{ ...cardSx, opacity: saving ? 0.55 : 1, transition: 'opacity .15s' }}>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 1.5 }}>
+            <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink }}>Votre fourchette</Typography>
+            <Typography sx={{ fontSize: 11, color: T.mut }}>le prix ne sort jamais de ces bornes</Typography>
+          </Stack>
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              size="small"
+              fullWidth
+              label="Jamais en dessous"
+              defaultValue={config?.minPrice ?? result.meta.floor}
+              onBlur={(e) => void patch({ minPrice: Number(e.target.value) || null })}
+              sx={{ '& input': { fontFamily: T.mono, fontSize: 15, fontWeight: 700 } }}
+            />
+            <TextField
+              size="small"
+              fullWidth
+              label="Jamais au-dessus"
+              defaultValue={config?.maxPrice ?? result.meta.ceil}
+              onBlur={(e) => void patch({ maxPrice: Number(e.target.value) || null })}
+              sx={{ '& input': { fontFamily: T.mono, fontSize: 15, fontWeight: 700 } }}
+            />
+          </Stack>
+          <Typography sx={{ fontSize: 12, color: T.ink2, mt: 1 }}>
+            Conseillé pour votre bien :{' '}
+            <Box component="span" sx={{ color: T.gold, fontWeight: 700 }}>
+              {Math.round(result.suggestedBounds.low)} – {Math.round(result.suggestedBounds.high)} MAD
+            </Box>{' '}
+            (prix d'appel → top 10 %)
+          </Typography>
+        </Box>
+
+          {/* Interrupteur du calcul nocturne — remonté ici : il décide si le
+              prix ci-contre est recalculé chaque nuit. */}
+          <Box sx={{ ...cardSx, opacity: saving ? 0.55 : 1, transition: 'opacity .15s' }}>
+            <Typography sx={{ ...kickerSx, mb: 1 }}>CALCUL NOCTURNE (SHADOW)</Typography>
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography sx={{ fontSize: 13.5, color: T.ink }}>
+                {config?.shadowEnabled ? 'Activé — historisé chaque nuit' : 'Désactivé'}
+              </Typography>
+              <Switch
+                checked={config?.shadowEnabled ?? false}
+                disabled={saving}
+                onChange={(e) => void patch({ shadowEnabled: e.target.checked })}
+              />
+            </Stack>
+            <Typography sx={{ fontSize: 11.5, color: T.ink2, mt: 0.75, lineHeight: 1.5 }}>
+              Mode shadow : les prix sont calculés et conservés,{' '}
+              <b>jamais envoyés au calendrier ni aux OTA</b>.
+            </Typography>
+          </Box>
+        </Stack>
+      </Box>
+
       {/* ══ GRILLE 2 COLONNES — calquée sur la maquette validée ══
           Mesuré au DOM : 614px / 492px, gap 14px (≈ 1.25fr / 1fr).
           GAUCHE : tout ce qui explique et règle (distribution, décisions, leviers)
-          DROITE : fourchette + calendrier, qui garde SA taille.
+          DROITE : le calendrier, qui garde SA taille.
           ⚠️ Ne repasse pas le calendrier pleine largeur : la maquette le veut
           en colonne étroite à droite, la lecture du mois en dépend. */}
       <Box
@@ -431,18 +500,10 @@ export default function PricingV2Page() {
             </>
           ) : null}
 
-          <Typography sx={{ ...kickerSx, mb: 1 }}>
-            {expert ? '2' : '2'} · CALCUL NOCTURNE (SHADOW)
-          </Typography>
-          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-            <Typography sx={{ fontSize: 13.5, color: T.ink }}>
-              {config?.shadowEnabled ? 'Activé — historisé chaque nuit' : 'Désactivé'}
-            </Typography>
-            <Switch
-              checked={config?.shadowEnabled ?? false}
-              onChange={(e) => void patch({ shadowEnabled: e.target.checked })}
-            />
-          </Stack>
+          {/* L'interrupteur du calcul nocturne a été remonté dans le hero, à
+              droite du prix : il décide si ce prix est recalculé chaque nuit.
+              Ne pas le redupliquer ici — deux interrupteurs pour un même
+              réglage, c'est un de trop. */}
 
           {/* EXPERT : le repère marché large, en contexte discret */}
           {expert && market ? (
@@ -505,40 +566,11 @@ export default function PricingV2Page() {
           {expert && market?.comps?.length ? <CompsTable comps={market.comps} /> : null}
         </Stack>
 
-        {/* ══════════ COLONNE DROITE — ordre maquette : fourchette PUIS calendrier ══════════ */}
+        {/* ══════════ COLONNE DROITE — le calendrier ══════════
+            La fourchette a été remontée dans le hero (à droite du prix), avec
+            l'interrupteur : ce sont les deux réglages qui commentent ce prix.
+            Le calendrier occupe donc toute cette colonne. */}
         <Stack spacing={1.75}>
-        <Box sx={{ ...cardSx, opacity: saving ? 0.55 : 1, transition: 'opacity .15s' }}>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 1.5 }}>
-            <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink }}>Votre fourchette</Typography>
-            <Typography sx={{ fontSize: 11, color: T.mut }}>le prix ne sort jamais de ces bornes</Typography>
-          </Stack>
-          <Stack direction="row" spacing={1.5}>
-            <TextField
-              size="small"
-              fullWidth
-              label="Jamais en dessous"
-              defaultValue={config?.minPrice ?? result.meta.floor}
-              onBlur={(e) => void patch({ minPrice: Number(e.target.value) || null })}
-              sx={{ '& input': { fontFamily: T.mono, fontSize: 15, fontWeight: 700 } }}
-            />
-            <TextField
-              size="small"
-              fullWidth
-              label="Jamais au-dessus"
-              defaultValue={config?.maxPrice ?? result.meta.ceil}
-              onBlur={(e) => void patch({ maxPrice: Number(e.target.value) || null })}
-              sx={{ '& input': { fontFamily: T.mono, fontSize: 15, fontWeight: 700 } }}
-            />
-          </Stack>
-          <Typography sx={{ fontSize: 12, color: T.ink2, mt: 1 }}>
-            Conseillé pour votre bien :{' '}
-            <Box component="span" sx={{ color: T.gold, fontWeight: 700 }}>
-              {Math.round(result.suggestedBounds.low)} – {Math.round(result.suggestedBounds.high)} MAD
-            </Box>{' '}
-            (prix d'appel → top 10 %)
-          </Typography>
-        </Box>
-
         <Box sx={cardSx}>
           <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1, flexWrap: 'wrap', gap: 0.5 }}>
             <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink }}>
