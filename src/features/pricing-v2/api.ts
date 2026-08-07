@@ -103,6 +103,17 @@ export type PricingV2Config = {
 // (route backend /market/:id — MÊMES comps que ceux qui font le prix)
 export type PricingV2Comp = {
   listingId: string;
+  /** Nom de l'annonce, tel qu'affiché sur Airbnb. */
+  name?: string | null;
+  /** Photo de couverture (CDN Airbnb). */
+  photoUrl?: string | null;
+  /**
+   * Lien Airbnb — null si l'id vrai n'a pas pu être récupéré. ⚠️ L'id stocké
+   * est tronqué (> 2^53) pour 18 comps sur 25 : le backend le reconstruit
+   * depuis les URLs de photos. Ne JAMAIS fabriquer ce lien côté front à partir
+   * de `listingId`, il mènerait à un 404.
+   */
+  airbnbUrl?: string | null;
   similarity: number;
   bedrooms: number;
   guests: number;
