@@ -55,17 +55,6 @@ import { T, cardSx, kickerSx } from './tokens';
 
 // Table de traduction (brief §2) — aucun terme technique nu à l'écran.
 /**
- * ⚠️ `pct` DOIT rester aligné sur GAMME_OFFSET (engine/config.ts) : 0.90, 1.00,
- * 1.08, 1.15. C'est l'écart appliqué au prix de marché.
- */
-const GAMME_LABELS: Record<string, { label: string; sub: string; pct: number }> = {
-  economique: { label: 'Économique', sub: 'Remplir vite, marge faible', pct: -10 },
-  // « voisins » → « marché » : même règle de vocabulaire que partout ailleurs.
-  normal: { label: 'Normal', sub: 'Le prix du marché', pct: 0 },
-  premium: { label: 'Premium', sub: 'Au-dessus du lot', pct: 8 },
-  luxe: { label: 'Luxe', sub: 'Le haut du marché', pct: 15 },
-};
-/**
  * ⚠️ `pct` DOIT rester aligné sur MODE.tilt (apps/srv-pricing-v2/src/engine/
  * config.ts) : prudent 0.97, equilibre 1.00, agressif 1.05. Afficher un chiffre
  * faux serait pire que ne rien afficher — si tu changes le moteur, change ici.
@@ -88,7 +77,6 @@ export default function PricingV2Page() {
   // Mécanique du calcul nocturne (shadow/AirROI) = admin only, cf. DynamicPricingPage.
   // L'owner ne doit ni voir ni savoir que ce calcul existe (Tawfiq, 07/08/2026).
   const isPlatformAdmin = hasAdminAccess(user?.role);
-  const [expert, setExpert] = useState(false);
   const [result, setResult] = useState<PricingV2Result | null>(null);
   const [config, setConfig] = useState<PricingV2Config | null>(null);
   const [market, setMarket] = useState<PricingV2Market | null>(null);
@@ -246,7 +234,7 @@ export default function PricingV2Page() {
           respiration. Le plafond à 1240 px bridait le calendrier sur grand
           écran alors que c'est la zone qui a le plus besoin de place. */}
       <Box sx={{ maxWidth: 1800, mx: 'auto' }}>
-      {/* ── En-tête + switch Simple/Expert ── */}
+      {/* ── En-tête ── */}
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Typography sx={{ fontWeight: 750, fontSize: 20, color: T.ink }}>
           Prix dynamiques
@@ -254,32 +242,6 @@ export default function PricingV2Page() {
             v2 · bêta
           </Box>
         </Typography>
-        <Stack direction="row" sx={{ bgcolor: T.line2, borderRadius: `${T.radius}px`, p: 0.375, gap: 0.375, border: `1px solid ${T.line}` }}>
-          {[
-            { id: false, label: 'Simple' },
-            { id: true, label: 'Expert' },
-          ].map((o) => (
-            <Box
-              key={String(o.id)}
-              component="button"
-              type="button"
-              onClick={() => setExpert(o.id)}
-              sx={{
-                all: 'unset',
-                cursor: 'pointer',
-                px: 2,
-                py: 0.75,
-                borderRadius: 1,
-                fontSize: 13,
-                fontWeight: 700,
-                color: expert === o.id ? T.card : T.ink2,
-                bgcolor: expert === o.id ? T.ink : 'transparent',
-              }}
-            >
-              {o.label}
-            </Box>
-          ))}
-        </Stack>
       </Stack>
 
       {/* ── Hero sur DEUX colonnes ──────────────────────────────────────────
@@ -414,7 +376,7 @@ export default function PricingV2Page() {
         {/* ══════════ COLONNE GAUCHE ══════════ */}
         <Stack spacing={1.75}>
           {/* Distribution — écran signature, en tête de colonne gauche */}
-          {expert && market?.scale ? (
+          {market?.scale ? (
             <DistributionChart
               scale={market.scale}
               comps={market.comps}
@@ -447,65 +409,8 @@ export default function PricingV2Page() {
           {/* ── Décisions ── */}
           <Box sx={{ ...cardSx, opacity: saving ? 0.55 : 1, transition: 'opacity .15s' }}>
           <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink, mb: 2 }}>
-            {expert ? 'Vos réglages' : 'Vos décisions'}
+            Vos réglages
           </Typography>
-
-          {/* ⚠️ Le POSITIONNEMENT n'est plus ici : c'est la COURBE qui le porte
-              (cliquer un repère = choisir sa gamme). Deux contrôles pour la même
-              décision embrouillaient le PM. En mode Simple, la courbe est masquée
-              → les 3 boutons ci-dessous prennent le relais. */}
-          {!expert ? (
-            <>
-              <Typography sx={{ ...kickerSx, mb: 1 }}>
-                1 · POSITIONNEMENT DE VOTRE BIEN
-              </Typography>
-              <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
-                {(['economique', 'normal', 'luxe'] as const).map((g) => (
-                  <Box
-                    key={g}
-                    component="button"
-                    type="button"
-                    onClick={() => void patch({ gamme: g })}
-                    sx={{
-                      all: 'unset',
-                      flex: 1,
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                      border:
-                        config?.gamme === g
-                          ? `1.5px solid ${T.goldPure}`
-                          : `1.5px solid ${T.line}`,
-                      bgcolor: config?.gamme === g ? T.goldBg : T.card,
-                      borderRadius: `${T.radius}px`,
-                      py: 1.5,
-                      px: 1,
-                    }}
-                  >
-                    <Typography sx={{ fontWeight: 700, fontSize: 13.5, color: T.ink }}>
-                      {GAMME_LABELS[g].label}
-                    </Typography>
-                    {/* L'écart appliqué au prix de marché — sinon on choisit
-                        « Premium » sans savoir ce que ça coûte. */}
-                    <Typography
-                      sx={{
-                        fontFamily: T.mono,
-                        fontSize: 13,
-                        fontWeight: 750,
-                        color: config?.gamme === g ? T.gold : T.ink2,
-                        mt: 0.25,
-                      }}
-                    >
-                      {GAMME_LABELS[g].pct > 0 ? '+' : ''}
-                      {GAMME_LABELS[g].pct}&nbsp;%
-                    </Typography>
-                    <Typography sx={{ fontSize: 11, color: T.mut, mt: 0.25 }}>
-                      {GAMME_LABELS[g].sub}
-                    </Typography>
-                  </Box>
-                ))}
-              </Stack>
-            </>
-          ) : null}
 
           {/* ⚠️ ORDRE MAQUETTE : « Votre fourchette » n'est PAS ici — elle vit en
               COLONNE DROITE, juste au-dessus du calendrier (relevé au DOM de la
@@ -513,60 +418,55 @@ export default function PricingV2Page() {
               Ne la ramène pas ici : le PM règle ses bornes en regardant l'effet
               immédiat sur le calendrier, les deux doivent être côte à côte. */}
 
-          {/* Stratégie — visible en Expert seulement (le owner a déjà 3 décisions) */}
-          {expert ? (
-            <>
-              <Typography sx={{ ...kickerSx, mb: 1 }}>
-                1 · VOTRE STRATÉGIE
-              </Typography>
-              <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
-                {(['prudent', 'equilibre', 'agressif'] as const).map((m) => (
-                  <Box
-                    key={m}
-                    component="button"
-                    type="button"
-                    onClick={() => void patch({ mode: m })}
-                    sx={{
-                      all: 'unset',
-                      flex: 1,
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                      border: config?.mode === m ? `1.5px solid ${T.goldPure}` : `1.5px solid ${T.line}`,
-                      bgcolor: config?.mode === m ? T.goldBg : T.card,
-                      borderRadius: `${T.radius}px`,
-                      py: 1.25,
-                      px: 1,
-                    }}
-                  >
-                    <Typography sx={{ fontWeight: 700, fontSize: 13, color: T.ink }}>{MODE_LABELS[m].label}</Typography>
-                    {/* Le % réellement appliqué au prix de base : sans lui, les
-                        trois modes se choisissent au ressenti. */}
-                    <Typography
-                      sx={{
-                        fontFamily: T.mono,
-                        fontSize: 13,
-                        fontWeight: 750,
-                        color: config?.mode === m ? T.gold : T.ink2,
-                        mt: 0.25,
-                      }}
-                    >
-                      {MODE_LABELS[m].pct > 0 ? '+' : ''}
-                      {MODE_LABELS[m].pct}&nbsp;%
-                    </Typography>
-                    <Typography sx={{ fontSize: 10.5, color: T.mut, mt: 0.25 }}>{MODE_LABELS[m].sub}</Typography>
-                  </Box>
-                ))}
-              </Stack>
-            </>
-          ) : null}
+          <Typography sx={{ ...kickerSx, mb: 1 }}>
+            1 · VOTRE STRATÉGIE
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
+            {(['prudent', 'equilibre', 'agressif'] as const).map((m) => (
+              <Box
+                key={m}
+                component="button"
+                type="button"
+                onClick={() => void patch({ mode: m })}
+                sx={{
+                  all: 'unset',
+                  flex: 1,
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  border: config?.mode === m ? `1.5px solid ${T.goldPure}` : `1.5px solid ${T.line}`,
+                  bgcolor: config?.mode === m ? T.goldBg : T.card,
+                  borderRadius: `${T.radius}px`,
+                  py: 1.25,
+                  px: 1,
+                }}
+              >
+                <Typography sx={{ fontWeight: 700, fontSize: 13, color: T.ink }}>{MODE_LABELS[m].label}</Typography>
+                {/* Le % réellement appliqué au prix de base : sans lui, les
+                    trois modes se choisissent au ressenti. */}
+                <Typography
+                  sx={{
+                    fontFamily: T.mono,
+                    fontSize: 13,
+                    fontWeight: 750,
+                    color: config?.mode === m ? T.gold : T.ink2,
+                    mt: 0.25,
+                  }}
+                >
+                  {MODE_LABELS[m].pct > 0 ? '+' : ''}
+                  {MODE_LABELS[m].pct}&nbsp;%
+                </Typography>
+                <Typography sx={{ fontSize: 10.5, color: T.mut, mt: 0.25 }}>{MODE_LABELS[m].sub}</Typography>
+              </Box>
+            ))}
+          </Stack>
 
           {/* L'interrupteur du calcul nocturne a été remonté dans le hero, à
               droite du prix : il décide si ce prix est recalculé chaque nuit.
               Ne pas le redupliquer ici — deux interrupteurs pour un même
               réglage, c'est un de trop. */}
 
-          {/* EXPERT : le repère marché large, en contexte discret */}
-          {expert && market ? (
+          {/* Le repère marché large, en contexte discret */}
+          {market ? (
             <Box sx={{ mt: 2.5, pt: 2, borderTop: `1px solid ${T.line2}` }}>
               <Typography sx={{ ...kickerSx, mb: 0.5 }}>
                 REPÈRE — TOUT LE MARCHÉ AUTOUR DE VOUS
@@ -580,9 +480,8 @@ export default function PricingV2Page() {
           ) : null}
           </Box>
 
-          {/* ── EXPERT : les leviers (maquette : « Vos 5 leviers ») ── */}
-          {expert ? (
-            <Box sx={{ ...cardSx, opacity: saving ? 0.55 : 1, transition: 'opacity .15s' }}>
+          {/* ── Les leviers (maquette : « Vos 5 leviers ») ── */}
+          <Box sx={{ ...cardSx, opacity: saving ? 0.55 : 1, transition: 'opacity .15s' }}>
               <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink, mb: 1.5 }}>
                 Vos leviers
               </Typography>
@@ -647,7 +546,6 @@ export default function PricingV2Page() {
                 }
               />
             </Box>
-          ) : null}
 
           {/* Le tableau du marché a quitté cette colonne : il vit désormais en
               PLEINE LARGEUR sous la grille. Six colonnes de données dans une
@@ -885,11 +783,11 @@ export default function PricingV2Page() {
         </Stack>
       </Box>
 
-      {/* ── EXPERT : le marché ouvert — PLEINE LARGEUR ──
+      {/* ── Le marché ouvert — PLEINE LARGEUR ──
           Six colonnes (ressemblance, quartier, note, deux prix, équipement) ont
           besoin de toute la page pour être comparables d'un coup d'œil. En
           demi-largeur, les écarts de taille et de note étaient illisibles. */}
-      {expert && market?.comps?.length ? (
+      {market?.comps?.length ? (
         <Box sx={{ mt: 1.75 }}>
           <CompsTable comps={market.comps} subject={market.subject} />
         </Box>
