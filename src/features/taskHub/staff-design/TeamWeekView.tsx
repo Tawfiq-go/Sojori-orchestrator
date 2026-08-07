@@ -23,25 +23,6 @@ import './teamWeekView.css';
 const WINDOW_DAYS_SIMPLE = 15;
 const WINDOW_DAYS_ENRICHED = 15;
 
-/**
- * Compteurs jour × staff pour le mode enrichi — mêmes 3 statuts que le kanban
- * Vue staff (Attente début / Attente fin / Terminé), pas de prix affiché ici.
- */
-function dayCellStats(tasks: TeamTask[]): {
-  waitingStart: number;
-  waitingFinish: number;
-  finished: number;
-} {
-  let waitingStart = 0;
-  let waitingFinish = 0;
-  let finished = 0;
-  for (const t of tasks) {
-    if (t.lifecycle === 'waiting_start') waitingStart++;
-    else if (t.lifecycle === 'waiting_finish') waitingFinish++;
-    else if (t.lifecycle === 'finished') finished++;
-  }
-  return { waitingStart, waitingFinish, finished };
-}
 const CANCELLED_STATUSES = new Set(['CANCELLED_ADMIN', 'CANCELLED_CUSTOMER', 'ARCHIVED']);
 const MAX_CHIPS_COLLAPSED = 3;
 
@@ -1004,61 +985,59 @@ export default function TeamWeekView({
       );
     }
 
+    // Mode enrichi : 3 colonnes kanban DANS la cellule (Attente début / Attente
+    // fin / Terminé). Chaque colonne est une zone de dépôt large — glisser une
+    // tâche d'une colonne à la suivante change son statut.
+    if (enriched && !row.unassigned) {
+      const COLS = [
+        { to: 'waiting_start' as const, emoji: '▶️', label: 'À démarrer', cls: 'waiting-start' },
+        { to: 'waiting_finish' as const, emoji: '⏳', label: 'En cours', cls: 'waiting-finish' },
+        { to: 'finished' as const, emoji: '✅', label: 'Terminé', cls: 'finished' },
+      ];
+      return (
+        <div className="twv-cell-kanban">
+          {COLS.map((col) => {
+            const colTasks = list.filter((t) =>
+              col.to === 'waiting_start'
+                ? t.lifecycle === 'waiting_start' || t.lifecycle === 'waiting_accept'
+                : t.lifecycle === col.to,
+            );
+            const isDrop = dropBadge?.key === cellKey && dropBadge.to === col.to;
+            return (
+              <div
+                key={col.to}
+                className={`twv-kcol twv-kcol--${col.cls}${isDrop ? ' twv-kcol--drop' : ''}`}
+                onDragOver={(e) => {
+                  onStatusBadgeDragOver(col.to, e);
+                  setDropBadge({ key: cellKey, to: col.to });
+                }}
+                onDragLeave={() =>
+                  setDropBadge((cur) =>
+                    cur?.key === cellKey && cur.to === col.to ? null : cur,
+                  )
+                }
+                onDrop={(e) => {
+                  onStatusBadgeDrop(col.to, e);
+                  setDropBadge(null);
+                }}
+                title={`${col.label} — déposer une tâche ici`}
+              >
+                <div className="twv-kcol-h">
+                  {col.emoji} {colTasks.length}
+                </div>
+                {colTasks.map(renderChip)}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
     const visible =
       row.unassigned || expanded ? list : list.slice(0, MAX_CHIPS_COLLAPSED);
     const hidden = list.length - visible.length;
-    const stats = enriched && !row.unassigned ? dayCellStats(raw) : null;
     return (
       <>
-        {stats && (
-          <div className="twv-day-kanban">
-            <span
-              className={`twv-kanban-tile twv-kanban-tile--waiting-start${dropBadge?.key === cellKey && dropBadge.to === 'waiting_start' ? ' twv-kanban-tile--drop' : ''}`}
-              title="Attente début — glisser une tâche acceptée ici pour la démarrer"
-              onDragOver={(e) => {
-                onStatusBadgeDragOver('waiting_start', e);
-                setDropBadge({ key: cellKey, to: 'waiting_start' });
-              }}
-              onDragLeave={() => setDropBadge((cur) => (cur?.key === cellKey ? null : cur))}
-              onDrop={(e) => {
-                onStatusBadgeDrop('waiting_start', e);
-                setDropBadge(null);
-              }}
-            >
-              ▶️ {stats.waitingStart}
-            </span>
-            <span
-              className={`twv-kanban-tile twv-kanban-tile--waiting-finish${dropBadge?.key === cellKey && dropBadge.to === 'waiting_finish' ? ' twv-kanban-tile--drop' : ''}`}
-              title="Attente fin — glisser une tâche démarrée ici pour la terminer"
-              onDragOver={(e) => {
-                onStatusBadgeDragOver('waiting_finish', e);
-                setDropBadge({ key: cellKey, to: 'waiting_finish' });
-              }}
-              onDragLeave={() => setDropBadge((cur) => (cur?.key === cellKey ? null : cur))}
-              onDrop={(e) => {
-                onStatusBadgeDrop('waiting_finish', e);
-                setDropBadge(null);
-              }}
-            >
-              ⏳ {stats.waitingFinish}
-            </span>
-            <span
-              className={`twv-kanban-tile twv-kanban-tile--finished${dropBadge?.key === cellKey && dropBadge.to === 'finished' ? ' twv-kanban-tile--drop' : ''}`}
-              title="Terminé — glisser une tâche en cours ici pour la clôturer"
-              onDragOver={(e) => {
-                onStatusBadgeDragOver('finished', e);
-                setDropBadge({ key: cellKey, to: 'finished' });
-              }}
-              onDragLeave={() => setDropBadge((cur) => (cur?.key === cellKey ? null : cur))}
-              onDrop={(e) => {
-                onStatusBadgeDrop('finished', e);
-                setDropBadge(null);
-              }}
-            >
-              ✅ {stats.finished}
-            </span>
-          </div>
-        )}
         {visible.map(renderChip)}
         {row.unassigned ? (
           <button type="button" className="twv-more" onClick={() => toggleCell(cellKey)}>
