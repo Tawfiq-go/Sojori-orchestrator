@@ -279,20 +279,20 @@ export default function PricingV2Page() {
           alignItems: 'stretch',
         }}
       >
-      <Box sx={{ ...cardSx, textAlign: 'center', py: 3.5, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <Box sx={{ ...cardSx, textAlign: 'center', py: 2, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <Typography sx={{ ...kickerSx, fontSize: 10, letterSpacing: '1.2px', color: T.gold }}>
           CE SOIR CHEZ VOUS
         </Typography>
-        <Typography sx={{ fontSize: { xs: 46, md: 58 }, fontWeight: 750, lineHeight: 1.05, letterSpacing: '-0.02em', color: T.ink, mt: 0.5 }}>
+        <Typography sx={{ fontSize: { xs: 34, md: 42 }, fontWeight: 750, lineHeight: 1.05, letterSpacing: '-0.02em', color: T.ink, mt: 0.25 }}>
           {today.price}
           <Box component="span" sx={{ fontSize: 20, ml: 1, color: T.mut, fontWeight: 600 }}>
             MAD
           </Box>
         </Typography>
-        <Typography sx={{ color: T.ink2, fontSize: 14, mt: 0.75 }}>
+        <Typography sx={{ color: T.ink2, fontSize: 13, mt: 0.5 }}>
           Le marché autour de chez vous est à <b>{Math.round(today.comp)} MAD</b> ce soir.
         </Typography>
-        <Stack direction="row" spacing={1} sx={{ justifyContent: 'center', mt: 1.5, flexWrap: 'wrap' }}>
+        <Stack direction="row" spacing={0.75} sx={{ justifyContent: 'center', mt: 1, flexWrap: 'wrap' }}>
           <Chip
             size="small"
             label={
@@ -339,34 +339,7 @@ export default function PricingV2Page() {
             </Box>{' '}
             (prix d'appel → top 10 %)
           </Typography>
-
-          {/* ── Orphan gaps ── Le réglage était en base mais sans interface :
-              -20 % s'appliquait sans que le PM puisse le voir ni le changer. */}
-          <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${T.line2}` }}>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <Typography sx={{ ...kickerSx }}>ORPHAN GAPS</Typography>
-              <Typography sx={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.ink }}>
-                {config?.gapAdjustPct ?? -20} %
-              </Typography>
-            </Stack>
-            <Slider
-              size="small"
-              min={-50}
-              max={0}
-              step={5}
-              value={config?.gapAdjustPct ?? -20}
-              disabled={saving}
-              marks={[{ value: -20, label: 'défaut' }]}
-              onChangeCommitted={(_, v) => void patch({ gapAdjustPct: v as number })}
-              sx={{ color: T.goldPure, mt: 0.5 }}
-            />
-            <Typography sx={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.5 }}>
-              Une nuit ou deux coincées entre deux réservations, plus courtes que votre minimum de
-              séjour : invendables en l'état. Le minimum est abaissé à la taille du trou et le prix
-              ajusté d'autant, pour les remplir.
-            </Typography>
           </Box>
-        </Box>
 
           {/* Interrupteur du calcul nocturne — remonté ici : il décide si le
               prix ci-contre est recalculé chaque nuit. */}
@@ -572,6 +545,33 @@ export default function PricingV2Page() {
                   <Box sx={{ height: 1, bgcolor: T.line2, my: 2.5 }} />
                 </>
               ) : null}
+
+              {/* ── Orphan gaps ── Rangé avec les autres leviers : c'en est un.
+                  Il était dans la carte « fourchette », qui parle de bornes. */}
+              <Box sx={{ mt: 2.5, pt: 2, borderTop: `1px solid ${T.line2}` }}>
+                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <Typography sx={{ ...kickerSx }}>ORPHAN GAPS</Typography>
+                  <Typography sx={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.ink }}>
+                    {config?.gapAdjustPct ?? -20} %
+                  </Typography>
+                </Stack>
+                <Slider
+                  size="small"
+                  min={-50}
+                  max={0}
+                  step={5}
+                  value={config?.gapAdjustPct ?? -20}
+                  disabled={saving}
+                  marks={[{ value: -20, label: 'défaut' }]}
+                  onChangeCommitted={(_, v) => void patch({ gapAdjustPct: v as number })}
+                  sx={{ color: T.goldPure, mt: 0.5 }}
+                />
+                <Typography sx={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.5 }}>
+                  Une nuit ou deux coincées entre deux réservations, plus courtes que votre minimum de
+                  séjour : invendables en l'état. Le minimum est abaissé à la taille du trou et le prix
+                  ajusté d'autant, pour les remplir.
+                </Typography>
+              </Box>
 
               {/* Pacing (maquette : levier 3) */}
               <PacingPanel
