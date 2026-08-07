@@ -134,6 +134,50 @@ export type PricingV2Shadow = {
   comparison: Array<{ date: string; v2: number; v1: number | null; deltaPct: number | null }>;
 };
 
+// ── Page d'atterrissage : tous les biens + KPI ──
+// ⚡ Servi depuis les résultats shadow DÉJÀ stockés (aucun recalcul côté service).
+export type PricingV2PortfolioRow = {
+  listingId: string;
+  name: string;
+  city: string;
+  district: string | null;
+  propertyType: string | null;
+  bedrooms: number | null;
+  dynamicEnabled: boolean;
+  tonightMad: number | null;
+  spark: number[]; // 30 prix pour la courbe miniature
+  floor: number | null;
+  ceil: number | null;
+  gamme: string;
+  occupancy30: number | null; // 0–1
+  lastComputedAt: string | null;
+  status: 'ok' | 'stale' | 'never_computed' | 'paused';
+  staleHours: number | null;
+};
+export type PricingV2Portfolio = {
+  success: boolean;
+  error?: string;
+  /**
+   * Propriétaire dont on regarde le parc, imposé par srv-admin depuis le JWT.
+   * `null` = vue admin sur TOUT le parc — l'UI doit le dire explicitement,
+   * sinon on présente les biens des autres comme « vos biens ».
+   */
+  scope: string | null;
+  kpis: {
+    listings: number;
+    cities: number;
+    dynamicEnabled: number;
+    paused: number;
+    alerts: number;
+    avgTonightMad: number | null;
+    avgOccupancy30: number | null;
+  };
+  rows: PricingV2PortfolioRow[];
+};
+export async function fetchPricingV2Portfolio() {
+  return apiClient.get<PricingV2Portfolio>(`${BASE}/portfolio`);
+}
+
 export async function fetchPricingV2Market(listingId: string) {
   return apiClient.get<PricingV2Market>(`${BASE}/market/${listingId}`);
 }
