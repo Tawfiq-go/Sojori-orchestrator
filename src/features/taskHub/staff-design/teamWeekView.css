@@ -530,9 +530,9 @@ th.twv-today .twv-day-num {
    au milieu des 3 sous-colonnes quand on scrolle. */
 .twv-enriched .twv-day-cell,
 .twv-enriched .twv-day-head {
-  width: 240px;
-  min-width: 240px;
-  max-width: 240px;
+  width: 300px;
+  min-width: 300px;
+  max-width: 300px;
   border-left: 2px solid rgba(26, 22, 17, 0.18);
 }
 .twv-enriched .twv-day-cell:last-child,
@@ -568,21 +568,21 @@ th.twv-today .twv-day-num {
 .twv-cell-kanban {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
+  gap: 5px;
   align-items: start;
 }
 .twv-kcol {
-  min-height: 44px;
+  min-height: 48px;
   border-radius: 6px;
-  padding: 3px 2px;
+  padding: 5px 4px;
   border: 1px dashed transparent;
   transition: background 0.12s, border-color 0.12s;
 }
 .twv-kcol-h {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 800;
   text-align: center;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   white-space: nowrap;
 }
 .twv-kcol--waiting-start {
@@ -611,9 +611,9 @@ th.twv-today .twv-day-num {
    Le badge « → Commencer » et le statut courant sont redondants ici : la
    colonne porte déjà l'information. Le détail reste dans le title + le menu. */
 .twv-cell-kanban .twv-chip {
-  font-size: 9.5px;
-  padding: 3px 4px;
-  margin-bottom: 3px;
+  font-size: 10px;
+  padding: 4px 6px;
+  margin-bottom: 4px;
 }
 .twv-cell-kanban .twv-chip-listing,
 .twv-cell-kanban .twv-chip-status,
