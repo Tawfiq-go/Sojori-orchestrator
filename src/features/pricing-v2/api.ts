@@ -7,6 +7,10 @@
 // - Les types ci-dessous sont le MIROIR EXACT du contrat de sortie du moteur
 //   (apps/srv-pricing-v2/src/engine/types.ts, spec v2.7). Ne les « enrichis »
 //   pas côté front : si le moteur ne le produit pas, l'UI ne l'affiche pas.
+// - Vocabulaire à l'écran : on dit « MARCHÉ », jamais « concurrents ». Décision
+//   produit de Tawfiq : le client final veut un prix, point ; le PM veut
+//   comprendre — et il raisonne en marché. « Concurrent » suggère qu'on épie des
+//   voisins nommément. Ne pas réintroduire le mot, même dans une infobulle.
 // - Vocabulaire à l'écran : JAMAIS de jargon nu (p25, ADR, momentum…) — voir la
 //   table de traduction dans docs/dynamicprice/BRIEF_DESIGN_PRICING_V2.md §2.
 // ════════════════════════════════════════════════════════════════════════════

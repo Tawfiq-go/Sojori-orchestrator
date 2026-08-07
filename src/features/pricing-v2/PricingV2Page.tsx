@@ -297,8 +297,8 @@ export default function PricingV2Page() {
             size="small"
             label={
               lowConfidence
-                ? `Faible confiance — ${result.meta.compsetSize} comparables`
-                : `Basé sur ${result.meta.compsetSize} biens comparables`
+                ? `Faible confiance — ${result.meta.compsetSize} biens seulement`
+                : `Marché mesuré sur ${result.meta.compsetSize} biens similaires`
             }
             color={lowConfidence ? 'warning' : 'default'}
           />
@@ -513,8 +513,8 @@ export default function PricingV2Page() {
               </Typography>
               <Typography sx={{ fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
                 {market.marketWide.p25} → {market.marketWide.p90} MAD (tous types de biens).
-                Votre échelle personnelle est plus resserrée : elle ne retient que vos vrais
-                comparables.
+                Votre échelle est plus resserrée : elle ne retient que les biens réellement
+                similaires au vôtre.
               </Typography>
             </Box>
           ) : null}
