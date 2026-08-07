@@ -552,8 +552,13 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     .sort((a, b) => a - b);
   const timeWindows = uniqueScheduleTimeWindows(schedule);
   const rates: Record<string, number> = {};
-  (row.pricing as { taskType: string; amount: number }[] | undefined)?.forEach((p) => {
+  const ratesMode: Record<string, 'per_task' | 'hourly' | 'monthly'> = {};
+  (
+    row.pricing as { taskType: string; amount: number; mode?: string }[] | undefined
+  )?.forEach((p) => {
     rates[p.taskType] = p.amount;
+    ratesMode[p.taskType] =
+      p.mode === 'hourly' || p.mode === 'monthly' ? p.mode : 'per_task';
   });
 
   return {
@@ -578,6 +583,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
     contractType: row.contractType === 'salaried' ? ('employee' as const) : ('freelance' as const),
     salary: row.salary != null ? Number(row.salary) : undefined,
     rates,
+    ratesMode,
     allowedTaskTypes: normalizeStaffAllowedTaskTypes(row.taskTypes as string[] | undefined),
     allowedListingIds: ((row.listingIds as unknown[]) || []).map(String),
     allowedCityIds: ((row.cityIds as unknown[]) || []).map(String),
@@ -768,11 +774,17 @@ export function designStaffToApi(
     }
   }
 
-  const pricing: { taskType: string; amount: number }[] = [];
+  const pricing: { taskType: string; amount: number; mode: string }[] = [];
   if (staff.rates) {
+    const modes = (staff.ratesMode || {}) as Record<string, string>;
     Object.entries(staff.rates as Record<string, number>).forEach(([taskType, amount]) => {
       if (amount != null && Number.isFinite(Number(amount))) {
-        pricing.push({ taskType, amount: Number(amount) });
+        const m = modes[taskType];
+        pricing.push({
+          taskType,
+          amount: Number(amount),
+          mode: m === 'hourly' || m === 'monthly' ? m : 'per_task',
+        });
       }
     });
   }

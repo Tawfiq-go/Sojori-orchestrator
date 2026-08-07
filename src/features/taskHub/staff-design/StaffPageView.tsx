@@ -276,6 +276,7 @@ export default function StaffPageView({
     setForm({
       ...s,
       rates: { ...s.rates },
+      ratesMode: { ...(s.ratesMode || {}) },
       alwaysAvailable: s.alwaysAvailable === true,
       taskTypeModes: { ...(s.taskTypeModes || {}) },
       autoAccept: s.autoAccept === true,
@@ -1197,7 +1198,23 @@ export default function StaffPageView({
                           })
                         }
                       />
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)' }}>MAD</span>
+                      <select
+                        className="input"
+                        style={{ width: 'auto', fontSize: 12 }}
+                        value={form.ratesMode?.[p.key] ?? 'per_task'}
+                        onChange={(e) =>
+                          patchForm({
+                            ratesMode: {
+                              ...form.ratesMode,
+                              [p.key]: e.target.value as 'per_task' | 'hourly' | 'monthly',
+                            },
+                          })
+                        }
+                      >
+                        <option value="per_task">MAD / tâche</option>
+                        <option value="hourly">MAD / heure</option>
+                        <option value="monthly">MAD fixe / mois</option>
+                      </select>
                       <button
                         type="button"
                         style={{

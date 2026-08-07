@@ -49,6 +49,8 @@ export interface Staff {
   salary?: number;
   /** Prix par type de tâche en MAD (clés fulltask) — freelance. */
   rates?: Record<string, number>;
+  /** Modèle de prix par type : per_task (MAD/tâche) · hourly (MAD/h) · monthly (fixe/mois). */
+  ratesMode?: Record<string, 'per_task' | 'hourly' | 'monthly'>;
   allowedTaskTypes: string[];
   /** Sentinel « All » ou ids listing — [] sans cityIds = tous (legacy). */
   allowedListingIds: string[];
