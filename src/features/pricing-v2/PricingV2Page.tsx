@@ -589,8 +589,9 @@ export default function PricingV2Page() {
             </Box>
           ) : null}
 
-          {/* ── EXPERT : le compset ouvert — colonne GAUCHE (maquette) ── */}
-          {expert && market?.comps?.length ? <CompsTable comps={market.comps} /> : null}
+          {/* Le tableau du marché a quitté cette colonne : il vit désormais en
+              PLEINE LARGEUR sous la grille. Six colonnes de données dans une
+              demi-largeur, c'était illisible. */}
         </Stack>
 
         {/* ══════════ COLONNE DROITE — le calendrier ══════════
@@ -823,6 +824,16 @@ export default function PricingV2Page() {
         </Box>
         </Stack>
       </Box>
+
+      {/* ── EXPERT : le marché ouvert — PLEINE LARGEUR ──
+          Six colonnes (ressemblance, quartier, note, deux prix, équipement) ont
+          besoin de toute la page pour être comparables d'un coup d'œil. En
+          demi-largeur, les écarts de taille et de note étaient illisibles. */}
+      {expert && market?.comps?.length ? (
+        <Box sx={{ mt: 1.75 }}>
+          <CompsTable comps={market.comps} subject={market.subject} />
+        </Box>
+      ) : null}
 
       <PriceTicket
         day={ticketDay}

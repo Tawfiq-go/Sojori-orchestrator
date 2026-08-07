@@ -22,13 +22,23 @@ const AMENITY_FR: Record<string, string> = {
   patio: 'terrasse/balcon',
 };
 
-export default function CompsTable({ comps }: { comps: PricingV2Comp[] }) {
+export default function CompsTable({
+  comps,
+  subject,
+}: {
+  comps: PricingV2Comp[];
+  /** VOTRE bien — sert de référence : sans lui, « 3 ch · 6 pers » ne dit pas
+      si c'est comme chez vous ou pas. C'est toute la question du tableau. */
+  subject?: { bedrooms: number; guests: number; locality: string; rating: number };
+}) {
   return (
     <Box sx={cardSx}>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 1.5 }}>
         <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink }}>Votre marché</Typography>
         <Typography sx={{ fontSize: 11.5, color: T.mut }}>
-          triés par ressemblance avec votre bien
+          {subject
+            ? `votre bien : ${subject.bedrooms} ch · ${subject.guests} pers · note ${subject.rating ?? '—'}`
+            : 'triés par ressemblance avec votre bien'}
         </Typography>
       </Stack>
 
@@ -64,12 +74,52 @@ export default function CompsTable({ comps }: { comps: PricingV2Comp[] }) {
                 <td>
                   <Typography sx={{ fontSize: 12, color: T.ink }}>{c.locality || '—'}</Typography>
                   <Typography sx={{ fontSize: 10.5, color: T.mut }}>
-                    {c.bedrooms} ch · {c.guests} pers
+                    {/* Un écart de taille est coloré : c'est ce qui explique le
+                        plus l'écart de prix (chambres = 30 % de la ressemblance,
+                        capacité = 20 %). Identique → gris, on ne le remarque pas. */}
+                    <Box
+                      component="span"
+                      sx={{
+                        color: subject && c.bedrooms !== subject.bedrooms ? T.warn : 'inherit',
+                        fontWeight: subject && c.bedrooms !== subject.bedrooms ? 700 : 400,
+                      }}
+                    >
+                      {c.bedrooms} ch
+                      {subject && c.bedrooms !== subject.bedrooms
+                        ? ` (${c.bedrooms > subject.bedrooms ? '+' : ''}${c.bedrooms - subject.bedrooms})`
+                        : ''}
+                    </Box>
+                    {' · '}
+                    <Box
+                      component="span"
+                      sx={{
+                        color: subject && c.guests !== subject.guests ? T.warn : 'inherit',
+                        fontWeight: subject && c.guests !== subject.guests ? 700 : 400,
+                      }}
+                    >
+                      {c.guests} pers
+                      {subject && c.guests !== subject.guests
+                        ? ` (${c.guests > subject.guests ? '+' : ''}${c.guests - subject.guests})`
+                        : ''}
+                    </Box>
                     {c.minNights ? ` · min ${c.minNights} nuit${c.minNights > 1 ? 's' : ''}` : ''}
                   </Typography>
                 </td>
                 <td>
-                  <Typography sx={{ fontSize: 12, fontFamily: T.mono, color: T.ink }}>{c.rating ?? '—'}</Typography>
+                  <Typography
+                    sx={{
+                      fontSize: 12,
+                      fontFamily: T.mono,
+                      color:
+                        subject && c.rating != null && Math.abs(c.rating - subject.rating) >= 0.15
+                          ? c.rating > subject.rating
+                            ? T.warn
+                            : T.ok
+                          : T.ink,
+                    }}
+                  >
+                    {c.rating ?? '—'}
+                  </Typography>
                   {c.superhost ? (
                     <Typography sx={{ ...kickerSx, fontSize: 9, color: T.ok }}>SUPERHOST</Typography>
                   ) : null}
