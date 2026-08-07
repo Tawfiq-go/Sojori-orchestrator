@@ -24,6 +24,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import ForbiddenPage from './pages/ForbiddenPage';
+import { MaJourneePage } from './pages/MaJourneePage';
 
 const ReservationsPage = lazyWithReload(() =>
   import('./pages/ReservationsPage').then((module) => ({ default: module.ReservationsPage }))
@@ -335,6 +336,7 @@ function App() {
               <Route element={<RouteAccessGuard />}>
               <Route path="/" element={<HomeRedirect />} />
 
+              <Route path="/ma-journee" element={<MaJourneePage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
@@ -500,7 +502,7 @@ function App() {
 
               <Route path="/forbidden" element={<ForbiddenPage />} />
 
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/ma-journee" replace />} />
               </Route>
               </Route>
             </Route>

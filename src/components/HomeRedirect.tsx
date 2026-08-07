@@ -7,8 +7,8 @@ import { usePmSimulation } from '../context/PmSimulationContext';
 /**
  * Landing `/` :
  * - SuperAdmin / Admin → Monitor owners (`/admin/owner-monitor`)
- * - Owner / Worker / Landlord → Tableau de bord
- * - Simulation PM active → dashboard (vue owner)
+ * - Owner / Worker / Landlord → Ma journée
+ * - Simulation PM active → Ma journée (vue owner)
  */
 export function HomeRedirect() {
   const { user, loading } = useAuth();
@@ -26,7 +26,7 @@ export function HomeRedirect() {
     return <Navigate to="/admin/owner-monitor" replace />;
   }
 
-  return <Navigate to="/dashboard" replace />;
+  return <Navigate to="/ma-journee" replace />;
 }
 
 export default HomeRedirect;

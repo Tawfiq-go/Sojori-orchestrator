@@ -49,6 +49,14 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     roles: PM_ROLES,
     items: [
       {
+        id: 'ma-journee',
+        label: 'Ma journée',
+        iconType: 'calendar',
+        iconColor: '#B8881A',
+        badge: 'Live',
+        description: 'Arrivées, départs, ménage, expériences et messages — écran d’atterrissage',
+      },
+      {
         id: 'admin/owner-monitor',
         label: 'Monitor',
         iconType: 'monitor',
@@ -149,7 +157,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     core: true,
     items: [
       { id: 'orch/plans', label: 'Plans par séjour', iconType: 'settings', iconColor: '#666666', badge: 'CORE' },
-      { id: 'orch/day-plan', label: 'Plan de journée', iconType: 'settings', iconColor: '#666666', badge: 'NEW' },
+      {
+        id: 'orch/day-plan',
+        label: 'Plan de journée',
+        iconType: 'settings',
+        iconColor: '#666666',
+        description: 'Vue orchestration détaillée (triage / fil chronologique)',
+      },
       { id: 'orch/workflows', label: 'Workflows · config', iconType: 'settings', iconColor: '#666666' },
     ],
   },

@@ -121,6 +121,7 @@ export const LANDLORD_PM_ONLY_FEATURES = new Set(['finances/landlords']);
 
 /** Droits par défaut à la création — Dashboard + Réservations + Finances (lecture seule). */
 export const DEFAULT_LANDLORD_DASHBOARD_GRANTS: FeatureGrant[] = [
+  { feature: 'ma-journee', actions: ['get'] },
   { feature: 'dashboard', actions: ['get'] },
   { feature: 'reservations', actions: ['get'] },
   { feature: 'finances/ledger', actions: ['get'] },

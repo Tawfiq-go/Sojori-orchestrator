@@ -19,6 +19,7 @@ for (const group of OWNER_NAV_GROUPS) {
 
 /** Titre H1 — peut différer du libellé sidebar (ex. « Dashboard principal »). */
 const TITLE_OVERRIDES: Record<string, string> = {
+  'ma-journee': 'Ma journée',
   'admin/owner-monitor': 'Monitor',
   dashboard: 'Dashboard principal',
   calendar: 'Calendrier',
