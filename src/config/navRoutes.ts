@@ -1,6 +1,7 @@
 /** Mapping nav id → pathname (react-router). Source unique avec navConfig. */
 export const NAV_TO_ROUTE: Record<string, string> = {
   // Pilotage
+  'ma-journee': '/ma-journee',
   'admin/owner-monitor': '/admin/owner-monitor',
   dashboard: '/dashboard',
   analytics: '/analytics',

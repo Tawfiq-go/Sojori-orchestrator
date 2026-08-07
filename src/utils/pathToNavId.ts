@@ -16,6 +16,7 @@ const navToRoute: Record<string, string> = {
 export function resolveNavIdFromPath(pathname: string, search = ''): string {
   const path = pathname;
 
+  if (path === '/ma-journee' || path.startsWith('/ma-journee/')) return 'ma-journee';
   if (path === '/tasks' || path === '/tasks/list') return 'tasks/list';
   if (path === '/planning' || path.startsWith('/planning/')) return 'planning';
   // Deep-links planning → highlight l’entrée unique « Planning »

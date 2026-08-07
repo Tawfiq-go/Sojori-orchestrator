@@ -86,7 +86,7 @@ export const AUTH_CONFIG = {
   API_URL: `${SRV_USER_URL}/auth`,
   TOKEN_KEY: 'sojori_token',
   REFRESH_TOKEN_KEY: 'sojori_refresh_token',
-  LOGIN_REDIRECT: '/dashboard',
+  LOGIN_REDIRECT: '/ma-journee',
   LOGOUT_REDIRECT: '/login',
   COOKIE_OPTIONS: {
     path: '/',

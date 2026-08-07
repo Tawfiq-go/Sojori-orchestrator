@@ -236,6 +236,10 @@ export function useDashboardChrome() {
       return 'finances/reports';
     }
 
+    if (path === '/ma-journee' || path.startsWith('/ma-journee/')) {
+      return 'ma-journee';
+    }
+
     if (path.startsWith('/orchestration/cockpit')) {
       return 'orch/cockpit';
     }
@@ -284,7 +288,7 @@ export function useDashboardChrome() {
       if (path.startsWith(route) && route !== '/') return key;
       if (path === route) return key;
     }
-    return 'dashboard';
+    return 'ma-journee';
   };
 
   const handleNavigate = (navId: string) => {
