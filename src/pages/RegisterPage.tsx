@@ -113,7 +113,7 @@ export default function RegisterPage() {
         newsletter: form.newsletter,
       });
       setSuccessMessage('Compte mock cree avec succes. Redirection vers le dashboard...');
-      setTimeout(() => navigate('/dashboard'), 900);
+      setTimeout(() => navigate('/ma-journee'), 900);
     } catch (registerError: any) {
       setLocalError(registerError?.message || 'Inscription impossible.');
     }

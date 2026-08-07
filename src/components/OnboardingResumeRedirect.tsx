@@ -48,7 +48,12 @@ export function OnboardingResumeRedirect() {
           (draft?.currentPanel ?? 0) > 0 ||
           Boolean(draft?.lastSavedAt);
 
-        if (hasProgress && location.pathname === '/dashboard') {
+        if (
+          hasProgress &&
+          (location.pathname === '/ma-journee' ||
+            location.pathname === '/dashboard' ||
+            location.pathname === '/')
+        ) {
           navigate(PM_ONBOARDING_WIZARD_PATH, { replace: true });
         }
       } catch {

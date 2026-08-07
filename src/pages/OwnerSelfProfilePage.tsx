@@ -85,7 +85,7 @@ export function OwnerSelfProfilePage() {
                 open
                 selfService
                 owner={owner}
-                onClose={() => navigate('/dashboard')}
+                onClose={() => navigate('/ma-journee')}
                 onOwnerUpdated={(updated) =>
                   setOwner((prev) => (prev ? { ...prev, ...updated } : updated))
                 }

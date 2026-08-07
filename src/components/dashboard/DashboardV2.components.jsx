@@ -356,7 +356,7 @@ const SIDEBAR_SCROLL_KEY = 'sojori-sidebar-scroll';
 
 export function AppSidebar({
   user,
-  activePath = 'dashboard',
+  activePath = 'ma-journee',
   onNavigate,
   onLogout,
   simulationActive = false,

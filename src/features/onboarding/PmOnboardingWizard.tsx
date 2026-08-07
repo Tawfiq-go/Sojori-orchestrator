@@ -93,7 +93,7 @@ export function PmOnboardingWizard({ embedded = false }: PmOnboardingWizardProps
   const handleSaveAndExit = async () => {
     await wizard.saveAndExit();
     toast.success('Progression enregistrée — reprenez via Équipe & Rôles → On-boarding');
-    navigate(embedded ? PM_ONBOARDING_WIZARD_PATH : '/dashboard');
+    navigate(embedded ? PM_ONBOARDING_WIZARD_PATH : '/ma-journee');
   };
 
   if (!canAccessPmOnboarding(user)) {

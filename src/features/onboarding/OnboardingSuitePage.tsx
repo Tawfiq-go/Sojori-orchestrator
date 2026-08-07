@@ -375,7 +375,7 @@ export function OnboardingSuitePage() {
               type="button"
               className="ob-btn-ghost"
               disabled={suiteRunning}
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/ma-journee')}
             >
               Aller au dashboard
             </button>
