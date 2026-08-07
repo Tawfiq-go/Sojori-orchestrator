@@ -43,6 +43,8 @@ type Props = {
   targetPrice: number;
   /** Relâchement du curseur doré → nouveau prix visé (recalcul serveur). */
   onTargetChange: (price: number) => void;
+  /** Clic sur le curseur VOUS → détail complet du calcul (ticket de caisse). */
+  onExplainYours?: () => void;
   busy?: boolean;
 };
 
@@ -60,6 +62,7 @@ export default function DistributionChart({
   onGammeChange,
   targetPrice,
   onTargetChange,
+  onExplainYours,
   busy,
 }: Props) {
   // Échelle horizontale : on cadre sur les comps réels + le prix du bien,
@@ -271,10 +274,19 @@ export default function DistributionChart({
           {/* ── Le curseur VOUS : le SEUL élément manipulable de ce graphique ──
               On le glisse ; au relâchement, la gamme dont le prix est le plus
               proche est sélectionnée. Les repères restent de simples jalons. */}
-          {/* ── VOUS : un CONSTAT, pas une commande. Il n'est PAS glissable —
-              c'est là que le moteur vous place aujourd'hui, d'après vos
-              comparables. Pour bouger, on tire le curseur doré ci-dessous. */}
-          <g>
+          {/* ── VOUS : un CONSTAT, pas une commande de positionnement. Il n'est
+              PAS glissable — c'est là que le moteur vous place aujourd'hui,
+              d'après vos comparables. Pour bouger, on tire le curseur doré
+              ci-dessous. Cliquable en revanche : ouvre le détail complet du
+              calcul (même « ticket de caisse » que le calendrier), pour
+              justifier l'écart avec les repères de gamme. */}
+          <g
+            onClick={onExplainYours}
+            style={{ cursor: onExplainYours ? 'pointer' : 'default' }}
+          >
+            <title>Cliquez pour voir le détail du calcul (saison, jour, remplissage…)</title>
+            {/* Zone de clic généreuse, comme les repères de gamme. */}
+            <rect x={x(yourPrice) - 15} y={BASE_Y - curveH - 20} width={30} height={curveH + 46} fill="transparent" />
             <line
               x1={x(yourPrice)}
               y1={BASE_Y - curveH - 8}
@@ -291,6 +303,16 @@ export default function DistributionChart({
               fill={T.ink}
               style={{ pointerEvents: 'none' }}
             />
+            {/* Petit « ? » : signale que ce point est cliquable pour une
+                explication, sans avoir à deviner. */}
+            <text
+              x={x(yourPrice)}
+              y={BASE_Y - curveH - 4}
+              textAnchor="middle"
+              style={{ fontSize: 10, fontWeight: 700, fill: T.card, pointerEvents: 'none' }}
+            >
+              ?
+            </text>
           </g>
           {/* Légende du curseur — sous la ligne des valeurs, jamais dessus.
               Fond blanc pour rester lisible si un repère tombe juste derrière. */}
@@ -307,7 +329,8 @@ export default function DistributionChart({
             x={x(yourPrice)}
             y={BASE_Y + 36}
             textAnchor="middle"
-            style={{ fontSize: 11, fontFamily: T.mono, fontWeight: 700, fill: T.ink }}
+            style={{ fontSize: 11, fontFamily: T.mono, fontWeight: 700, fill: T.ink, cursor: onExplainYours ? 'pointer' : 'default' }}
+            onClick={onExplainYours}
           >
             VOUS · {yourPrice} MAD
           </text>
@@ -424,7 +447,14 @@ export default function DistributionChart({
         Vous êtes <Box component="span" sx={{ color: T.ink, fontWeight: 700 }}>{position}</Box>.
         Cliquez une gamme ci-dessus, ou tirez le repère{' '}
         <Box component="span" sx={{ color: T.gold, fontWeight: 700 }}>doré</Box> sur la courbe pour
-        viser un prix précis.
+        viser un prix précis.{' '}
+        {onExplainYours ? (
+          <>
+            Cliquez le point{' '}
+            <Box component="span" sx={{ color: T.ink, fontWeight: 700 }}>noir</Box> pour voir
+            pourquoi ce prix précisément.
+          </>
+        ) : null}
       </Typography>
     </Box>
   );
