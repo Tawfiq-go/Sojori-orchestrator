@@ -386,6 +386,10 @@ export interface PilotPricingConfigDto {
   pricingBaseSource?: 'estimate' | 'manual_base';
   /** Base fixe MAD si pricingBaseSource === 'manual_base' (ex. 1000). */
   manualBasePriceMad?: number;
+  /** Gamme du bien (vocabulaire AirDNA) : economique −10 % · normal 0 · luxe +15 %. */
+  gamme?: 'economique' | 'normal' | 'luxe';
+  /** Source AirROI (admin) : auto = futureRates si présents sinon estimate. */
+  airroiSource?: 'auto' | 'future_rates' | 'estimate';
   minStayDelta: number;
   minStayPlancher?: number;
   gapBlockEnabled?: boolean;

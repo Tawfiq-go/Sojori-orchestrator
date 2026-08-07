@@ -80,6 +80,10 @@ export interface PricingControlsProps {
   pricingBaseSource: 'estimate' | 'manual_base';
   /** Base fixe MAD si source B (manuel). */
   manualBasePriceMad: number;
+  /** Gamme du bien : economique −10 % · normal 0 · luxe +15 %. Choix client. */
+  gamme: 'economique' | 'normal' | 'luxe';
+  /** Source AirROI (admin only) — auto = fallback historique. */
+  airroiSource: 'auto' | 'future_rates' | 'estimate';
   /** Si false, les events restent en mémoire mais ne sont pas appliqués. */
   eventsEnabled?: boolean;
   onFloorChange: (v: number) => void;
@@ -98,6 +102,8 @@ export interface PricingControlsProps {
   onOccupancyHighAdjChange: (v: number) => void;
   onPricingBaseSourceChange: (v: 'estimate' | 'manual_base') => void;
   onManualBasePriceMadChange: (v: number) => void;
+  onGammeChange: (v: 'economique' | 'normal' | 'luxe') => void;
+  onAirroiSourceChange: (v: 'auto' | 'future_rates' | 'estimate') => void;
   onEventsEnabledChange?: (on: boolean) => void;
   onApplyRecoBounds: () => void;
   onActiveModeChange: (modeId: string) => void;
@@ -478,6 +484,7 @@ export default function PricingControls(props: PricingControlsProps) {
     lastMinuteEnabled, lastMinuteFromDays, lastMinuteToDays, lastMinuteDiscountPct,
     occupancyBandsEnabled, occupancyLowMax, occupancyLowAdj, occupancyHighMin, occupancyHighAdj,
     pricingBaseSource, manualBasePriceMad,
+    gamme, airroiSource,
     eventsEnabled = true,
     onGapBlockEnabledChange, onGapBlockMinNightsChange,
     onFloorChange, onCeilingChange,
@@ -485,6 +492,7 @@ export default function PricingControls(props: PricingControlsProps) {
     onOccupancyBandsEnabledChange, onOccupancyLowMaxChange, onOccupancyLowAdjChange,
     onOccupancyHighMinChange, onOccupancyHighAdjChange,
     onPricingBaseSourceChange, onManualBasePriceMadChange,
+    onGammeChange, onAirroiSourceChange,
     onEventsEnabledChange,
     onApplyRecoBounds,
     onActiveModeChange,
@@ -576,7 +584,53 @@ export default function PricingControls(props: PricingControlsProps) {
                   onChange={onManualBasePriceMadChange}
                 />
               </Box>
-            ) : null}
+            ) : (
+              /* Source AirROI — admin only (section déjà masquée en ownerMode) */
+              <Stack direction="row" sx={{ mt: 1, gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Typography sx={{ fontSize: 10, fontFamily: MONO, color: T.text3, fontWeight: 800, mr: 0.25 }}>
+                  SOURCE
+                </Typography>
+                {(
+                  [
+                    { id: 'auto' as const, label: 'Auto' },
+                    { id: 'future_rates' as const, label: 'Calendrier Airbnb' },
+                    { id: 'estimate' as const, label: 'Estimation marché' },
+                  ] as const
+                ).map((opt) => {
+                  const on = airroiSource === opt.id;
+                  return (
+                    <Box
+                      key={opt.id}
+                      component="button"
+                      type="button"
+                      onClick={() => onAirroiSourceChange(opt.id)}
+                      title={
+                        opt.id === 'auto'
+                          ? 'Calendrier Airbnb si présent dans le snapshot, sinon estimation marché'
+                          : opt.id === 'future_rates'
+                            ? 'Prix jour par jour du calendrier Airbnb (exige un snapshot avec futureRates)'
+                            : 'ADR annuel + saisonnalité mensuelle (GET /calculator/estimate)'
+                      }
+                      sx={{
+                        all: 'unset',
+                        cursor: 'pointer',
+                        px: 1,
+                        py: 0.375,
+                        borderRadius: 999,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        border: `1px solid ${on ? T.goldDeep : T.border}`,
+                        color: on ? T.goldDeep : T.text3,
+                        bgcolor: on ? T.goldTint : 'transparent',
+                        '&:focus-visible': { outline: `2px solid ${T.goldDeep}`, outlineOffset: 1 },
+                      }}
+                    >
+                      {opt.label}
+                    </Box>
+                  );
+                })}
+              </Stack>
+            )}
           </Box>
         </Stack>
         ) : null}
@@ -627,6 +681,54 @@ export default function PricingControls(props: PricingControlsProps) {
         </Stack>
 
         </Box>
+
+        {/* Gamme du bien — choix client (vocabulaire AirDNA), visible admin + owner */}
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          sx={{ gap: 1, py: 1, borderBottom: `1px solid ${T.border}`, alignItems: { sm: 'center' } }}
+        >
+          <Box sx={{ width: { sm: 120 }, flexShrink: 0 }}>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 800 }}>Gamme du bien</Typography>
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>standing vs voisins</Typography>
+          </Box>
+          <Stack direction="row" sx={{ display: 'inline-flex', bgcolor: T.bg3, borderRadius: 1.25, p: 0.375, gap: 0.375 }}>
+            {(
+              [
+                { id: 'economique' as const, label: 'Économique', delta: '−10 %' },
+                { id: 'normal' as const, label: 'Normal', delta: '±0' },
+                { id: 'luxe' as const, label: 'Luxe', delta: '+15 %' },
+              ] as const
+            ).map((opt) => {
+              const on = gamme === opt.id;
+              return (
+                <Box
+                  key={opt.id}
+                  component="button"
+                  type="button"
+                  onClick={() => onGammeChange(opt.id)}
+                  sx={{
+                    all: 'unset',
+                    cursor: 'pointer',
+                    px: 1.75,
+                    py: 0.875,
+                    borderRadius: 1,
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    color: on ? T.text : T.text3,
+                    bgcolor: on ? T.bg1 : 'transparent',
+                    boxShadow: on ? '0 1px 3px rgba(0,0,0,0.10)' : 'none',
+                    '&:focus-visible': { outline: `2px solid ${T.goldDeep}`, outlineOffset: 1 },
+                  }}
+                >
+                  {opt.label}
+                  <Box component="span" sx={{ fontSize: 9.5, fontFamily: MONO, color: on ? T.goldDeep : T.text4, ml: 0.625, fontWeight: 800 }}>
+                    {opt.delta}
+                  </Box>
+                </Box>
+              );
+            })}
+          </Stack>
+        </Stack>
 
         {/* Positionnement — les 3 cartes rassurent, wording sans marché côté client */}
         <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ gap: 1, py: 1, pb: 0.25, alignItems: { sm: 'flex-start' } }}>

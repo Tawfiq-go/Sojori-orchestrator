@@ -727,6 +727,94 @@ function AdminExpressBar({
         </Box>
       </Stack>
 
+      {/* Source du prix marché + gamme — mêmes valeurs que la carte Réglages (auto-save partagé) */}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        sx={{ gap: 1.5, mb: 1.5, alignItems: { sm: 'center' }, flexWrap: 'wrap' }}
+      >
+        <Stack direction="row" sx={{ gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Typography sx={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', color: T.text3 }}>
+            SOURCE
+          </Typography>
+          {(
+            [
+              { id: 'auto' as const, label: 'Auto' },
+              { id: 'future_rates' as const, label: 'Calendrier Airbnb' },
+              { id: 'estimate' as const, label: 'Estimation marché' },
+            ] as const
+          ).map((opt) => {
+            const on = view.airroiSource === opt.id;
+            return (
+              <Box
+                key={opt.id}
+                component="button"
+                type="button"
+                onClick={() => view.onAirroiSourceChange(opt.id)}
+                title={
+                  opt.id === 'auto'
+                    ? 'Calendrier Airbnb si présent dans le snapshot, sinon estimation marché'
+                    : opt.id === 'future_rates'
+                      ? 'Prix jour par jour du calendrier Airbnb (exige un snapshot avec futureRates)'
+                      : 'ADR annuel + saisonnalité mensuelle (GET /calculator/estimate)'
+                }
+                sx={{
+                  all: 'unset',
+                  cursor: 'pointer',
+                  px: 1,
+                  py: 0.375,
+                  borderRadius: 999,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  border: `1px solid ${on ? T.goldDeep : T.border}`,
+                  color: on ? T.goldDeep : T.text3,
+                  bgcolor: on ? T.goldTint : 'transparent',
+                  '&:focus-visible': { outline: `2px solid ${T.goldDeep}`, outlineOffset: 1 },
+                }}
+              >
+                {opt.label}
+              </Box>
+            );
+          })}
+        </Stack>
+        <Stack direction="row" sx={{ gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Typography sx={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', color: T.text3 }}>
+            GAMME
+          </Typography>
+          {(
+            [
+              { id: 'economique' as const, label: 'Économique −10 %' },
+              { id: 'normal' as const, label: 'Normal' },
+              { id: 'luxe' as const, label: 'Luxe +15 %' },
+            ] as const
+          ).map((opt) => {
+            const on = view.gamme === opt.id;
+            return (
+              <Box
+                key={opt.id}
+                component="button"
+                type="button"
+                onClick={() => view.onGammeChange(opt.id)}
+                sx={{
+                  all: 'unset',
+                  cursor: 'pointer',
+                  px: 1,
+                  py: 0.375,
+                  borderRadius: 999,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  border: `1px solid ${on ? T.goldDeep : T.border}`,
+                  color: on ? T.goldDeep : T.text3,
+                  bgcolor: on ? T.goldTint : 'transparent',
+                  '&:focus-visible': { outline: `2px solid ${T.goldDeep}`, outlineOffset: 1 },
+                }}
+              >
+                {opt.label}
+              </Box>
+            );
+          })}
+        </Stack>
+      </Stack>
+
       <CalendarMajHeader
         when={lastCalendarAt}
         loading={Boolean(view.pilotApplyLoading)}

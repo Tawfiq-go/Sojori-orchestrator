@@ -53,8 +53,12 @@ function buildConfigPayload(
   pricingBaseSource: 'estimate' | 'manual_base',
   manualBasePriceMad: number,
   eventsEnabled: boolean,
+  gamme: 'economique' | 'normal' | 'luxe',
+  airroiSource: 'auto' | 'future_rates' | 'estimate',
 ): Partial<PilotPricingConfigDto> {
   return {
+    gamme,
+    airroiSource,
     enabled,
     applyPrice,
     applyMinStay,
@@ -146,6 +150,10 @@ export function usePilotPricing(options: {
   occupancyHighAdj: number;
   pricingBaseSource: 'estimate' | 'manual_base';
   manualBasePriceMad: number;
+  /** Gamme du bien : economique −10 % · normal 0 · luxe +15 %. */
+  gamme?: 'economique' | 'normal' | 'luxe';
+  /** Source AirROI (admin) — auto = fallback historique. */
+  airroiSource?: 'auto' | 'future_rates' | 'estimate';
   calendarYear: number;
   eventsEnabled?: boolean;
   /**
@@ -180,6 +188,8 @@ export function usePilotPricing(options: {
     occupancyHighAdj,
     pricingBaseSource,
     manualBasePriceMad,
+    gamme = 'normal',
+    airroiSource = 'auto',
     calendarYear,
     eventsEnabled = true,
     autoPreview = true,
@@ -227,6 +237,8 @@ export function usePilotPricing(options: {
       pricingBaseSource,
       manualBasePriceMad,
       eventsEnabled,
+      gamme,
+      airroiSource,
     );
   }, [
     activeModeId,
@@ -253,6 +265,8 @@ export function usePilotPricing(options: {
     pricingBaseSource,
     manualBasePriceMad,
     eventsEnabled,
+    gamme,
+    airroiSource,
   ]);
 
   const loadConfig = useCallback(async () => {
