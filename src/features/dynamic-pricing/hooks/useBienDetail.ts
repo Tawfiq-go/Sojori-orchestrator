@@ -337,6 +337,8 @@ export function useBienDetail(
   const [occupancyHighAdj, setOccupancyHighAdj] = useState(15);
   const [pricingBaseSource, setPricingBaseSource] = useState<'estimate' | 'manual_base'>('estimate');
   const [manualBasePriceMad, setManualBasePriceMad] = useState(1000);
+  const [gamme, setGamme] = useState<'economique' | 'normal' | 'luxe'>('normal');
+  const [airroiSource, setAirroiSource] = useState<'auto' | 'future_rates' | 'estimate'>('auto');
   const [eventsEnabled, setEventsEnabled] = useState(true);
   const [applyPrice, setApplyPrice] = useState(true);
   const [applyMinStay, setApplyMinStay] = useState(true);
@@ -401,6 +403,8 @@ export function useBienDetail(
     occupancyHighAdj,
     pricingBaseSource,
     manualBasePriceMad,
+    gamme,
+    airroiSource,
     eventsEnabled,
     calendarYear,
     // apply-preview-diff recalcule déjà le moteur — pas de 2ᵉ POST /preview
@@ -619,6 +623,14 @@ export function useBienDetail(
           }
           setPricingBaseSource(
             c.pricingBaseSource === 'manual_base' ? 'manual_base' : 'estimate',
+          );
+          setGamme(
+            c.gamme === 'economique' || c.gamme === 'luxe' ? c.gamme : 'normal',
+          );
+          setAirroiSource(
+            c.airroiSource === 'future_rates' || c.airroiSource === 'estimate'
+              ? c.airroiSource
+              : 'auto',
           );
           if (typeof c.manualBasePriceMad === 'number' && c.manualBasePriceMad > 0) {
             setManualBasePriceMad(Math.max(200, Math.min(50_000, Math.round(c.manualBasePriceMad))));
@@ -1454,6 +1466,8 @@ export function useBienDetail(
       occupancyHighAdj,
       pricingBaseSource,
       manualBasePriceMad,
+      gamme,
+      airroiSource,
       eventsEnabled,
       applyPrice: aiEnabled && applyPrice,
       applyMinStay: aiEnabled && applyMinStay,
@@ -1611,6 +1625,14 @@ export function useBienDetail(
       },
       onPricingBaseSourceChange: (v: 'estimate' | 'manual_base') => {
         setPricingBaseSource(v);
+        scheduleConfigSave();
+      },
+      onGammeChange: (v: 'economique' | 'normal' | 'luxe') => {
+        setGamme(v);
+        scheduleConfigSave();
+      },
+      onAirroiSourceChange: (v: 'auto' | 'future_rates' | 'estimate') => {
+        setAirroiSource(v);
         scheduleConfigSave();
       },
       onManualBasePriceMadChange: (v: number) => {

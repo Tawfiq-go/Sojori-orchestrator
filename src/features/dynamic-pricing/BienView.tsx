@@ -98,6 +98,10 @@ export interface BienViewProps {
   occupancyHighAdj: number;
   pricingBaseSource: 'estimate' | 'manual_base';
   manualBasePriceMad: number;
+  /** Gamme du bien : economique −10 % · normal 0 · luxe +15 %. */
+  gamme: 'economique' | 'normal' | 'luxe';
+  /** Source AirROI (admin) — auto = fallback historique. */
+  airroiSource: 'auto' | 'future_rates' | 'estimate';
   eventsEnabled: boolean;
   applyPrice: boolean;
   applyMinStay: boolean;
@@ -166,6 +170,8 @@ export interface BienViewProps {
   onOccupancyHighAdjChange: (v: number) => void;
   onPricingBaseSourceChange: (v: 'estimate' | 'manual_base') => void;
   onManualBasePriceMadChange: (v: number) => void;
+  onGammeChange: (v: 'economique' | 'normal' | 'luxe') => void;
+  onAirroiSourceChange: (v: 'auto' | 'future_rates' | 'estimate') => void;
   onEventsEnabledChange: (on: boolean) => void;
   onAddEvent: () => void;
   onEventModalClose?: () => void;
@@ -219,7 +225,7 @@ export default function BienView(props: BienViewProps) {
     floor, ceiling, mode, activeModeId, pricingModes, gapBlockEnabled, gapBlockMinNights, modeEnabled,
     lastMinuteEnabled, lastMinuteFromDays, lastMinuteToDays, lastMinuteDiscountPct,
     occupancyBandsEnabled, occupancyLowMax, occupancyLowAdj, occupancyHighMin, occupancyHighAdj,
-    pricingBaseSource, manualBasePriceMad, eventsEnabled,
+    pricingBaseSource, manualBasePriceMad, gamme, airroiSource, eventsEnabled,
     applyPrice, applyMinStay, scopeModalOpen, scopeModalEdit, scopeSaving, scopeSaveError,
     configSaveStatus, events, suggestions,
     eventModalOpen, editingEventId,
@@ -238,7 +244,7 @@ export default function BienView(props: BienViewProps) {
     onLastMinuteEnabledChange, onLastMinuteFromDaysChange, onLastMinuteToDaysChange, onLastMinuteDiscountPctChange,
     onOccupancyBandsEnabledChange, onOccupancyLowMaxChange, onOccupancyLowAdjChange,
     onOccupancyHighMinChange, onOccupancyHighAdjChange,
-    onPricingBaseSourceChange, onManualBasePriceMadChange, onEventsEnabledChange,
+    onPricingBaseSourceChange, onManualBasePriceMadChange, onGammeChange, onAirroiSourceChange, onEventsEnabledChange,
     onAddEvent, onEditEvent, onDeleteEvent, onAcceptSuggestion,
     onToggleEventEnabled, onDuplicateEvent, onCreateEvent,
     onEventModalClose, onEventSave,
@@ -472,6 +478,8 @@ export default function BienView(props: BienViewProps) {
           occupancyHighAdj={occupancyHighAdj}
           pricingBaseSource={pricingBaseSource}
           manualBasePriceMad={manualBasePriceMad}
+          gamme={gamme}
+          airroiSource={airroiSource}
           eventsEnabled={eventsEnabled}
           events={events} suggestions={suggestions}
           hasBoundsProd={floor > 0 && ceiling > 0}
@@ -492,6 +500,8 @@ export default function BienView(props: BienViewProps) {
           onOccupancyHighAdjChange={onOccupancyHighAdjChange}
           onPricingBaseSourceChange={onPricingBaseSourceChange}
           onManualBasePriceMadChange={onManualBasePriceMadChange}
+          onGammeChange={onGammeChange}
+          onAirroiSourceChange={onAirroiSourceChange}
           onEventsEnabledChange={onEventsEnabledChange}
           onApplyRecoBounds={onApplyRecoBounds}
           onActiveModeChange={onActiveModeChange}
