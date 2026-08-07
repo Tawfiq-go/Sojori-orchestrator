@@ -21,7 +21,7 @@ import { labelForTaskTypeId } from './fulltaskTaskTypes';
 import './teamWeekView.css';
 
 const WINDOW_DAYS_SIMPLE = 15;
-const WINDOW_DAYS_ENRICHED = 3;
+const WINDOW_DAYS_ENRICHED = 15;
 
 /**
  * Compteurs jour × staff pour le mode enrichi — mêmes 3 statuts que le kanban
