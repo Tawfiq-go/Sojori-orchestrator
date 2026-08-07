@@ -48,7 +48,7 @@ export function ForbiddenPage() {
             </>
           ) : null}
         </Typography>
-        <Button variant="contained" onClick={() => navigate('/dashboard', { replace: true })}>
+        <Button variant="contained" onClick={() => navigate('/ma-journee', { replace: true })}>
           Retour au tableau de bord
         </Button>
       </Box>

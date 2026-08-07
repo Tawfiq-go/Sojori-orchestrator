@@ -148,8 +148,8 @@ export function PmSimulationProvider({ children }: { children: ReactNode }) {
         simulatedOwnerEmail: next.ownerEmail,
         path: location.pathname,
       });
-      if (!location.pathname.startsWith('/dashboard')) {
-        navigate('/dashboard');
+      if (!location.pathname.startsWith('/ma-journee')) {
+        navigate('/ma-journee');
       }
     },
     [canSimulate, adminUserId, owners, persist, location.pathname, navigate],
