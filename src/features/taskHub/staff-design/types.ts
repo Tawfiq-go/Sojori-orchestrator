@@ -45,7 +45,9 @@ export interface Staff {
     digestTime?: string;
   };
   contractType: ContractType;
-  /** Prix par type de tâche en MAD (clés fulltask) — salarié ou freelance. */
+  /** Salaire mensuel MAD — salariés uniquement (freelance = rates par activité). */
+  salary?: number;
+  /** Prix par type de tâche en MAD (clés fulltask) — freelance. */
   rates?: Record<string, number>;
   allowedTaskTypes: string[];
   /** Sentinel « All » ou ids listing — [] sans cityIds = tous (legacy). */
