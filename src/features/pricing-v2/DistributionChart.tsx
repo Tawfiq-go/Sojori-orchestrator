@@ -51,7 +51,17 @@ const H = 205; // marge basse : les valeurs décalées (labels serrés) tiennent
 const PAD_X = 28;
 const BASE_Y = 140;
 
-export default function DistributionChart({ scale, comps, yourPrice, compsetSize, gamme, onGammeChange, busy }: Props) {
+export default function DistributionChart({
+  scale,
+  comps,
+  yourPrice,
+  compsetSize,
+  gamme,
+  onGammeChange,
+  targetPrice,
+  onTargetChange,
+  busy,
+}: Props) {
   // Échelle horizontale : on cadre sur les comps réels + le prix du bien,
   // avec 8 % de marge pour que rien ne touche les bords.
   const values = comps.map((c) => c.adjustedMad).filter((v) => v > 0);

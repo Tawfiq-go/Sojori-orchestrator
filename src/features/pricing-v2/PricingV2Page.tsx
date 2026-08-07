@@ -225,7 +225,10 @@ export default function PricingV2Page() {
 
   return (
     <Box sx={{ bgcolor: T.bg, color: T.ink, fontFamily: T.sans, minHeight: '100%', p: { xs: 2, md: 4 } }}>
-      <Box sx={{ maxWidth: 1240, mx: 'auto' }}>
+      {/* Pleine largeur comme le reste du dashboard, avec une marge de
+          respiration. Le plafond à 1240 px bridait le calendrier sur grand
+          écran alors que c'est la zone qui a le plus besoin de place. */}
+      <Box sx={{ maxWidth: 1800, mx: 'auto' }}>
       {/* ── En-tête + switch Simple/Expert ── */}
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Typography sx={{ fontWeight: 750, fontSize: 20, color: T.ink }}>
@@ -300,7 +303,9 @@ export default function PricingV2Page() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: '1.25fr 1fr' },
+          // Moitié-moitié : le calendrier (colonne droite) était à ~44 % et
+          // ses cellules étaient trop serrées pour lire deux prix par nuit.
+          gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
           gap: 1.75,
           alignItems: 'start',
         }}
@@ -606,7 +611,11 @@ export default function PricingV2Page() {
           <Box
             onMouseLeave={() => setDragging(false)}
             sx={{
-              maxHeight: CALENDAR_VISIBLE_MONTHS * 232,
+              // Hauteur en unités de VUE, pas en pixels figés : les cellules
+              // s'élargissent avec la colonne (donc grandissent en hauteur),
+              // et 4 mois ne tiendraient plus dans un plafond calculé pour des
+              // cellules étroites.
+              maxHeight: `min(${CALENDAR_VISIBLE_MONTHS * 250}px, 78vh)`,
               overflowY: 'auto',
               overscrollBehavior: 'contain',
               pr: 0.5,
