@@ -287,7 +287,25 @@ export default function PricingV2Page() {
               compsetSize={market.compsetSize}
               gamme={config?.gamme ?? 'normal'}
               busy={saving}
-              onGammeChange={(g) => void patch({ gamme: g })}
+              /* Cliquer une gamme = raccourci pour poser le curseur doré sur ce
+                 palier. On remet donc annualTilt à 1 : sinon un réglage fin
+                 précédent resterait appliqué par-dessus et le curseur ne
+                 tomberait pas sur le repère cliqué. */
+              onGammeChange={(g) => void patch({ gamme: g, annualTilt: 1 })}
+              /* Cible = prix de base du moteur, ajusté du réglage fin du PM.
+                 Tant qu'il n'a rien touché (annualTilt = 1), elle se superpose
+                 au constat — les deux curseurs sont alors alignés. */
+              targetPrice={Math.round(result.meta.base)}
+              onTargetChange={(price) => {
+                // Le PM raisonne en prix, le moteur en multiplicateur : on
+                // convertit. `base` inclut déjà le tilt courant, donc on part du
+                // ratio prix visé / base actuelle.
+                const current = result.meta.base || 1;
+                const tilt = (config?.annualTilt ?? 1) * (price / current);
+                // Borné : au-delà, on sort de ce que le marché peut absorber et
+                // le moteur écrêterait de toute façon sur floor/ceil.
+                void patch({ annualTilt: Math.min(1.6, Math.max(0.6, Number(tilt.toFixed(3)))) });
+              }}
             />
           ) : null}
 

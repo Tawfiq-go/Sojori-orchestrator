@@ -70,10 +70,19 @@ export type PricingV2Result = {
 export type PricingV2Config = {
   listingId: string;
   shadowEnabled: boolean;
-  gamme: 'economique' | 'normal' | 'luxe';
+  // 'premium' manquait ici alors que le moteur le gère (GAMME_OFFSET) — le type
+  // front était plus étroit que le contrat réel.
+  gamme: 'economique' | 'normal' | 'premium' | 'luxe';
   mode: 'prudent' | 'equilibre' | 'agressif';
   minPrice?: number | null;
   maxPrice?: number | null;
+  /**
+   * Réglage fin continu du prix de base (1 = neutre). C'est ce que pilote le
+   * curseur doré « VISÉ » : le PM raisonne en MAD, on convertit en multiplicateur.
+   */
+  annualTilt?: number | null;
+  /** Remise sur les nuits invendables (trou < minStay). Négatif = remise. */
+  gapAdjustPct?: number | null;
   /** Overrides datés posés par le PM (sélection de plage au drag). */
   dailyOverrides?: Record<string, { type: 'fixed' | 'mult'; value: number }> | null;
   /** Leviers édités par le PM. null = valeurs du marché. */
