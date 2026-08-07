@@ -13,6 +13,8 @@
 // normalisation ici, tu la compterais deux fois.
 // ════════════════════════════════════════════════════════════════════════════
 import { Box, Slider, Stack, Typography } from '@mui/material';
+import type React from 'react';
+import { useState } from 'react';
 import { T, kickerSx } from './tokens';
 
 const MONTHS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
@@ -21,6 +23,9 @@ const MONTHS_FULL = [
   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
 ];
 const DOW = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
+
+/** Bornes du moteur : un mois ne descend pas sous -30 % ni au-dessus de +40 %. */
+const clampC = (c: number) => Math.min(1.4, Math.max(0.7, c));
 
 export default function SeasonWeekLevers({
   /** 12 coefficients (moyenne 1). Ceux du marché si le PM n'a rien édité. */
@@ -43,17 +48,58 @@ export default function SeasonWeekLevers({
 }) {
   const W = 620;
   const H = 110;
-  const maxC = Math.max(...seasonalCoefs, 1.2);
-  const minC = Math.min(...seasonalCoefs, 0.8);
-  const span = Math.max(0.01, maxC - minC);
+  // ⚠️ Échelle FIXE (0.70 → 1.40), volontairement PAS calculée depuis les valeurs :
+  // avec une échelle auto, tirer une barre change l'échelle, donc la barre fuit
+  // sous le doigt et les 11 autres bougent toutes seules. Bornes = celles du moteur.
+  const MIN_C = 0.7;
+  const MAX_C = 1.4;
   const barW = W / 12 - 6;
-  const yOf = (c: number) => H - ((c - minC) / span) * (H - 18) - 6;
+  const yOf = (c: number) => H - ((clampC(c) - MIN_C) / (MAX_C - MIN_C)) * (H - 18) - 6;
+  /** Inverse de yOf : position verticale (px SVG) → coefficient. */
+  const cOf = (y: number) => clampC(MAX_C - ((y - 6) / (H - 18)) * (MAX_C - MIN_C));
 
-  /** Tirer un mois : molette/flèches via un slider caché sous la barre. */
+  // ⚠️ Pourquoi un état local : `seasonalCoefs` vient du SERVEUR. Si on appelait
+  // onSeasonalChange à chaque pixel, l'affichage n'avancerait qu'au retour réseau
+  // — d'où les sauts, et l'impression que « bouger un curseur bouge les autres »
+  // (on voyait en fait la réponse d'un appel précédent écraser le geste en cours).
+  // Ici : `draft` suit le doigt, le serveur n'est prévenu qu'au relâchement.
+  const [draft, setDraft] = useState<number[] | null>(null);
+  const coefs = draft ?? seasonalCoefs;
+  const [dowDraft, setDowDraft] = useState<number[] | null>(null);
+  const dows = dowDraft ?? dowMult;
+
   const setMonth = (i: number, v: number) => {
-    const next = [...seasonalCoefs];
-    next[i] = v;
-    onSeasonalChange(next);
+    const base = draft ?? seasonalCoefs;
+    const next = [...base];
+    next[i] = clampC(v);
+    setDraft(next);
+    return next;
+  };
+
+  /** Tirer le haut d'une barre. On suit le pointeur jusqu'au relâchement. */
+  const dragMonth = (i: number) => (e: React.PointerEvent<SVGGElement>) => {
+    if (busy) return;
+    const svg = e.currentTarget.ownerSVGElement;
+    if (!svg) return;
+    e.preventDefault();
+    const apply = (clientY: number) => {
+      const r = svg.getBoundingClientRect();
+      // clientY → unités du viewBox (le SVG est étiré en largeur : H/r.height).
+      return setMonth(i, cOf(((clientY - r.top) * H) / r.height));
+    };
+    let last = apply(e.clientY);
+    const move = (ev: PointerEvent) => {
+      last = apply(ev.clientY);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      // Un seul appel réseau, à la fin du geste.
+      if (last) onSeasonalChange(last);
+      setDraft(null);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
   };
 
   return (
@@ -85,12 +131,20 @@ export default function SeasonWeekLevers({
           strokeWidth={1}
           strokeDasharray="4 3"
         />
-        {seasonalCoefs.map((c, i) => {
+        {coefs.map((c, i) => {
           const x = (i * W) / 12 + 3;
           const y = yOf(c);
           const above = c >= 1;
+          const edited = Math.abs(c - 1) > 0.005;
           return (
-            <g key={i}>
+            <g
+              key={i}
+              onPointerDown={dragMonth(i)}
+              style={{ cursor: busy ? 'default' : 'ns-resize', touchAction: 'none' }}
+            >
+              {/* Zone de saisie invisible : toute la colonne est attrapable,
+                  sinon il faut viser un rectangle de quelques pixels. */}
+              <rect x={x} y={0} width={barW} height={H - 10} fill="transparent" />
               <rect
                 x={x}
                 y={Math.min(y, yOf(1))}
@@ -100,8 +154,33 @@ export default function SeasonWeekLevers({
                 fill={above ? T.goldPure : T.line}
                 fillOpacity={above ? 0.75 : 1}
               >
-                <title>{`${MONTHS_FULL[i]} : ${Math.round((c - 1) * 100) > 0 ? '+' : ''}${Math.round((c - 1) * 100)} % vs votre année`}</title>
+                <title>{`${MONTHS_FULL[i]} : ${Math.round((c - 1) * 100) > 0 ? '+' : ''}${Math.round((c - 1) * 100)} % vs votre année — tirez pour régler`}</title>
               </rect>
+              {/* Poignée : dit « ça se tire » sans mode d'emploi. */}
+              <rect
+                x={x}
+                y={y - 1.5}
+                width={barW}
+                height={3}
+                rx={1.5}
+                fill={above ? T.goldPure : T.ink2}
+                style={{ pointerEvents: 'none' }}
+              />
+              <text
+                x={x + barW / 2}
+                y={y - 5}
+                textAnchor="middle"
+                style={{
+                  fontSize: 8.5,
+                  fontFamily: T.mono,
+                  fill: edited ? T.ink : T.mut,
+                  fontWeight: edited ? 700 : 400,
+                  pointerEvents: 'none',
+                }}
+              >
+                {Math.round((c - 1) * 100) > 0 ? '+' : ''}
+                {Math.round((c - 1) * 100)}
+              </text>
               <text
                 x={x + barW / 2}
                 y={H - 1}
@@ -115,30 +194,8 @@ export default function SeasonWeekLevers({
         })}
       </svg>
 
-      {/* Curseurs par mois — 12 lignes compactes */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0.75, mt: 1 }}>
-        {seasonalCoefs.map((c, i) => (
-          <Stack key={i} direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
-            <Typography sx={{ ...kickerSx, fontSize: 8.5, minWidth: 26 }}>
-              {MONTHS_FULL[i].slice(0, 3).toUpperCase()}
-            </Typography>
-            <Slider
-              size="small"
-              min={0.7}
-              max={1.4}
-              step={0.01}
-              value={c}
-              disabled={busy}
-              onChange={(_, v) => setMonth(i, v as number)}
-              sx={{ color: c >= 1 ? T.goldPure : T.ink2, py: 0.5 }}
-            />
-            <Typography sx={{ fontFamily: T.mono, fontSize: 10.5, minWidth: 34, color: T.ink }}>
-              {Math.round((c - 1) * 100) > 0 ? '+' : ''}
-              {Math.round((c - 1) * 100)} %
-            </Typography>
-          </Stack>
-        ))}
-      </Box>
+      {/* Les 12 curseurs d'origine ont été retirés : on règle en tirant le haut
+          de la barre. Deux commandes pour un même réglage, c'est une de trop. */}
 
       {/* ── Semaine ── */}
       <Stack
@@ -159,7 +216,7 @@ export default function SeasonWeekLevers({
         </Box>
       </Stack>
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5 }}>
-        {dowMult.map((m, i) => (
+        {dows.map((m, i) => (
           <Box key={i} sx={{ textAlign: 'center' }}>
             <Typography sx={{ ...kickerSx, fontSize: 8.5 }}>{DOW[i]}</Typography>
             <Slider
@@ -170,9 +227,17 @@ export default function SeasonWeekLevers({
               step={0.01}
               value={m}
               disabled={busy}
+              // onChange = affichage local uniquement (suit le doigt).
               onChange={(_, v) => {
-                const next = [...dowMult];
+                const next = [...(dowDraft ?? dowMult)];
                 next[i] = v as number;
+                setDowDraft(next);
+              }}
+              // onChangeCommitted = relâchement → un seul appel réseau.
+              onChangeCommitted={(_, v) => {
+                const next = [...(dowDraft ?? dowMult)];
+                next[i] = v as number;
+                setDowDraft(null);
                 onDowChange(next);
               }}
               sx={{ height: 64, color: m >= 1 ? T.goldPure : T.ink2, my: 0.5 }}

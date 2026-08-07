@@ -64,7 +64,10 @@ const MODE_LABELS: Record<string, { label: string; sub: string }> = {
 
 /** Mois affichés au calendrier, EN ENTIER et sans défilement (le moteur en
  *  calcule 6 — cf. HORIZON_DAYS = 182 côté engine). */
-const CALENDAR_MONTHS = 3;
+// 6 mois chargés ; 4 tiennent dans le cadre, les suivants s'atteignent en
+// faisant défiler À L'INTÉRIEUR du bloc (la page ne bouge pas).
+const CALENDAR_MONTHS = 6;
+const CALENDAR_VISIBLE_MONTHS = 4;
 
 export default function PricingV2Page() {
   const { listingId } = useParams<{ listingId: string }>();
@@ -493,7 +496,8 @@ export default function PricingV2Page() {
               <Box component="span" sx={{ color: T.manual }}>■</Box> réservé ·{' '}
               <Box component="span" sx={{ color: T.line }}>■</Box> bloqué ·{' '}
               <Box component="span" sx={{ color: T.goldPure }}>■</Box> à vendre ·{' '}
-              <Box component="span" sx={{ color: T.crit }}>▁</Box> borné
+              <Box component="span" sx={{ color: T.crit }}>▁</Box> borné ·{' '}
+              <Box component="span" sx={{ color: T.crit }}>▢</Box> trou invendable
             </Typography>
           </Stack>
           {/* Nuits vendues : quel prix afficher ? (maquette : « Prix actuels / Prix à la résa »)
@@ -548,9 +552,19 @@ export default function PricingV2Page() {
               }}
             />
           ) : null}
-          {/* PAS de zone défilante : les 3 mois s'affichent en entier.
-              `onMouseLeave` relâche le drag si la souris sort du calendrier. */}
-          <Box onMouseLeave={() => setDragging(false)}>
+          {/* Zone défilante : 4 mois visibles, 6 chargés. La hauteur est bornée à
+              4 mois (~232 px chacun) pour que le 5ᵉ appelle le défilement sans
+              pousser le reste de la page. `onMouseLeave` relâche le drag si la
+              souris sort du calendrier. */}
+          <Box
+            onMouseLeave={() => setDragging(false)}
+            sx={{
+              maxHeight: CALENDAR_VISIBLE_MONTHS * 232,
+              overflowY: 'auto',
+              overscrollBehavior: 'contain',
+              pr: 0.5,
+            }}
+          >
           {months.map(([month, days]) => {
             const prices = days.map((d) => d.price);
             const lo = Math.min(...prices);
@@ -597,7 +611,17 @@ export default function PricingV2Page() {
                       : blocked
                         ? T.line2
                         : `rgba(230, 176, 34, ${0.1 + 0.5 * t})`;
-                    const borderCol = booked ? T.manual : inRange(d.date) ? T.manual : T.line;
+                    // Trou invendable : le minStay du bien interdit de vendre ces
+                    // nuits. On les signale explicitement — c'est de l'argent qui
+                    // dort, invisible autrement.
+                    const gap = d.gap;
+                    const borderCol = gap
+                      ? T.crit
+                      : booked
+                        ? T.manual
+                        : inRange(d.date)
+                          ? T.manual
+                          : T.line;
                     return (
                       <Box
                         key={d.date}
@@ -621,7 +645,11 @@ export default function PricingV2Page() {
                           }
                         }}
                         title={
-                          booked
+                          gap
+                            ? `${d.date} — TROU de ${gap.size} nuit${gap.size > 1 ? 's' : ''} entre deux réservations.` +
+                              ` Invendable avec un minimum de ${result.minStay} nuits :` +
+                              ` minimum abaissé à ${gap.minStay} et prix ajusté de ${gap.adjustPct} % → ${d.price} MAD`
+                            : booked
                             ? `${d.date} — RÉSERVÉ` +
                               (d.bookedPriceMad ? ` · encaissé ${d.bookedPriceMad} MAD` : '') +
                               ` · le moteur proposerait ${d.price} MAD`

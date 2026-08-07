@@ -13,6 +13,7 @@
 // Voir apps/srv-pricing-v2/src/engine/engine.ts → pacingMult().
 // ════════════════════════════════════════════════════════════════════════════
 import { Box, Slider, Stack, Typography } from '@mui/material';
+import { useState } from 'react';
 import { T, kickerSx } from './tokens';
 
 export type PacingSettings = {
@@ -44,7 +45,19 @@ export default function PacingPanel({
   occupancy?: Array<{ date: string; occ: number }>;
   busy?: boolean;
 }) {
-  const set = (patch: Partial<PacingSettings>) => onChange({ ...value, ...patch });
+  // Même principe que les leviers saison/semaine : pendant le geste on ne touche
+  // qu'un état local (`draft`), sinon chaque pixel déclenche un aller-retour
+  // serveur et les curseurs sautent en recevant les réponses en retard.
+  const [draft, setDraft] = useState<Partial<PacingSettings> | null>(null);
+  const v = { ...value, ...(draft ?? {}) };
+  /** Aperçu local, pendant le glissement. */
+  const preview = (patch: Partial<PacingSettings>) => setDraft({ ...(draft ?? {}), ...patch });
+  /** Relâchement : un seul appel réseau. */
+  const commit = (patch: Partial<PacingSettings>) => {
+    const next = { ...value, ...(draft ?? {}), ...patch };
+    setDraft(null);
+    onChange(next);
+  };
 
   // ── Graphe 90 jours : courbe de remplissage + les deux seuils en pointillés,
   //    zones teintées (verte au-dessus du seuil haut, terracotta sous le bas).
@@ -77,20 +90,20 @@ export default function PacingPanel({
         <Box sx={{ mb: 1.5 }}>
           <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 96, display: 'block' }}>
             {/* Zone « prix monte » : au-dessus du seuil haut */}
-            <rect x={0} y={0} width={W} height={y(value.highThreshold)} fill={T.ok} fillOpacity={0.07} />
+            <rect x={0} y={0} width={W} height={y(v.highThreshold)} fill={T.ok} fillOpacity={0.07} />
             {/* Zone « prix descend » : sous le seuil bas */}
             <rect
               x={0}
-              y={y(value.lowThreshold)}
+              y={y(v.lowThreshold)}
               width={W}
-              height={H - y(value.lowThreshold)}
+              height={H - y(v.lowThreshold)}
               fill={T.crit}
               fillOpacity={0.07}
             />
             {/* Seuils */}
-            <line x1={0} y1={y(value.highThreshold)} x2={W} y2={y(value.highThreshold)}
+            <line x1={0} y1={y(v.highThreshold)} x2={W} y2={y(v.highThreshold)}
               stroke={T.ok} strokeWidth={1} strokeDasharray="4 3" />
-            <line x1={0} y1={y(value.lowThreshold)} x2={W} y2={y(value.lowThreshold)}
+            <line x1={0} y1={y(v.lowThreshold)} x2={W} y2={y(v.lowThreshold)}
               stroke={T.crit} strokeWidth={1} strokeDasharray="4 3" />
             {/* Courbe de remplissage projeté */}
             <polyline points={line} fill="none" stroke={T.ink} strokeWidth={1.75} />
@@ -115,13 +128,14 @@ export default function PacingPanel({
               min={0.5}
               max={0.95}
               step={0.05}
-              value={value.highThreshold}
+              value={v.highThreshold}
               disabled={busy}
-              onChange={(_, v) => set({ highThreshold: v as number })}
+              onChange={(_, nv) => preview({ highThreshold: nv as number })}
+              onChangeCommitted={(_, nv) => commit({ highThreshold: nv as number })}
               sx={{ color: T.ok }}
             />
             <Typography sx={{ fontFamily: T.mono, fontSize: 13, fontWeight: 750, minWidth: 44, color: T.ink }}>
-              {pctLabel(value.highThreshold)}
+              {pctLabel(v.highThreshold)}
             </Typography>
           </Stack>
           <Typography sx={{ ...kickerSx, fontSize: 9, mt: 0.5 }}>HAUSSE MAX</Typography>
@@ -131,13 +145,14 @@ export default function PacingPanel({
               min={0}
               max={0.3}
               step={0.01}
-              value={value.highMax}
+              value={v.highMax}
               disabled={busy}
-              onChange={(_, v) => set({ highMax: v as number })}
+              onChange={(_, nv) => preview({ highMax: nv as number })}
+              onChangeCommitted={(_, nv) => commit({ highMax: nv as number })}
               sx={{ color: T.ok }}
             />
             <Typography sx={{ fontFamily: T.mono, fontSize: 13, fontWeight: 750, minWidth: 44, color: T.ink }}>
-              +{Math.round(value.highMax * 100)} %
+              +{Math.round(v.highMax * 100)} %
             </Typography>
           </Stack>
         </Box>
@@ -154,13 +169,14 @@ export default function PacingPanel({
               min={0.2}
               max={0.9}
               step={0.05}
-              value={value.lowThreshold}
+              value={v.lowThreshold}
               disabled={busy}
-              onChange={(_, v) => set({ lowThreshold: v as number })}
+              onChange={(_, nv) => preview({ lowThreshold: nv as number })}
+              onChangeCommitted={(_, nv) => commit({ lowThreshold: nv as number })}
               sx={{ color: T.crit }}
             />
             <Typography sx={{ fontFamily: T.mono, fontSize: 13, fontWeight: 750, minWidth: 44, color: T.ink }}>
-              {pctLabel(value.lowThreshold)}
+              {pctLabel(v.lowThreshold)}
             </Typography>
           </Stack>
           <Typography sx={{ ...kickerSx, fontSize: 9, mt: 0.5 }}>BAISSE MAX</Typography>
@@ -170,20 +186,21 @@ export default function PacingPanel({
               min={0}
               max={0.3}
               step={0.01}
-              value={value.lowMax}
+              value={v.lowMax}
               disabled={busy}
-              onChange={(_, v) => set({ lowMax: v as number })}
+              onChange={(_, nv) => preview({ lowMax: nv as number })}
+              onChangeCommitted={(_, nv) => commit({ lowMax: nv as number })}
               sx={{ color: T.crit }}
             />
             <Typography sx={{ fontFamily: T.mono, fontSize: 13, fontWeight: 750, minWidth: 44, color: T.ink }}>
-              −{Math.round(value.lowMax * 100)} %
+              −{Math.round(v.lowMax * 100)} %
             </Typography>
           </Stack>
         </Box>
       </Box>
 
       <Typography sx={{ fontSize: 11.5, color: T.ink2, mt: 1.25, lineHeight: 1.5 }}>
-        Entre {pctLabel(value.lowThreshold)} et {pctLabel(value.highThreshold)} de remplissage, le
+        Entre {pctLabel(v.lowThreshold)} et {pctLabel(v.highThreshold)} de remplissage, le
         prix suit le marché sans correction. Vos bornes restent prioritaires.
       </Typography>
     </Box>
