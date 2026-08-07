@@ -32,6 +32,7 @@ import {
   Typography,
 } from '@mui/material';
 import CompsTable from './CompsTable';
+import PublishPanel from './PublishPanel';
 import PacingPanel, { PACING_DEFAULTS, type PacingSettings } from './PacingPanel';
 import SeasonWeekLevers from './SeasonWeekLevers';
 import RangeActionBar, { type RangeAction } from './RangeActionBar';
@@ -366,10 +367,22 @@ export default function PricingV2Page() {
               />
             </Stack>
             <Typography sx={{ fontSize: 11.5, color: T.ink2, mt: 0.75, lineHeight: 1.5 }}>
-              Mode shadow : les prix sont calculés et conservés,{' '}
-              <b>jamais envoyés au calendrier ni aux OTA</b>.
+              Le calcul tourne chaque nuit et conserve les prix. Leur envoi vers vos canaux se
+              règle ci-dessous.
             </Typography>
           </Box>
+
+          {/* Publication réelle — ne s'affiche que pour un propriétaire autorisé
+              (déploiement progressif). Le composant interroge lui-même son
+              éligibilité et ne rend rien si le droit manque. */}
+          {listingId ? (
+            <PublishPanel
+              listingId={listingId}
+              publishEnabled={config?.publishEnabled === true}
+              busy={saving}
+              onTogglePublish={(next) => void patch({ publishEnabled: next })}
+            />
+          ) : null}
         </Stack>
       </Box>
 
