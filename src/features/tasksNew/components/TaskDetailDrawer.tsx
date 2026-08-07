@@ -23,6 +23,10 @@ import {
   FULLTASK_TASK_TYPE_EMOJI,
   labelForTaskTypeId,
 } from '../../taskHub/staff-design/fulltaskTaskTypes';
+import {
+  getListingMediaDisplayUrl,
+  isListingsBucketUrl,
+} from '../../finances/services/listingMediaApi';
 
 /** 1040px − 25 % */
 const DRAWER_WIDTH = 780;
@@ -262,11 +266,14 @@ export default function TaskDetailDrawer({
     executionNote: '',
   });
 
+  const [photoSrcs, setPhotoSrcs] = useState<string[]>([]);
+
   const taskKey = task?._id || '';
 
   useEffect(() => {
     if (!task) {
       setIsEditing(false);
+      setPhotoSrcs([]);
       return;
     }
     const clientTime =
@@ -288,6 +295,35 @@ export default function TaskDetailDrawer({
       executionNote: task.comment || '',
     });
     setIsEditing(false);
+
+    const urls = Array.isArray(task.photoUrls) ? task.photoUrls.filter(Boolean) : [];
+    let cancelled = false;
+    const objectUrls: string[] = [];
+    ;(async () => {
+      if (!urls.length) {
+        if (!cancelled) setPhotoSrcs([]);
+        return;
+      }
+      const resolved = await Promise.all(
+        urls.map(async (u) => {
+          try {
+            if (isListingsBucketUrl(u)) {
+              const blobUrl = await getListingMediaDisplayUrl(u);
+              if (blobUrl.startsWith('blob:')) objectUrls.push(blobUrl);
+              return blobUrl;
+            }
+            return u;
+          } catch {
+            return u;
+          }
+        }),
+      );
+      if (!cancelled) setPhotoSrcs(resolved.filter(Boolean));
+    })();
+    return () => {
+      cancelled = true;
+      for (const o of objectUrls) URL.revokeObjectURL(o);
+    };
   }, [taskKey]);
 
   const typeLabel = useMemo(
@@ -723,24 +759,69 @@ export default function TaskDetailDrawer({
           </Box>
         </CollapseBlock>
 
-        {(form.requestNote || task.comment) && !isEditing ? (
+        {(form.requestNote || task.comment || photoSrcs.length > 0 || task.hasGuestPhoto) &&
+        !isEditing ? (
           <CollapseBlock title="Notes">
-            {form.requestNote ? (
-              <Box sx={{ mb: task.comment ? 1.25 : 0 }}>
-                <SectionLabel>Demande</SectionLabel>
-                <Typography sx={{ fontSize: 13, color: T.text2, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
-                  {form.requestNote}
-                </Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 1.5,
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+              }}
+            >
+              <Box sx={{ flex: '1 1 200px', minWidth: 0 }}>
+                {form.requestNote ? (
+                  <Box sx={{ mb: task.comment ? 1.25 : 0 }}>
+                    <SectionLabel>Demande</SectionLabel>
+                    <Typography sx={{ fontSize: 13, color: T.text2, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                      {form.requestNote}
+                    </Typography>
+                  </Box>
+                ) : null}
+                {task.comment ? (
+                  <Box>
+                    <SectionLabel>Exécution</SectionLabel>
+                    <Typography sx={{ fontSize: 13, color: T.text2, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                      {task.comment}
+                    </Typography>
+                  </Box>
+                ) : null}
               </Box>
-            ) : null}
-            {task.comment ? (
-              <Box>
-                <SectionLabel>Exécution</SectionLabel>
-                <Typography sx={{ fontSize: 13, color: T.text2, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
-                  {task.comment}
+              {photoSrcs.length > 0 ? (
+                <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
+                  {photoSrcs.map((src, i) => (
+                    <Box
+                      key={`${src}-${i}`}
+                      component="a"
+                      href={src}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{
+                        width: 88,
+                        height: 88,
+                        borderRadius: 1.5,
+                        overflow: 'hidden',
+                        border: `1px solid ${T.border}`,
+                        display: 'block',
+                        bgcolor: T.bg2,
+                      }}
+                    >
+                      <Box
+                        component="img"
+                        src={src}
+                        alt={`Photo ${i + 1}`}
+                        sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      />
+                    </Box>
+                  ))}
+                </Box>
+              ) : task.hasGuestPhoto ? (
+                <Typography sx={{ fontSize: 12, color: T.text3, alignSelf: 'center' }}>
+                  📷 Photo signalée (lien indisponible)
                 </Typography>
-              </Box>
-            ) : null}
+              ) : null}
+            </Box>
           </CollapseBlock>
         ) : null}
       </Box>

@@ -10,6 +10,7 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ChecklistRtlIcon from '@mui/icons-material/ChecklistRtl';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import InboxIcon from '@mui/icons-material/Inbox';
 import NotesIcon from '@mui/icons-material/Notes';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
@@ -77,6 +78,10 @@ import type { RegistrationFieldPatch } from '../components/reservations/Reservat
 import type { StayFieldPatch } from '../components/reservations/ReservationStayActions';
 import { ModalPortal } from '../components/ModalPortal';
 import { createFulltaskFromFormData } from '../services/createFulltaskFromModal';
+import {
+  getListingMediaDisplayUrl,
+  isListingsBucketUrl,
+} from '../features/finances/services/listingMediaApi';
 import { useAuth } from '../hooks/useAuth';
 import tasksService, { resolveTasksUserScope } from '../services/fulltaskTasksService';
 import { usePmTasksScope } from '../hooks/usePmTasksScope';
@@ -647,20 +652,60 @@ function taskNotesText(task: TaskListItem): string {
   return firstDescriptionLine(task);
 }
 
-/** Icônes Checklist / Note — clic → popover (uniquement si contenu). */
+/** Icônes Checklist / Note / Photo — clic → popover (uniquement si contenu). */
 function TaskExtrasIcons({ task }: { task: TaskListItem }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const [kind, setKind] = useState<'checklist' | 'notes' | null>(null);
+  const [kind, setKind] = useState<'checklist' | 'notes' | 'photos' | null>(null);
+  const [photoSrcs, setPhotoSrcs] = useState<string[]>([]);
+  const [thumbSrc, setThumbSrc] = useState<string>('');
   const checklist = task.checklistItems || [];
   const notes = taskNotesText(task);
+  const photos = (task.photoUrls || []).filter(Boolean);
   const hasChecklist = checklist.length > 0;
   const hasNotes = Boolean(notes);
+  const hasPhotos = photos.length > 0 || task.hasGuestPhoto === true;
+  const photosKey = photos.join('|');
 
-  if (!hasChecklist && !hasNotes) {
+  // Vignette Infos + aperçu popover — URLs GCS signées si besoin.
+  useEffect(() => {
+    if (!photos.length) {
+      setThumbSrc('');
+      setPhotoSrcs([]);
+      return;
+    }
+    let cancelled = false;
+    const objectUrls: string[] = [];
+    void (async () => {
+      const resolved = await Promise.all(
+        photos.map(async (u) => {
+          try {
+            if (isListingsBucketUrl(u)) {
+              const blobUrl = await getListingMediaDisplayUrl(u);
+              if (blobUrl.startsWith('blob:')) objectUrls.push(blobUrl);
+              return blobUrl;
+            }
+            return u;
+          } catch {
+            return u;
+          }
+        }),
+      );
+      if (cancelled) return;
+      const ok = resolved.filter(Boolean);
+      setThumbSrc(ok[0] || '');
+      setPhotoSrcs(ok);
+    })();
+    return () => {
+      cancelled = true;
+      for (const u of objectUrls) URL.revokeObjectURL(u);
+    };
+  }, [photosKey]);
+
+  if (!hasChecklist && !hasNotes && !hasPhotos) {
     return <Typography sx={{ fontSize: 11, color: T.text4, textAlign: 'center' }}>—</Typography>;
   }
 
-  const open = (e: MouseEvent<HTMLElement>, k: 'checklist' | 'notes') => {
+  const open = (e: MouseEvent<HTMLElement>, k: 'checklist' | 'notes' | 'photos') => {
     e.stopPropagation();
     setAnchor(e.currentTarget);
     setKind(k);
@@ -722,6 +767,49 @@ function TaskExtrasIcons({ task }: { task: TaskListItem }) {
               sx={{ color: T.text2, p: 0.35 }}
             >
               <NotesIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+        ) : null}
+        {hasPhotos ? (
+          <Tooltip
+            title={
+              photos.length
+                ? `Photo guest · ${photos.length} — cliquer pour voir`
+                : 'Photo signalée (lien indisponible)'
+            }
+            arrow
+          >
+            <IconButton
+              size="small"
+              aria-label="Voir photo guest"
+              onClick={(e) => open(e, 'photos')}
+              sx={{
+                color: photos.length ? T.primaryDeep : T.text3,
+                p: 0.2,
+                borderRadius: 1,
+                border: photos.length ? `1px solid ${T.border}` : 'none',
+                overflow: 'hidden',
+              }}
+            >
+              {thumbSrc ? (
+                <Box
+                  component="img"
+                  src={thumbSrc}
+                  alt=""
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const sib = e.currentTarget.nextElementSibling as HTMLElement | null;
+                    if (sib) sib.style.display = 'block';
+                  }}
+                  sx={{ width: 28, height: 28, objectFit: 'cover', display: 'block' }}
+                />
+              ) : null}
+              <ImageOutlinedIcon
+                sx={{
+                  fontSize: 18,
+                  display: thumbSrc ? 'none' : 'block',
+                }}
+              />
             </IconButton>
           </Tooltip>
         ) : null}
@@ -824,6 +912,51 @@ function TaskExtrasIcons({ task }: { task: TaskListItem }) {
             >
               {notes}
             </Typography>
+          </Box>
+        ) : null}
+        {kind === 'photos' ? (
+          <Box>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.text, mb: 0.75 }}>
+              📷 Photo guest
+            </Typography>
+            {photos.length > 0 ? (
+              photoSrcs.length > 0 ? (
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ maxWidth: 340 }}>
+                  {photoSrcs.map((src, i) => (
+                    <Box
+                      key={`${src}-${i}`}
+                      component="a"
+                      href={src}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{
+                        width: 140,
+                        height: 140,
+                        borderRadius: 1.25,
+                        overflow: 'hidden',
+                        border: `1px solid ${T.border}`,
+                        display: 'block',
+                        bgcolor: T.bg2,
+                      }}
+                    >
+                      <Box
+                        component="img"
+                        src={src}
+                        alt={`Photo guest ${i + 1}`}
+                        sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      />
+                    </Box>
+                  ))}
+                </Stack>
+              ) : (
+                <Typography sx={{ fontSize: 12, color: T.text3 }}>Chargement…</Typography>
+              )
+            ) : (
+              <Typography sx={{ fontSize: 12.5, color: T.text3, lineHeight: 1.45 }}>
+                Photo signalée par le client, mais le fichier n’a pas été enregistré (lien
+                indisponible).
+              </Typography>
+            )}
           </Box>
         ) : null}
       </Popover>

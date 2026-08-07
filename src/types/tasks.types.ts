@@ -137,6 +137,10 @@ export interface TaskListItem {
   }>;
   /** Note affichable (requestNote / executionNote / payload.notes) — distinct de la checklist */
   notesText?: string;
+  /** Photos guest (Aide) — URLs GCS documents, affichage via proxy listing-media. */
+  photoUrls?: string[];
+  /** True si le guest a joint / signalé une photo (même sans URL encore). */
+  hasGuestPhoto?: boolean;
   ownerId?: string;
 }
 
