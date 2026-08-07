@@ -54,6 +54,10 @@ import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import { useSocketIO } from '../hooks/useSocketIO';
 import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 import { PostImportListingIndicator } from '../components/reservations/PostImportListingIndicator';
+import {
+  presenceMetaFromReservation,
+  presenceStyles,
+} from '../utils/reservationPresence';
 
 moment.locale('fr');
 
@@ -257,17 +261,9 @@ const statusMeta = (status: string): { bg: string; color: string; label: string 
 };
 
 const presenceMeta = (r: Reservation): { label: string; bg: string; color: string } => {
-  const now = moment();
-  const arr = moment(r.arrivalDate);
-  const dep = moment(r.departureDate);
-  if (r.status.toLowerCase().includes('cancel')) return { label: 'Annulé', bg: 'rgba(20,17,10,0.05)', color: T.text3 };
-  if (r.status.toLowerCase() === 'completed')   return { label: 'Complété', bg: 'rgba(10,143,94,0.10)', color: T.success };
-  if (now.isBefore(arr, 'day'))                  return { label: 'Attendu', bg: 'rgba(6,115,179,0.10)', color: T.info };
-  if (now.isSame(arr, 'day') && !r.actualArrivalTime) return { label: "Aujourd'hui", bg: 'rgba(196,101,6,0.12)', color: T.warning };
-  if (r.actualArrivalTime && !r.actualDepartureTime && now.isBefore(dep, 'day')) return { label: 'Présent', bg: 'rgba(10,143,94,0.10)', color: T.success };
-  if (r.actualArrivalTime && now.isSame(dep, 'day') && !r.actualDepartureTime) return { label: 'Départ Auj.', bg: 'rgba(196,101,6,0.12)', color: T.warning };
-  if (r.actualDepartureTime) return { label: 'Parti', bg: 'rgba(20,17,10,0.05)', color: T.text3 };
-  return { label: 'En cours', bg: 'rgba(6,115,179,0.10)', color: T.info };
+  const meta = presenceMetaFromReservation(r as never);
+  const styles = presenceStyles(meta.tone);
+  return { label: meta.label, ...styles };
 };
 
 const GuestCountryCell = ({
@@ -605,7 +601,10 @@ export function ReservationsPage() {
     const t = moment();
     const arrToday = reservations.filter(r => moment(r.arrivalDate).isSame(t, 'day')).length;
     const depToday = reservations.filter(r => moment(r.departureDate).isSame(t, 'day')).length;
-    const present  = reservations.filter(r => r.actualArrivalTime && !r.actualDepartureTime).length;
+    const present = reservations.filter((r) => {
+      const p = presenceMetaFromReservation(r as never);
+      return p.label === 'Présent' || p.label === 'Départ auj.';
+    }).length;
     const pending  = reservations.filter(r => r.status === 'Pending').length;
     return { arrToday, depToday, present, pending };
   }, [reservations]);
@@ -1451,7 +1450,19 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                     }}>{r.nights || 0}</Box>
                   </Box>
                   <Box component="td" sx={{ textAlign: 'center' }}>
-                    <Chip label={p.label} size="small" sx={{
+                    <Chip
+                      label={p.label}
+                      size="small"
+                      title={
+                        p.label === 'Présent' || p.label === 'Départ auj.'
+                          ? 'Arrivée déclarée (WhatsApp / ops)'
+                          : p.label === 'En séjour'
+                            ? 'Calendrier : séjour en cours, arrivée pas encore déclarée'
+                            : p.label === "Aujourd'hui"
+                              ? 'Check-in aujourd’hui — en attente de déclaration'
+                              : undefined
+                      }
+                      sx={{
                       bgcolor: p.bg, color: p.color, fontWeight: 600, fontSize: 11, height: 22,
                     }} />
                   </Box>

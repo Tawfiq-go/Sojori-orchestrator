@@ -247,7 +247,13 @@ class ReservationsService {
     const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
     const in7Days = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-    const formatDate = (date: Date) => date.toISOString().split('T')[0];
+    // Heure locale murale (Casablanca) — pas toISOString() qui décale J-1 en UTC+1.
+    const formatDate = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
 
     switch (filter) {
       case 'CHECKIN_TODAY':
