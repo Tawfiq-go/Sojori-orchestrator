@@ -135,7 +135,13 @@ export default function MessagesOTATabV2() {
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [searchTerm, setSearchTerm] = useState('');
   const [otaChannelFilter, setOtaChannelFilter] = useState<OtaChannelFilter>('all');
-  const [otaView, setOtaView] = useState<OtaInboxView>('exchanges');
+  const [otaView, setOtaView] = useState<OtaInboxView>(() => {
+    const v = new URLSearchParams(window.location.search).get('view');
+    if (v === 'unreplied' || v === 'exchanges' || v === 'created_today' || v === 'stay') {
+      return v as OtaInboxView;
+    }
+    return 'exchanges';
+  });
   const [otaAdvancedDraft, setOtaAdvancedDraft] = useState<OtaAdvancedSearch>(EMPTY_ADVANCED);
   const [appliedAdvanced, setAppliedAdvanced] = useState<OtaAdvancedSearch>(EMPTY_ADVANCED);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
@@ -981,6 +987,13 @@ export default function MessagesOTATabV2() {
     searchParams.get('reservation') || searchParams.get('res') || null;
   const otaDeepLinkedRef = useRef<string | null>(null);
   const otaDeepLinkFetchRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const v = searchParams.get('view');
+    if (v === 'unreplied' || v === 'exchanges' || v === 'created_today' || v === 'stay') {
+      setOtaView(v as OtaInboxView);
+    }
+  }, [searchParams]);
 
   const handleSelect = async (row: OtaThreadRow) => {
     setComposerDraft('');

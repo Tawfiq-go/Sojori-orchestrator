@@ -132,7 +132,17 @@ export function MaJourneeDashboard() {
             <span className="t">Départs</span>
             <span className="d">{model.departureDetail}</span>
           </button>
-          <button type="button" className="num clickable" onClick={() => navigate('/reservations')}>
+          <button
+            type="button"
+            className="num clickable"
+            onClick={() =>
+              navigate(
+                isTomorrow
+                  ? `/reservations?created=today&startDate=${model.date}&endDate=${model.date}&dateType=creation`
+                  : '/reservations?created=today&dateType=creation',
+              )
+            }
+          >
             <span className="n">{model.createdCount}</span>
             <span className="t">Résas créées</span>
             <span className="d">{model.createdChannels}</span>
@@ -146,7 +156,17 @@ export function MaJourneeDashboard() {
             <span className="t">Résa annulée</span>
             <span className="d">{model.cancelledDetail}</span>
           </button>
-          <button type="button" className="num clickable" onClick={() => navigate('/tasks')}>
+          <button
+            type="button"
+            className="num clickable"
+            onClick={() =>
+              navigate(
+                isTomorrow
+                  ? '/tasks?due=tomorrow'
+                  : '/tasks?due=today',
+              )
+            }
+          >
             <span className="n">{model.experiences.length}</span>
             <span className="t">{isTomorrow ? 'Expériences demain' : 'Expériences ce jour'}</span>
             <span className="d">
@@ -161,7 +181,9 @@ export function MaJourneeDashboard() {
           <button
             type="button"
             className="num clickable"
-            onClick={() => navigate('/communications?tab=whatsapp')}
+            onClick={() =>
+              navigate('/communications?section=guest&tab=whatsapp&view=unreplied')
+            }
           >
             <span className="n">{unreadMsg}</span>
             <span className="t">Messages sans réponse</span>

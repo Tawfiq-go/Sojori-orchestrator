@@ -32,11 +32,12 @@ import {
   ArrowUpward as ArrowUpIcon,
   ArrowDownward as ArrowDownIcon,
 } from '@mui/icons-material';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import moment from 'moment';
 import 'moment/locale/fr';
 import reservationsService from '../services/reservationsService';
+import type { ReservationFilter } from '../types/reservations.types';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { CreateReservationModal } from '../components/modals/CreateReservationModal';
 import { ReservationSourceIcon } from '../components/reservations/ReservationSourceIcon';
@@ -149,6 +150,82 @@ const isReservationCancelled = (status: string) => {
 const isCancelledStatusFilter = (statuses: string[]) =>
   statuses.some((s) => s.toLowerCase() === 'cancelled' || isReservationCancelled(s));
 
+const CANCELLED_STATUS_VALUES = [
+  'Cancelled',
+  'CancelledByHost',
+  'CancelledByCustomer',
+  'CancelledByAdmin',
+  'CancelledByOTA',
+  'CancelledPaymentFailed',
+] as const;
+
+type QuickFilterKey =
+  | 'arrToday'
+  | 'depToday'
+  | 'arrTomorrow'
+  | 'depTomorrow'
+  | 'arr7days'
+  | 'dep7days';
+
+type QuickFiltersState = Record<QuickFilterKey, boolean>;
+
+const EMPTY_QUICK_FILTERS: QuickFiltersState = {
+  arrToday: false,
+  depToday: false,
+  arrTomorrow: false,
+  depTomorrow: false,
+  arr7days: false,
+  dep7days: false,
+};
+
+const URL_FILTER_TO_QUICK: Partial<Record<ReservationFilter, QuickFilterKey>> = {
+  CHECKIN_TODAY: 'arrToday',
+  CHECKOUT_TODAY: 'depToday',
+  CHECKIN_TOMORROW: 'arrTomorrow',
+  CHECKOUT_TOMORROW: 'depTomorrow',
+  CHECKIN_7DAYS: 'arr7days',
+  CHECKOUT_7DAYS: 'dep7days',
+};
+
+const QUICK_TO_URL_FILTER: Record<QuickFilterKey, ReservationFilter> = {
+  arrToday: 'CHECKIN_TODAY',
+  depToday: 'CHECKOUT_TODAY',
+  arrTomorrow: 'CHECKIN_TOMORROW',
+  depTomorrow: 'CHECKOUT_TOMORROW',
+  arr7days: 'CHECKIN_7DAYS',
+  dep7days: 'CHECKOUT_7DAYS',
+};
+
+const VALID_URL_FILTERS = new Set<string>(Object.keys(URL_FILTER_TO_QUICK));
+
+function parseUrlReservationFilter(raw: string | null): ReservationFilter | null {
+  if (!raw || !VALID_URL_FILTERS.has(raw)) return null;
+  return raw as ReservationFilter;
+}
+
+function quickFiltersFromUrlFilter(filter: ReservationFilter | null): QuickFiltersState {
+  const next = { ...EMPTY_QUICK_FILTERS };
+  const key = filter ? URL_FILTER_TO_QUICK[filter] : undefined;
+  if (key) next[key] = true;
+  return next;
+}
+
+function statusesFromUrl(statusParam: string | null): string[] {
+  if (!statusParam) return ['Pending', 'Confirmed'];
+  const raw = statusParam.trim().toLowerCase();
+  if (raw === 'cancelled' || raw.includes('cancel')) {
+    return [...CANCELLED_STATUS_VALUES];
+  }
+  return statusParam
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function isoToday(): string {
+  return moment().format('YYYY-MM-DD');
+}
+
 const formatTime = (timeInput: any): string | null => {
   if (timeInput === undefined || timeInput === null || timeInput === '') return null;
   try {
@@ -249,31 +326,50 @@ const sortReservationsList = (list: Reservation[]): Reservation[] => {
 // ─── Composant ──────────────────────────────────────────────────────
 export function ReservationsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { scopeFetchReady, requestOwnerId, ownerScopeAll } = useAdminOwnerApiScope();
   const { canWrite } = useWriteAccess('reservations');
+
+  const urlFilter = parseUrlReservationFilter(searchParams.get('filter'));
+  const createdToday =
+    searchParams.get('created') === 'today' || searchParams.get('dateType') === 'creation';
+  const createdStart = searchParams.get('startDate') || isoToday();
+  const createdEnd = searchParams.get('endDate') || createdStart;
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [globalFilter, setGlobalFilter] = useState('');
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['Pending', 'Confirmed']);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() =>
+    statusesFromUrl(new URLSearchParams(window.location.search).get('status')),
+  );
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [selectedListings, setSelectedListings] = useState<string[]>([]);
 
-  const [quickFilters, setQuickFilters] = useState({
-    arrToday: false, depToday: false,
-    arrTomorrow: false, depTomorrow: false,
-    arr7days: false, dep7days: false,
-  });
+  const [quickFilters, setQuickFilters] = useState<QuickFiltersState>(() =>
+    quickFiltersFromUrlFilter(
+      parseUrlReservationFilter(new URLSearchParams(window.location.search).get('filter')),
+    ),
+  );
 
   const PAGE_SIZE_OPTIONS = [100, 200, 300] as const;
   const [page, setPage] = useState(0);
   const [totalReservations, setTotalReservations] = useState(0);
   const [limit, setLimit] = useState<number>(100);
   const totalPages = Math.max(1, Math.ceil(totalReservations / limit));
+
+  // Deep-link Ma journée / KPI → synchronise pills + statuts depuis l’URL
+  useEffect(() => {
+    setQuickFilters(quickFiltersFromUrlFilter(urlFilter));
+    const statusParam = searchParams.get('status');
+    if (statusParam != null) {
+      setSelectedStatuses(statusesFromUrl(statusParam));
+    }
+    setPage(0);
+  }, [urlFilter, searchParams]);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -377,6 +473,10 @@ export function ReservationsPage() {
         sortField: 'createdAt',
         sortOrder: 'desc',
         filterOwnerId: requestOwnerId || undefined,
+        ...(urlFilter ? { filter: urlFilter } : {}),
+        ...(createdToday && !urlFilter
+          ? { dateType: 'creation' as const, startDate: createdStart, endDate: createdEnd }
+          : {}),
       });
 
       const sorted = sortReservationsList(response.data as Reservation[]);
@@ -397,7 +497,18 @@ export function ReservationsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [page, limit, selectedStatuses, globalFilter, scopeFetchReady, requestOwnerId]);
+  }, [
+    page,
+    limit,
+    selectedStatuses,
+    globalFilter,
+    scopeFetchReady,
+    requestOwnerId,
+    urlFilter,
+    createdToday,
+    createdStart,
+    createdEnd,
+  ]);
 
   useEffect(() => { setPage(0); }, [requestOwnerId]);
 
@@ -475,15 +586,19 @@ export function ReservationsPage() {
     if (selectedListings.length > 0) {
       f = f.filter(r => selectedListings.includes(r.listing?._id || ''));
     }
-    const today = moment(), tomorrow = moment().add(1, 'd'), next7 = moment().add(7, 'd');
-    if (quickFilters.arrToday)    f = f.filter(r => moment(r.arrivalDate).isSame(today, 'day'));
-    if (quickFilters.depToday)    f = f.filter(r => moment(r.departureDate).isSame(today, 'day'));
-    if (quickFilters.arrTomorrow) f = f.filter(r => moment(r.arrivalDate).isSame(tomorrow, 'day'));
-    if (quickFilters.depTomorrow) f = f.filter(r => moment(r.departureDate).isSame(tomorrow, 'day'));
-    if (quickFilters.arr7days)    f = f.filter(r => moment(r.arrivalDate).isBetween(today, next7, 'day', '[]'));
-    if (quickFilters.dep7days)    f = f.filter(r => moment(r.departureDate).isBetween(today, next7, 'day', '[]'));
+    // Si l’API a déjà filtré via ?filter=CHECKIN_*, ne pas re-filtrer côté client
+    // (évite une liste vide quand le fetch est paginé hors fenêtre).
+    if (!urlFilter) {
+      const today = moment(), tomorrow = moment().add(1, 'd'), next7 = moment().add(7, 'd');
+      if (quickFilters.arrToday)    f = f.filter(r => moment(r.arrivalDate).isSame(today, 'day'));
+      if (quickFilters.depToday)    f = f.filter(r => moment(r.departureDate).isSame(today, 'day'));
+      if (quickFilters.arrTomorrow) f = f.filter(r => moment(r.arrivalDate).isSame(tomorrow, 'day'));
+      if (quickFilters.depTomorrow) f = f.filter(r => moment(r.departureDate).isSame(tomorrow, 'day'));
+      if (quickFilters.arr7days)    f = f.filter(r => moment(r.arrivalDate).isBetween(today, next7, 'day', '[]'));
+      if (quickFilters.dep7days)    f = f.filter(r => moment(r.departureDate).isBetween(today, next7, 'day', '[]'));
+    }
     return f;
-  }, [reservations, globalFilter, selectedChannels, selectedListings, quickFilters]);
+  }, [reservations, globalFilter, selectedChannels, selectedListings, quickFilters, urlFilter]);
 
   // ─── KPIs ──────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -508,14 +623,11 @@ export function ReservationsPage() {
     };
   }, [reservations]);
 
-  const toggleQuick = (k: keyof typeof quickFilters) => {
-    setQuickFilters(prev => {
-      const isActive = prev[k];
-      // Si déjà actif, on désactive. Sinon on active et désactive les autres
-      if (isActive) {
-        return { ...prev, [k]: false };
-      } else {
-        return {
+  const toggleQuick = (k: QuickFilterKey) => {
+    const isActive = quickFilters[k];
+    const nextQuick: QuickFiltersState = isActive
+      ? { ...EMPTY_QUICK_FILTERS }
+      : {
           arrToday: k === 'arrToday',
           depToday: k === 'depToday',
           arrTomorrow: k === 'arrTomorrow',
@@ -523,17 +635,39 @@ export function ReservationsPage() {
           arr7days: k === 'arr7days',
           dep7days: k === 'dep7days',
         };
-      }
-    });
+    setQuickFilters(nextQuick);
     setPage(0);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('created');
+      next.delete('dateType');
+      next.delete('startDate');
+      next.delete('endDate');
+      if (isActive) {
+        next.delete('filter');
+      } else {
+        next.set('filter', QUICK_TO_URL_FILTER[k]);
+      }
+      return next;
+    }, { replace: true });
   };
   const handleReset = () => {
     setGlobalFilter('');
     setSelectedStatuses(['Pending', 'Confirmed']);
     setSelectedChannels([]);
     setSelectedListings([]);
-    setQuickFilters({ arrToday: false, depToday: false, arrTomorrow: false, depTomorrow: false, arr7days: false, dep7days: false });
+    setQuickFilters({ ...EMPTY_QUICK_FILTERS });
     setPage(0);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('filter');
+      next.delete('status');
+      next.delete('created');
+      next.delete('dateType');
+      next.delete('startDate');
+      next.delete('endDate');
+      return next;
+    }, { replace: true });
   };
   const openCreateModal = useCallback(() => {
     if (!canWrite) return;
