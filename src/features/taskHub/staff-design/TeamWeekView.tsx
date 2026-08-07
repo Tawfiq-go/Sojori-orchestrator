@@ -21,67 +21,26 @@ import { labelForTaskTypeId } from './fulltaskTaskTypes';
 import './teamWeekView.css';
 
 const WINDOW_DAYS_SIMPLE = 15;
-const WINDOW_DAYS_ENRICHED = 7;
-
-/** Durées par défaut (minutes) — miroir de defaultSeeds.ts côté fulltask, pour un calcul client sans appel réseau. */
-const DEFAULT_ESTIMATED_MINUTES: Record<string, number> = {
-  arrival_choose: 5,
-  departure_choose: 5,
-  cleaning_free: 45,
-  arrival_declare: 5,
-  departure_declare: 5,
-  registration: 5,
-  receive_arrival: 20,
-  receive_departure: 15,
-  cleaning_paid: 45,
-  checkout_cleaning: 45,
-  transport: 30,
-  groceries: 30,
-  concierge: 30,
-  support: 20,
-  service_client: 20,
-};
-
-function estimatedMinutesForType(type: string): number {
-  return DEFAULT_ESTIMATED_MINUTES[type] ?? 30;
-}
+const WINDOW_DAYS_ENRICHED = 3;
 
 /**
- * Stats jour × staff pour le mode enrichi — même logique de coût que
- * getStaffPeriodStats côté fulltask. « Retard » : jour déjà passé et tâche
- * pas encore terminée (pas de dueAt exposé sur ce payload planning ; c'est
- * le proxy visuel le plus honnête disponible ici — le vrai calcul dueAt<completedAt
- * reste dans le bandeau KPI /staff/stats).
+ * Compteurs jour × staff pour le mode enrichi — mêmes 3 statuts que le kanban
+ * Vue staff (Attente début / Attente fin / Terminé), pas de prix affiché ici.
  */
-function dayCellStats(
-  tasks: TeamTask[],
-  staffMember: Staff | undefined,
-  dayKey: string,
-  todayKey: string,
-): { count: number; hours: number; costMad: number; late: number } {
-  let minutes = 0;
-  const byType = new Map<string, number>();
+function dayCellStats(tasks: TeamTask[]): {
+  waitingStart: number;
+  waitingFinish: number;
+  finished: number;
+} {
+  let waitingStart = 0;
+  let waitingFinish = 0;
+  let finished = 0;
   for (const t of tasks) {
-    minutes += estimatedMinutesForType(t.taskType);
-    byType.set(t.taskType, (byType.get(t.taskType) ?? 0) + 1);
+    if (t.lifecycle === 'waiting_start') waitingStart++;
+    else if (t.lifecycle === 'waiting_finish') waitingFinish++;
+    else if (t.lifecycle === 'finished') finished++;
   }
-  const late = dayKey < todayKey ? tasks.filter((t) => t.lifecycle !== 'finished').length : 0;
-  let costMad = 0;
-  if (staffMember?.contractType === 'freelance' && staffMember.rates) {
-    const monthlyCounted = new Set<string>();
-    for (const [type, count] of byType.entries()) {
-      const amount = staffMember.rates[type];
-      if (amount == null) continue;
-      const mode = staffMember.ratesMode?.[type] ?? 'per_task';
-      if (mode === 'per_task') costMad += amount * count;
-      else if (mode === 'hourly') costMad += amount * ((estimatedMinutesForType(type) * count) / 60);
-      else if (mode === 'monthly' && !monthlyCounted.has(type)) {
-        costMad += amount;
-        monthlyCounted.add(type);
-      }
-    }
-  }
-  return { count: tasks.length, hours: minutes / 60, costMad: Math.round(costMad), late };
+  return { waitingStart, waitingFinish, finished };
 }
 const CANCELLED_STATUSES = new Set(['CANCELLED_ADMIN', 'CANCELLED_CUSTOMER', 'ARCHIVED']);
 const MAX_CHIPS_COLLAPSED = 3;
@@ -995,28 +954,20 @@ export default function TeamWeekView({
     const visible =
       row.unassigned || expanded ? list : list.slice(0, MAX_CHIPS_COLLAPSED);
     const hidden = list.length - visible.length;
-    const stats =
-      enriched && !row.unassigned ? dayCellStats(raw, row.staff, dayKey, todayKey) : null;
+    const stats = enriched && !row.unassigned ? dayCellStats(raw) : null;
     return (
       <>
         {stats && (
           <div className="twv-day-kanban">
-            <span className="twv-kanban-tile" title="Tâches">
-              📋 {stats.count}
+            <span className="twv-kanban-tile twv-kanban-tile--waiting-start" title="Attente début">
+              ▶️ {stats.waitingStart}
             </span>
-            <span className="twv-kanban-tile" title="Heures estimées">
-              ⏱️ {stats.hours.toFixed(1)}h
+            <span className="twv-kanban-tile twv-kanban-tile--waiting-finish" title="Attente fin">
+              ⏳ {stats.waitingFinish}
             </span>
-            {row.staff?.contractType === 'freelance' && stats.costMad > 0 && (
-              <span className="twv-kanban-tile" title="Coût freelance">
-                💰 {stats.costMad} MAD
-              </span>
-            )}
-            {stats.late > 0 && (
-              <span className="twv-kanban-tile twv-kanban-tile--late" title="En retard">
-                ⚠️ {stats.late}
-              </span>
-            )}
+            <span className="twv-kanban-tile twv-kanban-tile--finished" title="Terminé">
+              ✅ {stats.finished}
+            </span>
           </div>
         )}
         {visible.map(renderChip)}
