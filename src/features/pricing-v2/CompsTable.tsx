@@ -47,7 +47,7 @@ export default function CompsTable({
           <Box component="thead">
             <Box component="tr" sx={{ '& th': { textAlign: 'left', ...kickerSx, pb: 1, borderBottom: `1px solid ${T.line}` } }}>
               <th>RESSEMBLANCE</th>
-              <th>QUARTIER</th>
+              <th>LE BIEN</th>
               <th>NOTE</th>
               <th style={{ textAlign: 'right' }}>IL ENCAISSE</th>
               <th style={{ textAlign: 'right' }}>À VOTRE NIVEAU</th>
@@ -72,7 +72,67 @@ export default function CompsTable({
                   </Box>
                 </td>
                 <td>
-                  <Typography sx={{ fontSize: 12, color: T.ink }}>{c.locality || '—'}</Typography>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    {c.photoUrl ? (
+                      <Box
+                        component="img"
+                        src={c.photoUrl}
+                        alt=""
+                        loading="lazy"
+                        sx={{
+                          width: 46,
+                          height: 46,
+                          borderRadius: `${T.radius - 5}px`,
+                          objectFit: 'cover',
+                          flexShrink: 0,
+                          border: `1px solid ${T.line}`,
+                        }}
+                      />
+                    ) : null}
+                    <Box sx={{ minWidth: 0 }}>
+                      {/* Nom cliquable → l'annonce Airbnb. Pas de lien quand le
+                          backend n'a pas pu récupérer l'id vrai : un lien mort
+                          serait pire que pas de lien (18 ids sur 25 sont
+                          tronqués en base, cf. market.ts). */}
+                      {c.airbnbUrl ? (
+                        <Box
+                          component="a"
+                          href={c.airbnbUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`${c.name ?? 'Voir'} — ouvrir sur Airbnb`}
+                          sx={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: T.ink,
+                            textDecoration: 'none',
+                            display: 'block',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            maxWidth: 260,
+                            '&:hover': { color: T.gold, textDecoration: 'underline' },
+                          }}
+                        >
+                          {c.name || 'Voir sur Airbnb'} ↗
+                        </Box>
+                      ) : c.name ? (
+                        <Typography
+                          title={c.name}
+                          sx={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: T.ink,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            maxWidth: 260,
+                          }}
+                        >
+                          {c.name}
+                        </Typography>
+                      ) : null}
+                  <Typography sx={{ fontSize: 11, color: T.mut }}>{c.locality || '—'}</Typography>
                   <Typography sx={{ fontSize: 10.5, color: T.mut }}>
                     {/* Un écart de taille est coloré : c'est ce qui explique le
                         plus l'écart de prix (chambres = 30 % de la ressemblance,
@@ -104,6 +164,8 @@ export default function CompsTable({
                     </Box>
                     {c.minNights ? ` · min ${c.minNights} nuit${c.minNights > 1 ? 's' : ''}` : ''}
                   </Typography>
+                    </Box>
+                  </Box>
                 </td>
                 <td>
                   <Typography
