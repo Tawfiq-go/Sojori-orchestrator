@@ -261,7 +261,7 @@ export function Toggle({ on, sm, onChange, disabled = false }) {
   );
 }
 
-export function Card({ icon, title, subtitle, meta, children, toggle, onToggleChange, compact = false }) {
+export function Card({ icon, title, subtitle, meta, headerExtra, children, toggle, onToggleChange, compact = false }) {
   return (
     <Box
       sx={{
@@ -303,6 +303,7 @@ export function Card({ icon, title, subtitle, meta, children, toggle, onToggleCh
             <Typography sx={{ fontSize: 11.5, color: T.text3, mt: 0.25, fontWeight: 500 }}>{subtitle}</Typography>
           )}
         </Box>
+        {headerExtra}
         {meta && (
           <Box
             sx={{

@@ -1126,6 +1126,32 @@ export const listingsService = {
     return safeListingConfigPost(`${LISTING_API_BASE_URL}/rules-and-info/${listingId}/sync`, {});
   },
 
+  /** POST srv-reservations /ai/translate-rules-list — Haiku (ANTHROPIC_API_KEY lives there) */
+  async translateRulesAndInfo(body: {
+    texts: string[];
+    targetLang: string;
+    sourceLang?: string;
+  }): Promise<{ texts: string[]; error?: string }> {
+    try {
+      const response = await apiClient.post(
+        `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/ai/translate-rules-list`,
+        body,
+      );
+      const payload = asRecord(response.data);
+      if (payload.success === false) {
+        return {
+          texts: [],
+          error: pickFirstString(payload, ['error', 'message']) || 'Traduction impossible',
+        };
+      }
+      const data = asRecord(payload.data);
+      const texts = Array.isArray(data.texts) ? data.texts.map((t) => String(t ?? '')) : [];
+      return { texts };
+    } catch (error) {
+      return { texts: [], error: buildServiceError(error) };
+    }
+  },
+
   async updateListingAccess(listingId: string, body: unknown): Promise<ListingSrvConfigFetchResult> {
     return safeListingConfigPut(`${LISTING_API_BASE_URL}/listing-access/${listingId}`, body);
   },
