@@ -104,9 +104,7 @@ export default function PublishPanel({
 
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography sx={{ fontSize: 13.5, color: T.ink }}>
-          {publishEnabled
-            ? 'Activée — les prix partent vers le calendrier'
-            : 'Désactivée — rien ne sort de Sojori'}
+          {publishEnabled ? 'Activée' : 'Désactivée'}
         </Typography>
         <Switch
           checked={publishEnabled}
@@ -115,21 +113,6 @@ export default function PublishPanel({
         />
       </Stack>
 
-      <Typography sx={{ fontSize: 11.5, color: T.ink2, mt: 0.75, lineHeight: 1.5 }}>
-        {publishEnabled ? (
-          <>
-            Chaque nuit, les {elig.horizonDays} prochains jours sont envoyés au calendrier, puis à
-            vos canaux de vente. <b>Vos nuits fixées à la main ne sont jamais écrasées</b>, ni les
-            nuits déjà vendues ou fermées.
-          </>
-        ) : (
-          <>
-            Les prix sont calculés et conservés, mais <b>rien n'est envoyé</b> au calendrier ni aux
-            OTA.
-          </>
-        )}
-      </Typography>
-
       {publishEnabled ? (
         <Button
           size="small"
@@ -137,7 +120,7 @@ export default function PublishPanel({
           disabled={busy || pushing}
           onClick={() => setConfirm(true)}
           sx={{
-            mt: 1.5,
+            mt: 1,
             borderColor: T.line,
             color: T.ink,
             '&:hover': { borderColor: T.ink, bgcolor: 'transparent' },
