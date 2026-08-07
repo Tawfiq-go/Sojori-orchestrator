@@ -1171,7 +1171,8 @@ function emergencyChipMeta(em: string | undefined): { bg: string; color: string 
 }
 
 /** Aligné `TasksNew.jsx` — statuts par défaut de la liste admin. */
-const DEFAULT_TASK_STATUSES: string[] = ['CREATED', 'ASSIGNED', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED'];
+/** Actives seulement — Terminée / Archivée hors liste par défaut (filtre explicite). */
+const DEFAULT_TASK_STATUSES: string[] = ['CREATED', 'ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'];
 
 const STATUS_MULTI_OPTIONS: { id: string; label: string }[] = [
   { id: 'CREATED', label: 'Créé' },

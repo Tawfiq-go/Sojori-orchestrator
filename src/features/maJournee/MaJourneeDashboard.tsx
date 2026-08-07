@@ -198,7 +198,9 @@ export function MaJourneeDashboard() {
                 <span className="bar" />
                 <h2>Arrivées</h2>
                 <span className="cnt">{model.arrivals.length}</span>
-                <span className="hint">prête = heure confirmée + enregistré + logement propre</span>
+                <span className="hint">
+                  Arrivé à = heure déclarée · Attendu = prévue · prête = enregistré + propre
+                </span>
               </header>
               {model.arrivals.length === 0 ? (
                 <div className="empty">
@@ -214,14 +216,23 @@ export function MaJourneeDashboard() {
                     onClick={() => navigate(`/reservations/${s.reservationId}`)}
                     onKeyDown={(e) => e.key === 'Enter' && navigate(`/reservations/${s.reservationId}`)}
                   >
-                    <span className={`h${s.timeTbd ? ' tbd' : ''}`}>{s.time}</span>
+                    <span
+                      className={`h${s.timeTbd ? ' tbd' : ''}${
+                        s.checks.some((c) => c.primary && c.text.startsWith('Arrivé')) ? ' arrived' : ''
+                      }`}
+                    >
+                      {s.time}
+                    </span>
                     <span className="who">
                       <b>{s.guestName}</b>
                       <span>{s.meta}</span>
                     </span>
                     <span className="checks">
                       {s.checks.map((c) => (
-                        <span key={c.text} className={`ck ${c.cls}`}>
+                        <span
+                          key={c.text}
+                          className={`ck ${c.cls}${c.primary ? ' primary' : ' sm'}`}
+                        >
                           {c.text}
                         </span>
                       ))}
