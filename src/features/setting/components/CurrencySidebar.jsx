@@ -308,13 +308,13 @@ const CurrencySidebar = ({
                       name="madRate"
                       type="number"
                       size="small"
-                      placeholder="ex. 10.67 pour EUR"
+                      placeholder="ex. 10.74 pour EUR"
                       inputProps={{ step: '0.0001', min: '0' }}
                       error={Boolean(errors.madRate && touched.madRate)}
                       helperText={
                         errors.madRate && touched.madRate
                           ? t(errors.madRate)
-                          : 'Utilisé pour le push prix RU/Airbnb. MAD = 1. EUR ≈ 10.67 aujourd’hui. Laisser vide si non applicable.'
+                          : 'Pour EUR : pousse le taux vers srv-listing (push prix RU). MAD = 1. Marché ≈ 10,74. Laisser vide si non applicable.'
                       }
                     />
                   </div>
