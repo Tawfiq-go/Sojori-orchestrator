@@ -16,8 +16,32 @@
 // ════════════════════════════════════════════════════════════════════════════
 import apiClient from '../../services/apiClient';
 import { MICROSERVICE_BASE_URL } from '../../config/authConfig';
+import { getPersistedUser } from '../../data/mockAuth';
 
 const BASE = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/pricing-v2`;
+
+// ⚠️ Le proxy srv-admin exige `ownerId` sur chaque appel pricing-v2 (voir
+// apps/srv-admin/src/routes/pricingV2Dashboard/index.ts pour l'historique
+// complet) : tant que DISABLE_AUTH=true reste actif en prod, `req.user` côté
+// serveur ne peut JAMAIS porter le vrai JWT — c'est toujours un utilisateur
+// factice. Le front est donc la seule source fiable de « qui est connecté »,
+// exactement comme fulltaskApi.ts le fait déjà avec son paramètre `ownerId`.
+//
+// Un intercepteur local (pas sur `apiClient` global, qui sert tout le
+// dashboard) pose `ownerId` sur CHAQUE requête pricing-v2 — en query pour un
+// GET/DELETE, dans le corps sinon. Ça évite de faire porter ce paramètre à
+// chacun des ~15 appels ci-dessous et à leurs appelants.
+apiClient.interceptors.request.use((config) => {
+  if (!config.url?.includes('/pricing-v2/')) return config;
+  const ownerId = getPersistedUser()?.id;
+  if (!ownerId) return config; // le backend renverra 400 OWNER_ID_REQUIRED, explicite
+  if (config.method?.toUpperCase() === 'GET' || config.method?.toUpperCase() === 'DELETE') {
+    config.params = { ...config.params, ownerId };
+  } else {
+    config.data = { ...(config.data ?? {}), ownerId };
+  }
+  return config;
+});
 
 // ── Miroir du contrat moteur (spec v2.7 §7) ──
 export type PricingV2Day = {

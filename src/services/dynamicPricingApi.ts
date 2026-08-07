@@ -186,11 +186,14 @@ export async function fetchDynamicPricingPortfolio(params?: {
   ownerId?: string;
   /** Ville active — charge cache marché `marrakech:*` ou `casablanca:*` */
   city?: string | null;
+  /** true si l'appelant est admin/superadmin — sinon le proxy masque le détail AirROI (coût, comps, raw). */
+  isAdmin?: boolean;
 }) {
   const qs = new URLSearchParams();
   if (params?.year) qs.set('year', String(params.year));
   if (params?.ownerId) qs.set('ownerId', params.ownerId);
   if (params?.city) qs.set('city', params.city);
+  if (params?.isAdmin) qs.set('isAdmin', '1');
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
   return apiClient.get<PortfolioApiResponse>(`${BASE}/portfolio${suffix}`);
 }
