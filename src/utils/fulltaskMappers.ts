@@ -473,6 +473,20 @@ export function fullTaskToListItem(
         : undefined,
     supportCategoryIcon:
       taskType === 'support' ? String(payload.categoryIcon ?? '').trim() || undefined : undefined,
+    photoUrls: (() => {
+      const fromArr = Array.isArray(payload.photos)
+        ? payload.photos.map((u) => String(u || '').trim()).filter(Boolean)
+        : []
+      const single = String(payload.photoUrl || payload.photo || '').trim()
+      const all = [...fromArr]
+      if (single && !all.includes(single)) all.unshift(single)
+      return all.length ? all : undefined
+    })(),
+    hasGuestPhoto:
+      (Array.isArray(payload.photos) &&
+        payload.photos.some((u) => Boolean(String(u || '').trim()))) ||
+      Boolean(String(payload.photoUrl || payload.photo || '').trim()) ||
+      payload.hasPhoto === true,
     comment: task.executionNote ? String(task.executionNote) : '',
     isArchived: task.isArchived === true,
     isClientRequest: task.status === 'waiting_guest',
