@@ -51,16 +51,26 @@ import {
 import { T, cardSx, kickerSx } from './tokens';
 
 // Table de traduction (brief §2) — aucun terme technique nu à l'écran.
-const GAMME_LABELS: Record<string, { label: string; sub: string }> = {
-  economique: { label: 'Économique', sub: 'Remplir vite, marge faible' },
-  normal: { label: 'Normal', sub: 'Le prix de vos voisins' },
-  premium: { label: 'Premium', sub: 'Au-dessus du lot' },
-  luxe: { label: 'Luxe', sub: 'Pour un bien au-dessus du lot' },
+/**
+ * ⚠️ `pct` DOIT rester aligné sur GAMME_OFFSET (engine/config.ts) : 0.90, 1.00,
+ * 1.08, 1.15. C'est l'écart appliqué au prix de marché.
+ */
+const GAMME_LABELS: Record<string, { label: string; sub: string; pct: number }> = {
+  economique: { label: 'Économique', sub: 'Remplir vite, marge faible', pct: -10 },
+  // « voisins » → « marché » : même règle de vocabulaire que partout ailleurs.
+  normal: { label: 'Normal', sub: 'Le prix du marché', pct: 0 },
+  premium: { label: 'Premium', sub: 'Au-dessus du lot', pct: 8 },
+  luxe: { label: 'Luxe', sub: 'Le haut du marché', pct: 15 },
 };
-const MODE_LABELS: Record<string, { label: string; sub: string }> = {
-  prudent: { label: 'Prudent', sub: 'Je veux remplir' },
-  equilibre: { label: 'Équilibré', sub: "L'optimum revenu" },
-  agressif: { label: 'Agressif', sub: 'Je vise le prix haut' },
+/**
+ * ⚠️ `pct` DOIT rester aligné sur MODE.tilt (apps/srv-pricing-v2/src/engine/
+ * config.ts) : prudent 0.97, equilibre 1.00, agressif 1.05. Afficher un chiffre
+ * faux serait pire que ne rien afficher — si tu changes le moteur, change ici.
+ */
+const MODE_LABELS: Record<string, { label: string; sub: string; pct: number }> = {
+  prudent: { label: 'Prudent', sub: 'Je veux remplir', pct: -3 },
+  equilibre: { label: 'Équilibré', sub: "L'optimum revenu", pct: 0 },
+  agressif: { label: 'Agressif', sub: 'Je vise le prix haut', pct: 5 },
 };
 
 /** Mois affichés au calendrier, EN ENTIER et sans défilement (le moteur en
@@ -452,6 +462,20 @@ export default function PricingV2Page() {
                     <Typography sx={{ fontWeight: 700, fontSize: 13.5, color: T.ink }}>
                       {GAMME_LABELS[g].label}
                     </Typography>
+                    {/* L'écart appliqué au prix de marché — sinon on choisit
+                        « Premium » sans savoir ce que ça coûte. */}
+                    <Typography
+                      sx={{
+                        fontFamily: T.mono,
+                        fontSize: 13,
+                        fontWeight: 750,
+                        color: config?.gamme === g ? T.gold : T.ink2,
+                        mt: 0.25,
+                      }}
+                    >
+                      {GAMME_LABELS[g].pct > 0 ? '+' : ''}
+                      {GAMME_LABELS[g].pct}&nbsp;%
+                    </Typography>
                     <Typography sx={{ fontSize: 11, color: T.mut, mt: 0.25 }}>
                       {GAMME_LABELS[g].sub}
                     </Typography>
@@ -493,6 +517,20 @@ export default function PricingV2Page() {
                     }}
                   >
                     <Typography sx={{ fontWeight: 700, fontSize: 13, color: T.ink }}>{MODE_LABELS[m].label}</Typography>
+                    {/* Le % réellement appliqué au prix de base : sans lui, les
+                        trois modes se choisissent au ressenti. */}
+                    <Typography
+                      sx={{
+                        fontFamily: T.mono,
+                        fontSize: 13,
+                        fontWeight: 750,
+                        color: config?.mode === m ? T.gold : T.ink2,
+                        mt: 0.25,
+                      }}
+                    >
+                      {MODE_LABELS[m].pct > 0 ? '+' : ''}
+                      {MODE_LABELS[m].pct}&nbsp;%
+                    </Typography>
                     <Typography sx={{ fontSize: 10.5, color: T.mut, mt: 0.25 }}>{MODE_LABELS[m].sub}</Typography>
                   </Box>
                 ))}
