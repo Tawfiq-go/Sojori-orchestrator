@@ -44,6 +44,7 @@ export function DynamicPricingPage() {
 
   const portfolio = usePortfolio(requestOwnerId || undefined, cityScope, {
     enabled: scopeFetchReady,
+    isAdmin: isPlatformAdmin,
   });
   const seedRow = useMemo(() => {
     if (!listingId) return null;
@@ -100,7 +101,9 @@ export function DynamicPricingPage() {
 
   const patchPilotConfig = portfolio.patchListingPilot;
 
-  const portfolioAirroiModal = (
+  // AirROI (mécanique de refresh, coûts, jargon fournisseur) = admin only.
+  // L'owner ne doit ni voir, ni savoir que ça existe — cf. instruction Tawfiq 07/08/2026.
+  const portfolioAirroiModal = isPlatformAdmin ? (
     <DynamicPricingAirroiModal
       scope="portfolio"
       activeCityScope={cityScope}
@@ -113,7 +116,7 @@ export function DynamicPricingPage() {
       onRefreshAirroiMarket={(city) => portfolio.refreshMarket(city)}
       onRefreshListingPerformance={(city) => portfolio.refreshListingPerformance(city)}
     />
-  );
+  ) : null;
 
   return (
     <DashboardWrapper breadcrumb={[]} hidePageHeader>
@@ -127,7 +130,7 @@ export function DynamicPricingPage() {
       >
         <DynamicPricingShell
           hideTitle
-          dataActions={isBienPage ? null : portfolioAirroiModal}
+          dataActions={isBienPage || !isPlatformAdmin ? null : portfolioAirroiModal}
         >
           {listingId && bienDetail?.error && !bienDetail.loading ? (
             <Box sx={{ p: 3, maxWidth: 720, mx: 'auto' }}>

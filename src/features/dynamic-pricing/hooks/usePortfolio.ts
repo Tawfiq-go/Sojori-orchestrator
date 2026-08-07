@@ -47,7 +47,7 @@ const EMPTY_PORTFOLIO: PortfolioMockData = {
 export function usePortfolio(
   ownerId?: string | null,
   cityScope?: string | null,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; isAdmin?: boolean },
 ): PortfolioMockData & {
   loading: boolean;
   error: string | null;
@@ -90,7 +90,11 @@ export function usePortfolio(
       setFetchFailed(false);
     }
     try {
-      const res = await fetchDynamicPricingPortfolio({ ownerId, city: cityScope ?? undefined });
+      const res = await fetchDynamicPricingPortfolio({
+        ownerId,
+        city: cityScope ?? undefined,
+        isAdmin: options?.isAdmin,
+      });
       if (!res.data?.success) {
         throw new Error(
           typeof res.data === 'object' && res.data && 'error' in res.data
@@ -127,7 +131,7 @@ export function usePortfolio(
     } finally {
       if (!opts?.silent) setLoading(false);
     }
-  }, [ownerId, cityScope]);
+  }, [ownerId, cityScope, options?.isAdmin]);
 
   const patchListingPilot = useCallback(
     async (listingId: string, partial: Partial<PilotPricingConfigDto>) => {
