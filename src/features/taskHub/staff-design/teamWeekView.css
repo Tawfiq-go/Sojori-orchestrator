@@ -419,9 +419,9 @@ th.twv-today .twv-day-num {
 }
 
 .twv-staff-cell {
-  width: 168px;
-  min-width: 168px;
-  max-width: 168px;
+  width: 210px;
+  min-width: 210px;
+  max-width: 210px;
   text-align: left;
   padding: 6px 8px 6px 4px;
   position: sticky;
@@ -530,9 +530,9 @@ th.twv-today .twv-day-num {
    au milieu des 3 sous-colonnes quand on scrolle. */
 .twv-enriched .twv-day-cell,
 .twv-enriched .twv-day-head {
-  width: 300px;
-  min-width: 300px;
-  max-width: 300px;
+  width: 360px;
+  min-width: 360px;
+  max-width: 360px;
   border-left: 2px solid rgba(26, 22, 17, 0.18);
 }
 .twv-enriched .twv-day-cell:last-child,
@@ -615,10 +615,31 @@ th.twv-today .twv-day-num {
   padding: 4px 6px;
   margin-bottom: 4px;
 }
-.twv-cell-kanban .twv-chip-listing,
 .twv-cell-kanban .twv-chip-status,
 .twv-cell-kanban .twv-chip-lc {
   display: none;
+}
+/* Nom de l'annonce conservé sur chaque tâche — repère métier essentiel. */
+.twv-cell-kanban .twv-chip-listing {
+  display: block;
+  font-size: 8.5px;
+  line-height: 1.25;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Annonces accessibles, sous le nom du staff. */
+.twv-staff-listings {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1.3;
+  color: #7a756c;
+  margin-top: 2px;
 }
 
 .twv-row--drop .twv-staff-cell,
