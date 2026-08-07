@@ -87,6 +87,12 @@ export type PricingV2Config = {
   annualTilt?: number | null;
   /** Remise sur les nuits invendables (trou < minStay). Négatif = remise. */
   gapAdjustPct?: number | null;
+  /**
+   * Publication RÉELLE vers le calendrier — distinct de `shadowEnabled`, qui
+   * n'est que le calcul nocturne. false par défaut ; l'allowlist d'ownerId côté
+   * backend reste le verrou maître, ce booléen ne suffit pas à publier.
+   */
+  publishEnabled?: boolean;
   /** Overrides datés posés par le PM (sélection de plage au drag). */
   dailyOverrides?: Record<string, { type: 'fixed' | 'mult'; value: number }> | null;
   /** Leviers édités par le PM. null = valeurs du marché. */
@@ -235,4 +241,40 @@ export async function savePricingV2Config(listingId: string, patch: Partial<Pric
     `${BASE}/config/${listingId}`,
     patch,
   );
+}
+
+// ── Publication réelle vers le calendrier ───────────────────────────────────
+// ⚠️ Les SEULS appels de ce module à changer les prix vus par les voyageurs.
+// Le backend porte les verrous (allowlist d'ownerId, interrupteur du bien,
+// fraîcheur du marché) — le front ne fait que demander, il n'autorise rien.
+
+export type PricingV2PushEligibility = {
+  success: boolean;
+  /** Ce propriétaire a-t-il le droit de publier ? (déploiement progressif) */
+  allowed: boolean;
+  /** La publication est-elle activée sur ce bien ? */
+  publishEnabled: boolean;
+  horizonDays: number;
+};
+
+export async function fetchPricingV2PushEligibility(listingId: string) {
+  return apiClient.get<PricingV2PushEligibility>(`${BASE}/push/${listingId}/eligibility`);
+}
+
+export type PricingV2PushResult = {
+  success: boolean;
+  error?: string;
+  code?: string;
+  /** Nuits effectivement publiées. */
+  pushed?: number;
+  /** Nuits sautées car vendues ou fermées — jamais touchées. */
+  skippedBooked?: number;
+  skippedNoPrice?: number;
+};
+
+/** Publie les 182 jours vers le calendrier. Effet RÉEL : à confirmer avant. */
+export async function pushPricingV2ToCalendar(listingId: string) {
+  return apiClient.post<PricingV2PushResult>(`${BASE}/push/${listingId}`, {
+    triggerSource: 'manual-force',
+  });
 }
