@@ -524,10 +524,12 @@ th.twv-today .twv-day-num {
   max-width: 120px;
 }
 
+/* 3 colonnes kanban par cellule → il faut ~100px par colonne pour rester
+   lisible ; le scroll horizontal de .twv-scroll absorbe la largeur totale. */
 .twv-enriched .twv-day-cell {
-  width: 168px;
-  min-width: 168px;
-  max-width: 168px;
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
 }
 
 .twv-mode-seg {
@@ -550,44 +552,59 @@ th.twv-today .twv-day-num {
   color: #fff;
 }
 
-.twv-day-kanban {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 2px;
-  margin-bottom: 4px;
+/* Mode enrichi : 3 colonnes kanban dans chaque cellule staff × jour.
+   Chaque colonne est une zone de dépôt large (glisser = changer de statut). */
+.twv-cell-kanban {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  align-items: start;
 }
-.twv-kanban-tile {
-  font-size: 9px;
-  font-weight: 700;
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: #f1efe9;
-  color: #4a463d;
+.twv-kcol {
+  min-height: 44px;
+  border-radius: 6px;
+  padding: 3px 2px;
+  border: 1px dashed transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+.twv-kcol-h {
+  font-size: 9.5px;
+  font-weight: 800;
+  text-align: center;
+  margin-bottom: 3px;
   white-space: nowrap;
-  cursor: grab;
-  transition: transform 0.1s, box-shadow 0.1s;
 }
-.twv-kanban-tile--drop {
-  outline: 2px dashed currentColor;
-  outline-offset: 1px;
-  transform: scale(1.12);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+.twv-kcol--waiting-start {
+  background: #eef3fd;
 }
-.twv-kanban-tile--late {
-  background: #fdeaea;
-  color: #b91c1c;
-}
-.twv-kanban-tile--waiting-start {
-  background: #e8eefc;
+.twv-kcol--waiting-start .twv-kcol-h {
   color: #1d4ed8;
 }
-.twv-kanban-tile--waiting-finish {
-  background: #fdf1e3;
+.twv-kcol--waiting-finish {
+  background: #fdf4e9;
+}
+.twv-kcol--waiting-finish .twv-kcol-h {
   color: #b45309;
 }
-.twv-kanban-tile--finished {
-  background: #e7f6ee;
+.twv-kcol--finished {
+  background: #eaf7f0;
+}
+.twv-kcol--finished .twv-kcol-h {
   color: #0d8a4f;
+}
+.twv-kcol--drop {
+  border-color: currentColor;
+  filter: brightness(0.96);
+}
+/* Chips resserrées dans les colonnes (3× moins de largeur disponible). */
+.twv-cell-kanban .twv-chip {
+  font-size: 9.5px;
+  padding: 3px 4px;
+  margin-bottom: 3px;
+}
+.twv-cell-kanban .twv-chip-listing,
+.twv-cell-kanban .twv-chip-status {
+  display: none;
 }
 
 .twv-row--drop .twv-staff-cell,
