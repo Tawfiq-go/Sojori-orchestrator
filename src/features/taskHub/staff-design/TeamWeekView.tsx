@@ -332,6 +332,11 @@ export default function TeamWeekView({
   >('all');
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dropStaffId, setDropStaffId] = useState<string | null>(null);
+  /** Badge de statut (mode enrichi) survolé pendant un drag — surlignage visuel de la cible. */
+  const [dropBadge, setDropBadge] = useState<{
+    key: string;
+    to: 'waiting_start' | 'waiting_finish' | 'finished';
+  } | null>(null);
   const [dropDeniedStaffId, setDropDeniedStaffId] = useState<string | null>(null);
   const [dropUnassignKey, setDropUnassignKey] = useState<string | null>(null);
   const dragMovedRef = useRef(false);
@@ -696,8 +701,14 @@ export default function TeamWeekView({
 
   const handleStaffAction = async (
     action: 'accept' | 'reject' | 'start' | 'complete',
+  ) => runStaffAction(taskMenu?.task, action);
+
+  /** Cœur de l'action accepter/refuser/démarrer/terminer — cible explicite,
+   * réutilisé par le menu contextuel (taskMenu) et le drop sur badge de statut. */
+  const runStaffAction = async (
+    target: TeamTask | undefined,
+    action: 'accept' | 'reject' | 'start' | 'complete',
   ) => {
-    const target = taskMenu?.task;
     if (!target?.taskId || !target.staffId || acting) return;
     const taskId = target.taskId;
     const staffId = target.staffId;
@@ -748,6 +759,48 @@ export default function TeamWeekView({
     } finally {
       setActing(false);
     }
+  };
+
+  /**
+   * Glisser une chip vers un badge de statut (▶️/⏳/✅) = changement rapide
+   * superviseur, sans passer par le menu. Une seule étape à la fois — pas de
+   * saut (attente début → terminé direct), même logique/rollback que
+   * handleStaffAction pour rester cohérent avec le menu contextuel.
+   */
+  const badgeDropAction = (
+    from: Lifecycle,
+    to: 'waiting_start' | 'waiting_finish' | 'finished',
+  ): 'accept' | 'start' | 'complete' | null => {
+    if (to === 'waiting_start' && from === 'waiting_accept') return 'accept';
+    if (to === 'waiting_finish' && from === 'waiting_start') return 'start';
+    if (to === 'finished' && from === 'waiting_finish') return 'complete';
+    return null;
+  };
+
+  const onStatusBadgeDragOver = (
+    to: 'waiting_start' | 'waiting_finish' | 'finished',
+    e: React.DragEvent,
+  ) => {
+    const dragTask = dragTaskRef.current;
+    const action = dragTask ? badgeDropAction(dragTask.lifecycle, to) : null;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = action ? 'move' : 'none';
+  };
+
+  const onStatusBadgeDrop = (
+    to: 'waiting_start' | 'waiting_finish' | 'finished',
+    e: React.DragEvent,
+  ) => {
+    e.preventDefault();
+    const task = resolveDragTask(e);
+    clearDragState();
+    if (!task?.taskId || !task.staffId) return;
+    const action = badgeDropAction(task.lifecycle, to);
+    if (!action) {
+      toast.error('Étape suivante uniquement (pas de saut de statut).');
+      return;
+    }
+    void runStaffAction(task, action);
   };
 
   const onChipClick = (t: TeamTask, e: React.MouseEvent<HTMLElement>) => {
@@ -959,13 +1012,49 @@ export default function TeamWeekView({
       <>
         {stats && (
           <div className="twv-day-kanban">
-            <span className="twv-kanban-tile twv-kanban-tile--waiting-start" title="Attente début">
+            <span
+              className={`twv-kanban-tile twv-kanban-tile--waiting-start${dropBadge?.key === cellKey && dropBadge.to === 'waiting_start' ? ' twv-kanban-tile--drop' : ''}`}
+              title="Attente début — glisser une tâche acceptée ici pour la démarrer"
+              onDragOver={(e) => {
+                onStatusBadgeDragOver('waiting_start', e);
+                setDropBadge({ key: cellKey, to: 'waiting_start' });
+              }}
+              onDragLeave={() => setDropBadge((cur) => (cur?.key === cellKey ? null : cur))}
+              onDrop={(e) => {
+                onStatusBadgeDrop('waiting_start', e);
+                setDropBadge(null);
+              }}
+            >
               ▶️ {stats.waitingStart}
             </span>
-            <span className="twv-kanban-tile twv-kanban-tile--waiting-finish" title="Attente fin">
+            <span
+              className={`twv-kanban-tile twv-kanban-tile--waiting-finish${dropBadge?.key === cellKey && dropBadge.to === 'waiting_finish' ? ' twv-kanban-tile--drop' : ''}`}
+              title="Attente fin — glisser une tâche démarrée ici pour la terminer"
+              onDragOver={(e) => {
+                onStatusBadgeDragOver('waiting_finish', e);
+                setDropBadge({ key: cellKey, to: 'waiting_finish' });
+              }}
+              onDragLeave={() => setDropBadge((cur) => (cur?.key === cellKey ? null : cur))}
+              onDrop={(e) => {
+                onStatusBadgeDrop('waiting_finish', e);
+                setDropBadge(null);
+              }}
+            >
               ⏳ {stats.waitingFinish}
             </span>
-            <span className="twv-kanban-tile twv-kanban-tile--finished" title="Terminé">
+            <span
+              className={`twv-kanban-tile twv-kanban-tile--finished${dropBadge?.key === cellKey && dropBadge.to === 'finished' ? ' twv-kanban-tile--drop' : ''}`}
+              title="Terminé — glisser une tâche en cours ici pour la clôturer"
+              onDragOver={(e) => {
+                onStatusBadgeDragOver('finished', e);
+                setDropBadge({ key: cellKey, to: 'finished' });
+              }}
+              onDragLeave={() => setDropBadge((cur) => (cur?.key === cellKey ? null : cur))}
+              onDrop={(e) => {
+                onStatusBadgeDrop('finished', e);
+                setDropBadge(null);
+              }}
+            >
               ✅ {stats.finished}
             </span>
           </div>
