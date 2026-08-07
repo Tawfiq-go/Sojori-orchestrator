@@ -36,6 +36,13 @@ type Props = {
   gamme: Gamme;
   /** Clic sur un repère → change la gamme et recalcule. */
   onGammeChange: (g: Gamme) => void;
+  /**
+   * Prix VISÉ par le PM (curseur doré). Distinct de `yourPrice`, qui est un
+   * CONSTAT : où le moteur vous place aujourd'hui. Ici c'est une INTENTION.
+   */
+  targetPrice: number;
+  /** Relâchement du curseur doré → nouveau prix visé (recalcul serveur). */
+  onTargetChange: (price: number) => void;
   busy?: boolean;
 };
 
@@ -104,7 +111,8 @@ export default function DistributionChart({ scale, comps, yourPrice, compsetSize
   const [dragging, setDragging] = useState(false);
   const [ghost, setGhost] = useState<number | null>(null);
 
-  const dragYou = (e: React.PointerEvent<SVGGElement>) => {
+  /** Glissement du curseur DORÉ (la cible). Le noir, lui, ne bouge jamais. */
+  const dragTarget = (e: React.PointerEvent<SVGGElement>) => {
     if (busy) return;
     const svg = e.currentTarget.ownerSVGElement;
     if (!svg) return;
@@ -123,15 +131,17 @@ export default function DistributionChart({ scale, comps, yourPrice, compsetSize
       window.removeEventListener('pointerup', up);
       setDragging(false);
       setGhost(null);
-      const next = nearestGamme(toPrice(ev.clientX));
-      if (next !== gamme) onGammeChange(next);
+      // Un seul appel serveur, au relâchement : le prix visé. La gamme suit
+      // (elle sert de repère de lecture), mais c'est le prix qui fait foi.
+      onTargetChange(toPrice(ev.clientX));
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   };
 
   // Position affichée : l'aperçu pendant le geste, le vrai prix sinon.
-  const shownPrice = ghost ?? yourPrice;
+  /** Position du curseur doré : aperçu pendant le geste, cible sinon. */
+  const shownTarget = ghost ?? targetPrice;
 
 
   // Position du bien vs sa propre échelle → phrase de lecture immédiate.
@@ -151,7 +161,7 @@ export default function DistributionChart({ scale, comps, yourPrice, compsetSize
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 1 }}>
         <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink }}>Le marché, et vous dessus</Typography>
         <Typography sx={{ ...kickerSx, color: T.ok }}>
-          {compsetSize} COMPARABLES · GLISSEZ VOTRE CURSEUR
+          {compsetSize} COMPARABLES · CLIQUEZ UNE GAMME OU GLISSEZ LE CURSEUR DORÉ
         </Typography>
       </Stack>
 
@@ -246,48 +256,31 @@ export default function DistributionChart({ scale, comps, yourPrice, compsetSize
           {/* ── Le curseur VOUS : le SEUL élément manipulable de ce graphique ──
               On le glisse ; au relâchement, la gamme dont le prix est le plus
               proche est sélectionnée. Les repères restent de simples jalons. */}
-          <g
-            onPointerDown={dragYou}
-            style={{ cursor: busy ? 'default' : 'ew-resize', touchAction: 'none' }}
-          >
-            {/* Zone d'accroche large : viser un trait de 2,5 px est impossible. */}
-            <rect
-              x={x(shownPrice) - 30}
-              y={BASE_Y - curveH - 26}
-              width={60}
-              height={curveH + 44}
-              fill="transparent"
-            />
+          {/* ── VOUS : un CONSTAT, pas une commande. Il n'est PAS glissable —
+              c'est là que le moteur vous place aujourd'hui, d'après vos
+              comparables. Pour bouger, on tire le curseur doré ci-dessous. */}
+          <g>
             <line
-              x1={x(shownPrice)}
+              x1={x(yourPrice)}
               y1={BASE_Y - curveH - 8}
-              x2={x(shownPrice)}
+              x2={x(yourPrice)}
               y2={BASE_Y + 4}
               stroke={T.ink}
               strokeWidth={2.5}
               style={{ pointerEvents: 'none' }}
             />
             <circle
-              cx={x(shownPrice)}
+              cx={x(yourPrice)}
               cy={BASE_Y - curveH - 8}
-              r={dragging ? 13 : 11}
+              r={9}
               fill={T.ink}
-              style={{ pointerEvents: 'none' }}
-            />
-            {/* Deux chevrons : signale que ça se tire latéralement. */}
-            <path
-              d={`M${x(shownPrice) - 3.5},${BASE_Y - curveH - 11.5} l-2.5,3.5 l2.5,3.5 M${x(shownPrice) + 3.5},${BASE_Y - curveH - 11.5} l2.5,3.5 l-2.5,3.5`}
-              stroke={T.card}
-              strokeWidth={1.4}
-              fill="none"
-              strokeLinecap="round"
               style={{ pointerEvents: 'none' }}
             />
           </g>
           {/* Légende du curseur — sous la ligne des valeurs, jamais dessus.
               Fond blanc pour rester lisible si un repère tombe juste derrière. */}
           <rect
-            x={x(shownPrice) - 62}
+            x={x(yourPrice) - 62}
             y={BASE_Y + 24}
             width={124}
             height={17}
@@ -296,19 +289,81 @@ export default function DistributionChart({ scale, comps, yourPrice, compsetSize
             fillOpacity={0.94}
           />
           <text
-            x={x(shownPrice)}
+            x={x(yourPrice)}
             y={BASE_Y + 36}
             textAnchor="middle"
             style={{ fontSize: 11, fontFamily: T.mono, fontWeight: 700, fill: T.ink }}
           >
-            VOUS · {shownPrice} MAD
+            VOUS · {yourPrice} MAD
           </text>
+
+          {/* ── VOTRE POSITIONNEMENT : le seul élément qu'on manipule ──────────
+              Curseur doré, glissable. Il porte l'INTENTION (« je veux être
+              là »), quand le noir porte le CONSTAT (« le moteur vous met là »).
+              Les deux se superposent tant que vous n'avez rien changé. */}
+          <g
+            onPointerDown={dragTarget}
+            style={{ cursor: busy ? 'default' : 'ew-resize', touchAction: 'none' }}
+          >
+            {/* Zone d'accroche large : viser un trait de 3 px est impossible. */}
+            <rect
+              x={x(shownTarget) - 30}
+              y={BASE_Y - 6}
+              width={60}
+              height={54}
+              fill="transparent"
+            />
+            <line
+              x1={x(shownTarget)}
+              y1={BASE_Y - curveH - 4}
+              x2={x(shownTarget)}
+              y2={BASE_Y + 16}
+              stroke={T.goldPure}
+              strokeWidth={3}
+              style={{ pointerEvents: 'none' }}
+            />
+            <circle
+              cx={x(shownTarget)}
+              cy={BASE_Y + 16}
+              r={dragging ? 12 : 10}
+              fill={T.goldPure}
+              stroke={T.card}
+              strokeWidth={2}
+              style={{ pointerEvents: 'none' }}
+            />
+            {/* Chevrons : dit « ça se tire » sans mode d'emploi. */}
+            <path
+              d={`M${x(shownTarget) - 3.5},${BASE_Y + 12.5} l-2.5,3.5 l2.5,3.5 M${x(shownTarget) + 3.5},${BASE_Y + 12.5} l2.5,3.5 l-2.5,3.5`}
+              stroke={T.ink}
+              strokeWidth={1.4}
+              fill="none"
+              strokeLinecap="round"
+              style={{ pointerEvents: 'none' }}
+            />
+            <text
+              x={x(shownTarget)}
+              y={BASE_Y + 46}
+              textAnchor="middle"
+              style={{
+                fontSize: 11,
+                fontFamily: T.mono,
+                fontWeight: 700,
+                fill: T.gold,
+                pointerEvents: 'none',
+              }}
+            >
+              VISÉ · {shownTarget} MAD
+            </text>
+          </g>
         </svg>
       </Box>
 
       <Typography sx={{ fontSize: 13, color: T.ink2, mt: 1.25, lineHeight: 1.5 }}>
-        Votre prix de ce soir est <b>{position}</b>. Les points sont vos concurrents réels, replacés
-        au niveau de qualité de votre bien.
+        <Box component="span" sx={{ color: T.ink, fontWeight: 700 }}>Noir</Box> = où vous êtes
+        aujourd'hui ({yourPrice} MAD, {position}).{' '}
+        <Box component="span" sx={{ color: T.gold, fontWeight: 700 }}>Doré</Box> = où vous voulez
+        être : cliquez une gamme ou tirez-le. Les points sont vos concurrents réels, replacés au
+        niveau de qualité de votre bien.
       </Typography>
     </Box>
   );
