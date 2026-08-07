@@ -1,5 +1,8 @@
 // ════════════════════════════════════════════════════════════════════════════
-// COMPSET OUVERT (mode Expert) — « qui sont mes concurrents, et pourquoi eux »
+// COMPSET OUVERT (mode Expert) — « quels biens composent mon marché, et pourquoi eux »
+// ⚠️ VOCABULAIRE : on dit « marché », JAMAIS « concurrents ». Le PM raisonne en
+// marché ; « concurrent » suggère qu'on épie des voisins nommément. Décision
+// produit — ne pas réintroduire le mot.
 // ────────────────────────────────────────────────────────────────────────────
 // Exigence du brief §4.2, absente de la maquette : le PM doit voir les biens
 // réels qui font son prix, et l'écart d'équipement (« eux ont un jacuzzi »).
@@ -23,7 +26,7 @@ export default function CompsTable({ comps }: { comps: PricingV2Comp[] }) {
   return (
     <Box sx={cardSx}>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 1.5 }}>
-        <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink }}>Vos concurrents</Typography>
+        <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink }}>Votre marché</Typography>
         <Typography sx={{ fontSize: 11.5, color: T.mut }}>
           triés par ressemblance avec votre bien
         </Typography>
@@ -84,7 +87,7 @@ export default function CompsTable({ comps }: { comps: PricingV2Comp[] }) {
                         key={a}
                         size="small"
                         label={`+ ${AMENITY_FR[a] ?? a}`}
-                        title={`Ce concurrent a ${AMENITY_FR[a] ?? a}, pas votre bien`}
+                        title={`Ce bien du marché a ${AMENITY_FR[a] ?? a}, pas le vôtre`}
                         sx={{ height: 20, fontSize: 10, bgcolor: T.warnBg, color: T.warn }}
                       />
                     ))}
@@ -93,7 +96,7 @@ export default function CompsTable({ comps }: { comps: PricingV2Comp[] }) {
                         key={a}
                         size="small"
                         label={`− ${AMENITY_FR[a] ?? a}`}
-                        title={`Votre bien a ${AMENITY_FR[a] ?? a}, pas ce concurrent`}
+                        title={`Votre bien a ${AMENITY_FR[a] ?? a}, pas celui-ci`}
                         sx={{ height: 20, fontSize: 10, bgcolor: T.okBg, color: T.ok }}
                       />
                     ))}
@@ -106,7 +109,7 @@ export default function CompsTable({ comps }: { comps: PricingV2Comp[] }) {
       </Box>
 
       <Typography sx={{ fontSize: 11.5, color: T.mut, mt: 1.5, lineHeight: 1.5 }}>
-        « À votre niveau » = ce que ce concurrent encaisserait avec la qualité de votre bien. C'est
+        « À votre niveau » = ce que ce bien encaisserait avec la qualité du vôtre. C'est
         cette valeur qui entre dans votre prix, pas son tarif brut.
       </Typography>
     </Box>

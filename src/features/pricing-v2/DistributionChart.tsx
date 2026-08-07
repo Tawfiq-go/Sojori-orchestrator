@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 // ÉCRAN SIGNATURE (mode Expert) — « Le marché, et vous dessus »
 // ────────────────────────────────────────────────────────────────────────────
-// La distribution des prix des VRAIS concurrents du bien, avec 4 repères
+// La distribution des prix RÉELS du marché du bien, avec 4 repères
 // nommés en langage business et le curseur du bien posé dessus.
 //
 // ⚠️ RÈGLES (agent futur) :
@@ -171,7 +171,7 @@ export default function DistributionChart({
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 1 }}>
         <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink }}>Le marché, et vous dessus</Typography>
         <Typography sx={{ ...kickerSx, color: T.ok }}>
-          {compsetSize} COMPARABLES · CLIQUEZ UNE GAMME OU GLISSEZ LE CURSEUR DORÉ
+          {compsetSize} BIENS DU MARCHÉ · CLIQUEZ UNE GAMME OU GLISSEZ LE CURSEUR DORÉ
         </Typography>
       </Stack>
 
@@ -246,7 +246,7 @@ export default function DistributionChart({
             );
           })}
 
-          {/* Les concurrents réels, un point chacun (hover = détail) */}
+          {/* Les biens réels du marché, un point chacun (hover = détail) */}
           {comps.map((c) => (
             <circle
               key={c.listingId}
@@ -372,7 +372,7 @@ export default function DistributionChart({
         <Box component="span" sx={{ color: T.ink, fontWeight: 700 }}>Noir</Box> = où vous êtes
         aujourd'hui ({yourPrice} MAD, {position}).{' '}
         <Box component="span" sx={{ color: T.gold, fontWeight: 700 }}>Doré</Box> = où vous voulez
-        être : cliquez une gamme ou tirez-le. Les points sont vos concurrents réels, replacés au
+        être : cliquez une gamme ou tirez-le. Les points sont les biens réels du marché, replacés au
         niveau de qualité de votre bien.
       </Typography>
     </Box>

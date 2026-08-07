@@ -49,7 +49,10 @@ export default function PriceTicket({
   const rows: Array<{ label: string; sub: string; value: number; delta?: string }> = [
     {
       label: 'Prix de base de votre bien',
-      sub: 'marché de vos comparables · votre positionnement · tendance · en MAD',
+      // Dit CE QUI est mesuré, pas seulement les ingrédients : c'est la ligne
+      // que le PM lit pour comprendre d'où sort le chiffre. Vocabulaire
+      // « marché », jamais « concurrents » (décision produit).
+      sub: 'ce que pratique le marché pour un bien comme le vôtre · votre positionnement · tendance',
       value: b.base,
     },
     {
