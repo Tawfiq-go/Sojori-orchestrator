@@ -232,6 +232,28 @@ function staffMatchesCityAccess(s: Staff, cityId: string, listingsInCity: Listin
   return listingsInCity.some((l) => listingIds.some((id) => String(id) === String(l.id)));
 }
 
+/**
+ * Annonces réellement accessibles à un staff, en libellés — affiché sous son
+ * nom dans le planning. « Toutes » quand l'accès n'est pas restreint (sentinel
+ * All, ou ni listing ni ville configurés = accès large historique).
+ */
+function staffListingLabels(
+  s: Staff,
+  listings: ListingOpt[],
+): { labels: string[]; all: boolean } {
+  const listingIds = s.allowedListingIds || [];
+  const cityIds = s.allowedCityIds || [];
+  if ((!listingIds.length && !cityIds.length) || hasAllAccess(listingIds) || hasAllAccess(cityIds)) {
+    return { labels: [], all: true };
+  }
+  const labels = listings
+    .filter((l) =>
+      staffMatchesListingAccess(s, String(l.id), l.cityId != null ? String(l.cityId) : null),
+    )
+    .map((l) => l.name);
+  return { labels, all: false };
+}
+
 function staffMatchesTaskType(s: Staff, taskType: string): boolean {
   const types = (s.allowedTaskTypes || []).map(String).filter(Boolean);
   if (!taskType) return true;
@@ -1157,6 +1179,21 @@ export default function TeamWeekView({
                         ? 'Autorisé · libre'
                         : 'Libre'}
                 </span>
+                {row.staff
+                  ? (() => {
+                      const access = staffListingLabels(row.staff, listings);
+                      const text = access.all
+                        ? 'Toutes les annonces'
+                        : access.labels.length
+                          ? access.labels.join(' · ')
+                          : 'Aucune annonce';
+                      return (
+                        <span className="twv-staff-listings" title={text}>
+                          🏠 {text}
+                        </span>
+                      );
+                    })()
+                  : null}
               </span>
             </button>
           )}
