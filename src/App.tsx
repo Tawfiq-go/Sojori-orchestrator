@@ -153,6 +153,7 @@ const PricingAuditPage = lazyWithReload(() =>
 );
 // Pricing v2 (nouveau moteur, mode shadow) — module GREENFIELD, zéro import de dynamic-pricing v1.
 const PricingV2Page = lazyWithReload(() => import('./features/pricing-v2/PricingV2Page'));
+const PricingV2PortfolioPage = lazyWithReload(() => import('./features/pricing-v2/PricingV2Portfolio'));
 const ChannelsPage = lazyWithReload(() =>
   import('./pages/ChannelsPage').then((module) => ({ default: module.ChannelsPage }))
 );
@@ -426,6 +427,8 @@ function App() {
               <Route path="/dynamic-pricing/bien/:listingId" element={<LazyRoute><DynamicPricingPage /></LazyRoute>} />
               <Route path="/dynamic-pricing/audit" element={<LazyRoute><PricingAuditPage /></LazyRoute>} />
               {/* Pricing v2 — bêta admin-only (proxy srv-admin /pricing-v2, RBAC côté back) */}
+              <Route path="/pricing-v2" element={<LazyRoute><PricingV2PortfolioPage /></LazyRoute>} />
+              <Route path="/pricing-v2/portefeuille" element={<Navigate to="/pricing-v2" replace />} />
               <Route path="/pricing-v2/bien/:listingId" element={<LazyRoute><PricingV2Page /></LazyRoute>} />
               <Route path="/catalogue/dynamic-pricing" element={<Navigate to="/dynamic-pricing/portefeuille" replace />} />
               <Route path="/catalogue/dynamic-pricing/portefeuille" element={<LazyRoute><DynamicPricingPage /></LazyRoute>} />
