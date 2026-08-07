@@ -552,18 +552,26 @@ th.twv-today .twv-day-num {
 
 .twv-day-kanban {
   display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  margin-bottom: 5px;
+  flex-wrap: nowrap;
+  gap: 2px;
+  margin-bottom: 4px;
 }
 .twv-kanban-tile {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  padding: 2px 5px;
-  border-radius: 5px;
+  padding: 1px 4px;
+  border-radius: 4px;
   background: #f1efe9;
   color: #4a463d;
   white-space: nowrap;
+  cursor: grab;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.twv-kanban-tile--drop {
+  outline: 2px dashed currentColor;
+  outline-offset: 1px;
+  transform: scale(1.12);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 .twv-kanban-tile--late {
   background: #fdeaea;
