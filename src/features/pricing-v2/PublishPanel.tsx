@@ -154,8 +154,9 @@ export default function PublishPanel({
             puis propagés à Airbnb, Booking et vos autres canaux.
           </Typography>
           <Typography sx={{ fontSize: 12.5, color: T.ink2, mt: 1.5, lineHeight: 1.6 }}>
-            Ne bougeront pas : les nuits <b>déjà vendues</b>, celles que vous avez <b>fermées</b>, et
-            celles dont vous avez <b>fixé le prix à la main</b>.
+            Les nuits déjà <b>vendues</b> ou <b>fermées</b> reçoivent aussi le nouveau prix (utile en
+            cas d'annulation), mais leur <b>disponibilité ne change jamais</b>. Les nuits dont vous
+            avez <b>fixé le prix à la main</b> ne sont pas touchées.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -165,7 +166,11 @@ export default function PublishPanel({
           <Button
             onClick={() => void doPush()}
             variant="contained"
-            sx={{ bgcolor: T.ink, '&:hover': { bgcolor: T.ink } }}
+            sx={{
+              bgcolor: T.gold,
+              color: '#FFF',
+              '&:hover': { bgcolor: T.goldPure },
+            }}
           >
             Publier
           </Button>
