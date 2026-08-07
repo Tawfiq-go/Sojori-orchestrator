@@ -77,6 +77,8 @@ export default function PricingV2Page() {
   const [market, setMarket] = useState<PricingV2Market | null>(null);
   const [ticketDay, setTicketDay] = useState<PricingV2Day | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Renseigné quand le calcul est refusé faute de prix de marché récent. */
+  const [stale, setStale] = useState<{ ageDays: number | null; maxAgeDays: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   // ── Sélection de plage au drag (consigne maquette : « glisser = plage ») ──
@@ -96,7 +98,16 @@ export default function PricingV2Page() {
         fetchPricingV2Preview(listingId),
         fetchPricingV2Config(listingId),
       ]);
-      if (!p.data.success) throw new Error(p.data.error || 'preview indisponible');
+      if (!p.data.success) {
+        // Prix de marché périmé : état métier, pas panne. On garde le détail
+        // pour l'afficher franchement au PM plutôt qu'un « indisponible ».
+        if (p.data.code === 'SNAPSHOT_STALE') {
+          setStale({ ageDays: p.data.ageDays ?? null, maxAgeDays: p.data.maxAgeDays ?? 7 });
+          throw new Error(p.data.error || 'prix de marché obsolète');
+        }
+        throw new Error(p.data.error || 'preview indisponible');
+      }
+      setStale(null);
       setResult(p.data.result);
       setConfig(c.data.config);
       // Secondaires : ne doivent jamais casser la page principale.
@@ -177,6 +188,24 @@ export default function PricingV2Page() {
     return (
       <Box sx={{ p: 6, textAlign: 'center', bgcolor: T.bg, minHeight: '100%' }}>
         <CircularProgress size={28} sx={{ color: T.goldPure }} />
+      </Box>
+    );
+  }
+  if (stale) {
+    return (
+      <Box sx={{ p: 4, maxWidth: 720, mx: 'auto', bgcolor: T.bg, minHeight: '100%' }}>
+        <Alert severity="error" sx={{ fontSize: 14 }}>
+          <b>Prix de marché obsolète — calcul arrêté.</b>
+          <Box sx={{ mt: 1 }}>
+            Les données de marché de ce bien datent de{' '}
+            <b>{stale.ageDays != null ? `${stale.ageDays} jours` : 'trop longtemps'}</b> (maximum{' '}
+            {stale.maxAgeDays} jours). Calculer dessus donnerait des prix crédibles mais faux.
+          </Box>
+          <Box sx={{ mt: 1 }}>
+            <b>Le calendrier n'est pas mis à jour</b> et aucun prix n'a été modifié. Relancez
+            « Estimation Sojori » sur ce bien, puis revenez ici.
+          </Box>
+        </Alert>
       </Box>
     );
   }

@@ -201,9 +201,16 @@ export async function fetchPricingV2Shadow(listingId: string) {
 }
 
 export async function fetchPricingV2Preview(listingId: string) {
-  return apiClient.get<{ success: boolean; asOfDate: string; result: PricingV2Result; error?: string }>(
-    `${BASE}/preview/${listingId}`,
-  );
+  return apiClient.get<{
+    success: boolean;
+    asOfDate: string;
+    result: PricingV2Result;
+    error?: string;
+    /** 'SNAPSHOT_STALE' = prix de marché trop vieux, calcul volontairement refusé. */
+    code?: string;
+    ageDays?: number | null;
+    maxAgeDays?: number;
+  }>(`${BASE}/preview/${listingId}`);
 }
 export async function fetchPricingV2Config(listingId: string) {
   return apiClient.get<{ success: boolean; config: PricingV2Config }>(`${BASE}/config/${listingId}`);
