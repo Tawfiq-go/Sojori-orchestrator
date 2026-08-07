@@ -168,15 +168,15 @@ export default function DistributionChart({
 
   return (
     <Box sx={cardSx}>
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 1 }}>
+      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', mb: 1, flexWrap: 'wrap', gap: 0.5 }}>
         <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink }}>Le marché, et vous dessus</Typography>
-        <Typography sx={{ ...kickerSx, color: T.ok }}>
+        <Typography sx={{ ...kickerSx, color: T.mut }}>
           {/* ⚠️ On n'affiche PAS le nombre de biens du compset. Le client n'a
               pas à savoir sur combien d'annonces on s'appuie : c'est notre
               méthode, et un chiffre bas ferait douter du prix sans rien lui
               apprendre d'utile. `compsetSize` sert uniquement en interne (seuil
               de faible confiance). */}
-          LE MARCHÉ AUTOUR DE VOUS · CLIQUEZ UNE GAMME OU GLISSEZ LE CURSEUR DORÉ
+          CHOISISSEZ VOTRE POSITIONNEMENT
         </Typography>
       </Stack>
 
@@ -373,12 +373,58 @@ export default function DistributionChart({
         </svg>
       </Box>
 
-      <Typography sx={{ fontSize: 13, color: T.ink2, mt: 1.25, lineHeight: 1.5 }}>
-        <Box component="span" sx={{ color: T.ink, fontWeight: 700 }}>Noir</Box> = où vous êtes
-        aujourd'hui ({yourPrice} MAD, {position}).{' '}
-        <Box component="span" sx={{ color: T.gold, fontWeight: 700 }}>Doré</Box> = où vous voulez
-        être : cliquez une gamme ou tirez-le. Les points sont les biens réels du marché, replacés au
-        niveau de qualité de votre bien.
+      {/* 4 boutons de gamme — même effet que cliquer un repère sur la courbe,
+          mais sans ambiguïté sur ce qui est cliquable (retour client : la
+          courbe seule ne se lisait pas comme une commande). Navigation directe
+          d'un bout à l'autre (Économique → Luxe) en un clic, pas de flèches
+          pas-à-pas qui obligeraient à passer par les paliers intermédiaires. */}
+      <Stack direction="row" spacing={1} sx={{ mt: 1.75 }}>
+        {markers.map((m) => {
+          const isActive = m.key === gamme;
+          return (
+            <Box
+              key={m.key}
+              component="button"
+              type="button"
+              disabled={busy}
+              onClick={() => onGammeChange(m.key)}
+              sx={{
+                all: 'unset',
+                flex: 1,
+                cursor: busy ? 'default' : 'pointer',
+                textAlign: 'center',
+                border: isActive ? `1.5px solid ${T.goldPure}` : `1.5px solid ${T.line}`,
+                bgcolor: isActive ? T.goldBg : T.card,
+                borderRadius: `${T.radius}px`,
+                py: 1,
+                px: 0.5,
+                transition: 'border-color .15s, background-color .15s',
+              }}
+            >
+              <Typography sx={{ fontWeight: 700, fontSize: 12.5, color: T.ink }}>
+                {m.label}
+              </Typography>
+              <Typography
+                sx={{
+                  fontFamily: T.mono,
+                  fontSize: 12.5,
+                  fontWeight: 750,
+                  color: isActive ? T.gold : T.ink2,
+                  mt: 0.25,
+                }}
+              >
+                {m.value} MAD
+              </Typography>
+            </Box>
+          );
+        })}
+      </Stack>
+
+      <Typography sx={{ fontSize: 12.5, color: T.ink2, mt: 1.25, lineHeight: 1.5 }}>
+        Vous êtes <Box component="span" sx={{ color: T.ink, fontWeight: 700 }}>{position}</Box>.
+        Cliquez une gamme ci-dessus, ou tirez le repère{' '}
+        <Box component="span" sx={{ color: T.gold, fontWeight: 700 }}>doré</Box> sur la courbe pour
+        viser un prix précis.
       </Typography>
     </Box>
   );
