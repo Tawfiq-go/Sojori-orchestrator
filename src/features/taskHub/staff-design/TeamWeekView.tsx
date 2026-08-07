@@ -20,8 +20,7 @@ import type { Staff } from './types';
 import { labelForTaskTypeId } from './fulltaskTaskTypes';
 import './teamWeekView.css';
 
-const WINDOW_DAYS_SIMPLE = 15;
-const WINDOW_DAYS_ENRICHED = 15;
+const WINDOW_DAYS = 15;
 
 const CANCELLED_STATUSES = new Set(['CANCELLED_ADMIN', 'CANCELLED_CUSTOMER', 'ARCHIVED']);
 const MAX_CHIPS_COLLAPSED = 3;
@@ -285,9 +284,6 @@ export default function TeamWeekView({
   onOpenStaff,
 }: Props) {
   const navigate = useNavigate();
-  /** Simple = 15 jours compacts (existant) · Enrichi = 7 jours, mini-kanban 4 stats par cellule. */
-  const [enriched, setEnriched] = useState(false);
-  const WINDOW_DAYS = enriched ? WINDOW_DAYS_ENRICHED : WINDOW_DAYS_SIMPLE;
   const [startDate, setStartDate] = useState<Date>(() => startOfDay(new Date()));
   const [tasks, setTasks] = useState<TeamTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -985,10 +981,11 @@ export default function TeamWeekView({
       );
     }
 
-    // Mode enrichi : 3 colonnes kanban DANS la cellule (Attente début / Attente
-    // fin / Terminé). Chaque colonne est une zone de dépôt large — glisser une
-    // tâche d'une colonne à la suivante change son statut.
-    if (enriched && !row.unassigned) {
+    // 3 colonnes kanban DANS la cellule (À démarrer / En cours / Terminé).
+    // Chaque colonne est une zone de dépôt large — glisser une tâche d'une
+    // colonne à la suivante change son statut. La ligne « À assigner » garde
+    // l'affichage compact (pas de statut staff à piloter).
+    if (!row.unassigned) {
       const COLS = [
         { to: 'waiting_start' as const, emoji: '▶️', label: 'À démarrer', cls: 'waiting-start' },
         { to: 'waiting_finish' as const, emoji: '⏳', label: 'En cours', cls: 'waiting-finish' },
@@ -1164,8 +1161,13 @@ export default function TeamWeekView({
             </button>
           )}
         </td>
-        {dayKeys.map((dk) => (
-          <td key={dk} className={`twv-day-cell${dk === todayKey ? ' twv-today' : ''}`}>
+        {dayKeys.map((dk, i) => (
+          <td
+            key={dk}
+            className={`twv-day-cell${dk === todayKey ? ' twv-today' : ''}${
+              [0, 6].includes(days[i].getDay()) ? ' twv-weekend' : ''
+            }`}
+          >
             {renderCell(row, dk)}
           </td>
         ))}
@@ -1174,27 +1176,9 @@ export default function TeamWeekView({
   };
 
   return (
-    <div className={`twv-root${enriched ? ' twv-enriched' : ''}`}>
+    <div className="twv-root twv-enriched">
       <div className="twv-toolbar">
         <div className="twv-toolbar-left">
-          <div className="twv-mode-seg" role="group" aria-label="Mode d'affichage">
-            <button
-              type="button"
-              className={`twv-mode-btn${!enriched ? ' on' : ''}`}
-              onClick={() => setEnriched(false)}
-              title="15 jours, vue compacte"
-            >
-              Simple
-            </button>
-            <button
-              type="button"
-              className={`twv-mode-btn${enriched ? ' on' : ''}`}
-              onClick={() => setEnriched(true)}
-              title="7 jours, stats tâches/heures/coût/retards par jour et par staff"
-            >
-              📊 Enrichi
-            </button>
-          </div>
           <label className="twv-listing-filter">
             <span>Ville</span>
             <select
