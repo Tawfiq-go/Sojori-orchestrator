@@ -198,7 +198,9 @@ export function MaJourneeDashboard() {
                 <span className="bar" />
                 <h2>Arrivées</h2>
                 <span className="cnt">{model.arrivals.length}</span>
-                <span className="hint">prête = heure confirmée + enregistré + logement propre</span>
+                <span className="hint">
+                  Arrivé = déclaré · Attendu = pas encore · prête = heure + enregistré + propre
+                </span>
               </header>
               {model.arrivals.length === 0 ? (
                 <div className="empty">

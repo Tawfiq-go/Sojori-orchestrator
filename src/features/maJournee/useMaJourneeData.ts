@@ -17,6 +17,7 @@ import { resolveOtaListLastMessage } from '../../components/unified-inbox/otaExc
 import { isOtaUnreplied } from '../../components/unified-inbox/otaThreadFilters';
 import { isWaUnreplied } from '../../components/unified-inbox/waThreadFilters';
 import { inboxMessagePreview } from '../../components/unified-inbox/formatInboxMessageText';
+import { presenceMetaFromReservation } from '../../utils/reservationPresence';
 
 const UNASSIGNED = 'Non assigné';
 
@@ -195,6 +196,8 @@ function mapArrival(r: Reservation, cleanMap: Map<string, string>): StayRow {
   const lid = listingIdOf(r);
   const regOk = isRegistered(r);
   const clean = cleanLabel(cleanMap.get(lid));
+  const presence = presenceMetaFromReservation(r);
+  const arrived = presence.label === 'Arrivé';
   const n = nightsBetween(r.arrivalDate, r.departureDate);
   const meta = [listingNameOf(r), n ? `${n} nuit${n > 1 ? 's' : ''}` : null, channelOf(r)]
     .filter(Boolean)
@@ -210,6 +213,10 @@ function mapArrival(r: Reservation, cleanMap: Map<string, string>): StayRow {
     guestName: r.guestName || 'Voyageur',
     meta,
     checks: [
+      {
+        cls: arrived ? 'ok' : 'no',
+        text: arrived ? '✓ Arrivé' : presence.label === 'Attendu' ? 'Attendu' : presence.label,
+      },
       {
         cls: hourOk ? 'ok' : 'no',
         text: hourOk ? `✓ ${time || ''} confirmée`.trim() : 'Heure non confirmée',
@@ -561,15 +568,21 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
       let ready = 0;
       let hourTbd = 0;
       let dirty = 0;
+      let attendu = 0;
+      let arrived = 0;
       for (const a of arrivals) {
         const hourOk = !a.timeTbd;
         const regOk = a.checks.some((c) => c.text.includes('Enregistré') && c.cls === 'ok');
         const cleanOk = a.checks.some((c) => c.text.includes('Propre') && c.cls === 'ok');
+        if (a.checks.some((c) => c.text === '✓ Arrivé')) arrived += 1;
+        else if (a.checks.some((c) => c.text === 'Attendu')) attendu += 1;
         if (hourOk && regOk && cleanOk) ready += 1;
         if (!hourOk) hourTbd += 1;
         if (a.checks.some((c) => c.cls === 'bad')) dirty += 1;
       }
       const arrivalDetail = [
+        attendu ? `${attendu} attendu${attendu > 1 ? 's' : ''}` : null,
+        arrived ? `${arrived} arrivé${arrived > 1 ? 's' : ''}` : null,
         ready ? `${ready} prête${ready > 1 ? 's' : ''}` : null,
         hourTbd ? `${hourTbd} heure à confirmer` : null,
         dirty ? `${dirty} logement${dirty > 1 ? 's' : ''} sale${dirty > 1 ? 's' : ''}` : null,
