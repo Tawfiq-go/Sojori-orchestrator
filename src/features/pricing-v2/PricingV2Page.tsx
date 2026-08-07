@@ -25,6 +25,7 @@ import {
   Box,
   Chip,
   CircularProgress,
+  Slider,
   Stack,
   Switch,
   TextField,
@@ -64,10 +65,9 @@ const MODE_LABELS: Record<string, { label: string; sub: string }> = {
 
 /** Mois affichés au calendrier, EN ENTIER et sans défilement (le moteur en
  *  calcule 6 — cf. HORIZON_DAYS = 182 côté engine). */
-// 6 mois chargés ; 4 tiennent dans le cadre, les suivants s'atteignent en
-// faisant défiler À L'INTÉRIEUR du bloc (la page ne bouge pas).
+// 6 mois = les 182 jours que le moteur renvoie. Affichés sur deux colonnes,
+// ils tiennent tous à l'écran : plus de zone défilante interne.
 const CALENDAR_MONTHS = 6;
-const CALENDAR_VISIBLE_MONTHS = 4;
 
 export default function PricingV2Page() {
   const { listingId } = useParams<{ listingId: string }>();
@@ -339,6 +339,33 @@ export default function PricingV2Page() {
             </Box>{' '}
             (prix d'appel → top 10 %)
           </Typography>
+
+          {/* ── Orphan gaps ── Le réglage était en base mais sans interface :
+              -20 % s'appliquait sans que le PM puisse le voir ni le changer. */}
+          <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${T.line2}` }}>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <Typography sx={{ ...kickerSx }}>ORPHAN GAPS</Typography>
+              <Typography sx={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.ink }}>
+                {config?.gapAdjustPct ?? -20} %
+              </Typography>
+            </Stack>
+            <Slider
+              size="small"
+              min={-50}
+              max={0}
+              step={5}
+              value={config?.gapAdjustPct ?? -20}
+              disabled={saving}
+              marks={[{ value: -20, label: 'défaut' }]}
+              onChangeCommitted={(_, v) => void patch({ gapAdjustPct: v as number })}
+              sx={{ color: T.goldPure, mt: 0.5 }}
+            />
+            <Typography sx={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.5 }}>
+              Une nuit ou deux coincées entre deux réservations, plus courtes que votre minimum de
+              séjour : invendables en l'état. Le minimum est abaissé à la taille du trou et le prix
+              ajusté d'autant, pour les remplir.
+            </Typography>
+          </Box>
         </Box>
 
           {/* Interrupteur du calcul nocturne — remonté ici : il décide si le
@@ -581,7 +608,7 @@ export default function PricingV2Page() {
               <Box component="span" sx={{ color: T.line }}>■</Box> bloqué ·{' '}
               <Box component="span" sx={{ color: T.goldPure }}>■</Box> à vendre ·{' '}
               <Box component="span" sx={{ color: T.crit }}>▁</Box> borné ·{' '}
-              <Box component="span" sx={{ color: T.crit }}>▢</Box> trou invendable
+              <Box component="span" sx={{ color: T.crit }}>▢</Box> orphan gap
             </Typography>
           </Stack>
           {/* Nuits vendues : quel prix afficher ? (maquette : « Prix actuels / Prix à la résa »)
@@ -643,13 +670,15 @@ export default function PricingV2Page() {
           <Box
             onMouseLeave={() => setDragging(false)}
             sx={{
-              // Hauteur en unités de VUE, pas en pixels figés : les cellules
-              // s'élargissent avec la colonne (donc grandissent en hauteur),
-              // et 4 mois ne tiendraient plus dans un plafond calculé pour des
-              // cellules étroites.
-              maxHeight: `min(${CALENDAR_VISIBLE_MONTHS * 250}px, 78vh)`,
-              overflowY: 'auto',
-              overscrollBehavior: 'contain',
+              // Les 6 mois sur DEUX colonnes : empilés verticalement, il fallait
+              // faire défiler pour en voir plus de deux. Sur écran large ils
+              // tiennent côte à côte, donc plus de scroll du tout.
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+              gap: 2,
+              alignItems: 'start',
+              // Plus de plafond de hauteur : la grille 2 colonnes divise déjà la
+              // hauteur par deux. Le scroll interne masquait les derniers mois.
               pr: 0.5,
             }}
           >
@@ -734,7 +763,7 @@ export default function PricingV2Page() {
                         }}
                         title={
                           gap
-                            ? `${d.date} — TROU de ${gap.size} nuit${gap.size > 1 ? 's' : ''} entre deux réservations.` +
+                            ? `${d.date} — ORPHAN GAP de ${gap.size} nuit${gap.size > 1 ? 's' : ''} entre deux réservations.` +
                               ` Invendable avec un minimum de ${result.minStay} nuits :` +
                               ` minimum abaissé à ${gap.minStay} et prix ajusté de ${gap.adjustPct} % → ${d.price} MAD`
                             : booked
