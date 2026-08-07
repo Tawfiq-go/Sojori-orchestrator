@@ -469,9 +469,15 @@ export function ReservationsPage() {
         sortField: 'createdAt',
         sortOrder: 'desc',
         filterOwnerId: requestOwnerId || undefined,
-        ...(urlFilter ? { filter: urlFilter } : {}),
+        // Filtre date fort : pas d’élargissement via cancellationDate
+        ...(urlFilter ? { filter: urlFilter, strictArrivalWindow: true } : {}),
         ...(createdToday && !urlFilter
-          ? { dateType: 'creation' as const, startDate: createdStart, endDate: createdEnd }
+          ? {
+              dateType: 'creation' as const,
+              startDate: createdStart,
+              endDate: createdEnd,
+              strictArrivalWindow: true,
+            }
           : {}),
       });
 
@@ -603,7 +609,7 @@ export function ReservationsPage() {
     const depToday = reservations.filter(r => moment(r.departureDate).isSame(t, 'day')).length;
     const present = reservations.filter((r) => {
       const p = presenceMetaFromReservation(r as never);
-      return p.label === 'Présent' || p.label === 'Départ auj.';
+      return p.label === 'Arrivé' || (p.label === 'Séjour' && p.declared);
     }).length;
     const pending  = reservations.filter(r => r.status === 'Pending').length;
     return { arrToday, depToday, present, pending };
@@ -1454,13 +1460,19 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                       label={p.label}
                       size="small"
                       title={
-                        p.label === 'Présent' || p.label === 'Départ auj.'
-                          ? 'Arrivée déclarée (WhatsApp / ops)'
-                          : p.label === 'En séjour'
-                            ? 'Calendrier : séjour en cours, arrivée pas encore déclarée'
-                            : p.label === "Aujourd'hui"
-                              ? 'Check-in aujourd’hui — en attente de déclaration'
-                              : undefined
+                        p.label === 'Arrivé'
+                          ? 'Arrivée déclarée (WhatsApp)'
+                          : p.label === 'Parti'
+                            ? 'Départ déclaré (WhatsApp)'
+                            : p.label === 'Attendu'
+                              ? 'Check-in aujourd’hui — pas encore déclaré'
+                              : p.label === 'Départ'
+                                ? 'Check-out aujourd’hui — avant 11h, pas encore déclaré'
+                                : p.label === 'Retard'
+                                  ? 'Check-out aujourd’hui — après 11h, départ non déclaré'
+                                  : p.label === 'Séjour'
+                                    ? 'Ni check-in ni check-out aujourd’hui'
+                                    : undefined
                       }
                       sx={{
                       bgcolor: p.bg, color: p.color, fontWeight: 600, fontSize: 11, height: 22,

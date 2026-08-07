@@ -1,10 +1,14 @@
 /**
- * Présence ops (liste réservations / inbox) — pas le statut OTA legacy.
+ * Présence ops — règles simples (clients PM) :
  *
- * Source de vérité :
- * - calendrier arrivalDate / departureDate
- * - déclaration guest WhatsApp → actualArrivalTime / actualDepartureTime (fulltask)
- * - repli customerStatus (arrived / on_site / departed)
+ * Filtre liste (ailleurs) = date arrival/departure uniquement.
+ * Ici, colonne Présence :
+ * - Arrivé / Parti = uniquement déclaration (actualArrivalTime / actualDepartureTime)
+ * - Jour check-in sans déclaration → Attendu
+ * - Jour check-out sans déclaration, ≥ 11h locale → Retard
+ * - Jour check-out sans déclaration, < 11h → Départ
+ * - Ni check-in ni check-out → Séjour
+ * - Avant check-in → À venir
  */
 import type { Reservation } from '../types/reservations.types';
 
@@ -13,9 +17,12 @@ export type PresenceTone = 'muted' | 'info' | 'warning' | 'success' | 'error';
 export type PresenceMeta = {
   label: string;
   tone: PresenceTone;
-  /** Déclaré via flow arrivée/départ (pas seulement le calendrier). */
+  /** true si Arrivé/Parti vient d’une déclaration guest. */
   declared: boolean;
 };
+
+/** Heure limite départ déclarée (heure murale locale navigateur / Casablanca). */
+export const DEPARTURE_LATE_HOUR = 11;
 
 function startOfLocalDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -28,45 +35,66 @@ function dayOf(v?: Date | string | null): Date | null {
   return startOfLocalDay(d);
 }
 
-export function presenceMetaFromReservation(r: Reservation): PresenceMeta {
+function sameDay(a: Date, b: Date): boolean {
+  return a.getTime() === b.getTime();
+}
+
+export function presenceMetaFromReservation(
+  r: Reservation,
+  nowInput: Date = new Date(),
+): PresenceMeta {
   const status = String(r.status || '').toLowerCase();
   if (status.includes('cancel')) {
     return { label: 'Annulé', tone: 'muted', declared: false };
   }
-  if (status === 'completed') {
-    return { label: 'Complété', tone: 'success', declared: Boolean(r.actualDepartureTime) };
-  }
 
   const arr = dayOf(r.arrivalDate);
   const dep = dayOf(r.departureDate);
-  const today = startOfLocalDay(new Date());
-  const cs = String(r.customerStatus || '').toLowerCase();
-  const arrived = Boolean(r.actualArrivalTime) || cs === 'arrived' || cs === 'on_site';
-  const departed = Boolean(r.actualDepartureTime) || cs === 'departed';
+  const today = startOfLocalDay(nowInput);
+  const now = nowInput;
 
-  if (departed || (dep && today > dep)) {
-    return { label: 'Parti', tone: 'muted', declared: Boolean(r.actualDepartureTime) };
+  const arrivalDeclared = Boolean(r.actualArrivalTime);
+  const departureDeclared = Boolean(r.actualDepartureTime);
+
+  if (departureDeclared) {
+    return { label: 'Parti', tone: 'muted', declared: true };
   }
+
   if (arr && today < arr) {
-    return { label: 'Attendu', tone: 'info', declared: false };
+    return { label: 'À venir', tone: 'info', declared: false };
   }
-  if (arr && today.getTime() === arr.getTime() && !arrived) {
-    return { label: "Aujourd'hui", tone: 'warning', declared: false };
+
+  if (dep && today > dep) {
+    return { label: 'Terminé', tone: 'muted', declared: arrivalDeclared };
   }
-  if (arrived && dep && today.getTime() === dep.getTime()) {
-    return { label: 'Départ auj.', tone: 'warning', declared: true };
+
+  const isArrivalDay = Boolean(arr && sameDay(today, arr));
+  const isDepartureDay = Boolean(dep && sameDay(today, dep));
+
+  // Jour de départ (prioritaire sur le jour d’arrivée si même jour)
+  if (isDepartureDay && !departureDeclared) {
+    const past11 = now.getHours() >= DEPARTURE_LATE_HOUR;
+    return past11
+      ? { label: 'Retard', tone: 'error', declared: false }
+      : { label: 'Départ', tone: 'warning', declared: false };
   }
-  if (arrived && dep && today < dep) {
-    return { label: 'Présent', tone: 'success', declared: true };
+
+  if (isArrivalDay) {
+    if (arrivalDeclared) {
+      return { label: 'Arrivé', tone: 'success', declared: true };
+    }
+    return { label: 'Attendu', tone: 'warning', declared: false };
   }
-  if (arrived) {
-    return { label: 'Présent', tone: 'success', declared: true };
+
+  // Ni check-in ni check-out aujourd’hui
+  if (arr && dep && today > arr && today < dep) {
+    if (arrivalDeclared) {
+      return { label: 'Séjour', tone: 'success', declared: true };
+    }
+    return { label: 'Séjour', tone: 'info', declared: false };
   }
-  // Calendrier dit « sur place » mais pas encore déclaré (WhatsApp / customerStatus)
-  if (arr && dep && today >= arr && today <= dep) {
-    return { label: 'En séjour', tone: 'info', declared: false };
-  }
-  return { label: 'Attendu', tone: 'info', declared: false };
+
+  return { label: 'Séjour', tone: 'info', declared: false };
 }
 
 export function presenceStyles(tone: PresenceTone): { bg: string; color: string } {

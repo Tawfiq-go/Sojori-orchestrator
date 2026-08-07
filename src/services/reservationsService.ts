@@ -256,17 +256,18 @@ class ReservationsService {
     };
 
     switch (filter) {
+      /* Jour exact : start = end (le backend élargit à 00:00→23:59 UTC). */
       case 'CHECKIN_TODAY':
         return {
           dateType: 'arrival',
           startDate: formatDate(today),
-          endDate: formatDate(tomorrow),
+          endDate: formatDate(today),
         };
       case 'CHECKIN_TOMORROW':
         return {
           dateType: 'arrival',
           startDate: formatDate(tomorrow),
-          endDate: formatDate(new Date(tomorrow.getTime() + 24 * 60 * 60 * 1000)),
+          endDate: formatDate(tomorrow),
         };
       case 'CHECKIN_7DAYS':
         return {
@@ -278,13 +279,13 @@ class ReservationsService {
         return {
           dateType: 'departure',
           startDate: formatDate(today),
-          endDate: formatDate(tomorrow),
+          endDate: formatDate(today),
         };
       case 'CHECKOUT_TOMORROW':
         return {
           dateType: 'departure',
           startDate: formatDate(tomorrow),
-          endDate: formatDate(new Date(tomorrow.getTime() + 24 * 60 * 60 * 1000)),
+          endDate: formatDate(tomorrow),
         };
       case 'CHECKOUT_7DAYS':
         return {
@@ -296,7 +297,7 @@ class ReservationsService {
         return {
           dateType: 'arrival',
           startDate: formatDate(today),
-          endDate: formatDate(tomorrow),
+          endDate: formatDate(today),
         };
     }
   }
