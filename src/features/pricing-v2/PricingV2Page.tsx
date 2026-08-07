@@ -31,6 +31,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { useAuth } from '../../hooks/useAuth';
+import { hasAdminAccess } from '../../utils/rbac.utils';
 import CompsTable from './CompsTable';
 import PublishPanel from './PublishPanel';
 import PacingPanel, { PACING_DEFAULTS, type PacingSettings } from './PacingPanel';
@@ -82,6 +84,10 @@ const CALENDAR_MONTHS = 6;
 
 export default function PricingV2Page() {
   const { listingId } = useParams<{ listingId: string }>();
+  const { user } = useAuth();
+  // Mécanique du calcul nocturne (shadow/AirROI) = admin only, cf. DynamicPricingPage.
+  // L'owner ne doit ni voir ni savoir que ce calcul existe (Tawfiq, 07/08/2026).
+  const isPlatformAdmin = hasAdminAccess(user?.role);
   const [expert, setExpert] = useState(false);
   const [result, setResult] = useState<PricingV2Result | null>(null);
   const [config, setConfig] = useState<PricingV2Config | null>(null);
@@ -353,24 +359,27 @@ export default function PricingV2Page() {
           </Box>
 
           {/* Interrupteur du calcul nocturne — remonté ici : il décide si le
-              prix ci-contre est recalculé chaque nuit. */}
-          <Box sx={{ ...cardSx, opacity: saving ? 0.55 : 1, transition: 'opacity .15s' }}>
-            <Typography sx={{ ...kickerSx, mb: 1 }}>CALCUL NOCTURNE (SHADOW)</Typography>
-            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography sx={{ fontSize: 13.5, color: T.ink }}>
-                {config?.shadowEnabled ? 'Activé — historisé chaque nuit' : 'Désactivé'}
+              prix ci-contre est recalculé chaque nuit. Admin only : l'owner ne
+              doit ni voir ni savoir que ce mécanisme (shadow/AirROI) existe. */}
+          {isPlatformAdmin ? (
+            <Box sx={{ ...cardSx, opacity: saving ? 0.55 : 1, transition: 'opacity .15s' }}>
+              <Typography sx={{ ...kickerSx, mb: 1 }}>CALCUL NOCTURNE (SHADOW)</Typography>
+              <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography sx={{ fontSize: 13.5, color: T.ink }}>
+                  {config?.shadowEnabled ? 'Activé — historisé chaque nuit' : 'Désactivé'}
+                </Typography>
+                <Switch
+                  checked={config?.shadowEnabled ?? false}
+                  disabled={saving}
+                  onChange={(e) => void patch({ shadowEnabled: e.target.checked })}
+                />
+              </Stack>
+              <Typography sx={{ fontSize: 11.5, color: T.ink2, mt: 0.75, lineHeight: 1.5 }}>
+                Le calcul tourne chaque nuit et conserve les prix. Leur envoi vers vos canaux se
+                règle ci-dessous.
               </Typography>
-              <Switch
-                checked={config?.shadowEnabled ?? false}
-                disabled={saving}
-                onChange={(e) => void patch({ shadowEnabled: e.target.checked })}
-              />
-            </Stack>
-            <Typography sx={{ fontSize: 11.5, color: T.ink2, mt: 0.75, lineHeight: 1.5 }}>
-              Le calcul tourne chaque nuit et conserve les prix. Leur envoi vers vos canaux se
-              règle ci-dessous.
-            </Typography>
-          </Box>
+            </Box>
+          ) : null}
 
           {/* Publication réelle — ne s'affiche que pour un propriétaire autorisé
               (déploiement progressif). Le composant interroge lui-même son
