@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import './staffDesign.css';
 import { getStaffStats, type StaffPeriodStats } from '../../../services/fulltaskApi';
+import DayTimeline from './DayTimeline';
 import type { Staff, ContractType } from './types';
 import {
   STAFF_TASK_PILLS,
@@ -691,6 +692,8 @@ export default function StaffPageView({
           );
         })()}
       </div>
+
+      {statsPeriod === 'day' && <DayTimeline staff={staff} />}
 
       <div className="list-h" style={{ marginTop: 6 }}>
         <div className="filters">
