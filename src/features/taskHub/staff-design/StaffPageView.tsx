@@ -167,6 +167,7 @@ export default function StaffPageView({
   const [deleting, setDeleting] = useState(false);
   /** Quel panneau accès est ouvert (null = rien). Villes + listings se cumulent en DB. */
   const [accessPanel, setAccessPanel] = useState<AccessPanel>(null);
+  const [ratesOpen, setRatesOpen] = useState(false);
   /** Filtre ville dans le panneau « Par listing » uniquement. */
   const [listingCityFilter, setListingCityFilter] = useState<string | null>(null);
   /** Jour sélectionné pour éditer ses créneaux (null = panneau fermé). */
@@ -1172,66 +1173,92 @@ export default function StaffPageView({
               )}
               {form.contractType === 'freelance' && (
               <div className="field">
-                <div className="field-label">
-                  Tarifs (MAD)
-                  <span className="hint">Prix par activité — ex. ménage 100 MAD</span>
-                </div>
+                <button
+                  type="button"
+                  className="field-label collapse-toggle"
+                  onClick={() => setRatesOpen((o) => !o)}
+                  style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  <span>
+                    Tarifs (MAD)
+                    <span className="hint">Prix par activité — ex. ménage 100 MAD</span>
+                  </span>
+                  <span className={`collapse-caret${ratesOpen ? ' open' : ''}`}>▾</span>
+                </button>
+                {ratesOpen && (
+                <>
                 <div className="pricing-grid">
                   {STAFF_TASK_PILLS.filter(
                     (p) => form.rates?.[p.key as keyof typeof form.rates] != null,
-                  ).map((p) => (
-                    <div key={p.key} className="price-row">
-                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>
-                        {p.emoji} {p.label}
-                      </span>
-                      <input
-                        className="input"
-                        type="number"
-                        min={0}
-                        value={form.rates?.[p.key as keyof typeof form.rates] ?? ''}
-                        onChange={(e) =>
-                          patchForm({
-                            rates: {
-                              ...form.rates,
-                              [p.key]: Number(e.target.value) || 0,
-                            },
-                          })
-                        }
-                      />
-                      <select
-                        className="input"
-                        style={{ width: 'auto', fontSize: 12 }}
-                        value={form.ratesMode?.[p.key] ?? 'per_task'}
-                        onChange={(e) =>
-                          patchForm({
-                            ratesMode: {
-                              ...form.ratesMode,
-                              [p.key]: e.target.value as 'per_task' | 'hourly' | 'monthly',
-                            },
-                          })
-                        }
-                      >
-                        <option value="per_task">MAD / tâche</option>
-                        <option value="hourly">MAD / heure</option>
-                        <option value="monthly">MAD fixe / mois</option>
-                      </select>
-                      <button
-                        type="button"
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          cursor: 'pointer',
-                        }}
-                        onClick={() => {
-                          const next = { ...form.rates };
-                          delete next[p.key as keyof typeof next];
-                          patchForm({ rates: next });
-                        }}
-                      >
-                        ✕
-                      </button>
+                  ).map((p) => {
+                    const mode = form.ratesMode?.[p.key] ?? 'per_task';
+                    const unitLabel =
+                      mode === 'hourly' ? '/ heure' : mode === 'monthly' ? '/ mois' : '/ tâche';
+                    const amount = form.rates?.[p.key as keyof typeof form.rates] ?? 0;
+                    return (
+                    <div key={p.key} className="price-card">
+                      <div className="price-card-top">
+                        <span style={{ fontSize: 12.5, fontWeight: 600 }}>
+                          {p.emoji} {p.label}
+                        </span>
+                        <input
+                          className="input"
+                          type="number"
+                          min={0}
+                          value={form.rates?.[p.key as keyof typeof form.rates] ?? ''}
+                          onChange={(e) =>
+                            patchForm({
+                              rates: {
+                                ...form.rates,
+                                [p.key]: Number(e.target.value) || 0,
+                              },
+                            })
+                          }
+                        />
+                        <button
+                          type="button"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => {
+                            const next = { ...form.rates };
+                            delete next[p.key as keyof typeof next];
+                            patchForm({ rates: next });
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="price-mode-seg">
+                        {(
+                          [
+                            ['per_task', 'MAD / tâche'],
+                            ['hourly', 'MAD / heure'],
+                            ['monthly', 'MAD fixe / mois'],
+                          ] as const
+                        ).map(([m, label]) => (
+                          <button
+                            key={m}
+                            type="button"
+                            className={`price-mode-btn${mode === m ? ' on' : ''}`}
+                            onClick={() =>
+                              patchForm({
+                                ratesMode: { ...form.ratesMode, [p.key]: m },
+                              })
+                            }
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="price-summary">
+                        {amount || 0} MAD {unitLabel}
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <button
                   type="button"
@@ -1245,6 +1272,8 @@ export default function StaffPageView({
                 >
                   + Ajouter un type
                 </button>
+                </>
+                )}
               </div>
               )}
             </div>
