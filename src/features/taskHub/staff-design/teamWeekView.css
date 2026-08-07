@@ -569,6 +569,18 @@ th.twv-today .twv-day-num {
   background: #fdeaea;
   color: #b91c1c;
 }
+.twv-kanban-tile--waiting-start {
+  background: #e8eefc;
+  color: #1d4ed8;
+}
+.twv-kanban-tile--waiting-finish {
+  background: #fdf1e3;
+  color: #b45309;
+}
+.twv-kanban-tile--finished {
+  background: #e7f6ee;
+  color: #0d8a4f;
+}
 
 .twv-row--drop .twv-staff-cell,
 .twv-row--drop-denied .twv-staff-cell,
