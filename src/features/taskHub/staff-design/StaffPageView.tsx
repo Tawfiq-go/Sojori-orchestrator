@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import './staffDesign.css';
+import { getStaffStats, type StaffPeriodStats } from '../../../services/fulltaskApi';
 import type { Staff, ContractType } from './types';
 import {
   STAFF_TASK_PILLS,
@@ -174,6 +175,33 @@ export default function StaffPageView({
   const [planningDay, setPlanningDay] = useState<number | null>(1);
   /** Activités ouvertes (collapse) — toutes repliées par défaut. */
   const [expandedActivities, setExpandedActivities] = useState<Record<string, boolean>>({});
+  /** KPI opérationnels/business — période sélectionnée + stats chargées. */
+  const [statsPeriod, setStatsPeriod] = useState<'day' | 'week' | 'month'>('week');
+  const [statsByStaff, setStatsByStaff] = useState<Record<string, StaffPeriodStats>>({});
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatsLoading(true);
+    getStaffStats(statsPeriod)
+      .then((rows) => {
+        if (cancelled) return;
+        const byId: Record<string, StaffPeriodStats> = {};
+        rows.forEach((r) => {
+          byId[r.staffId] = r;
+        });
+        setStatsByStaff(byId);
+      })
+      .catch(() => {
+        if (!cancelled) setStatsByStaff({});
+      })
+      .finally(() => {
+        if (!cancelled) setStatsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [statsPeriod]);
 
   const staff = useMemo(() => {
     if (staffProp.length > 0) return staffProp;
@@ -613,6 +641,61 @@ export default function StaffPageView({
         <div className="filters">
           {(
             [
+              ['day', "Aujourd'hui"],
+              ['week', 'Semaine'],
+              ['month', 'Mois'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={`filter-pill${statsPeriod === key ? ' on' : ''}`}
+              onClick={() => setStatsPeriod(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="kpi-row">
+        {(() => {
+          const rows = Object.values(statsByStaff);
+          const tasksDone = rows.reduce((sum, r) => sum + r.tasksCompleted, 0);
+          const hours = rows.reduce((sum, r) => sum + r.estimatedMinutes, 0) / 60;
+          const freelanceCost = rows.reduce((sum, r) => sum + r.costMad, 0);
+          const late = rows.reduce((sum, r) => sum + r.lateCount, 0);
+          return (
+            <>
+              <div className="kpi-tile">
+                <div className="kpi-v">{statsLoading ? '…' : tasksDone}</div>
+                <div className="kpi-l">tâches terminées</div>
+              </div>
+              <div className="kpi-tile">
+                <div className="kpi-v">{statsLoading ? '…' : hours.toFixed(1)} h</div>
+                <div className="kpi-l">heures estimées</div>
+              </div>
+              <div className="kpi-tile">
+                <div className="kpi-v">
+                  {statsLoading ? '…' : freelanceCost.toLocaleString('fr-FR')} MAD
+                </div>
+                <div className="kpi-l">coût freelances</div>
+              </div>
+              <div className="kpi-tile">
+                <div className="kpi-v" style={{ color: late > 0 ? 'var(--red, #b91c1c)' : undefined }}>
+                  {statsLoading ? '…' : late}
+                </div>
+                <div className="kpi-l">en retard</div>
+              </div>
+            </>
+          );
+        })()}
+      </div>
+
+      <div className="list-h" style={{ marginTop: 6 }}>
+        <div className="filters">
+          {(
+            [
               ['all', `TOUS · ${counts.all}`],
               ['active', `ACTIFS · ${counts.active}`],
               ['freelance', `FREELANCE · ${counts.freelance}`],
@@ -640,6 +723,7 @@ export default function StaffPageView({
               6,
             );
             const firstRate = s.rates && Object.entries(s.rates)[0];
+            const stats = statsByStaff[s._id];
             return (
               <div
                 key={s._id}
@@ -718,6 +802,25 @@ export default function StaffPageView({
                     </span>
                     <span style={{ color: 'var(--pd)', fontFamily: 'var(--mono)' }}>
                       {firstRate[1]} MAD
+                    </span>
+                  </div>
+                )}
+                {stats && (
+                  <div className="meta-line">
+                    <span style={{ textTransform: 'uppercase', fontSize: 9.5, fontWeight: 700 }}>
+                      Période
+                    </span>
+                    <span style={{ fontSize: 11.5 }}>
+                      {stats.tasksCompleted} tâches · {(stats.estimatedMinutes / 60).toFixed(1)} h
+                      {s.contractType === 'freelance' && stats.costMad > 0
+                        ? ` · ${stats.costMad.toLocaleString('fr-FR')} MAD`
+                        : ''}
+                      {stats.lateCount > 0 && (
+                        <span style={{ color: 'var(--red, #b91c1c)', fontWeight: 700 }}>
+                          {' '}
+                          · {stats.lateCount} retard{stats.lateCount > 1 ? 's' : ''}
+                        </span>
+                      )}
                     </span>
                   </div>
                 )}

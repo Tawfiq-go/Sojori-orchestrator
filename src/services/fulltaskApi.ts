@@ -157,6 +157,25 @@ export async function deleteStaff(id: string) {
   return data;
 }
 
+export interface StaffPeriodStats {
+  staffId: string;
+  tasksCompleted: number;
+  estimatedMinutes: number;
+  lateCount: number;
+  costMad: number;
+  byType: Record<string, number>;
+}
+
+export async function getStaffStats(
+  period: 'day' | 'week' | 'month',
+  date?: string,
+): Promise<StaffPeriodStats[]> {
+  const { data } = await apiClient.get(`${BASE}/staff/stats`, {
+    params: { period, ...(date ? { date } : {}) },
+  });
+  return data?.data || [];
+}
+
 export async function listWhatsappAdmins(params: Record<string, unknown> = {}) {
   const { data } = await apiClient.get(`${BASE}/whatsapp-admins`, { params });
   return data;

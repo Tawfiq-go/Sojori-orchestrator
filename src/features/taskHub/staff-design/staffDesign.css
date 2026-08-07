@@ -725,6 +725,28 @@
 .so-staff-root .collapse-caret.open {
   transform: rotate(180deg);
 }
+.so-staff-root .kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 10px 0 4px;
+}
+.so-staff-root .kpi-tile {
+  background: var(--bg2);
+  border: 1px solid var(--b);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.so-staff-root .kpi-v {
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.so-staff-root .kpi-l {
+  font-size: 11px;
+  color: var(--t3);
+  margin-top: 1px;
+}
 .so-staff-root .add-btn {
   padding: 9px;
   background: #fff;
