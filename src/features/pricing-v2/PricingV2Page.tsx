@@ -108,7 +108,7 @@ export default function PricingV2Page() {
   const [dragTo, setDragTo] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   /** Sur les nuits VENDUES : afficher le prix payé (figé) ou le prix du moteur. */
-  const [showBookedPrices, setShowBookedPrices] = useState(true);
+  const [showBookedPrices, setShowBookedPrices] = useState(false);
   /** Liste { listingId, name } pour le sélecteur — chargée UNE fois, jamais
    *  reliée à `reload()` : changer de bien ne doit ni re-fetcher le portfolio
    *  ni naviguer vers /pricing-v2 (l'atterrissage), juste changer l'URL. */
