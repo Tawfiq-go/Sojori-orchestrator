@@ -109,6 +109,12 @@ export default function PricingV2Page() {
   const [dragging, setDragging] = useState(false);
   /** Sur les nuits VENDUES : afficher le prix payé (figé) ou le prix du moteur. */
   const [showBookedPrices, setShowBookedPrices] = useState(false);
+  /** Jour cliqué dans le calendrier — la courbe "Le marché, et vous dessus"
+   *  et le texte "marché autour de chez vous ce soir" doivent refléter CE
+   *  jour, pas rester figés sur aujourd'hui (demandé par Tawfiq 08/08/2026:
+   *  chaque clic cellule doit changer le statut marché affiché). null =
+   *  aucun clic encore → on retombe sur `today`. */
+  const [selectedMarketDate, setSelectedMarketDate] = useState<string | null>(null);
   /** Liste { listingId, name } pour le sélecteur — chargée UNE fois, jamais
    *  reliée à `reload()` : changer de bien ne doit ni re-fetcher le portfolio
    *  ni naviguer vers /pricing-v2 (l'atterrissage), juste changer l'URL. */
@@ -256,6 +262,13 @@ export default function PricingV2Page() {
   }
 
   const today = result.days[0];
+  // Jour affiché par la courbe "Le marché, et vous dessus" + le texte
+  // "marché autour de chez vous" — le dernier jour cliqué dans le calendrier,
+  // sinon aujourd'hui. Cherché par date (pas par index) : le calendrier ne
+  // garantit pas que la position cliquée == l'index dans result.days une
+  // fois qu'on a navigué entre biens/rechargé.
+  const marketDay =
+    (selectedMarketDate && result.days.find((d) => d.date === selectedMarketDate)) || today;
   const lowConfidence = result.meta.compsetSize < 3;
   const trendPct = Math.round((result.meta.momentum - 1) * 100);
 
@@ -437,13 +450,17 @@ export default function PricingV2Page() {
             <DistributionChart
               scale={market.scale}
               comps={market.comps}
-              yourPrice={today.price}
+              // Suit le dernier jour cliqué dans le calendrier (marketDay),
+              // pas figé sur aujourd'hui — chaque clic cellule change le
+              // statut marché affiché ici (demandé par Tawfiq 08/08/2026).
+              yourPrice={marketDay.price}
               compsetSize={market.compsetSize}
               gamme={config?.gamme ?? 'normal'}
               busy={saving}
               /* Clic sur le curseur VOUS → le détail complet (même ticket que
-                 le calendrier) : base, saison, jour, remplissage, bornes. */
-              onExplainYours={() => setTicketDay(today)}
+                 le calendrier) : base, saison, jour, remplissage, bornes —
+                 pour le jour actuellement affiché par la courbe. */
+              onExplainYours={() => setTicketDay(marketDay)}
               /* Cliquer une gamme = poser le curseur doré PILE sur ce repère
                  (502/550/702/747 affichés). `result.meta.base` (= benchmark ×
                  GAMME_OFFSET × momentum × mode.tilt) et `scale.p25/p50/p75/p90`
@@ -674,8 +691,8 @@ export default function PricingV2Page() {
                 sx={{ bgcolor: T.line2, borderRadius: `${T.radius}px`, p: 0.25, gap: 0.25, border: `1px solid ${T.line}` }}
               >
                 {[
-                  { on: true, label: 'Prix encaissé' },
                   { on: false, label: 'Prix du moteur' },
+                  { on: true, label: 'Prix encaissé' },
                 ].map((o) => (
                   <Box
                     key={String(o.on)}
@@ -814,8 +831,16 @@ export default function PricingV2Page() {
                             setTicketDay(d);
                           }
                         }}
+                        /* Clic droit = changer le jour affiché par "Le marché,
+                           et vous dessus" SANS ouvrir le ticket de caisse —
+                           demandé par Tawfiq 08/08/2026 (clic simple garde le
+                           popup, clic droit met juste à jour la courbe). */
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setSelectedMarketDate(d.date);
+                        }}
                         title={
-                          gap
+                          (gap
                             ? `${d.date} — ORPHAN GAP de ${gap.size} nuit${gap.size > 1 ? 's' : ''} entre deux réservations.` +
                               ` Invendable avec un minimum de ${result.minStay} nuits :` +
                               ` minimum abaissé à ${gap.minStay} et prix ajusté de ${gap.adjustPct} % → ${d.price} MAD`
@@ -825,7 +850,8 @@ export default function PricingV2Page() {
                               ` · le moteur proposerait ${d.price} MAD`
                             : blocked
                               ? `${d.date} — bloqué (fermé à la vente)`
-                              : `${d.date} — ${d.price} MAD (marché : ${Math.round(d.comp)})`
+                              : `${d.date} — ${d.price} MAD (marché : ${Math.round(d.comp)})`) +
+                          ' · clic droit : voir dans "Le marché, et vous dessus"'
                         }
                         sx={{
                           all: 'unset',
