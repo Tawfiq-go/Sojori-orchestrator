@@ -1,14 +1,23 @@
 import type { ProfitMetric } from '../types';
 
+/** Ordre affichage classique (PM portefeuille). Landlord détail : lignes custom côté page. */
 const LANDLORD_FLOW_KEYS = [
   'gross_revenue',
+  'cleaning_to_pm',
   'extras',
   'ota_commission',
   'expenses_landlord',
   'pm_fee',
 ] as const;
 
-const PM_FLOW_KEYS = ['expenses_pm'] as const;
+const PM_FLOW_KEYS = [
+  'pm_commission_income',
+  'cleaning_retained_pm', // extras = ménages OTA récupérés
+  'city_tax_collected',
+  'staff_salaries',
+  'checkout_cleaning_cost',
+  'expenses_pm',
+] as const;
 
 export function profitLandlordFlowMetrics(metrics: ProfitMetric[]): ProfitMetric[] {
   const byKey = new Map(metrics.map((m) => [m.key, m]));
@@ -34,6 +43,9 @@ export function resolveProfitReportTotals(metrics: ProfitMetric[]): {
   const expLl = Math.abs(get('expenses_landlord'));
   const pmFee = Math.abs(get('pm_fee'));
 
+  const cleaning = Math.abs(get('cleaning_to_pm') || get('cleaning_retained_pm'));
+  const staff = Math.abs(get('staff_salaries'));
+
   const netPmStored = metrics.find((m) => m.key === 'net_to_pm');
   if (netPmStored) {
     return {
@@ -43,7 +55,7 @@ export function resolveProfitReportTotals(metrics: ProfitMetric[]): {
     };
   }
 
-  const netLandlord = gross + extras - ota - expLl - pmFee;
-  const netPm = pmFee - expPm;
+  const netLandlord = gross + extras - ota - cleaning - expLl - pmFee;
+  const netPm = pmFee + cleaning - expPm - staff;
   return { netLandlord, netPm, legacyFormula: true };
 }

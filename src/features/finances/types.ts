@@ -8,6 +8,9 @@ export type LandlordContract = {
   fixedPeriod?: 'per_month' | 'per_booking' | 'per_year';
   commissionPercent?: number;
   revenueBase?: 'gross' | 'net_after_ota';
+  includesOtaCommission?: boolean;
+  /** Ménage OTA 100 % PM */
+  cleaningRetainedByPm?: boolean;
   currency?: string;
   effectiveFrom?: string;
   effectiveTo?: string | null;
@@ -109,6 +112,40 @@ export type ProfitMetric = {
   hint?: string;
 };
 
+export type ProfitListingBilan = {
+  listingId: string;
+  listingName: string;
+  landlordId?: string;
+  landlordName?: string;
+  reservations: number;
+  nights: number;
+  grossRevenue: number;
+  otaCommission: number;
+  cleaningRetained: number;
+  cityTaxCollected: number;
+  pmCommission: number;
+  checkoutCleaningCost: number;
+  otherPmExpenses: number;
+  netPmContribution: number;
+  avgAccommodationPerNight: number | null;
+};
+
+export type ProfitLandlordBilan = {
+  landlordId: string;
+  landlordName: string;
+  listings: number;
+  reservations: number;
+  nights: number;
+  grossRevenue: number;
+  otaCommission: number;
+  cleaningRetained: number;
+  cityTaxCollected: number;
+  pmCommission: number;
+  checkoutCleaningCost: number;
+  otherPmExpenses: number;
+  netPmContribution: number;
+};
+
 export type ProfitReport = {
   _id: string;
   name: string;
@@ -132,6 +169,13 @@ export type ProfitReport = {
       ledger: string[];
     };
     header?: ProfitReportHeader;
+    reportKind?: 'pm_business' | 'landlord';
+    /** État (période) vs Projection — le cash flow « réel » arrivera plus tard. */
+    periodNature?: 'etat' | 'projection';
+    listingBilans?: ProfitListingBilan[];
+    landlordBilans?: ProfitLandlordBilan[];
+    topListing?: ProfitListingBilan | null;
+    topLandlord?: ProfitLandlordBilan | null;
   };
   updatedAt?: string;
   createdAt?: string;

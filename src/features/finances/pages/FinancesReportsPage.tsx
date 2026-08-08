@@ -148,20 +148,25 @@ function FinancesReportsPageContent() {
                   <th>Période</th>
                   <th className="num">Listings</th>
                   <th>Statut</th>
-                  <th className="num">Net propriétaire</th>
+                  <th className="num">Résultat</th>
                   {canWrite ? <th /> : <th />}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row) => {
-                  const net = row.snapshot?.grandTotal ?? row.snapshot?.metrics?.find((m) => m.key === 'net_to_landlord')?.value;
-                  const scopeLabel = row.landlordId ? 'Propriétaire' : 'PM';
+                  const isPm = !row.landlordId || row.snapshot?.reportKind === 'pm_business';
+                  const net =
+                    row.snapshot?.grandTotal ??
+                    row.snapshot?.metrics?.find((m) => m.key === (isPm ? 'net_to_pm' : 'net_to_landlord'))
+                      ?.value;
+                  const scopeLabel = isPm ? 'PM' : 'Propriétaire';
                   return (
                     <tr key={row._id} className="clk" onClick={() => navigate(`/finances/reports/${row._id}`)}>
                       <td>
                         <div className="cell-main">{row.name}</div>
                         <div className="cell-sub">
                           {scopeLabel}
+                          {isPm ? ' · ce que tu gagnes' : ''}
                           {' · '}
                           {row.status === 'published' && row.publishedAt
                             ? `publié le ${formatShortDate(row.publishedAt)}`

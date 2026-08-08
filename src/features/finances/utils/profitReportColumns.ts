@@ -123,12 +123,20 @@ export const PROFIT_REPORT_RESERVATION_COLUMNS: ProfitReportColumnDef[] = [
     hint: 'Part hébergement du breakdown OTA (ChannelRent / roomRate). Peut différer légèrement du brut selon le canal.',
   },
   {
+    key: 'accommodationPerNight',
+    label: 'Héberg./jour',
+    type: 'money',
+    default: true,
+    group: 'reservation',
+    hint: 'Loyer ÷ nuits — ADR / détection bug prix (anomalie si trop bas ou trop haut).',
+  },
+  {
     key: 'cleaningFee',
     label: 'Ménage OTA',
     type: 'money',
     default: true,
     group: 'reservation',
-    hint: 'Frais de ménage facturé par l’OTA. Vert = inclus canal / rouge = à collecter sur place.',
+    hint: 'Frais de ménage facturé par l’OTA. Vert = inclus canal / rouge = à collecter sur place. Récupéré 100 % par le PM.',
   },
   {
     key: 'cityTax',
@@ -136,7 +144,7 @@ export const PROFIT_REPORT_RESERVATION_COLUMNS: ProfitReportColumnDef[] = [
     type: 'money',
     default: true,
     group: 'reservation',
-    hint: 'Taxe de séjour / city tax. Souvent à collecter sur place (rouge) si non incluse dans le total canal.',
+    hint: 'Collectée par le PM (souvent sur place, rouge). Pass-through vers la commune — hors résultat business.',
   },
   {
     key: 'ledgerExtras',
@@ -408,9 +416,21 @@ function migrateReservationColumnKeys(keys: string[]): string[] {
 }
 
 function ensurePmFinanceColumns(keys: string[]): string[] {
-  const markers = ['cleaningFee', 'cityTax', 'paidAtArrival', 'accommodationAmount', 'channelTotal'];
+  const markers = [
+    'cleaningFee',
+    'cityTax',
+    'paidAtArrival',
+    'accommodationAmount',
+    'accommodationPerNight',
+    'channelTotal',
+  ];
   if (keys.some((k) => markers.includes(k))) {
-    return keys.filter((k) => k !== 'otaCommissionPercent');
+    const base = keys.filter((k) => k !== 'otaCommissionPercent');
+    if (!base.includes('accommodationPerNight') && base.includes('accommodationAmount')) {
+      const i = base.indexOf('accommodationAmount');
+      base.splice(i + 1, 0, 'accommodationPerNight');
+    }
+    return base;
   }
   const inject = PROFIT_REPORT_RESERVATION_COLUMNS.filter((c) => c.default).map((c) => c.key);
   const set = new Set(keys.filter((k) => k !== 'otaCommissionPercent' && k !== 'balanceDue'));

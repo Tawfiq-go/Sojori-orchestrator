@@ -26,8 +26,13 @@ export function buildStoredLandlordContract(
   fixedPeriod: LandlordContract['fixedPeriod'],
   currency: string,
   notes?: string,
+  cleaningRetainedByPm?: boolean,
 ): LandlordContract {
-  const base: LandlordContract = { currency, notes: notes || undefined };
+  const base: LandlordContract = {
+    currency,
+    notes: notes || undefined,
+    cleaningRetainedByPm: Boolean(cleaningRetainedByPm),
+  };
   if (formType === 'fixed') {
     return { ...base, type: 'fixed', fixedAmount, fixedPeriod };
   }
