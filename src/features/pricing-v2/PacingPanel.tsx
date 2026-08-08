@@ -1,20 +1,27 @@
 // ════════════════════════════════════════════════════════════════════════════
-// PACING — 4 CURSEURS (mode Expert), calqué sur la maquette validée
+// PACING — MÉTHODE (3 états) + 4 CURSEURS (mode Expert)
 // ────────────────────────────────────────────────────────────────────────────
 // « Le prix respire avec le remplissage » — deux décisions symétriques :
 //   • Remplissage ÉLEVÉ  → le prix monte   (vert)  : seuil + hausse max
 //   • Remplissage FAIBLE → le prix descend (terracotta) : seuil + baisse max
 //   • ENTRE les deux seuils : le prix suit le marché, sans correction.
 //
-// ⚠️ CONTRAT MOTEUR (option B) : `mode` reste le PRÉRÉGLAGE. Tant que le PM n'a
-// touché aucun curseur, la config ne porte aucun seuil et le moteur applique la
-// courbe du mode (prudent/équilibré/agressif). Dès qu'un curseur bouge, les 4
-// valeurs sont envoyées et la logique explicite prend le relais.
-// Voir apps/srv-pricing-v2/src/engine/engine.ts → pacingMult().
+// ⚠️ CONTRAT MOTEUR (décidé avec Tawfiq le 08/08/2026) : `pacingMethod` est un
+// choix EXPLICITE à 3 états, plus de bascule silencieuse sur simple présence
+// de valeurs :
+//   'threshold' (DÉFAUT) → les seuils ci-dessous sont TOUJOURS actifs, même à
+//                          leurs valeurs par défaut (85 % / 70 % / ±15 %).
+//   'dynamic'             → formule progressive v2.7, seuils ignorés/masqués.
+//   'off'                 → aucun ajustement, seuils masqués.
+// Avant cette date, la présence de valeurs dans la config décidait seule —
+// ça rendait les seuils affichés à l'écran trompeurs (visibles mais pas
+// forcément actifs). Voir apps/srv-pricing-v2/src/engine/engine.ts → pacingMult().
 // ════════════════════════════════════════════════════════════════════════════
 import { Box, Slider, Stack, Typography } from '@mui/material';
 import { useState } from 'react';
 import { T, kickerSx } from './tokens';
+
+export type PacingMethod = 'threshold' | 'dynamic' | 'off';
 
 export type PacingSettings = {
   highThreshold: number; // 0–1
@@ -31,15 +38,25 @@ export const PACING_DEFAULTS: PacingSettings = {
   lowMax: 0.15,
 };
 
+const METHOD_OPTIONS: Array<{ key: PacingMethod; label: string; sub: string }> = [
+  { key: 'threshold', label: 'Seuils simples', sub: 'vous réglez deux paliers' },
+  { key: 'dynamic', label: 'Dynamique', sub: 'formule automatique du marché' },
+  { key: 'off', label: 'Désactivé', sub: 'le remplissage ne change rien' },
+];
+
 const pctLabel = (v: number) => `${Math.round(v * 100)} %`;
 
 export default function PacingPanel({
+  method,
+  onMethodChange,
   value,
   onChange,
   /** Occupation réelle par date (fenêtre glissante) pour le graphe 90 j. */
   occupancy,
   busy,
 }: {
+  method: PacingMethod;
+  onMethodChange: (next: PacingMethod) => void;
   value: PacingSettings;
   onChange: (next: PacingSettings) => void;
   occupancy?: Array<{ date: string; occ: number }>;
@@ -74,19 +91,63 @@ export default function PacingPanel({
         <Typography sx={{ fontWeight: 700, fontSize: 13.5, color: T.ink }}>
           Pacing — le prix respire avec le remplissage
         </Typography>
-        <Box
-          component="button"
-          type="button"
-          disabled={busy}
-          onClick={() => onChange(PACING_DEFAULTS)}
-          sx={{ all: 'unset', cursor: 'pointer', fontSize: 11.5, color: T.gold, fontWeight: 700 }}
-        >
-          revenir au marché
-        </Box>
+        {method === 'threshold' ? (
+          <Box
+            component="button"
+            type="button"
+            disabled={busy}
+            onClick={() => onChange(PACING_DEFAULTS)}
+            sx={{ all: 'unset', cursor: 'pointer', fontSize: 11.5, color: T.gold, fontWeight: 700 }}
+          >
+            revenir au marché
+          </Box>
+        ) : null}
       </Stack>
 
-      {/* ── Graphe 90 j ── */}
-      {pts.length > 1 ? (
+      {/* ── Méthode : choix explicite, 3 états — plus de bascule silencieuse. ── */}
+      <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+        {METHOD_OPTIONS.map((o) => {
+          const isActive = o.key === method;
+          return (
+            <Box
+              key={o.key}
+              component="button"
+              type="button"
+              disabled={busy}
+              onClick={() => onMethodChange(o.key)}
+              sx={{
+                all: 'unset',
+                flex: 1,
+                cursor: busy ? 'default' : 'pointer',
+                textAlign: 'center',
+                border: isActive ? `1.5px solid ${T.goldPure}` : `1.5px solid ${T.line}`,
+                bgcolor: isActive ? T.goldBg : T.card,
+                borderRadius: `${T.radius}px`,
+                py: 0.75,
+                px: 0.5,
+              }}
+            >
+              <Typography sx={{ fontWeight: 700, fontSize: 12, color: T.ink }}>{o.label}</Typography>
+              <Typography sx={{ fontSize: 10.5, color: T.mut, mt: 0.1 }}>{o.sub}</Typography>
+            </Box>
+          );
+        })}
+      </Stack>
+
+      {method === 'off' ? (
+        <Typography sx={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.5 }}>
+          Le prix ne bouge jamais selon votre remplissage. Seuls la saison, le jour de la semaine et
+          vos autres réglages s'appliquent.
+        </Typography>
+      ) : method === 'dynamic' ? (
+        <Typography sx={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.5 }}>
+          Le moteur ajuste le prix en continu selon l'écart entre votre remplissage réel et
+          l'objectif attendu à cette date — pas de seuils fixes, une courbe automatique.
+        </Typography>
+      ) : null}
+
+      {/* ── Graphe 90 j — seuils, uniquement pertinent en méthode "Seuils". ── */}
+      {method === 'threshold' && pts.length > 1 ? (
         <Box sx={{ mb: 1.5 }}>
           <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 96, display: 'block' }}>
             {/* Zone « prix monte » : au-dessus du seuil haut */}
@@ -114,7 +175,8 @@ export default function PacingPanel({
         </Box>
       ) : null}
 
-      {/* ── Les 2 groupes de curseurs ── */}
+      {/* ── Les 2 groupes de curseurs — méthode "Seuils" uniquement ── */}
+      {method === 'threshold' ? (
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
         {/* Groupe HAUT — vert */}
         <Box sx={{ border: `1px solid ${T.line}`, borderRadius: `${T.radius}px`, p: 1.5, bgcolor: T.okBg }}>
@@ -198,11 +260,14 @@ export default function PacingPanel({
           </Stack>
         </Box>
       </Box>
+      ) : null}
 
-      <Typography sx={{ fontSize: 11.5, color: T.ink2, mt: 1.25, lineHeight: 1.5 }}>
-        Entre {pctLabel(v.lowThreshold)} et {pctLabel(v.highThreshold)} de remplissage, le
-        prix suit le marché sans correction. Vos bornes restent prioritaires.
-      </Typography>
+      {method === 'threshold' ? (
+        <Typography sx={{ fontSize: 11.5, color: T.ink2, mt: 1.25, lineHeight: 1.5 }}>
+          Entre {pctLabel(v.lowThreshold)} et {pctLabel(v.highThreshold)} de remplissage, le
+          prix suit le marché sans correction. Vos bornes restent prioritaires.
+        </Typography>
+      ) : null}
     </Box>
   );
 }
