@@ -174,6 +174,7 @@ export type PricingV2Market = {
   subject: {
     bedrooms: number;
     guests: number;
+    bathrooms: number | null;
     locality: string;
     rating: number;
     qualityScore: number;
