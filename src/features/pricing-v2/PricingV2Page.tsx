@@ -326,15 +326,16 @@ export default function PricingV2Page() {
           {currentListingName ? (
             <Typography sx={{ fontSize: 14, color: T.ink2, mt: 0.25 }}>
               {currentListingName}
-            </Typography>
-          ) : null}
-          {/* Paramètres utilisés pour l'estimation — discret, sous le nom,
-              sans casser la verticalité de l'en-tête (demandé par Tawfiq
-              08/08/2026). null = donnée absente en base, on ne l'invente pas. */}
-          {market?.subject ? (
-            <Typography sx={{ fontSize: 11.5, color: T.mut, mt: 0.25 }}>
-              {market.subject.bedrooms} ch · {market.subject.guests} pers
-              {market.subject.bathrooms != null ? ` · ${market.subject.bathrooms} SdB` : ''}
+              {/* Paramètres utilisés pour l'estimation — sur la même ligne que
+                  le nom (pas en dessous) pour gagner en verticalité, demandé
+                  par Tawfiq 08/08/2026. null = donnée absente en base, on ne
+                  l'invente pas. */}
+              {market?.subject ? (
+                <Box component="span" sx={{ fontSize: 11.5, color: T.mut, ml: 1 }}>
+                  · {market.subject.bedrooms} ch · {market.subject.guests} pers
+                  {market.subject.bathrooms != null ? ` · ${market.subject.bathrooms} SdB` : ''}
+                </Box>
+              ) : null}
             </Typography>
           ) : null}
         </Box>
