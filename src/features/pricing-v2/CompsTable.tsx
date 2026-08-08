@@ -18,6 +18,7 @@ import { T, cardSx, kickerSx } from './tokens';
 
 const AMENITY_FR: Record<string, string> = {
   hot_tub: 'jacuzzi',
+  rooftop: 'rooftop',
   pool: 'piscine',
   patio: 'terrasse/balcon',
 };
