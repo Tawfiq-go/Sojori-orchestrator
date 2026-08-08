@@ -35,7 +35,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { hasAdminAccess } from '../../utils/rbac.utils';
 import CompsTable from './CompsTable';
 import PublishPanel from './PublishPanel';
-import PacingPanel, { PACING_DEFAULTS, type PacingSettings } from './PacingPanel';
+import PacingPanel, { PACING_DEFAULTS, type PacingMethod, type PacingSettings } from './PacingPanel';
 import SeasonWeekLevers from './SeasonWeekLevers';
 import RangeActionBar, { type RangeAction } from './RangeActionBar';
 import DistributionChart from './DistributionChart';
@@ -166,6 +166,9 @@ export default function PricingV2Page() {
     await patch({ dailyOverrides: next });
   };
 
+  // Méthode de pacing : 'threshold' est le défaut produit (config absente =
+  // seuils actifs quand même, cf. moteur pacingMult) — pas 'dynamic'.
+  const pacingMethod: PacingMethod = config?.pacingMethod ?? 'threshold';
   // Pacing : valeurs affichées = celles de la config, sinon les défauts maquette.
   const pacing: PacingSettings = {
     highThreshold: config?.pacingHighThreshold ?? PACING_DEFAULTS.highThreshold,
@@ -537,6 +540,8 @@ export default function PricingV2Page() {
 
               {/* Pacing (maquette : levier 3) */}
               <PacingPanel
+                method={pacingMethod}
+                onMethodChange={(next) => void patch({ pacingMethod: next })}
                 value={pacing}
                 busy={saving}
                 onChange={(next) =>

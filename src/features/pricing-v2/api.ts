@@ -122,7 +122,13 @@ export type PricingV2Config = {
   /** Leviers édités par le PM. null = valeurs du marché. */
   seasonalCoefs?: number[] | null;
   dowMult?: Record<string, number> | null;
-  /** Pacing fin (option B) — null tant que le PM n'a rien réglé : `mode` pilote. */
+  /**
+   * Méthode de pacing — choix explicite, 3 états. Absent/'threshold' (défaut) :
+   * les seuils ci-dessous sont RÉELLEMENT actifs, même à leurs valeurs par
+   * défaut (85 % / 70 % / ±15 %). Décidé le 08/08/2026.
+   */
+  pacingMethod?: 'threshold' | 'dynamic' | 'off';
+  /** Pacing fin (option B) — actifs quand pacingMethod='threshold'. */
   pacingHighThreshold?: number | null;
   pacingHighMax?: number | null;
   pacingLowThreshold?: number | null;
