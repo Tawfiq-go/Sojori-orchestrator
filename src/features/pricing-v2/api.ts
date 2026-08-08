@@ -207,6 +207,13 @@ export type PricingV2Shadow = {
 // ⚡ Servi depuis les résultats shadow DÉJÀ stockés (aucun recalcul côté service).
 export type PricingV2PortfolioRow = {
   listingId: string;
+  /**
+   * MULTI-ROOMTYPE (Nommos et consorts) — null sur un listing single. Présent
+   * = cette ligne est UNE villa d'un listing multi ; à retransmettre en query
+   * `roomTypeId` sur tous les appels /market, /preview, /config, /shadow de
+   * cette ligne, sinon le backend refuse avec 409 ROOMTYPE_REQUIRED.
+   */
+  roomTypeId: string | null;
   name: string;
   city: string;
   district: string | null;
@@ -247,32 +254,60 @@ export async function fetchPricingV2Portfolio() {
   return apiClient.get<PricingV2Portfolio>(`${BASE}/portfolio`);
 }
 
-export async function fetchPricingV2Market(listingId: string) {
-  return apiClient.get<PricingV2Market>(`${BASE}/market/${listingId}`);
+// MULTI-ROOMTYPE (Nommos) — `roomTypeId` undefined sur un listing single
+// (immense majorité) : comportement identique à avant. Sur un listing multi,
+// son absence fait renvoyer un 409 { code:'ROOMTYPE_REQUIRED', roomTypeIds }
+// par le backend — PricingV2Page gère ce cas avec un sélecteur de villa.
+export type MultiRoomTypeRequiredError = {
+  success: false;
+  code: 'ROOMTYPE_REQUIRED';
+  roomTypeIds: string[];
+  error: string;
+};
+
+export async function fetchPricingV2Market(listingId: string, roomTypeId?: string) {
+  return apiClient.get<PricingV2Market>(`${BASE}/market/${listingId}`, {
+    params: roomTypeId ? { roomTypeId } : undefined,
+  });
 }
-export async function fetchPricingV2Shadow(listingId: string) {
-  return apiClient.get<PricingV2Shadow>(`${BASE}/shadow/${listingId}`);
+export async function fetchPricingV2Shadow(listingId: string, roomTypeId?: string) {
+  return apiClient.get<PricingV2Shadow>(`${BASE}/shadow/${listingId}`, {
+    params: roomTypeId ? { roomTypeId } : undefined,
+  });
 }
 
-export async function fetchPricingV2Preview(listingId: string) {
-  return apiClient.get<{
-    success: boolean;
-    asOfDate: string;
-    result: PricingV2Result;
-    error?: string;
-    /** 'SNAPSHOT_STALE' = prix de marché trop vieux, calcul volontairement refusé. */
-    code?: string;
-    ageDays?: number | null;
-    maxAgeDays?: number;
-  }>(`${BASE}/preview/${listingId}`);
+export async function fetchPricingV2Preview(listingId: string, roomTypeId?: string) {
+  return apiClient.get<
+    | {
+        success: true;
+        asOfDate: string;
+        result: PricingV2Result;
+      }
+    | (MultiRoomTypeRequiredError & { asOfDate?: undefined; result?: undefined })
+    | {
+        success: false;
+        error?: string;
+        /** 'SNAPSHOT_STALE' = prix de marché trop vieux, calcul volontairement refusé. */
+        code?: string;
+        ageDays?: number | null;
+        maxAgeDays?: number;
+      }
+  >(`${BASE}/preview/${listingId}`, { params: roomTypeId ? { roomTypeId } : undefined });
 }
-export async function fetchPricingV2Config(listingId: string) {
-  return apiClient.get<{ success: boolean; config: PricingV2Config }>(`${BASE}/config/${listingId}`);
+export async function fetchPricingV2Config(listingId: string, roomTypeId?: string) {
+  return apiClient.get<{ success: boolean; config: PricingV2Config }>(`${BASE}/config/${listingId}`, {
+    params: roomTypeId ? { roomTypeId } : undefined,
+  });
 }
-export async function savePricingV2Config(listingId: string, patch: Partial<PricingV2Config>) {
+export async function savePricingV2Config(
+  listingId: string,
+  patch: Partial<PricingV2Config>,
+  roomTypeId?: string,
+) {
   return apiClient.put<{ success: boolean; config: PricingV2Config }>(
     `${BASE}/config/${listingId}`,
     patch,
+    { params: roomTypeId ? { roomTypeId } : undefined },
   );
 }
 
