@@ -80,6 +80,7 @@ type LandlordFormValues = {
   commissionPercent: string;
   fixedAmount: string;
   fixedPeriod: 'per_month' | 'per_booking' | 'per_year';
+  cleaningRetainedByPm: boolean;
   contractNotes: string;
 };
 
@@ -98,6 +99,7 @@ const EMPTY: LandlordFormValues = {
   commissionPercent: '18',
   fixedAmount: '',
   fixedPeriod: 'per_month',
+  cleaningRetainedByPm: false,
   contractNotes: '',
 };
 
@@ -124,6 +126,7 @@ function toFormValues(account: LandlordAccount | null): LandlordFormValues {
     commissionPercent: String(lc.commissionPercent ?? 18),
     fixedAmount: lc.fixedAmount != null ? String(lc.fixedAmount) : '',
     fixedPeriod: lc.fixedPeriod || 'per_month',
+    cleaningRetainedByPm: Boolean(lc.cleaningRetainedByPm),
     contractNotes: lc.notes || '',
   };
 }
@@ -136,6 +139,7 @@ function buildContract(v: LandlordFormValues): LandlordContract {
     v.fixedPeriod,
     'MAD',
     v.contractNotes,
+    v.cleaningRetainedByPm,
   );
 }
 
@@ -671,6 +675,22 @@ export default function LandlordForm() {
                           </Grid>
                         </Grid>
                       )}
+                      <FormControlLabel
+                        sx={{ mt: 1.5, ml: 0 }}
+                        control={
+                          <Switch
+                            checked={v.cleaningRetainedByPm}
+                            onChange={(e) => setFieldValue('cleaningRetainedByPm', e.target.checked)}
+                            sx={{
+                              '& .MuiSwitch-switchBase.Mui-checked': { color: WF.primary },
+                              '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                bgcolor: WF.primary,
+                              },
+                            }}
+                          />
+                        }
+                        label="Frais de ménage OTA 100 % PM (hors partage / hors base %)"
+                      />
                       <TextField
                         sx={{ ...fieldSx, mt: 2 }}
                         label="Notes internes"
