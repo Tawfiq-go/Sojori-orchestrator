@@ -113,6 +113,10 @@ export default function PricingV2Page() {
   /** Vrai dès que la souris a survolé une AUTRE cellule pendant le geste :
    *  c'est ce qui sépare « clic » (ticket de caisse) de « glisser » (plage). */
   const movedRef = useRef(false);
+  /** Cellule où le geste a commencé. Sert à ne PAS compter comme glisser un
+   *  `pointerenter` sur la cellule de départ (sinon le clic simple, qui doit
+   *  ouvrir le ticket de caisse, était pris pour une sélection). */
+  const anchorRef = useRef<string | null>(null);
   /** Sur les nuits VENDUES : afficher le prix payé (figé) ou le prix du moteur. */
   const [showBookedPrices, setShowBookedPrices] = useState(false);
   /** Jour cliqué dans le calendrier — la courbe "Le marché, et vous dessus"
@@ -906,11 +910,20 @@ export default function PricingV2Page() {
                           }
                           setDragging(true);
                           movedRef.current = false;
+                          anchorRef.current = d.date;
                           setSel({ from: d.date, to: d.date });
                         }}
                         onPointerEnter={() => {
                           if (!dragging) return;
-                          movedRef.current = true;
+                          // ⚠️ `movedRef` ne passe à vrai QUE sur une AUTRE cellule
+                          // que l'ancre : `pointerenter` se déclenche aussi sur la
+                          // cellule de départ (re-entrée, micro-mouvement), et le
+                          // compter comme un glisser cassait le clic simple, qui
+                          // n'ouvrait plus le ticket de caisse.
+                          // En revanche la plage suit TOUJOURS le survol : revenir
+                          // sur l'ancre après en être sorti doit bien la réduire
+                          // à une nuit (sans ce `setSel`, elle restait à deux).
+                          if (d.date !== anchorRef.current) movedRef.current = true;
                           // Étend depuis l'ancre `from`, jamais depuis `to` : en
                           // repartant en arrière la plage se réduit correctement.
                           setSel((s) => (s ? { from: s.from, to: d.date } : s));
@@ -921,12 +934,14 @@ export default function PricingV2Page() {
                           // ticket ni effacer ce qu'on vient de sélectionner.
                           if (e.shiftKey) return;
                           setDragging(false);
-                          // Clic sans déplacement = consultation, pas sélection.
+                          // Clic sans changement de cellule = consultation : le
+                          // ticket de caisse s'ouvre EXACTEMENT comme avant.
                           if (!movedRef.current) {
                             setSel(null);
                             setTicketDay(d);
                           }
                           movedRef.current = false;
+                          anchorRef.current = null;
                         }}
                         /* Clic droit = changer le jour affiché par "Le marché,
                            et vous dessus" SANS ouvrir le ticket de caisse —
@@ -934,6 +949,12 @@ export default function PricingV2Page() {
                            popup, clic droit met juste à jour la courbe). */
                         onContextMenu={(e) => {
                           e.preventDefault();
+                          // Le clic droit ne doit RIEN laisser derrière lui : sans
+                          // ça, le pointerdown droit (ignoré) pouvait laisser un
+                          // geste ouvert et figer la sélection suivante.
+                          setDragging(false);
+                          movedRef.current = false;
+                          anchorRef.current = null;
                           setSelectedMarketDate(d.date);
                         }}
                         title={
