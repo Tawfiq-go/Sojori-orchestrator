@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { EmailRestrictedRoute } from './components/EmailRestrictedRoute';
 import { RouteAccessGuard } from './components/RouteAccessGuard';
 import { DashboardShellLayout } from './components/DashboardShellLayout';
 import { AdminRoute } from './components/AdminRoute';
@@ -110,6 +111,9 @@ const TasksKanbanPage = lazyWithReload(() =>
 );
 const TasksStaffFulltaskPage = lazyWithReload(() =>
   import('./pages/TasksStaffFulltaskPage').then((module) => ({ default: module.default }))
+);
+const CustomersPage = lazyWithReload(() =>
+  import('./pages/CustomersPage').then((module) => ({ default: module.default }))
 );
 const TasksOrchestrationFulltaskPage = lazyWithReload(() =>
   import('./pages/TasksOrchestrationFulltaskPage').then((module) => ({ default: module.default }))
@@ -338,6 +342,11 @@ function App() {
               <Route element={<DashboardShellLayout />}>
               <Route element={<RouteAccessGuard />}>
               <Route path="/" element={<HomeRedirect />} />
+
+              {/* CRM clients — accès nominatif, jamais ouvert au rôle seul. */}
+              <Route element={<EmailRestrictedRoute />}>
+                <Route path="/customers" element={<LazyRoute><CustomersPage /></LazyRoute>} />
+              </Route>
 
               <Route path="/ma-journee" element={<MaJourneePage />} />
               <Route path="/dashboard" element={<DashboardPage />} />

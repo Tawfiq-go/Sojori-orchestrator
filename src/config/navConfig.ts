@@ -9,6 +9,15 @@ import {
 /** Rôles autorisés sur un groupe ou item (absent = hérite du groupe). */
 export type NavRole = (typeof Roles)[keyof typeof Roles];
 
+/**
+ * Comptes autorisés sur les entrées marquées `restrictedToEmails`.
+ * Verrou NOMINATIF, volontairement plus strict que le rôle : un autre
+ * SuperAdmin (ex. un développeur) ne doit pas voir ces écrans.
+ * ⚠️ Ce filtre masque l'entrée dans la sidebar — la donnée reste protégée
+ * côté API par l'auth du service (le front n'est jamais la seule barrière).
+ */
+export const CRM_ALLOWED_EMAILS = ['tawfiq.gouach@sojori.com'];
+
 export type NavItemConfig = {
   id: string;
   label: string;
@@ -21,6 +30,11 @@ export type NavItemConfig = {
   /** Sous-liens — affichés sous le parent (parent reste cliquable si route définie). */
   sub?: NavItemConfig[];
   roles?: NavRole[];
+  /**
+   * Verrou nominatif : seuls ces emails voient l'entrée, quel que soit le rôle.
+   * Se cumule avec `roles` (les deux doivent passer).
+   */
+  restrictedToEmails?: string[];
   /** Parent décoratif : pas de navigation au clic (ex. Orchestration CORE). */
   navDisabled?: boolean;
 };
@@ -104,6 +118,21 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     items: [
       { id: 'reservations', label: 'Liste', iconType: 'calendar', iconColor: '#E06666' },
       { id: 'payments', label: 'Paiements', iconType: 'chart', iconColor: '#5B9BD5', roles: PM_ROLES },
+    ],
+  },
+  {
+    group: 'Clients',
+    roles: ADMIN_ROLES,
+    items: [
+      {
+        id: 'customers',
+        label: 'Fiches clients',
+        iconType: 'chart',
+        iconColor: '#7C5CD6',
+        description: 'CRM — clients dédupliqués, séjours, CA, canaux (données personnelles)',
+        /** Données personnelles : verrou nominatif, pas seulement le rôle. */
+        restrictedToEmails: CRM_ALLOWED_EMAILS,
+      },
     ],
   },
   {
@@ -458,20 +487,40 @@ function roleAllowed(allowed: NavRole[] | undefined, role: string | null | undef
   return allowed.includes(role as NavRole);
 }
 
-function filterItems(items: NavItemConfig[], role: string | null | undefined): NavItemConfig[] {
+/** Verrou nominatif — comparaison insensible à la casse/espaces. */
+function emailAllowed(
+  allowed: string[] | undefined,
+  email: string | null | undefined,
+): boolean {
+  if (!allowed?.length) return true;
+  const e = String(email ?? '').trim().toLowerCase();
+  if (!e) return false;
+  return allowed.some((a) => a.trim().toLowerCase() === e);
+}
+
+function filterItems(
+  items: NavItemConfig[],
+  role: string | null | undefined,
+  email?: string | null,
+): NavItemConfig[] {
   return items
     .filter((item) => roleAllowed(item.roles, role))
+    .filter((item) => emailAllowed(item.restrictedToEmails, email))
     .map((item) => ({
       ...item,
-      sub: item.sub ? filterItems(item.sub, role) : undefined,
+      sub: item.sub ? filterItems(item.sub, role, email) : undefined,
     }))
     .filter((item) => !item.sub || item.sub.length > 0);
 }
 
-function filterGroup(group: NavGroupConfig, role: string | null | undefined): NavGroupConfig {
+function filterGroup(
+  group: NavGroupConfig,
+  role: string | null | undefined,
+  email?: string | null,
+): NavGroupConfig {
   return {
     ...group,
-    items: filterItems(group.items, role),
+    items: filterItems(group.items, role, email),
   };
 }
 
@@ -528,6 +577,8 @@ export function navGroupsForRole(
   role: string | null | undefined,
   workerGrants?: FeatureGrant[],
   workerOwnerAccess?: boolean,
+  /** Email du compte connecté — requis pour les entrées à verrou nominatif. */
+  email?: string | null,
 ): NavGroupConfig[] {
   const navRole = normalizeNavRole(role);
   if (navRole === Roles.Worker) {
@@ -555,7 +606,7 @@ export function navGroupsForRole(
   }
 
   const ownerGroups = OWNER_NAV_GROUPS.filter((g) => roleAllowed(g.roles, navRole))
-    .map((g) => filterGroup(g, navRole))
+    .map((g) => filterGroup(g, navRole, email))
     .filter((g) => g.items.length > 0);
 
   if (!roleAllowed(ADMIN_ROLES, navRole)) {
@@ -563,7 +614,7 @@ export function navGroupsForRole(
   }
 
   const adminGroups = ADMIN_NAV_GROUPS.filter((g) => roleAllowed(g.roles, navRole))
-    .map((g) => filterGroup(g, navRole))
+    .map((g) => filterGroup(g, navRole, email))
     .filter((g) => g.items.length > 0);
 
   return [...ownerGroups, ...adminGroups];

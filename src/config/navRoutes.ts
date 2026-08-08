@@ -15,6 +15,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'reservations/list': '/reservations',
   'reservations/planning': '/reservations/planning',
   payments: '/paiements',
+  customers: '/customers',
   tasks: '/tasks',
   'tasks/list': '/tasks',
   'tasks/planning': '/tasks/planning',
