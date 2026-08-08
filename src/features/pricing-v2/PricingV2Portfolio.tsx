@@ -337,8 +337,14 @@ export default function PricingV2Portfolio({
               {rows.map((r) => (
                 <Box
                   component="tr"
-                  key={r.listingId}
-                  onClick={() => navigate(`/pricing-v2/bien/${r.listingId}`)}
+                  key={r.roomTypeId ? `${r.listingId}::${r.roomTypeId}` : r.listingId}
+                  onClick={() =>
+                    navigate(
+                      r.roomTypeId
+                        ? `/pricing-v2/bien/${r.listingId}/${r.roomTypeId}`
+                        : `/pricing-v2/bien/${r.listingId}`,
+                    )
+                  }
                   sx={{
                     cursor: 'pointer',
                     '& td': { p: 1.5, borderBottom: `1px solid ${T.line2}`, verticalAlign: 'middle' },

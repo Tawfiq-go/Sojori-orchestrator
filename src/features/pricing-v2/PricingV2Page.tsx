@@ -88,7 +88,11 @@ const MODE_LABELS: Record<string, { label: string; sub: string; pct: number }> =
 const CALENDAR_MONTHS = 6;
 
 export default function PricingV2Page() {
-  const { listingId } = useParams<{ listingId: string }>();
+  // MULTI-ROOMTYPE (Nommos) — roomTypeId absent sur l'immense majorité des
+  // biens (route /pricing-v2/bien/:listingId seule) : comportement identique
+  // à avant. Présent seulement quand on arrive sur UNE villa d'un listing
+  // multi (route .../bien/:listingId/:roomTypeId, cf. App.tsx).
+  const { listingId, roomTypeId } = useParams<{ listingId: string; roomTypeId?: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
   // Mécanique du calcul nocturne (shadow/AirROI) = admin only, cf. DynamicPricingPage.
@@ -126,19 +130,31 @@ export default function PricingV2Page() {
       .catch(() => setAllListings([]));
   }, []);
   const currentListingName =
-    allListings.find((r) => r.listingId === listingId)?.name ?? null;
+    allListings.find(
+      (r) => r.listingId === listingId && (r.roomTypeId ?? null) === (roomTypeId ?? null),
+    )?.name ?? null;
+  /** Un listing multi sans roomTypeId dans l'URL → 409 ROOMTYPE_REQUIRED du
+   *  backend, à choisir explicitement plutôt qu'un pick arbitraire côté UI. */
+  const [needsRoomTypeSelection, setNeedsRoomTypeSelection] = useState(false);
 
   const reload = useCallback(async () => {
     if (!listingId) return;
     setLoading(true);
     setError(null);
+    setNeedsRoomTypeSelection(false);
     try {
       // Le preview est un calcul à la volée côté service : aucun effet de bord.
       const [p, c] = await Promise.all([
-        fetchPricingV2Preview(listingId),
-        fetchPricingV2Config(listingId),
+        fetchPricingV2Preview(listingId, roomTypeId),
+        fetchPricingV2Config(listingId, roomTypeId),
       ]);
       if (!p.data.success) {
+        // Listing multi (Nommos) sans villa précisée : pas une panne, un choix
+        // à faire. On l'affiche avec un sélecteur plutôt qu'un pick arbitraire.
+        if (p.data.code === 'ROOMTYPE_REQUIRED') {
+          setNeedsRoomTypeSelection(true);
+          return;
+        }
         // Prix de marché périmé : état métier, pas panne. On garde le détail
         // pour l'afficher franchement au PM plutôt qu'un « indisponible ».
         if (p.data.code === 'SNAPSHOT_STALE') {
@@ -151,7 +167,7 @@ export default function PricingV2Page() {
       setResult(p.data.result);
       setConfig(c.data.config);
       // Secondaires : ne doivent jamais casser la page principale.
-      void fetchPricingV2Market(listingId)
+      void fetchPricingV2Market(listingId, roomTypeId)
         .then((m) => setMarket(m.data.success ? m.data : null))
         .catch(() => setMarket(null));
     } catch (e) {
@@ -159,7 +175,7 @@ export default function PricingV2Page() {
     } finally {
       setLoading(false);
     }
-  }, [listingId]);
+  }, [listingId, roomTypeId]);
 
   useEffect(() => {
     void reload();
@@ -195,7 +211,7 @@ export default function PricingV2Page() {
     if (!listingId) return;
     setSaving(true);
     try {
-      await savePricingV2Config(listingId, p);
+      await savePricingV2Config(listingId, p, roomTypeId);
       await reload(); // recalcul en direct — le calendrier suit
     } finally {
       setSaving(false);
@@ -262,10 +278,47 @@ export default function PricingV2Page() {
     return [...m.entries()].slice(0, CALENDAR_MONTHS);
   }, [result]);
 
-  if (loading && !result) {
+  if (loading && !result && !needsRoomTypeSelection) {
     return (
       <Box sx={{ p: 6, textAlign: 'center', bgcolor: T.bg, minHeight: '100%' }}>
         <CircularProgress size={28} sx={{ color: T.goldPure }} />
+      </Box>
+    );
+  }
+  if (needsRoomTypeSelection) {
+    // MULTI-ROOMTYPE (Nommos) — plusieurs villas sous ce listing, aucune
+    // choisie par l'URL. `allListings` (le portfolio) liste déjà chaque villa
+    // séparément avec son roomTypeId — on les retrouve par listingId.
+    const villas = allListings.filter((r) => r.listingId === listingId && r.roomTypeId);
+    return (
+      <Box sx={{ p: 4, maxWidth: 560, mx: 'auto', bgcolor: T.bg, minHeight: '100%' }}>
+        <Typography sx={{ fontWeight: 750, fontSize: 17, color: T.ink, mb: 0.5 }}>
+          Ce bien a plusieurs villas
+        </Typography>
+        <Typography sx={{ fontSize: 13, color: T.ink2, mb: 2.5 }}>
+          Chacune a son propre prix et ses propres réglages — choisissez laquelle regarder.
+        </Typography>
+        <Stack spacing={1}>
+          {villas.map((v) => (
+            <Box
+              key={v.roomTypeId}
+              component="button"
+              type="button"
+              onClick={() => navigate(`/pricing-v2/bien/${listingId}/${v.roomTypeId}`)}
+              sx={{
+                all: 'unset',
+                cursor: 'pointer',
+                ...cardSx,
+                py: 1.5,
+                px: 2,
+                display: 'block',
+                '&:hover': { borderColor: T.goldPure },
+              }}
+            >
+              <Typography sx={{ fontWeight: 700, fontSize: 14, color: T.ink }}>{v.name}</Typography>
+            </Box>
+          ))}
+        </Stack>
       </Box>
     );
   }
@@ -346,11 +399,22 @@ export default function PricingV2Page() {
           <Autocomplete
             options={allListings}
             getOptionLabel={(o) => o.name}
-            value={allListings.find((r) => r.listingId === listingId) ?? null}
+            value={
+              allListings.find(
+                (r) => r.listingId === listingId && (r.roomTypeId ?? null) === (roomTypeId ?? null),
+              ) ?? null
+            }
             onChange={(_, next) => {
-              if (next) navigate(`/pricing-v2/bien/${next.listingId}`);
+              if (!next) return;
+              navigate(
+                next.roomTypeId
+                  ? `/pricing-v2/bien/${next.listingId}/${next.roomTypeId}`
+                  : `/pricing-v2/bien/${next.listingId}`,
+              );
             }}
-            isOptionEqualToValue={(o, v) => o.listingId === v.listingId}
+            isOptionEqualToValue={(o, v) =>
+              o.listingId === v.listingId && (o.roomTypeId ?? null) === (v.roomTypeId ?? null)
+            }
             size="small"
             sx={{ width: { xs: '100%', sm: 320 } }}
             renderInput={(params) => (

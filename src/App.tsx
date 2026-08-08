@@ -439,6 +439,9 @@ function App() {
               <Route path="/pricing-v2" element={<LazyRoute><PricingV2PortfolioPage /></LazyRoute>} />
               <Route path="/pricing-v2/portefeuille" element={<Navigate to="/pricing-v2" replace />} />
               <Route path="/pricing-v2/bien/:listingId" element={<LazyRoute><PricingV2Page /></LazyRoute>} />
+              {/* MULTI-ROOMTYPE (Nommos) — :roomTypeId optionnel, une villa d'un
+                  listing multi. Absent = comportement single inchangé. */}
+              <Route path="/pricing-v2/bien/:listingId/:roomTypeId" element={<LazyRoute><PricingV2Page /></LazyRoute>} />
               <Route path="/catalogue/dynamic-pricing" element={<Navigate to="/dynamic-pricing/portefeuille" replace />} />
               <Route path="/catalogue/dynamic-pricing/portefeuille" element={<LazyRoute><DynamicPricingPage /></LazyRoute>} />
               <Route path="/catalogue/dynamic-pricing/bien" element={<Navigate to="/dynamic-pricing/portefeuille" replace />} />
