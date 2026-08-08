@@ -49,6 +49,7 @@ export default function CompsTable({
             <Box component="tr" sx={{ '& th': { textAlign: 'left', ...kickerSx, pb: 1, borderBottom: `1px solid ${T.line}` } }}>
               <th>RESSEMBLANCE</th>
               <th>LE BIEN</th>
+              <th>DISTANCE</th>
               <th>NOTE</th>
               <th style={{ textAlign: 'right' }}>IL ENCAISSE</th>
               <th style={{ textAlign: 'right' }}>À VOTRE NIVEAU</th>
@@ -167,6 +168,11 @@ export default function CompsTable({
                   </Typography>
                     </Box>
                   </Box>
+                </td>
+                <td>
+                  <Typography sx={{ fontSize: 12, fontFamily: T.mono, color: T.mut }}>
+                    {c.distanceKm != null ? `${c.distanceKm} km` : '—'}
+                  </Typography>
                 </td>
                 <td>
                   <Typography

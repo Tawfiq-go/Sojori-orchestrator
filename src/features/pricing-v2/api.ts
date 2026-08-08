@@ -157,6 +157,8 @@ export type PricingV2Comp = {
   superhost: boolean;
   minNights: number | null;
   locality: string;
+  /** Distance à vol d'oiseau (km) vs votre bien — null si un point GPS manque. */
+  distanceKm: number | null;
   adrMad: number; // ce qu'il encaisse réellement (12 mois)
   adr90dMad: number; // tendance récente
   occupancy: number | null;
