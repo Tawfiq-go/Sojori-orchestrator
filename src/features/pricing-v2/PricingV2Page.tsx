@@ -18,7 +18,7 @@
 //   [ ] Overrides datés au drag sur le calendrier (backend prêt : dailyOverrides)
 //   [ ] Drag du curseur de positionnement sur la distribution (aujourd'hui : 3 cartes)
 // ════════════════════════════════════════════════════════════════════════════
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -103,10 +103,16 @@ export default function PricingV2Page() {
   const [stale, setStale] = useState<{ ageDays: number | null; maxAgeDays: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  // ── Sélection de plage au drag (consigne maquette : « glisser = plage ») ──
-  const [dragFrom, setDragFrom] = useState<string | null>(null);
-  const [dragTo, setDragTo] = useState<string | null>(null);
+  // ── Sélection de plage (consigne maquette : « glisser = plage ») ──
+  // Un seul objet : `from`/`to` bougent toujours ensemble, sinon la barre
+  // d'action se rendait un instant avec des bornes dépareillées.
+  // `dragging` distingue le geste en cours du résultat figé ; il ne suffit pas
+  // de le poser au mousedown car un clic simple doit AUSSI ouvrir le ticket.
+  const [sel, setSel] = useState<{ from: string; to: string } | null>(null);
   const [dragging, setDragging] = useState(false);
+  /** Vrai dès que la souris a survolé une AUTRE cellule pendant le geste :
+   *  c'est ce qui sépare « clic » (ticket de caisse) de « glisser » (plage). */
+  const movedRef = useRef(false);
   /** Sur les nuits VENDUES : afficher le prix payé (figé) ou le prix du moteur. */
   const [showBookedPrices, setShowBookedPrices] = useState(false);
   /** Jour cliqué dans le calendrier — la courbe "Le marché, et vous dessus"
@@ -164,6 +170,32 @@ export default function PricingV2Page() {
     void reload();
   }, [reload]);
 
+  /** Relâcher la souris N'IMPORTE OÙ termine le geste en gardant la plage.
+   *  Avant, un `onMouseLeave` sur la grille annulait `dragging` : en sortant du
+   *  calendrier pour aller cliquer « Fixer », la plage restait mais le geste
+   *  était réputé en cours, et la barre d'action (masquée pendant `dragging`)
+   *  ne réapparaissait jamais — d'où l'impression que « ça ne marche pas ». */
+  useEffect(() => {
+    if (!dragging) return;
+    const end = () => setDragging(false);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => {
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+  }, [dragging]);
+
+  /** Échap annule la sélection en cours (réflexe attendu sur une multi-sélection). */
+  useEffect(() => {
+    if (!sel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') clearSelection();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sel]);
+
   const patch = async (p: Partial<PricingV2Config>) => {
     if (!listingId) return;
     setSaving(true);
@@ -176,11 +208,15 @@ export default function PricingV2Page() {
   };
 
   // Bornes normalisées de la sélection (le drag peut aller de droite à gauche).
-  const range =
-    dragFrom && dragTo
-      ? { from: dragFrom <= dragTo ? dragFrom : dragTo, to: dragFrom <= dragTo ? dragTo : dragFrom }
-      : null;
+  const range = sel
+    ? { from: sel.from <= sel.to ? sel.from : sel.to, to: sel.from <= sel.to ? sel.to : sel.from }
+    : null;
   const inRange = (iso: string) => !!range && iso >= range.from && iso <= range.to;
+  const clearSelection = () => {
+    setSel(null);
+    setDragging(false);
+    movedRef.current = false;
+  };
 
   /** Applique Fixer / Ajuster / Revenir au calcul sur la plage sélectionnée. */
   const applyRange = async (action: RangeAction) => {
@@ -190,14 +226,19 @@ export default function PricingV2Page() {
     };
     for (const d of result.days) {
       if (!inRange(d.date)) continue;
-      // Une nuit déjà vendue ne se re-price pas : le prix est figé au contrat.
-      if (d.status === 'booked') continue;
+      // ⚠️ AUCUNE nuit n'est exclue, y compris `booked` et `blocked` (Tawfiq
+      // 08/08/2026). Un override est une CONSIGNE DE PRIX, pas un encaissement :
+      // si la nuit est débloquée, ou la réservation annulée, elle doit repartir
+      // au prix voulu par le PM et pas au prix calculé de l'époque. Filtrer ici
+      // laissait des trous silencieux dans la plage.
       if (action.type === 'clear') delete next[d.date];
       else next[d.date] = { type: action.type, value: action.value };
     }
-    setDragFrom(null);
-    setDragTo(null);
+    // La sélection ne se vide qu'APRÈS l'écriture : en la vidant avant, la barre
+    // d'action disparaissait pendant l'appel réseau et le PM ne savait plus si
+    // son geste avait porté (et un échec le laissait sans rien à réessayer).
     await patch({ dailyOverrides: next });
+    clearSelection();
   };
 
   // Méthode de pacing : 'threshold' est le défaut produit (config absente =
@@ -447,6 +488,40 @@ export default function PricingV2Page() {
         <Stack spacing={1.75}>
           {/* Distribution — écran signature, en tête de colonne gauche */}
           {market?.scale ? (
+            <>
+            {/* Date affichée par la courbe — sans ça, un clic droit change les
+                chiffres sans dire lesquels (pas de popup ici, contrairement au
+                ticket de caisse). Bouton "Aujourd'hui" seulement si on s'est
+                écarté de la date du jour. */}
+            {marketDay.date !== today.date ? (
+              <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', px: 0.25 }}>
+                <Typography sx={{ fontSize: 12, color: T.ink2 }}>
+                  Marché affiché pour le{' '}
+                  <b style={{ color: T.ink }}>
+                    {new Date(`${marketDay.date}T12:00:00Z`).toLocaleDateString('fr-FR', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      timeZone: 'UTC',
+                    })}
+                  </b>
+                </Typography>
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={() => setSelectedMarketDate(null)}
+                  sx={{
+                    all: 'unset',
+                    cursor: 'pointer',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: T.gold,
+                  }}
+                >
+                  ↺ Aujourd'hui
+                </Box>
+              </Stack>
+            ) : null}
             <DistributionChart
               scale={market.scale}
               comps={market.comps}
@@ -513,6 +588,7 @@ export default function PricingV2Page() {
                 void patch({ annualTilt: Math.min(1.6, Math.max(0.6, Number(tilt.toFixed(3)))) });
               }}
             />
+            </>
           ) : null}
 
           {/* ── Décisions ── */}
@@ -718,27 +794,26 @@ export default function PricingV2Page() {
             </Stack>
           ) : null}
 
-          {/* Barre d'action — apparaît dès qu'une plage est sélectionnée au drag */}
-          {range && !dragging ? (
+          {/* Barre d'action — apparaît dès qu'une plage est sélectionnée au drag.
+              Reste montée pendant le glisser (opacité seule) : la démonter puis
+              la remonter faisait sauter la page et vidait le champ « MAD ». */}
+          {range ? (
             <RangeActionBar
               fromDate={range.from}
               toDate={range.to}
-              nbDays={result.days.filter((d) => inRange(d.date) && d.status !== 'booked').length}
+              // Toutes les nuits de la plage reçoivent la consigne, réservées et
+              // bloquées incluses (cf. applyRange) — le décompte doit dire vrai.
+              nbDays={result.days.filter((d) => inRange(d.date)).length}
               nbBooked={result.days.filter((d) => inRange(d.date) && d.status === 'booked').length}
+              nbBlocked={result.days.filter((d) => inRange(d.date) && d.status === 'blocked').length}
+              dragging={dragging}
               busy={saving}
               onApply={(a) => void applyRange(a)}
-              onCancel={() => {
-                setDragFrom(null);
-                setDragTo(null);
-              }}
+              onCancel={clearSelection}
             />
           ) : null}
-          {/* Zone défilante : 4 mois visibles, 6 chargés. La hauteur est bornée à
-              4 mois (~232 px chacun) pour que le 5ᵉ appelle le défilement sans
-              pousser le reste de la page. `onMouseLeave` relâche le drag si la
-              souris sort du calendrier. */}
+          {/* Les 6 mois du moteur, sur deux colonnes, sans zone défilante. */}
           <Box
-            onMouseLeave={() => setDragging(false)}
             sx={{
               // Les 6 mois sur DEUX colonnes : empilés verticalement, il fallait
               // faire défiler pour en voir plus de deux. Sur écran large ils
@@ -814,22 +889,35 @@ export default function PricingV2Page() {
                         key={d.date}
                         component="button"
                         type="button"
-                        // clic = ticket de caisse · glisser = sélection de plage
-                        onMouseDown={() => {
+                        // clic = ticket de caisse · glisser = sélection de plage.
+                        // Pointer events (pas mouse) : gère aussi le tactile, et
+                        // `releasePointerCapture` permet de suivre le survol des
+                        // cellules voisines pendant le glisser.
+                        onPointerDown={(e) => {
+                          // Bouton droit : géré par onContextMenu, ne démarre pas
+                          // un glisser (sinon la sélection restait coincée).
+                          if (e.button !== 0) return;
+                          e.currentTarget.releasePointerCapture(e.pointerId);
                           setDragging(true);
-                          setDragFrom(d.date);
-                          setDragTo(d.date);
+                          movedRef.current = false;
+                          setSel({ from: d.date, to: d.date });
                         }}
-                        onMouseEnter={() => {
-                          if (dragging) setDragTo(d.date);
+                        onPointerEnter={() => {
+                          if (!dragging) return;
+                          movedRef.current = true;
+                          // Étend depuis l'ancre `from`, jamais depuis `to` : en
+                          // repartant en arrière la plage se réduit correctement.
+                          setSel((s) => (s ? { from: s.from, to: d.date } : s));
                         }}
-                        onMouseUp={() => {
+                        onPointerUp={(e) => {
+                          if (e.button !== 0) return;
                           setDragging(false);
-                          if (dragFrom === d.date && dragTo === d.date) {
-                            setDragFrom(null);
-                            setDragTo(null);
+                          // Clic sans déplacement = consultation, pas sélection.
+                          if (!movedRef.current) {
+                            setSel(null);
                             setTicketDay(d);
                           }
+                          movedRef.current = false;
                         }}
                         /* Clic droit = changer le jour affiché par "Le marché,
                            et vous dessus" SANS ouvrir le ticket de caisse —
