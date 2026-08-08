@@ -3,11 +3,13 @@ import airbnbLogo from '../../assets/images/airbnb.png';
 import bookingLogo from '../../assets/images/booking.png';
 
 const SOJORI_ORANGE = '#b8851a';
+const NOMMOS_TEAL = '#0d7377';
 
 export type ReservationSourceKind =
   | 'admin'
   | 'whatsapp'
   | 'vente'
+  | 'nommos'
   | 'airbnb'
   | 'booking'
   | 'vrbo'
@@ -18,30 +20,90 @@ export interface ReservationSourceInput {
   source?: string | null;
   channelName?: string | null;
   byRentals?: boolean;
+  /** Notes backend (souvent `channelNumber:… | origin:…` pour Mews). */
+  notes?: string | null;
+  /** Nom listing — pour badge Direct Nommos. */
+  listingName?: string | null;
+}
+
+function extractChannelNumber(notes?: string | null): string {
+  const m = String(notes || '').match(/channelNumber:([^\s|]+)/i);
+  return (m?.[1] || '').trim();
 }
 
 /**
- * Résout le canal d'origine à partir de source + channelName (backend).
+ * Booking.com confirmations via CM (D-EDGE) : numériques 8–12 chiffres.
+ * Airbnb : codes type HM… / alphanum mixtes.
+ */
+function resolveOtaFromChannelNumber(channelNumber: string): 'airbnb' | 'booking' | null {
+  const cn = channelNumber.trim();
+  if (!cn) return null;
+  if (/^[0-9]{8,12}$/.test(cn)) return 'booking';
+  if (/^(hm|hx)/i.test(cn) || /[A-Za-z].*\d|\d.*[A-Za-z]/.test(cn)) return 'airbnb';
+  return null;
+}
+
+/**
+ * Résout le canal d'origine à partir de source + channelName (+ notes / listing).
  * - Dashboard / admin → badge « A »
  * - sojori-vente → logo Sojori
- * - whatsapp-booking → logo WhatsApp
- * - OTA → logos existants
+ * - Direct Mews (hôtel) → badge Nommos (listing Nommos)
+ * - OTA Mews → Booking.com / Airbnb (pas Sojori)
  */
 export function resolveReservationSourceKind(
   reservation: ReservationSourceInput,
 ): ReservationSourceKind {
   const source = String(reservation?.source || '').toLowerCase().trim();
   const channel = String(reservation?.channelName || '').toLowerCase().trim();
+  const notes = String(reservation?.notes || '');
+  const listing = String(reservation?.listingName || '').toLowerCase();
+  const blob = `${source} ${channel} ${notes}`.toLowerCase();
 
   if (source === 'dashboard') return 'admin';
   if (source === 'whatsapp-booking' || channel.includes('whatsapp')) return 'whatsapp';
   if (source === 'sojori-vente' || channel.includes('marketplace')) return 'vente';
 
+  // Libellés déjà enrichis (pull / backfill)
+  if (channel.includes('nommos') || channel === 'direct nommos') return 'nommos';
   if (channel.includes('airbnb')) return 'airbnb';
   if (channel.includes('booking')) return 'booking';
   if (channel.includes('vrbo')) return 'vrbo';
   if (channel.includes('channex')) return 'channex';
   if (channel.includes('rentals') || reservation?.byRentals) return 'rentals';
+
+  const isMews =
+    source === 'mews' ||
+    channel.includes('mews') ||
+    /\bsource:mews\b/i.test(notes) ||
+    /\borigin:(channelmanager|commander)/i.test(notes);
+
+  if (isMews) {
+    const fromCn = resolveOtaFromChannelNumber(extractChannelNumber(notes));
+    if (fromCn) return fromCn;
+
+    const isDirect =
+      channel.includes('direct') ||
+      /origin:commander/i.test(notes) ||
+      /origin:bookingengine/i.test(notes) ||
+      /origin:navigator/i.test(notes) ||
+      /origin:callcenter/i.test(notes);
+
+    // Direct hôtel — badge Nommos (jamais logo Sojori)
+    if (isDirect) return 'nommos';
+
+    // OTA Mews CM : Nommos = Booking via D-EDGE (ChannelNumber numériques)
+    if (
+      channel.includes('ota') ||
+      /origin:channelmanager/i.test(notes) ||
+      blob.includes('channelmanager')
+    ) {
+      return 'booking';
+    }
+
+    // Autre MEWS sans signal → pas Sojori ; si listing Nommos, traiter comme Nommos
+    if (listing.includes('nommos')) return 'nommos';
+    return 'booking';
+  }
 
   if (channel === 'sojori' || channel === 'direct' || channel === '') return 'vente';
 
@@ -56,6 +118,8 @@ function getReservationSourceTitle(kind: ReservationSourceKind): string {
       return 'WhatsApp Booking';
     case 'vente':
       return 'Sojori (site / direct)';
+    case 'nommos':
+      return 'Nommos (direct)';
     case 'airbnb':
       return 'Airbnb';
     case 'booking':
@@ -128,6 +192,33 @@ function RentalsBadge({ size = 22 }: { size?: number }) {
   );
 }
 
+function NommosBadge({ size = 22 }: { size?: number }) {
+  return (
+    <div
+      title="Nommos (direct)"
+      style={{
+        minWidth: size,
+        height: size,
+        padding: '0 4px',
+        border: `2px solid ${NOMMOS_TEAL}`,
+        borderRadius: 4,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 800,
+        fontSize: Math.max(8, Math.round(size * 0.32)),
+        color: NOMMOS_TEAL,
+        lineHeight: 1,
+        backgroundColor: '#fff',
+        letterSpacing: '-0.03em',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      Nommos
+    </div>
+  );
+}
+
 export function ReservationSourceIcon({
   reservation,
   size = 22,
@@ -147,6 +238,9 @@ export function ReservationSourceIcon({
         <WhatsAppIcon size={size - 2} />
       </span>
     );
+  }
+  if (kind === 'nommos') {
+    return <NommosBadge size={size} />;
   }
   if (kind === 'rentals') {
     return <RentalsBadge size={size} />;

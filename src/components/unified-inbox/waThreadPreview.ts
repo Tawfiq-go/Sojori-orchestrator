@@ -87,7 +87,7 @@ function ownerSummaryFromTemplateName(templateName?: string | null): string | nu
   return `Relance · ${key.replace(/_/g, ' ')}`;
 }
 
-/** Message host Sojori (email / OTA) — pas une question voyageur. */
+/** Message host Sojori (email / OTA auto) — pas une question voyageur. */
 export function looksLikeHostOutboundMessage(raw?: string | null): boolean {
   const c = String(raw || '');
   if (!c.trim()) return false;
@@ -97,6 +97,52 @@ export function looksLikeHostOutboundMessage(raw?: string | null): boolean {
   if (/écrivez-nous\s+sur\s+whatsapp/i.test(c)) return true;
   if (/votre\s+réservation\b.+\best\s+confirmée/i.test(c)) return true;
   if (/sent via booking\.com|sent via airbnb/i.test(c)) return true;
+  return false;
+}
+
+/**
+ * Réponse hôte « parlée » (souvent mal taggée incoming=true côté OTA).
+ * Ne pas utiliser dans lastRealNonAuto (sinon on ignore le vrai dernier R).
+ */
+export function looksLikeHostSpokenReply(raw?: string | null): boolean {
+  const c = String(raw || '');
+  if (!c.trim()) return false;
+  if (looksLikeHostOutboundMessage(c)) return true;
+  if (/hope you'?re enjoying|just checking in|we have left you a \d/i.test(c)) return true;
+  if (/thank you for staying with us/i.test(c)) return true;
+  if (/you'?re very welcome|see you soon/i.test(c)) return true;
+  if (/belle journ[ée]e\b|je vais te texter/i.test(c)) return true;
+  if (/^(avec plaisir|je vous en prie|de rien)[\s!.…]*$/i.test(c.trim())) return true;
+  return false;
+}
+
+/**
+ * Court remerciement / ack voyageur — pas une vraie question à traiter.
+ * (Ma journée / Non répondu : ne pas compter comme « À répondre ».)
+ */
+export function looksLikeGuestCourtesyClose(raw?: string | null): boolean {
+  const t = String(raw || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!t || t.length > 100) return false;
+  if (/\?/.test(t)) return false;
+  const low = t.toLowerCase();
+  if (
+    /^(ok(ay)?|oui|yes|yep|sure|parfait|super|great|cool|fabulous|noted|c'?est noté|d'?accord|merci(\s+beaucoup)?|thanks?(?:\s+you)?|thank you|muito obrigado|👍|🙏|😊|🙂)[\s!.…]*$/i.test(
+      low,
+    )
+  ) {
+    return true;
+  }
+  // « Okay thanks 😊 » / « Hi Moncef Thanks everything is fine thanks a lot »
+  if (
+    t.length <= 90 &&
+    /^(ok(ay)?|hi\b|hello\b|bonjour)?[\s,]*(thanks?|thank you|merci)\b/i.test(t) &&
+    !/\b(can|could|please|pouvez|pourriez|besoin|need|when|où|where|how)\b/i.test(t)
+  ) {
+    return true;
+  }
   return false;
 }
 

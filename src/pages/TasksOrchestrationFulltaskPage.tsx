@@ -113,6 +113,7 @@ function TasksOrchestrationFulltaskPageInner() {
   );
 
   const [catalog, setCatalog] = useState<CatalogMessage[]>([]);
+  const [guestMessageSignature, setGuestMessageSignature] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadState, setLoadState] = useState<'ok' | 'empty' | 'error'>('ok');
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -125,6 +126,7 @@ function TasksOrchestrationFulltaskPageInner() {
     if (!doc) return;
     const mapped = apiOrchestrationToDesign(doc);
     setCatalog(mergeCatalogWithClaudeDefaults(mapped.catalog as CatalogMessage[]));
+    setGuestMessageSignature(String(doc.guestMessageSignature || ''));
   }, []);
 
   const load = useCallback(
@@ -140,6 +142,7 @@ function TasksOrchestrationFulltaskPageInner() {
         if (!doc) {
           if (!background) {
             setCatalog(mergeCatalogWithClaudeDefaults([]));
+            setGuestMessageSignature('');
             setLoadState('empty');
             setLoadError(null);
             setConfigSource(meta?.configSource ?? 'global_template');
@@ -255,6 +258,7 @@ function TasksOrchestrationFulltaskPageInner() {
           messageFrOta: String(c.messageFrOta || ''),
           messageFrEmail: String(c.messageFrEmail || ''),
         })),
+        guestMessageSignature: guestMessageSignature.trim(),
       });
       const saved = unwrapFulltaskData<Record<string, unknown>>(raw);
       if (saved) {
@@ -342,8 +346,8 @@ function TasksOrchestrationFulltaskPageInner() {
           ownerConfigStatus={ownerConfigStatus}
         />
       ) : null}
-      {/* 🚦 Priorité 3 couleurs — presets par type (navette ≠ ménage), cascade owner. */}
-      <TaskPrioritySection ownerKey={effectiveOwnerKey} />
+      {/* Priorités staff — admin / expert seulement (pas la page Messages clients PM). */}
+      {showWhatsAppConfigTab ? <TaskPrioritySection ownerKey={effectiveOwnerKey} /> : null}
       {isAdminTemplate &&
       adminScopeTab !== 'global' &&
       configSource === 'global_template' &&
@@ -443,6 +447,9 @@ function TasksOrchestrationFulltaskPageInner() {
       <OrchestrationPageView
         hideOwnerScope={hideOwnerScopeLabels}
         showWhatsAppConfigTab={showWhatsAppConfigTab}
+        pmSafeMode={!showWhatsAppConfigTab}
+        guestMessageSignature={guestMessageSignature}
+        onGuestMessageSignatureChange={setGuestMessageSignature}
         ownerDisplayName={hideOwnerScopeLabels ? undefined : effectiveDisplayName}
         ownerKeyDetail={hideOwnerScopeLabels ? undefined : effectiveKeyDetail}
         initialSubTab={subTab}

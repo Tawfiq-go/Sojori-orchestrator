@@ -275,7 +275,7 @@ export const ALL_COLUMNS: ColumnDef[] = [
   },
   {
     id: 'reservations',
-    label: 'Réservations',
+    label: 'Réservations (rooms Multi)',
     short: 'Rés.',
     excelSelectable: false,
   },
@@ -311,10 +311,15 @@ export const ALL_COLUMNS: ColumnDef[] = [
   },
 ];
 
-/** Colonnes affichées sur la ligne principale (prix seul — dispo dans le collapse). */
-export const CALENDAR_PRIMARY_ROW_COLUMNS = ['rate'] as const;
+/**
+ * Colonnes sur la ligne principale multi :
+ * - Tarif (roomType / single — jamais building hôtel)
+ * - Dispo (somme building + dispo roomType)
+ * - Rés. (filtre UI : rooms + barres — pas de ligne inventaire)
+ */
+export const CALENDAR_PRIMARY_ROW_COLUMNS = ['rate', 'availableRoom'] as const;
 
-/** Sélection colonnes par défaut (vue multi) — Dispo puis Min stay dans le collapse. */
+/** Sélection colonnes par défaut (vue multi) — Dispo sur la ligne ; Min stay / dyn en collapse. */
 export const CALENDAR_DEFAULT_COLUMNS = [
   'rate',
   'availableRoom',
@@ -326,6 +331,7 @@ export const CALENDAR_DEFAULT_COLUMNS = [
 export const CALENDAR_COLUMN_PRIORITY = [
   'rate',
   'availableRoom',
+  'reservations',
   'minStay',
   'dynamicPrice',
 ] as const;
@@ -354,8 +360,8 @@ export function calendarDetailColumns(selectedColumns: string[]): string[] {
   return sortCalendarColumns(effectiveCalendarColumns(selectedColumns));
 }
 
-/** Colonnes « UI only » : pas de ligne collapse ni cellules dates. */
-const UI_ONLY_COLUMN_IDS = new Set(['audit']);
+/** Colonnes « UI only » : pas de ligne collapse ni cellules dates (Rés. = rooms Multi). */
+const UI_ONLY_COLUMN_IDS = new Set(['audit', 'reservations']);
 
 export function isCalendarAuditFilterOn(selectedColumns: string[]): boolean {
   return effectiveCalendarColumns(selectedColumns).includes('audit');

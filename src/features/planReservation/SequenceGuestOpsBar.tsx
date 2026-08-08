@@ -48,6 +48,7 @@ export default function SequenceGuestOpsBar({
   actionCompleted,
   clientChosenTime,
   checkInIso,
+  guestManualSendDisabled,
   onDone,
 }: {
   reservationId: string;
@@ -60,13 +61,17 @@ export default function SequenceGuestOpsBar({
   actionCompleted?: boolean;
   clientChosenTime?: string;
   checkInIso?: string;
+  /** Listing : bloque Relancer client (y compris WA/OTA). */
+  guestManualSendDisabled?: boolean;
   onDone?: (planDoc?: FulltaskPlanDoc) => void;
 }) {
   const [busy, setBusy] = useState<'wa' | 'ota' | 'staff' | null>(null);
   const [slotOpen, setSlotOpen] = useState(false);
 
   const showManualRelance =
-    !actionCompleted && GUEST_RELANCE_TYPES.has(taskType);
+    !guestManualSendDisabled &&
+    !actionCompleted &&
+    GUEST_RELANCE_TYPES.has(taskType);
   const showForceSlot = GUEST_SLOT_TYPES.has(taskType);
   // Assigner dans Actions admin tant que pas déjà un bloc Assignation (évite doublon).
   const showManualAssign = isStaffAssignableType(taskType) && !hasAssignation;

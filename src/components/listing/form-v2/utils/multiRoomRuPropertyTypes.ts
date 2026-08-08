@@ -1,12 +1,9 @@
 /**
- * TYPE RU pour Config Rooms Multi = dico **`Pull_ListPropTypes_RQ`**
- * (Studio, One Bedroom…) → `Push_PutProperty_RQ/Property/PropertyTypeID`.
+ * Type Sojori pour Config Rooms Multi = dico ListPropTypes
+ * (Studio, One Bedroom…) → PropertyTypeID au push OTA.
  *
- * Source Sojori : collection **RoomTypeConfig** (sync `syncpropertyTypes`),
- * **pas** PropertyType (Hotel / Riad / Private room — autre dico, IDs invalides → RU 170).
- *
- * @see https://developer.rentalsunited.com/ — List property types
- * @see docs/RU/OFFICIAL_API_REFERENCE_LINKS.md
+ * Source Sojori : collection **RoomTypeConfig** (sync property types),
+ * **pas** PropertyType bâtiment (Hotel / Riad / Villa Resort — autre dico, IDs incompatibles Multi).
  */
 
 /** IDs ListPropTypes usuels pour un riad / hôtel (Studio → 10 chambres). */

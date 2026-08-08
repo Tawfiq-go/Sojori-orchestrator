@@ -598,6 +598,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
           digestTime?: string;
           autoAccept: boolean;
           readyToFinish: boolean;
+          opsRole?: 'agent' | 'supervisor';
         }
       > = {};
       const rows =
@@ -611,6 +612,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
           m.autoAccept === true || m.mode === 'auto_accept' || m.mode === 'ready_to_finish';
         const remindMode = m.remindMode === 'daily_digest' ? 'daily_digest' : 'individual';
         const digestRaw = String(m.digestTime || '').trim();
+        const opsRole = m.opsRole === 'supervisor' ? ('supervisor' as const) : ('agent' as const);
         out[t] = {
           notifyAssign: m.notifyAssign === false ? false : true,
           remindMode,
@@ -619,6 +621,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
             : {}),
           autoAccept,
           readyToFinish,
+          opsRole,
         };
       }
       if (Object.keys(out).length === 0) {
@@ -690,10 +693,17 @@ export function designStaffToApi(
             digestTime?: string;
             autoAccept?: boolean;
             readyToFinish?: boolean;
+            opsRole?: string;
           }
         >
       | undefined) || {};
   const allowedTypes = (staff.allowedTaskTypes as string[]) || [];
+  const CLEANING_SUP_TYPES = new Set([
+    'cleaning_free',
+    'cleaning_paid',
+    'cleaning_sojori',
+    'checkout_cleaning',
+  ]);
   const taskTypeModes = allowedTypes.map((taskType) => {
     const cfg = taskTypeModesMap[taskType] || {};
     const readyToFinish = cfg.readyToFinish === true;
@@ -711,6 +721,10 @@ export function designStaffToApi(
         ? ('daily_digest' as const)
         : ('individual' as const);
     const digestRaw = String(cfg.digestTime || '').trim();
+    const opsRole =
+      CLEANING_SUP_TYPES.has(taskType) && cfg.opsRole === 'supervisor'
+        ? ('supervisor' as const)
+        : ('agent' as const);
     return {
       taskType,
       mode,
@@ -725,6 +739,7 @@ export function designStaffToApi(
         : {}),
       autoAccept,
       readyToFinish,
+      opsRole,
     };
   });
   const modes = taskTypeModes.map((m) => m.mode);
@@ -1057,6 +1072,7 @@ export function apiOrchestrationToDesign(doc: Record<string, unknown> | null) {
       deliveryChannel: normDeliveryChannel(
         ch?.primary ?? (m as { deliveryChannel?: string }).deliveryChannel,
       ),
+      sendMode: m.sendMode === 'manual' ? ('manual' as const) : ('auto' as const),
     };
   });
 
@@ -1324,6 +1340,7 @@ export function designOrchestrationToApi(
         enabled: m.enabled !== false,
         label: m.label,
         messageId: String(m.catalogMessageId || ''),
+        sendMode: m.sendMode === 'manual' ? 'manual' : 'auto',
         trigger: {
           ref: mapRefToApi(trigger?.reference),
           ...(isHours ? { hours: trigger.delay?.value ?? 0 } : { day: trigger.delay?.value ?? 0 }),

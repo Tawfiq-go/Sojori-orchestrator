@@ -43,6 +43,8 @@ import ListingGroupMultiFilter from './ListingGroupMultiFilter';
 import {
   expandPlanningListingRows,
   isPlanningMultiHotel,
+  roomTypeExpandKey,
+  countReservationsOnDay,
 } from '../../utils/planningMultiExpand';
 
 export type StayViewVariant = 'tasks' | 'reservations';
@@ -178,8 +180,25 @@ export default function StayView({
   const [internalCockpitLayer, setInternalCockpitLayer] = useState<StayCockpitLayer>(
     () => (enableCommsCockpit ? 'resas' : 'all'),
   );
-  /** Multi MEWS : ▶ ouvre les roomTypes (collapsed par défaut). */
+  /** Multi MEWS : ▶ ouvre/ferme les roomTypes (ouvert par défaut pour voir l’occupation). */
   const [multiExpanded, setMultiExpanded] = useState<Record<string, boolean>>({});
+  const [roomTypeExpanded, setRoomTypeExpanded] = useState<Record<string, boolean>>({});
+
+  // Premier affichage : buildings Multi ouverts (roomTypes visibles, rooms repliés).
+  useEffect(() => {
+    setMultiExpanded((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const l of listings) {
+        if (!isPlanningMultiHotel(l)) continue;
+        if (next[l.listingId] === undefined) {
+          next[l.listingId] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [listings]);
   const cockpitLayer = cockpitLayerProp ?? internalCockpitLayer;
   const setCockpitLayer = onCockpitLayerChange ?? setInternalCockpitLayer;
   /** Planning classique : tâches seulement. Cockpit Résas : tâches + msgs. */
@@ -493,20 +512,29 @@ export default function StayView({
     return { arr, dep, confirmed, pending, cln, na };
   }, [filteredByGroup, isReservations]);
 
-  // Group by city — Multi expand ▶ roomTypes (comme MultiView MEWS)
+  // Group by city — Multi expand ▶ roomTypes ▶ rooms (ops ménage)
   const byCity = useMemo(() => {
     const map = new Map<string, ListingRow[]>();
     filteredByGroup.forEach((l) => {
       const c = planningCityLabel(l.city);
-      const rows = expandPlanningListingRows(l, Boolean(multiExpanded[l.listingId]));
+      const rows = expandPlanningListingRows(
+        l,
+        Boolean(multiExpanded[l.listingId]),
+        roomTypeExpanded,
+      );
       if (!map.has(c)) map.set(c, []);
       map.get(c)!.push(...rows);
     });
     return Array.from(map.entries());
-  }, [filteredByGroup, multiExpanded]);
+  }, [filteredByGroup, multiExpanded, roomTypeExpanded]);
 
   const toggleMultiHotel = useCallback((listingId: string) => {
     setMultiExpanded((prev) => ({ ...prev, [listingId]: !prev[listingId] }));
+  }, []);
+
+  const toggleRoomType = useCallback((listingId: string, roomTypeId: string) => {
+    const key = roomTypeExpandKey(listingId, roomTypeId);
+    setRoomTypeExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
   const showChrome = !gridOnly;
@@ -1391,7 +1419,7 @@ export default function StayView({
               <Box component="span" sx={{
                 ml: 'auto', bgcolor: T.bg2, color: T.text2,
                 px: 0.625, borderRadius: 999, fontSize: compactLayout ? 8 : 9.5, letterSpacing: '0.04em',
-              }}>{lists.filter((x) => !x.isRoomTypeRow).length}</Box>
+              }}>{lists.filter((x) => !x.isRoomTypeRow && !x.isRoomRow).length}</Box>
             </Box>
             {lists.map(l => (
               <ListingRowComp
@@ -1406,9 +1434,26 @@ export default function StayView({
                 multiExpanded={Boolean(
                   multiExpanded[l.parentListingId || l.listingId],
                 )}
+                roomTypeExpanded={
+                  l.isRoomTypeRow && l.parentListingId && l.roomTypeId
+                    ? Boolean(
+                        roomTypeExpanded[
+                          roomTypeExpandKey(l.parentListingId, l.roomTypeId)
+                        ],
+                      )
+                    : false
+                }
                 onToggleMulti={
-                  isPlanningMultiHotel(l) && !l.isRoomTypeRow
+                  isPlanningMultiHotel(l) && !l.isRoomTypeRow && !l.isRoomRow
                     ? () => toggleMultiHotel(l.listingId)
+                    : undefined
+                }
+                onToggleRoomType={
+                  l.isRoomTypeRow &&
+                  l.parentListingId &&
+                  l.roomTypeId &&
+                  (l.roomTypeCount || 0) > 0
+                    ? () => toggleRoomType(l.parentListingId!, l.roomTypeId!)
                     : undefined
                 }
                 onTaskClick={onTaskClick}
@@ -1446,7 +1491,7 @@ export default function StayView({
           }}
         >
           <Typography sx={{ fontSize: 11, color: T.text3, lineHeight: 1.2, fontFamily: '"Geist Mono", monospace' }}>
-            {filteredByGroup.filter((x) => !x.isRoomTypeRow).length} prop.
+            {filteredByGroup.filter((x) => !x.isRoomTypeRow && !x.isRoomRow).length} prop.
             {' · '}
             {days[0]?.frShort || ''}→{days[days.length - 1]?.frShort || ''}
           </Typography>
@@ -1466,7 +1511,9 @@ function ListingRowComp({
   listing, days, metrics, compactListing = false, showTaskChips = true, showMessageSnippets = false,
   richTaskChips = false,
   multiExpanded = false,
+  roomTypeExpanded = false,
   onToggleMulti,
+  onToggleRoomType,
   onTaskClick, onReservationClick, onCommsClick, onCleanlinessChange, onCreateTaskAt,
   pinShadow,
 }: {
@@ -1477,7 +1524,9 @@ function ListingRowComp({
   /** Colonnes élargies Résas : label + heure + staff sur le chip. */
   richTaskChips?: boolean;
   multiExpanded?: boolean;
+  roomTypeExpanded?: boolean;
   onToggleMulti?: () => void;
+  onToggleRoomType?: () => void;
   onTaskClick?: (i: TimelineItem) => void;
   onReservationClick?: (
     reservation: ListingRow['reservations'][0],
@@ -1495,23 +1544,41 @@ function ListingRowComp({
   pinShadow?: string;
 }) {
   const isRoomTypeRow = Boolean(listing.isRoomTypeRow);
-  const isMultiHotel = isPlanningMultiHotel(listing) && !isRoomTypeRow;
+  const isRoomRow = Boolean(listing.isRoomRow);
+  const isMultiHotel = isPlanningMultiHotel(listing) && !isRoomTypeRow && !isRoomRow;
+  /** Building / roomType Multi : pastilles nb résas / jour (barres seulement sur rooms). */
+  const dayCountSummary = Boolean(
+    listing.occupancyDayCounts ||
+      listing.roomTypeCollapsedSummary ||
+      isMultiHotel,
+  );
   const realListingId = listing.parentListingId || listing.listingId;
   const listingCtx = {
     listingId: realListingId,
     listingName: listing.parentListingName
-      ? `${listing.parentListingName} · ${listing.listingName}`
+      ? listing.parentRoomTypeName
+        ? `${listing.parentListingName} · ${listing.parentRoomTypeName} · ${listing.listingName}`
+        : `${listing.parentListingName} · ${listing.listingName}`
       : listing.listingName,
     city: listing.city,
   };
   const numTasks = listing.reservations.reduce((n, r) => n + (r.timeline?.length || 0), 0);
   const displayStatus = deriveDisplayCleanliness(listing, listing.reservations);
 
-  const barTop = compactListing ? STAY_COMPACT.RES_BAR_TOP : metrics.RES_BAR_TOP;
-  const barH = compactListing ? STAY_COMPACT.RES_BAR_HEIGHT : metrics.RES_BAR_HEIGHT;
+  const barTop = dayCountSummary
+    ? 4
+    : compactListing
+      ? STAY_COMPACT.RES_BAR_TOP
+      : metrics.RES_BAR_TOP;
+  const barH = dayCountSummary
+    ? 18
+    : compactListing
+      ? STAY_COMPACT.RES_BAR_HEIGHT
+      : metrics.RES_BAR_HEIGHT;
 
   /** Max lignes jour (tâches + 1 lane StayOps) pour hauteur cockpit. */
   const maxTasksOnDay = useMemo(() => {
+    if (dayCountSummary) return 0;
     if (!showTaskChips && !showMessageSnippets) return 0;
     let max = 0;
     for (const d of days) {
@@ -1532,9 +1599,9 @@ function ListingRowComp({
       if (n > max) max = n;
     }
     return max;
-  }, [days, listing.reservations, showTaskChips, showMessageSnippets]);
+  }, [days, listing.reservations, showTaskChips, showMessageSnippets, dayCountSummary]);
 
-  const taskLines = showTaskChips
+  const taskLines = showTaskChips && !dayCountSummary
     ? Math.max(
         COCKPIT_META.TASK_LANE_MIN_LINES,
         Math.min(COCKPIT_META.TASK_LANE_MAX_LINES, maxTasksOnDay || COCKPIT_META.TASK_LANE_MIN_LINES),
@@ -1574,20 +1641,23 @@ function ListingRowComp({
   }, [listing.reservations, showMessageSnippets]);
 
   // Planning classique = TASK_ROW_H. Cockpit Résas = barre + msgs + lane tâches.
-  const rowHeight = compactListing
-    ? (showTaskChips ? metrics.TASK_ROW_H : metrics.ROW_H)
-    : showMessageSnippets
-      ? listingCockpitRowHeight({
-          barTop,
-          barH,
-          showMessages: true,
-          showTasks: showTaskChips,
-          taskLines,
-          fallback: metrics.ROW_H,
-          narrowMessages,
-          dualMsgLines,
-        })
-      : (showTaskChips ? metrics.TASK_ROW_H : metrics.ROW_H);
+  // Multi building / roomType (compteurs) : ligne basse pour gagner de la verticale.
+  const rowHeight = dayCountSummary
+    ? 36
+    : compactListing
+      ? (showTaskChips ? metrics.TASK_ROW_H : metrics.ROW_H)
+      : showMessageSnippets
+        ? listingCockpitRowHeight({
+            barTop,
+            barH,
+            showMessages: true,
+            showTasks: showTaskChips,
+            taskLines,
+            fallback: metrics.ROW_H,
+            narrowMessages,
+            dualMsgLines,
+          })
+        : (showTaskChips ? metrics.TASK_ROW_H : metrics.ROW_H);
 
   const taskLaneTopPx = compactListing
     ? STAY_COMPACT.RES_BAR_TOP + STAY_COMPACT.RES_BAR_HEIGHT + STAY_COMPACT.RES_TASK_GAP
@@ -1600,21 +1670,24 @@ function ListingRowComp({
       display: 'grid', gridTemplateColumns: `${metrics.STICKY_W}px repeat(${days.length}, ${metrics.CELL_W}px)`,
       borderBottom: `1px solid ${T.border}`, height: rowHeight, position: 'relative',
     }}>
-      {/* Sticky left — Multi : ▶ + indent roomType (comme MultiView MEWS) */}
+      {/* Sticky left — Multi : ▶ listing → ▶ roomType → room (ops) */}
       <Stack
-        onClick={onToggleMulti}
+        onClick={onToggleMulti || onToggleRoomType}
         sx={{
-          px: isRoomTypeRow
-            ? (compactListing ? '4px 5px 4px 14px' : '10px 14px 10px 28px')
-            : (compactListing ? '4px 5px' : '14px'),
-          py: compactListing ? '3px' : '11px',
-          bgcolor: isRoomTypeRow ? T.bg2 : T.bg1,
+          px: isRoomRow
+            ? (compactListing ? '4px 5px 4px 22px' : '10px 14px 10px 44px')
+            : isRoomTypeRow
+              ? (compactListing || dayCountSummary ? '4px 6px 4px 14px' : '10px 14px 10px 28px')
+              : (compactListing || dayCountSummary ? '4px 6px' : '14px'),
+          py: compactListing || dayCountSummary ? '2px' : '11px',
+          bgcolor: isRoomRow ? T.bg1 : isRoomTypeRow ? T.bg2 : T.bg1,
           minWidth: 0,
           height: '100%',
-          gap: compactListing ? 0.25 : 0.75,
+          gap: compactListing || dayCountSummary ? 0.1 : 0.75,
           justifyContent: 'center',
-          cursor: onToggleMulti ? 'pointer' : 'default',
-          '&:hover': onToggleMulti ? { bgcolor: T.bg2 } : undefined,
+          cursor: onToggleMulti || onToggleRoomType ? 'pointer' : 'default',
+          '&:hover':
+            onToggleMulti || onToggleRoomType ? { bgcolor: T.bg2 } : undefined,
           // Colonne épinglée : au-dessus des barres résa (z2) et cartes comms (z5),
           // sous le header sticky (z7/z8).
           position: 'sticky', left: 0, zIndex: 6,
@@ -1625,27 +1698,36 @@ function ListingRowComp({
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: compactListing
-              ? (isMultiHotel ? '14px minmax(0, 1fr)' : 'minmax(0, 1fr)')
-              : isRoomTypeRow
-                ? 'minmax(0, 1fr)'
-                : isMultiHotel
-                  ? `14px ${metrics.LISTING_ICON_SIZE}px minmax(0, 1fr)`
-                  : `${metrics.LISTING_ICON_SIZE}px minmax(0, 1fr)`,
-            columnGap: compactListing ? 0.35 : `${metrics.LISTING_ICON_GAP}px`,
+            gridTemplateColumns:
+              isMultiHotel || (isRoomTypeRow && onToggleRoomType)
+                ? (compactListing || dayCountSummary
+                    ? '14px minmax(0, 1fr)'
+                    : isMultiHotel
+                      ? `14px ${metrics.LISTING_ICON_SIZE}px minmax(0, 1fr)`
+                      : '14px minmax(0, 1fr)')
+                : compactListing
+                  ? 'minmax(0, 1fr)'
+                  : isRoomTypeRow || isRoomRow
+                    ? 'minmax(0, 1fr)'
+                    : `${metrics.LISTING_ICON_SIZE}px minmax(0, 1fr)`,
+            columnGap: compactListing || dayCountSummary ? 0.35 : `${metrics.LISTING_ICON_GAP}px`,
             alignItems: 'center',
             width: '100%',
           }}
         >
-          {isMultiHotel && (
+          {(isMultiHotel || (isRoomTypeRow && onToggleRoomType)) && (
             <Box
               component="span"
               sx={{
                 fontSize: 10,
-                color: multiExpanded ? T.primary : T.text3,
+                color: (isMultiHotel ? multiExpanded : roomTypeExpanded)
+                  ? T.primary
+                  : T.text3,
                 width: 14,
                 textAlign: 'center',
-                transform: multiExpanded ? 'rotate(90deg)' : 'none',
+                transform: (isMultiHotel ? multiExpanded : roomTypeExpanded)
+                  ? 'rotate(90deg)'
+                  : 'none',
                 transition: 'transform 0.2s',
                 lineHeight: 1,
               }}
@@ -1653,7 +1735,7 @@ function ListingRowComp({
               ▶
             </Box>
           )}
-          {!compactListing && !isRoomTypeRow && (
+          {!compactListing && !dayCountSummary && !isRoomTypeRow && !isRoomRow && (
           <Box
             sx={{
               width: metrics.LISTING_ICON_SIZE,
@@ -1664,28 +1746,30 @@ function ListingRowComp({
             }}
           />
           )}
-          <Stack sx={{ minWidth: 0, gap: compactListing ? 0 : 0.5, pt: 0 }}>
+          <Stack sx={{ minWidth: 0, gap: compactListing || dayCountSummary ? 0 : 0.5, pt: 0 }}>
             <Typography
               sx={{
-                fontSize: isRoomTypeRow
-                  ? (compactListing ? 9.5 : 11.5)
-                  : (compactListing ? 10 : 12.5),
-                fontWeight: isRoomTypeRow ? 600 : 700,
+                fontSize: isRoomRow
+                  ? (compactListing ? 9 : 11)
+                  : dayCountSummary
+                    ? (isRoomTypeRow ? 11 : 12)
+                    : isRoomTypeRow
+                      ? (compactListing ? 9.5 : 11.5)
+                      : (compactListing ? 10 : 12.5),
+                fontWeight: isRoomRow ? 500 : isRoomTypeRow ? 600 : 700,
                 lineHeight: 1.15,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 display: 'block',
+                color: isRoomRow ? T.text2 : undefined,
               }}
-              title={
-                listing.parentListingName
-                  ? `${listing.parentListingName} · ${listing.listingName}`
-                  : listing.listingName
-              }
+              title={listingCtx.listingName}
             >
               {listing.listingName}
             </Typography>
-            {!compactListing && !isRoomTypeRow && (
+            {/* Multi agrégé : pas de badge CLEAN (ligne basse). */}
+            {!compactListing && !dayCountSummary && !isRoomTypeRow && !isRoomRow && (
             <CleanlinessBadgeInteractive
               status={displayStatus}
               displayStatus={displayStatus}
@@ -1697,7 +1781,23 @@ function ListingRowComp({
               }
             />
             )}
-            {!compactListing && isMultiHotel && (listing.roomTypeCount || 0) > 1 ? (
+            {/* Building : « 2 types occupés » — même density que roomType « N chambres ». */}
+            {(isMultiHotel || (isRoomTypeRow && dayCountSummary)) && (listing.roomTypeCount || 0) > 0 ? (
+              <Typography
+                sx={{
+                  fontSize: dayCountSummary ? 9 : 9.5,
+                  color: T.text3,
+                  fontFamily: '"Geist Mono", monospace',
+                  letterSpacing: '0.02em',
+                  lineHeight: 1.1,
+                }}
+              >
+                {isMultiHotel
+                  ? `${listing.roomTypeCount} type${listing.roomTypeCount === 1 ? '' : 's'} occupé${listing.roomTypeCount === 1 ? '' : 's'}`
+                  : `${listing.roomTypeCount} chambres`}
+              </Typography>
+            ) : null}
+            {!compactListing && isRoomTypeRow && !dayCountSummary && (listing.roomTypeCount || 0) > 0 ? (
               <Typography
                 sx={{
                   fontSize: 9.5,
@@ -1706,13 +1806,14 @@ function ListingRowComp({
                   letterSpacing: '0.02em',
                 }}
               >
-                {listing.roomTypeCount} types
+                {listing.roomTypeCount} chambres
               </Typography>
             ) : null}
           </Stack>
         </Box>
 
-        {!compactListing && !isRoomTypeRow && (
+        {/* Single only — pas de « N séj · ▶ rooms » sur Multi (gagne de la verticale). */}
+        {!compactListing && !isRoomTypeRow && !isRoomRow && !isMultiHotel && (
         <Typography
           sx={{
             fontSize: 10,
@@ -1729,22 +1830,12 @@ function ListingRowComp({
           )}
         </Typography>
         )}
-        {!compactListing && isRoomTypeRow && (
-        <Typography
-          sx={{
-            fontSize: 9.5,
-            color: T.text3,
-            fontFamily: '"Geist Mono", monospace',
-          }}
-        >
-          {listing.reservations.length} séj.
-        </Typography>
-        )}
       </Stack>
 
-      {/* Day cells : StayOps (Arr/Enreg → arrivée, Dép → départ) + tâches */}
+      {/* Day cells : StayOps + tâches — pas sur lignes agrégées Multi (counts only). */}
       {days.map(d => {
-        const tasks = showTaskChips
+        const tasks =
+          showTaskChips && !dayCountSummary
           ? (listing.reservations || []).flatMap((r) =>
               (r.timeline || [])
                 .filter((t) => {
@@ -1766,7 +1857,8 @@ function ListingRowComp({
                 })),
             )
           : [];
-        const dayStayOps = showMessageSnippets
+        const dayStayOps =
+          showMessageSnippets && !dayCountSummary
           ? (listing.reservations || [])
               .map((r) => r.stayOps)
               .filter((ops): ops is NonNullable<typeof ops> => Boolean(ops && stayOpsDayPillCount(ops, d.iso) > 0))
@@ -1792,15 +1884,15 @@ function ListingRowComp({
                     onCreateTaskAt(
                       {
                         listingId: realListingId,
-                        listingName: listing.parentListingName
-                          ? `${listing.parentListingName} · ${listing.listingName}`
-                          : listing.listingName,
+                        listingName: listingCtx.listingName,
                         dayIso,
                         reservationId: stay?.reservationId,
                         reservationNumber: stay?.reservationNumber,
                         guestName: stay?.guestName,
                         isArrivalDay: (stay?.arrivalDate || '').slice(0, 10) === dayIso,
                         isDepartureDay: (stay?.departureDate || '').slice(0, 10) === dayIso,
+                        roomTypeId: listing.roomTypeId || stay?.roomTypeId,
+                        roomId: listing.roomId || stay?.roomId,
                       },
                       { x: e.clientX, y: e.clientY },
                     );
@@ -1815,12 +1907,71 @@ function ListingRowComp({
         );
       })}
 
-      {/* Gantt + MESSAGES GLOBAUX (par résa, sous la barre — pas par jour) */}
+      {/* Gantt + résumé roomType (compteurs / jour) + messages */}
       <Box sx={{
         position: 'absolute', top: 0, left: metrics.STICKY_W,
         width: days.length * metrics.CELL_W, height: rowHeight, pointerEvents: 'none', zIndex: 3,
       }}>
-        {(() => {
+        {dayCountSummary ? (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: barTop,
+              left: 0,
+              width: '100%',
+              height: barH,
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            {days.map((d) => {
+              const n = countReservationsOnDay(listing.reservations || [], d.iso);
+              return (
+                <Box
+                  key={`occ-${d.iso}`}
+                  sx={{
+                    width: metrics.CELL_W,
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                  }}
+                >
+                  {n > 0 ? (
+                    <Box
+                      title={`${n} réservation${n > 1 ? 's' : ''} le ${d.iso}`}
+                      sx={{
+                        minWidth: 16,
+                        height: 16,
+                        px: '4px',
+                        borderRadius: '999px',
+                        bgcolor: isMultiHotel
+                          ? (n >= 3 ? 'rgba(59,130,246,0.22)' : 'rgba(59,130,246,0.14)')
+                          : (n >= 3 ? 'rgba(180,120,20,0.22)' : 'rgba(230,176,34,0.18)'),
+                        border: isMultiHotel
+                          ? '1px solid rgba(37,99,235,0.35)'
+                          : '1px solid rgba(180,120,20,0.35)',
+                        color: T.text,
+                        fontFamily: '"Geist Mono", monospace',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        pointerEvents: 'auto',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {n}
+                    </Box>
+                  ) : null}
+                </Box>
+              );
+            })}
+          </Box>
+        ) : (
+        (() => {
           const visibleReservations = listing.reservations
             .map(r => {
               const arr = new Date(r.arrivalDate);
@@ -1945,7 +2096,8 @@ function ListingRowComp({
             </Box>
           );
           });
-        })()}
+        })()
+        )}
       </Box>
     </Box>
   );

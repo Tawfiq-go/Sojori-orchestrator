@@ -21,7 +21,6 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   if (path === '/planning' || path.startsWith('/planning/')) return 'planning';
   // Deep-links planning → highlight l’entrée unique « Planning »
   if (path.startsWith('/tasks/planning')) return 'planning';
-  if (path.startsWith('/tasks/kanban')) return 'tasks/kanban';
   if (path.startsWith('/tasks/team')) return 'tasks/team';
   if (path.startsWith('/calendar') || path.startsWith('/calendar-v2')) {
     const view = new URLSearchParams(search).get('view');

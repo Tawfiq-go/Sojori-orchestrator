@@ -1,10 +1,11 @@
-import React, { memo } from 'react';
-import { Box, Typography, IconButton, Checkbox, Button } from '@mui/material';
+import React, { memo, useState } from 'react';
+import { Box, Typography, IconButton, Checkbox, Button, Stack } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import LinkIcon from '@mui/icons-material/Link';
 import ImageTypeSelector from './ImageTypeSelector';
 import { type ImageType } from '../../../services/imageTypesService';
 import { MEDIA_GRID_THEME as T } from './mediaGridConstants';
@@ -19,7 +20,11 @@ export interface MediaGridListingImage {
   sortOrder?: number;
   url: string;
   importedFromRu?: boolean;
+  /** Multi — RoomType._id associés pour push OTA */
+  roomTypeIds?: string[];
 }
+
+export type MediaGridRoomTypeOption = { id: string; name: string };
 
 export interface MediaGridPhotoCardProps {
   originalIndex: number;
@@ -42,6 +47,9 @@ export interface MediaGridPhotoCardProps {
   onRemove: (index: number) => void;
   onTypeChange: (index: number, typeId: string | null) => void;
   onStartTypeEdit: (index: number) => void;
+  /** Multi — boutons Associer sous la carte */
+  roomTypeOptions?: MediaGridRoomTypeOption[];
+  onToggleRoomType?: (index: number, roomTypeId: string) => void;
 }
 
 function MediaGridPhotoCardComponent({
@@ -65,11 +73,16 @@ function MediaGridPhotoCardComponent({
   onRemove,
   onTypeChange,
   onStartTypeEdit,
+  roomTypeOptions,
+  onToggleRoomType,
 }: MediaGridPhotoCardProps) {
   const { user } = useAuth();
   const isAdmin = Boolean(user && hasAdminAccess(user.role));
   const showImportedBadge = isAdmin && isListingImageImportedFromRu(img as Record<string, unknown>);
   const dimUnselected = selectionMode && !isSelected;
+  const [assocOpen, setAssocOpen] = useState(false);
+  const linkedIds = Array.isArray(img.roomTypeIds) ? img.roomTypeIds : [];
+  const showAssoc = Boolean(roomTypeOptions?.length && onToggleRoomType && !selectionMode);
 
   return (
     <Box
@@ -271,10 +284,83 @@ function MediaGridPhotoCardComponent({
               {undefinedCategory ? 'Définir la catégorie' : 'Changer la catégorie'}
             </Button>
           )}
+          {showAssoc ? (
+            <Box sx={{ mt: 0.5 }}>
+              <Button
+                fullWidth
+                size="small"
+                variant={linkedIds.length ? 'contained' : 'outlined'}
+                startIcon={<LinkIcon sx={{ fontSize: 14 }} />}
+                disabled={selectorDisabled}
+                onClick={() => setAssocOpen((v) => !v)}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '0.68rem',
+                  py: 0.4,
+                  fontWeight: 700,
+                  bgcolor: linkedIds.length ? T.primary : 'transparent',
+                  color: linkedIds.length ? '#fff' : T.text2,
+                  borderColor: T.borderStrong,
+                  '&:hover': {
+                    bgcolor: linkedIds.length ? T.primaryDeep : T.primaryTint,
+                  },
+                }}
+              >
+                {assocOpen
+                  ? 'Fermer'
+                  : linkedIds.length
+                    ? `Associé · ${linkedIds.length}`
+                    : 'Associer'}
+              </Button>
+              {assocOpen ? (
+                <Stack direction="row" gap={0.4} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                  {roomTypeOptions!.map((rt) => {
+                    const on = linkedIds.includes(rt.id);
+                    return (
+                      <Button
+                        key={rt.id}
+                        size="small"
+                        variant={on ? 'contained' : 'outlined'}
+                        disabled={selectorDisabled}
+                        onClick={() => onToggleRoomType!(idx, rt.id)}
+                        sx={{
+                          textTransform: 'none',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          py: 0.1,
+                          px: 0.75,
+                          minHeight: 0,
+                          lineHeight: 1.5,
+                          bgcolor: on ? T.primary : 'transparent',
+                          color: on ? '#fff' : T.text2,
+                          borderColor: T.border,
+                          '&:hover': { bgcolor: on ? T.primaryDeep : T.primaryTint },
+                        }}
+                      >
+                        {rt.name}
+                      </Button>
+                    );
+                  })}
+                </Stack>
+              ) : null}
+              {!assocOpen && linkedIds.length > 0 ? (
+                <Typography sx={{ fontSize: 9.5, color: T.text3, mt: 0.35, lineHeight: 1.3 }}>
+                  {roomTypeOptions!
+                    .filter((rt) => linkedIds.includes(rt.id))
+                    .map((rt) => rt.name)
+                    .join(' · ') || `${linkedIds.length} type(s)`}
+                </Typography>
+              ) : null}
+            </Box>
+          ) : null}
         </Box>
       )}
     </Box>
   );
+}
+
+function roomTypeIdsKey(ids?: string[]): string {
+  return Array.isArray(ids) ? ids.join(',') : '';
 }
 
 function arePhotoCardPropsEqual(
@@ -285,6 +371,7 @@ function arePhotoCardPropsEqual(
     prev.originalIndex === next.originalIndex &&
     prev.img.url === next.img.url &&
     prev.img.imageTypeId === next.img.imageTypeId &&
+    roomTypeIdsKey(prev.img.roomTypeIds) === roomTypeIdsKey(next.img.roomTypeIds) &&
     prev.effectiveImageTypeId === next.effectiveImageTypeId &&
     prev.categoryLabel === next.categoryLabel &&
     prev.undefinedCategory === next.undefinedCategory &&
@@ -297,12 +384,14 @@ function arePhotoCardPropsEqual(
     prev.selectorDisabled === next.selectorDisabled &&
     prev.imageTypes === next.imageTypes &&
     prev.existingImages === next.existingImages &&
+    prev.roomTypeOptions === next.roomTypeOptions &&
     prev.onCardClick === next.onCardClick &&
     prev.onToggleSelect === next.onToggleSelect &&
     prev.onSetMain === next.onSetMain &&
     prev.onRemove === next.onRemove &&
     prev.onTypeChange === next.onTypeChange &&
-    prev.onStartTypeEdit === next.onStartTypeEdit
+    prev.onStartTypeEdit === next.onStartTypeEdit &&
+    prev.onToggleRoomType === next.onToggleRoomType
   );
 }
 

@@ -75,6 +75,8 @@ export default function SimpleView({
   listing,
   dpEnabled = true,
   listings = [],
+  /** Chambres physiques du roomType actif (multi) — [{ id, name, number? }] */
+  rooms = [],
   selectedListingId = null,
   onSelectListing,
   /** 'listings' (Single / défaut) | 'roomTypes' (Multi Airbnb : 1 type = 1 calendrier) */
@@ -133,6 +135,11 @@ export default function SimpleView({
   /** Dernier jour cliqué : ses détails s'affichent dans le panneau. */
   const [focusIso, setFocusIso] = useState(null);
   useEffect(() => { setSelected([]); setFocusIso(null); }, [selectedListingId, listing?.roomTypeId]);
+  /** null = toutes les chambres du type ; id = filtre barre résa sur cette room */
+  const [selectedRoomId, setSelectedRoomId] = useState(null);
+  useEffect(() => {
+    setSelectedRoomId(null);
+  }, [selectedListingId, listing?.roomTypeId]);
 
   const clearSelection = () => { setSelected([]); setFocusIso(null); };
 
@@ -285,8 +292,14 @@ export default function SimpleView({
 
   const currency = listing.currencyCode || listing.currency || 'MAD';
   const isRoomTypeRail = railMode === 'roomTypes';
-  /** Barres de résas masquées par défaut — le calendrier d'abord, toggle pour les voir. */
-  const [showResas, setShowResas] = useState(false);
+  /** Barres résas ON par défaut — bouton pour masquer. */
+  const [showResas, setShowResas] = useState(true);
+  const physicalRooms = useMemo(() => {
+    if (Array.isArray(rooms) && rooms.length > 0) return rooms;
+    const fromListing = listing?.rooms;
+    if (Array.isArray(fromListing) && fromListing.length > 0) return fromListing;
+    return [];
+  }, [rooms, listing?.rooms]);
   const headerTitle = isRoomTypeRail && listing.roomTypeName
     ? listing.roomTypeName
     : listing.name;
@@ -446,33 +459,100 @@ export default function SimpleView({
                 {calendarReviewActive ? '▶ revue cal.' : '▶ audit'}
               </button>
             </h3>
-            <div style={{ display: 'flex', gap: 14, fontSize: 10.5, color: T.text3, flexShrink: 0, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 14, fontSize: 10.5, color: T.text3, flexShrink: 0, alignItems: 'center', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                title={showResas ? 'Masquer les réservations' : 'Afficher les réservations'}
+                title={showResas ? 'Masquer les barres de réservation' : 'Afficher les barres de réservation'}
                 onClick={() => setShowResas((v) => !v)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 5,
                   fontSize: 10.5, fontWeight: 800, lineHeight: 1,
-                  padding: '4px 9px', borderRadius: 99, cursor: 'pointer',
+                  padding: '5px 11px', borderRadius: 99, cursor: 'pointer',
                   background: showResas ? T.primaryTint : 'transparent',
                   color: showResas ? T.primaryDeep : T.text3,
                   border: `1px solid ${showResas ? T.primary : T.border}`,
                   transition: 'all 0.15s',
                 }}
               >
-                {showResas ? '👁 Résas ON' : '👁 Résas'}
+                {showResas ? 'Résas visibles' : 'Afficher résas'}
               </button>
-              <Legend dot={RESA_BAR_COLORS.airbnb.bg} label="Airbnb" />
-              <Legend dot={RESA_BAR_COLORS.booking.bg} label="Booking" />
-              <Legend dot={RESA_BAR_COLORS.direct.bg} label="Sojori" />
-              <Legend dot={RESA_BAR_COLORS.default.bg} label="Autre canal" />
-              <Legend dot={RESA_BAR_COLORS.pending.bg} label="Attente" />
+              {showResas ? (
+                <>
+                  <Legend dot={RESA_BAR_COLORS.airbnb.bg} label="Airbnb" />
+                  <Legend dot={RESA_BAR_COLORS.booking.bg} label="Booking" />
+                  <Legend dot={RESA_BAR_COLORS.direct.bg} label="Sojori" />
+                  <Legend dot={RESA_BAR_COLORS.default.bg} label="Autre canal" />
+                  <Legend dot={RESA_BAR_COLORS.pending.bg} label="Attente" />
+                </>
+              ) : null}
               <Legend dot={BLOCKED_HATCH_BG} label="Bloqué (stop sell)" />
               {dpEnabled ? <Legend dot={T.ai} label="Prix dynamique" /> : null}
               {inventoryLoading && <span style={{ fontWeight: 700 }}>Chargement…</span>}
             </div>
           </div>
+
+          {/* Chambres physiques du type (multi) — filtre les barres résa */}
+          {showResas && physicalRooms.length > 0 ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                flexWrap: 'wrap',
+                padding: '6px 12px',
+                borderBottom: `1px solid ${T.border}`,
+                background: T.bg2,
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ fontSize: 10.5, fontWeight: 800, color: T.text3, marginRight: 2 }}>
+                Chambres
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedRoomId(null)}
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  padding: '3px 9px',
+                  borderRadius: 99,
+                  border: `1px solid ${selectedRoomId == null ? T.primary : T.border}`,
+                  background: selectedRoomId == null ? T.primaryTint : T.bg1,
+                  color: selectedRoomId == null ? T.primaryDeep : T.text2,
+                  cursor: 'pointer',
+                }}
+              >
+                Toutes ({physicalRooms.length})
+              </button>
+              {physicalRooms.map((room) => {
+                const active = String(selectedRoomId) === String(room.id);
+                return (
+                  <button
+                    key={room.id}
+                    type="button"
+                    title={room.name}
+                    onClick={() => setSelectedRoomId(String(room.id))}
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      padding: '3px 9px',
+                      borderRadius: 99,
+                      border: `1px solid ${active ? T.primary : T.border}`,
+                      background: active ? T.primaryTint : T.bg1,
+                      color: active ? T.primaryDeep : T.text2,
+                      cursor: 'pointer',
+                      maxWidth: 140,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {room.name}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
 
           {/* Jours de semaine — fixe hors scroll mois */}
           <div style={{
@@ -512,6 +592,8 @@ export default function SimpleView({
               currency={currency}
               selected={selected}
               showReservations={showResas}
+              filterRoomId={selectedRoomId}
+              rooms={physicalRooms}
               onToggleDay={toggleDay}
               onOpenReservation={onOpenReservation}
             />
@@ -879,10 +961,26 @@ function ListingRail({ listings, selectedId, onSelect, tooltipSecondaryLabel }) 
 
 /* ════════════════ Grille d'un mois ════════════════ */
 
-function MonthGrid({ year, month, inventories, todayIso, currency, selected, showReservations = true, onToggleDay, onOpenReservation }) {
+function reservationMatchesRoomFilter(res, filterRoomId) {
+  if (!filterRoomId) return true;
+  return String(res?.roomId || '') === String(filterRoomId);
+}
+
+function MonthGrid({
+  year, month, inventories, todayIso, currency, selected,
+  showReservations = true, filterRoomId = null, rooms = [],
+  onToggleDay, onOpenReservation,
+}) {
   const first = new Date(year, month, 1);
   const offset = (first.getDay() + 6) % 7; // Lun = 0
   const lastDay = new Date(year, month + 1, 0).getDate();
+  const roomNameById = useMemo(() => {
+    const m = new Map();
+    (rooms || []).forEach((r) => {
+      if (r?.id) m.set(String(r.id), r.name || '');
+    });
+    return m;
+  }, [rooms]);
 
   /* Cellules du mois (sans padding 6×7 : le mois occupe juste ses semaines) */
   const { weeks, monthStats, monthReservations } = useMemo(() => {
@@ -900,7 +998,8 @@ function MonthGrid({ year, month, inventories, todayIso, currency, selected, sho
         if (inv.reservations?.length > 0) { booked++; revenue += priceOf(inv); }
         else if (!inv.stopSell) available++;
         normalizeCalendarReservations(inv.reservations).forEach((r) => {
-          if (r && !resById.has(String(r._id))) resById.set(String(r._id), r);
+          if (!r || !reservationMatchesRoomFilter(r, filterRoomId)) return;
+          if (!resById.has(String(r._id))) resById.set(String(r._id), r);
         });
       }
       cells.push({
@@ -927,7 +1026,7 @@ function MonthGrid({ year, month, inventories, todayIso, currency, selected, sho
       monthStats: { available, booked, revenue },
       monthReservations: Array.from(resById.values()),
     };
-  }, [year, month, inventories, todayIso, offset, lastDay]);
+  }, [year, month, inventories, todayIso, offset, lastDay, filterRoomId]);
 
   return (
     <div>
@@ -940,6 +1039,9 @@ function MonthGrid({ year, month, inventories, todayIso, currency, selected, sho
         <span style={{ fontSize: 11, color: T.text3, fontWeight: 600 }}>
           {monthStats.booked} nuit(s) réservée(s) · {monthStats.available} dispo
           {monthStats.revenue > 0 ? ` · ${Math.round(monthStats.revenue).toLocaleString('fr-FR')} ${currency}` : ''}
+          {filterRoomId && roomNameById.get(String(filterRoomId))
+            ? ` · ${roomNameById.get(String(filterRoomId))}`
+            : ''}
         </span>
       </div>
 
@@ -948,6 +1050,8 @@ function MonthGrid({ year, month, inventories, todayIso, currency, selected, sho
           key={wi}
           week={week}
           monthReservations={showReservations ? monthReservations : []}
+          roomNameById={roomNameById}
+          showRoomOnBar={!filterRoomId && roomNameById.size > 0}
           selected={selected}
           currency={currency}
           onToggleDay={onToggleDay}
@@ -960,7 +1064,10 @@ function MonthGrid({ year, month, inventories, todayIso, currency, selected, sho
 
 /* ════════════════ Semaine (7 cellules + barres résa en overlay) ════════════════ */
 
-function WeekRow({ week, monthReservations, selected, currency, onToggleDay, onOpenReservation }) {
+function WeekRow({
+  week, monthReservations, roomNameById, showRoomOnBar = false,
+  selected, currency, onToggleDay, onOpenReservation,
+}) {
   const dayIsos = week.map((c) => (c ? c.iso : null));
   const firstIso = dayIsos.find(Boolean);
   const lastIso = [...dayIsos].reverse().find(Boolean);
@@ -1010,7 +1117,13 @@ function WeekRow({ week, monthReservations, selected, currency, onToggleDay, onO
         const colors = reservationBarColors(res);
         const guests = Number(res.numberOfGuests) || 0;
         const name = res.guestName || res.guestFirstName || 'Réservation';
-        const label = guests > 1 ? `${name} + ${guests - 1}` : name;
+        const roomLabel = showRoomOnBar
+          ? (res.roomName || roomNameById?.get(String(res.roomId || '')) || '')
+          : '';
+        const label = [
+          guests > 1 ? `${name} + ${guests - 1}` : name,
+          roomLabel || null,
+        ].filter(Boolean).join(' · ');
         const showLabel = startsHere || startIdx === 0;
         const channelHint = colors.label || res.channelName || '';
         return (

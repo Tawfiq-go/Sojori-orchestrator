@@ -435,6 +435,10 @@ export function CalendarInventoryPageV3() {
         photoColorDeep: listing.photoColorDeep || '#d97706',
         roomTypeId: roomTypeByListing[listing._id] || 'default',
         calendarImportReview: listing.calendarImportReview || null,
+        // Multi filtre Rés. : rooms physiques sous chaque roomType
+        roomTypes: Array.isArray((listing as { roomTypes?: unknown[] }).roomTypes)
+          ? (listing as { roomTypes: unknown[] }).roomTypes
+          : [],
       })),
     [listings, roomTypeByListing],
   );
@@ -466,25 +470,18 @@ export function CalendarInventoryPageV3() {
             const prev = Number(agg[dateStr].availableRoom) || 0;
             const add = Number(day.availableRoom) || 0;
             agg[dateStr].availableRoom = prev + add;
-            if (agg[dateStr].basePrice == null && day.basePrice != null) {
-              agg[dateStr].basePrice = day.basePrice;
-              agg[dateStr].calculatedPrice = day.calculatedPrice ?? day.basePrice;
-            }
-            // Résas de TOUS les roomTypes sur la ligne hôtel (pas seulement le 1er),
-            // dédupliquées par _id (une résa multi-chambres ne compte qu'une fois).
-            const dayResas = (day.reservations as Array<{ _id?: string }> | undefined) || [];
-            if (dayResas.length > 0) {
-              const existing = (agg[dateStr].reservations as Array<{ _id?: string }> | undefined) || [];
-              const seen = new Set(existing.map((r) => String(r._id || '')));
-              const merged = [...existing];
-              dayResas.forEach((r) => {
-                const id = String(r._id || '');
-                if (!id || !seen.has(id)) {
-                  seen.add(id);
-                  merged.push(r);
-                }
-              });
-              agg[dateStr].reservations = merged;
+            // Building : dispo seulement (pas de prix, pas de résas — résas = filtre rooms).
+            delete agg[dateStr].basePrice;
+            delete agg[dateStr].calculatedPrice;
+            delete agg[dateStr].manualPrice;
+            delete agg[dateStr].dynamicPrice;
+            delete agg[dateStr].price;
+            delete agg[dateStr].reservations;
+            // Conserver stopSell / blockId si un RT est bloqué (hachures building)
+            if (day.stopSell === true) agg[dateStr].stopSell = true;
+            if (day.blockId && !agg[dateStr].blockId) agg[dateStr].blockId = day.blockId;
+            if (day.available === false) {
+              // building reste « ouvert » si une autre chambre est dispo — on ne force pas false
             }
           });
         });

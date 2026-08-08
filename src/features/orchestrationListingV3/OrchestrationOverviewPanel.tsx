@@ -912,6 +912,7 @@ function KindFlag({ kind }: { kind: 'flow' | 'msg' }) {
 }
 
 function messageWhenHuman(rule: ScheduledOrchestrationMessage): string {
+  if (rule.sendMode === 'manual') return '📨 Manuel';
   const ref = rule.trigger?.reference;
   const delay = rule.trigger?.delay;
   if (!ref || !delay) return '—';
@@ -1402,6 +1403,11 @@ export default function OrchestrationOverviewPanel({
     trigger: ScheduledOrchestrationMessage['trigger'],
   ) => {
     const next = messages.map((m) => (m._id === id ? { ...m, trigger } : m));
+    void persistMessages(next);
+  };
+
+  const patchMessageSendMode = (id: string, sendMode: 'auto' | 'manual') => {
+    const next = messages.map((m) => (m._id === id ? { ...m, sendMode } : m));
     void persistMessages(next);
   };
 
@@ -2156,6 +2162,7 @@ export default function OrchestrationOverviewPanel({
     const write = (next: ScheduledOrchestrationMessage['trigger']) => {
       patchMessageTrigger(rule._id, next);
     };
+    const sendMode = rule.sendMode === 'manual' ? 'manual' : 'auto';
     return (
       <Popover
         open
@@ -2167,8 +2174,43 @@ export default function OrchestrationOverviewPanel({
           <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t }}>
             💬 {rule.label} · timing
           </Typography>
-          <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>RÉFÉRENCE</Typography>
+          <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>MODE</Typography>
           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            <SegChip
+              on={sendMode === 'auto'}
+              label="Auto"
+              onClick={() => patchMessageSendMode(rule._id, 'auto')}
+            />
+            <SegChip
+              on={sendMode === 'manual'}
+              label="📨 Manuel"
+              onClick={() => patchMessageSendMode(rule._id, 'manual')}
+            />
+          </Box>
+          {sendMode === 'manual' ? (
+            <Typography sx={{ fontSize: 11.5, color: V3.t3, lineHeight: 1.35 }}>
+              Pas d’envoi auto. Relancer reste possible dans le plan (cockpit) 📨.
+            </Typography>
+          ) : null}
+          <Typography
+            sx={{
+              fontSize: 11,
+              fontWeight: 800,
+              color: V3.t3,
+              opacity: sendMode === 'manual' ? 0.45 : 1,
+            }}
+          >
+            RÉFÉRENCE
+          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              flexWrap: 'wrap',
+              opacity: sendMode === 'manual' ? 0.45 : 1,
+              pointerEvents: sendMode === 'manual' ? 'none' : 'auto',
+            }}
+          >
             {(
               [
                 ['reservation_date', 'Résa'],
@@ -2190,8 +2232,25 @@ export default function OrchestrationOverviewPanel({
               />
             ))}
           </Box>
-          <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>DÉLAI</Typography>
-          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+          <Typography
+            sx={{
+              fontSize: 11,
+              fontWeight: 800,
+              color: V3.t3,
+              opacity: sendMode === 'manual' ? 0.45 : 1,
+            }}
+          >
+            DÉLAI
+          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              flexWrap: 'wrap',
+              opacity: sendMode === 'manual' ? 0.45 : 1,
+              pointerEvents: sendMode === 'manual' ? 'none' : 'auto',
+            }}
+          >
             {[
               { v: 0, u: 'hours' as const, label: 'Immédiat' },
               { v: 2, u: 'hours' as const, label: '+2h' },
@@ -2217,7 +2276,7 @@ export default function OrchestrationOverviewPanel({
               />
             ))}
           </Box>
-          {unit === 'days' && (
+          {unit === 'days' && sendMode === 'auto' && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography sx={{ fontSize: 12, color: V3.t3 }}>Heure</Typography>
               <HourSelect
@@ -2908,7 +2967,7 @@ export default function OrchestrationOverviewPanel({
           icon="📨"
           kind="client"
           title="Messages planifiés"
-          subtitle="Envois automatiques (hors menu)"
+          subtitle="Auto ou 📨 Manuel (Relancer cockpit) — hors menu"
           open={openGroups.has('messages')}
           onOpenChange={() => toggleGroup('messages')}
           badge={
@@ -2943,7 +3002,7 @@ export default function OrchestrationOverviewPanel({
           <Typography sx={head} title="Modèle catalogue + canal d’envoi">
             Canal
           </Typography>
-          <Typography sx={head} title="Référence + délai + heure d’envoi">
+          <Typography sx={head} title="Auto (horaire) ou 📨 Manuel (Relancer cockpit)">
             Quand envoyer
           </Typography>
           <Typography sx={{ ...head, color: V3.t4 }}>—</Typography>
@@ -3011,7 +3070,11 @@ export default function OrchestrationOverviewPanel({
                         ? (e) => setMsgEditor({ id: m._id, anchor: e.currentTarget })
                         : undefined
                     }
-                    title="Quand envoyer"
+                    title={
+                      m.sendMode === 'manual'
+                        ? 'Manuel — Relancer 📨 dans le plan uniquement'
+                        : 'Quand envoyer (auto)'
+                    }
                   >
                     {messageWhenHuman(m)}
                   </Typography>

@@ -1,5 +1,15 @@
-import { useRef } from 'react';
-import { Box, Typography } from '@mui/material';
+import { useRef, useState } from 'react';
+import {
+  Box,
+  Typography,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+} from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { multiTokens as t, type MultiListingImage } from './multiTypes';
 
 type Props = {
@@ -27,6 +37,13 @@ export function PhotoZone({
   const inputRef = useRef<HTMLInputElement>(null);
   const isCommon = variant === 'common';
   const showHeader = Boolean(tag || hint);
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null);
+
+  const confirmDelete = () => {
+    if (pendingDeleteIndex == null) return;
+    onChange(images.filter((_, idx) => idx !== pendingDeleteIndex));
+    setPendingDeleteIndex(null);
+  };
 
   return (
     <Box
@@ -91,10 +108,8 @@ export function PhotoZone({
               backgroundImage: img.url ? `url(${img.url})` : undefined,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
-              cursor: 'pointer',
+              '&:hover .photo-zone-actions': { opacity: 1 },
             }}
-            title="Cliquer pour retirer"
-            onClick={() => onChange(images.filter((_, idx) => idx !== i))}
           >
             {i === 0 && (
               <Box
@@ -110,11 +125,35 @@ export function PhotoZone({
                   px: 0.75,
                   py: 0.25,
                   borderRadius: '5px',
+                  zIndex: 1,
                 }}
               >
                 Couverture
               </Box>
             )}
+            <Box
+              className="photo-zone-actions"
+              sx={{
+                position: 'absolute',
+                top: 4,
+                right: 4,
+                opacity: 0,
+                transition: 'opacity 0.15s',
+                zIndex: 2,
+              }}
+            >
+              <IconButton
+                size="small"
+                aria-label="Supprimer la photo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPendingDeleteIndex(i);
+                }}
+                sx={{ width: 22, height: 22, bgcolor: 'rgba(255,255,255,0.95)' }}
+              >
+                <DeleteIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            </Box>
             {(img.caption || img.fileName) && (
               <Box
                 sx={{
@@ -178,6 +217,33 @@ export function PhotoZone({
           e.target.value = '';
         }}
       />
+
+      <Dialog
+        open={pendingDeleteIndex != null}
+        onClose={() => setPendingDeleteIndex(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontSize: 16, fontWeight: 700 }}>Supprimer cette photo ?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: 13, color: t.text2 }}>
+            Elle sera retirée de la galerie. Cette action est immédiate après confirmation.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button onClick={() => setPendingDeleteIndex(null)} sx={{ textTransform: 'none' }}>
+            Annuler
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={confirmDelete}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            Supprimer
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

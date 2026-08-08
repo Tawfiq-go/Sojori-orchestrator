@@ -132,6 +132,7 @@ export default function PlanDetail({
               guestName={plan.guestName ?? r.guest.name}
               reservationRef={r.reference}
               checkInIso={r.checkIn}
+              guestManualSendDisabled={plan.guestManualSendDisabled === true}
               onDispatched={onPlanUpdated}
             />,
           );
@@ -139,7 +140,7 @@ export default function PlanDetail({
       }
     }
     return nodes;
-  }, [orderedTimelineEvents, sequenceByEventId, r.id, r.guest.name, r.reference, r.checkIn, plan.guestPhone, plan.guestName, onPlanUpdated]);
+  }, [orderedTimelineEvents, sequenceByEventId, r.id, r.guest.name, r.reference, r.checkIn, plan.guestPhone, plan.guestName, plan.guestManualSendDisabled, onPlanUpdated]);
 
   const runCronNow = async () => {
     setCronLoading(true);
@@ -456,6 +457,8 @@ function messageExecutionStatus(ev: PlanEvent): RelanceExecutionStatus {
   if (raw === 'echec') return 'echec';
   if (ev.status === 'done' && raw !== 'echec') return 'envoyee';
   if (ev.lastDispatch && !ev.lastDispatch.ok && raw !== 'envoye' && raw !== 'fait') return 'echec';
+  // 📨 Manuel : pas de badge « Prévu » (pas d’envoi scheduler)
+  if (ev.triggerMode === 'manual') return 'en_attente';
   if (ev.status === 'future') return 'prevision';
   return 'en_attente';
 }
@@ -484,6 +487,7 @@ function MessagePlanCard({
   const [histOpen, setHistOpen] = useState(false);
   const [rowLoading, setRowLoading] = useState(false);
   const canManualSend = ev.messageIndex != null && ev.messageCategory === 'simple';
+  const isManualSend = ev.triggerMode === 'manual';
   const channel = ev.channel || 'ota';
   const histCount = ev.dispatchLog?.length ?? 0;
   const histNewestFirst = histCount
@@ -505,9 +509,26 @@ function MessagePlanCard({
         ? 'fail'
         : 'pending';
 
+  const whenLabel = isManualSend ? '📨 Manuel' : `Prévu · ${ev.atDisplay || '—'}`;
+  const sendButton = canManualSend ? (
+    <PlanDispatchButton
+      reservationId={reservationId}
+      kind="message"
+      messageIndex={ev.messageIndex}
+      wasSent={wasSent}
+      itemLabel={ev.title}
+      buttonLabel={
+        isManualSend ? (wasSent ? 'Renvoyer' : 'Envoyer manuellement') : undefined
+      }
+      disabled={false}
+      onLoadingChange={setRowLoading}
+      onDone={onDispatched}
+    />
+  ) : null;
+
   return (
     <div
-      className={`ev msg-l1 ${ev.status}${open ? ' open' : ''}${histOpen ? ' hist-open' : ''}${rowLoading ? ' msg-l1--dispatching' : ''}`}
+      className={`ev msg-l1 ${ev.status}${open ? ' open' : ''}${histOpen ? ' hist-open' : ''}${rowLoading ? ' msg-l1--dispatching' : ''}${isManualSend ? ' msg-l1--manual' : ''}`}
     >
       <div
         className="ev-h msg-l1-h"
@@ -533,7 +554,11 @@ function MessagePlanCard({
             {open && ev.messageCategory === 'relance' ? (
               <span className="kind-badge message-relance">Relance</span>
             ) : null}
-            <MessageExecBadge status={exec} />
+            {isManualSend && !wasSent && exec !== 'echec' && exec !== 'sautee' ? (
+              <span className="st-badge sm rel-exec en_attente">Manuel</span>
+            ) : (
+              <MessageExecBadge status={exec} />
+            )}
             {ev.dispatchPreview ? (
               <DispatchPreviewChips preview={ev.dispatchPreview} />
             ) : ev.channel ? (
@@ -541,10 +566,10 @@ function MessagePlanCard({
             ) : null}
           </div>
           {open ? (
-            <span className="when msg-when-open">Prévu · {ev.atDisplay || '—'}</span>
+            <span className="when msg-when-open">{whenLabel}</span>
           ) : (
             <div className="msg-summary">
-              <span className="msg-summary-pre">Prévu · {ev.atDisplay || '—'}</span>
+              <span className="msg-summary-pre">{whenLabel}</span>
               {dispatchPreviewShort(ev.dispatchPreview) ? (
                 <>
                   <span className="msg-summary-sep"> · </span>
@@ -556,6 +581,15 @@ function MessagePlanCard({
             </div>
           )}
         </div>
+        {!open && isManualSend && canManualSend ? (
+          <div
+            className="msg-l1-send-collapsed"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            {sendButton}
+          </div>
+        ) : null}
         <span className="arr" aria-hidden>
           ▶
         </span>
@@ -575,18 +609,7 @@ function MessagePlanCard({
                 <span className="msg-last-send-pending">Pas encore envoyé</span>
               )}
             </div>
-            {canManualSend ? (
-              <PlanDispatchButton
-                reservationId={reservationId}
-                kind="message"
-                messageIndex={ev.messageIndex}
-                wasSent={wasSent}
-                itemLabel={ev.title}
-                disabled={false}
-                onLoadingChange={setRowLoading}
-                onDone={onDispatched}
-              />
-            ) : null}
+            {sendButton}
           </div>
 
           {histCount > 0 ? (
@@ -634,7 +657,9 @@ function MessagePlanCard({
           {ev.messageCategory === 'simple' && (ev.template || ev.dispatchPreview || channel) ? (
             <div className="rel-row-config msg-l1-config">
               Config · {ev.template || '—'}
-              {ev.dispatchPreview ? (
+              {isManualSend ? (
+                <> · 📨 Manuel · {ev.dispatchPreview?.label || channel.toUpperCase()}</>
+              ) : ev.dispatchPreview ? (
                 <> · Envoi prévu · {ev.dispatchPreview.label}</>
               ) : channel ? (
                 ` · ${channel.toUpperCase()}`

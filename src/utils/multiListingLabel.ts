@@ -11,6 +11,10 @@ export type RoomTypeNameSource = {
 
 /** Nom du type de chambre depuis une résa (liste, batch, détail). */
 export function pickRoomTypeName(source: RoomTypeNameSource): string | undefined {
+  const nestedOta = String(
+    (source?.roomTypes as { otaDisplayName?: string } | null | undefined)?.otaDisplayName || '',
+  ).trim();
+  if (nestedOta) return nestedOta;
   const direct = String(source?.roomTypeName || '').trim();
   if (direct) return direct;
   const nested = String(

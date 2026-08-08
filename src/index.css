@@ -357,7 +357,8 @@ a:hover {
 .ota-inbox-advanced-scroll,
 .planning-reservation-drawer-scroll,
 .planning-thread-scroll,
-.import-airbnb-modal-scroll {
+.import-airbnb-modal-scroll,
+.sidebar-nav-scroll {
   overflow-y: scroll !important;
   overflow-x: hidden !important;
   overscroll-behavior: contain;
@@ -378,7 +379,8 @@ a:hover {
 .ota-inbox-advanced-scroll::-webkit-scrollbar,
 .planning-reservation-drawer-scroll::-webkit-scrollbar,
 .planning-thread-scroll::-webkit-scrollbar,
-.import-airbnb-modal-scroll::-webkit-scrollbar {
+.import-airbnb-modal-scroll::-webkit-scrollbar,
+.sidebar-nav-scroll::-webkit-scrollbar {
   width: 10px !important;
   -webkit-appearance: none;
 }
@@ -394,7 +396,8 @@ a:hover {
 .ota-inbox-advanced-scroll::-webkit-scrollbar-track,
 .planning-reservation-drawer-scroll::-webkit-scrollbar-track,
 .planning-thread-scroll::-webkit-scrollbar-track,
-.import-airbnb-modal-scroll::-webkit-scrollbar-track {
+.import-airbnb-modal-scroll::-webkit-scrollbar-track,
+.sidebar-nav-scroll::-webkit-scrollbar-track {
   background: #f0eee8 !important;
   border-radius: 8px;
 }
@@ -410,7 +413,8 @@ a:hover {
 .ota-inbox-advanced-scroll::-webkit-scrollbar-thumb,
 .planning-reservation-drawer-scroll::-webkit-scrollbar-thumb,
 .planning-thread-scroll::-webkit-scrollbar-thumb,
-.import-airbnb-modal-scroll::-webkit-scrollbar-thumb {
+.import-airbnb-modal-scroll::-webkit-scrollbar-thumb,
+.sidebar-nav-scroll::-webkit-scrollbar-thumb {
   background: #e6b022 !important;
   border-radius: 8px;
   border: 2px solid #f0eee8 !important;

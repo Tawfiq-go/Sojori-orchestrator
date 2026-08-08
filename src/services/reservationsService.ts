@@ -132,7 +132,8 @@ class ReservationsService {
     startDate?: string;
     endDate?: string;
     reservationNumber?: string;
-    sortField?: 'createdAt' | 'checkin' | 'checkout';
+    /** `default` = annulations + créées auj. puis arrivées les plus proches. */
+    sortField?: 'default' | 'createdAt' | 'checkin' | 'checkout';
     sortOrder?: 'asc' | 'desc';
     /** Admin : filtre par PM (backend: filterOwnerId répété). */
     filterOwnerId?: string | string[];
@@ -180,8 +181,11 @@ class ReservationsService {
         queryParams.append('reservationNumber', params.reservationNumber.trim());
       }
 
-      queryParams.append('sortField', params.sortField || 'createdAt');
-      queryParams.append('sortOrder', params.sortOrder || 'desc');
+      queryParams.append('sortField', params.sortField || 'default');
+      queryParams.append(
+        'sortOrder',
+        params.sortOrder || (params.sortField === 'createdAt' ? 'desc' : 'asc'),
+      );
 
       const ownerFilter = params.filterOwnerId
         ? Array.isArray(params.filterOwnerId)
@@ -303,10 +307,14 @@ class ReservationsService {
   }
 
   /**
-   * Calcule les counts pour chaque filtre (appels séparés)
-   * Note: Il n'y a pas d'endpoint unique pour les counts dans l'API publique, donc on fait 6 appels
+   * Totaux par filtre date — `total` backend (pas le length de la page).
+   * 6 appels limit=1 + strictArrivalWindow (jour exact arrival/departure).
    */
-  async getCounts(): Promise<{
+  async getCounts(opts?: {
+    status?: string;
+    filterOwnerId?: string | string[];
+    ownerId?: string | null;
+  }): Promise<{
     CHECKIN_TODAY: number;
     CHECKIN_TOMORROW: number;
     CHECKIN_7DAYS: number;
@@ -314,6 +322,14 @@ class ReservationsService {
     CHECKOUT_TOMORROW: number;
     CHECKOUT_7DAYS: number;
   }> {
+    const empty = {
+      CHECKIN_TODAY: 0,
+      CHECKIN_TOMORROW: 0,
+      CHECKIN_7DAYS: 0,
+      CHECKOUT_TODAY: 0,
+      CHECKOUT_TOMORROW: 0,
+      CHECKOUT_7DAYS: 0,
+    };
     try {
       const filters: ReservationFilter[] = [
         'CHECKIN_TODAY',
@@ -327,22 +343,30 @@ class ReservationsService {
       const counts = await Promise.all(
         filters.map(async (filter) => {
           try {
-            const result = await this.getList({ filter, limit: 1000 });
-            return { filter, count: result.count };
+            const result = await this.getList({
+              filter,
+              limit: 1,
+              page: 0,
+              status: opts?.status,
+              filterOwnerId: opts?.filterOwnerId,
+              ownerId: opts?.ownerId,
+              strictArrivalWindow: true,
+            });
+            return { filter, count: result.total ?? result.count ?? 0 };
           } catch (err) {
             console.error(`Error fetching count for ${filter}:`, err);
             return { filter, count: 0 };
           }
-        })
+        }),
       );
 
       return counts.reduce((acc, { filter, count }) => {
         acc[filter] = count;
         return acc;
-      }, {} as any);
+      }, { ...empty });
     } catch (error) {
       console.error('Error fetching counts:', error);
-      throw error;
+      return empty;
     }
   }
 

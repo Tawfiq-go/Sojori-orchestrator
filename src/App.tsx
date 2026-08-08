@@ -60,9 +60,6 @@ const OrchestrationConfigPage = lazyWithReload(() =>
 const OrchestrationDailyOpsPage = lazyWithReload(() =>
   import('./pages/OrchestrationDailyOpsPage').then((module) => ({ default: module.default }))
 );
-const OrchestrationDayPlanPage = lazyWithReload(() =>
-  import('./pages/OrchestrationDayPlanPage').then((module) => ({ default: module.default }))
-);
 const AiCockpitPage = lazyWithReload(() =>
   import('./pages/AiCockpitPage').then((module) => ({ default: module.default }))
 );
@@ -105,9 +102,6 @@ const ReviewsPage = lazyWithReload(() =>
 );
 const TasksPlanningPageV2 = lazyWithReload(() =>
   import('./pages/TasksPlanningPageV2').then((module) => ({ default: module.default }))
-);
-const TasksKanbanPage = lazyWithReload(() =>
-  import('./pages/TasksKanbanPage').then((module) => ({ default: module.default }))
 );
 const TasksStaffFulltaskPage = lazyWithReload(() =>
   import('./pages/TasksStaffFulltaskPage').then((module) => ({ default: module.default }))
@@ -360,7 +354,7 @@ function App() {
 
               <Route path="/orchestration/plans" element={<LazyRoute><PlansReservationPage /></LazyRoute>} />
               <Route path="/orchestration/ops" element={<LazyRoute><OrchestrationDailyOpsPage /></LazyRoute>} />
-              <Route path="/orchestration/day-plan" element={<LazyRoute><OrchestrationDayPlanPage /></LazyRoute>} />
+              <Route path="/orchestration/day-plan" element={<Navigate to="/orchestration/cockpit" replace />} />
               <Route path="/orchestration/cockpit" element={<LazyRoute><AiCockpitPage /></LazyRoute>} />
               <Route path="/orchestration/config" element={<LazyRoute><TasksOrchestrationFulltaskPage /></LazyRoute>} />
               <Route path="/orchestration/whatsapp-messages" element={<LazyRoute><TasksWhatsAppMessagesPage /></LazyRoute>} />
@@ -393,7 +387,7 @@ function App() {
               {/* Claude Design V2 - Remplace les anciennes vues */}
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
               <Route path="/tasks/planning" element={<LazyRoute><TasksPlanningPageV2 /></LazyRoute>} />
-              <Route path="/tasks/kanban" element={<LazyRoute><TasksKanbanPage /></LazyRoute>} />
+              <Route path="/tasks/kanban" element={<Navigate to="/tasks" replace />} />
 
               <Route path="/chatbot/whitelist/:reservationId" element={<LazyRoute><ChatbotWhitelistDetailPage /></LazyRoute>} />
               <Route path="/chatbot/whitelist" element={<LazyRoute><ChatbotWhitelistPage /></LazyRoute>} />

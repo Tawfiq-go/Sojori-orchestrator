@@ -1,5 +1,10 @@
 import type { OtaThreadRow } from './inboxOtaMappers';
-import { isPlaceholderLastMessage, looksLikeHostOutboundMessage } from './waThreadPreview';
+import {
+  isPlaceholderLastMessage,
+  looksLikeGuestCourtesyClose,
+  looksLikeHostOutboundMessage,
+  looksLikeHostSpokenReply,
+} from './waThreadPreview';
 
 function messageTextFromPreloaded(msg: Record<string, unknown>): string {
   return String(
@@ -107,6 +112,43 @@ export function hasOtaRealExchange(row: OtaThreadRow): boolean {
  * Preview liste = dernier Q/R réel (hors plan auto).
  * Les envois programmé ne comptent pas comme R.
  */
+/**
+ * Faut-il vraiment répondre ? Priorité au dernier Q/R réel (preview),
+ * pas au seul `messageStatus` Mongo (souvent resté « received » après une réponse hôte OTA).
+ *
+ * - ignored / responded (manuel) → non
+ * - dernier message = hôte → non
+ * - dernier message = voyageur courte politesse (« merci », « ok ») → non (à ignorer)
+ * - dernier message = voyageur avec contenu → oui
+ * - sinon fallback messageStatus / lastMessageIsIncoming
+ */
+export function otaThreadNeedsReply(row: OtaThreadRow): boolean {
+  const status = String(row.messageStatus || '')
+    .toLowerCase()
+    .trim();
+  if (status === 'ignored' || status === 'responded' || status === 'replied') {
+    return false;
+  }
+
+  const effective = resolveOtaListLastMessage(row);
+  if (!effective.empty && effective.text.trim()) {
+    if (effective.isIncoming === false) return false;
+    if (looksLikeHostSpokenReply(effective.text)) return false;
+    if (effective.isIncoming === true) {
+      if (looksLikeGuestCourtesyClose(effective.text)) return false;
+      return true;
+    }
+  }
+
+  if (status === 'received' || status === 'pending') return true;
+  if (row.lastMessageIsIncoming === true) {
+    const guest = String(row.lastGuestMessage || row.lastMessage || '');
+    if (looksLikeGuestCourtesyClose(guest)) return false;
+    return true;
+  }
+  return false;
+}
+
 export function resolveOtaListLastMessage(row: OtaThreadRow): {
   text: string;
   isIncoming: boolean | undefined;
@@ -123,7 +165,7 @@ export function resolveOtaListLastMessage(row: OtaThreadRow): {
   ) {
     return {
       text: apiReal,
-      isIncoming: row.lastRealMessageIsIncoming,
+      isIncoming: looksLikeHostSpokenReply(apiReal) ? false : row.lastRealMessageIsIncoming,
       at: row.lastRealMessageAt || row.lastMessageTime,
       empty: false,
     };
@@ -133,7 +175,7 @@ export function resolveOtaListLastMessage(row: OtaThreadRow): {
   if (realPre) {
     return {
       text: realPre.text,
-      isIncoming: realPre.isIncoming,
+      isIncoming: looksLikeHostSpokenReply(realPre.text) ? false : realPre.isIncoming,
       at: realPre.at || row.lastMessageTime,
       empty: false,
     };

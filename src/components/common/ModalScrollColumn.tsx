@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, type RefObject } from 'react';
 import { Box } from '@mui/material';
 
 /**
@@ -11,6 +11,7 @@ export function ModalScrollColumn({
   wrapperSx,
   innerSx,
   onScroll,
+  scrollRef: externalScrollRef,
   children,
 }: {
   active: boolean;
@@ -18,9 +19,12 @@ export function ModalScrollColumn({
   wrapperSx?: Record<string, unknown>;
   innerSx?: Record<string, unknown>;
   onScroll?: (e: React.UIEvent<HTMLDivElement>) => void;
+  /** Ref optionnelle vers la zone scroll (persist scroll, focus, etc.). */
+  scrollRef?: RefObject<HTMLDivElement | null>;
   children: React.ReactNode;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const internalScrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = externalScrollRef ?? internalScrollRef;
 
   useEffect(() => {
     if (!active) return;
@@ -48,7 +52,7 @@ export function ModalScrollColumn({
 
     el.addEventListener('wheel', onWheel, { passive: false, capture: true });
     return () => el.removeEventListener('wheel', onWheel, { capture: true });
-  }, [active]);
+  }, [active, scrollRef]);
 
   return (
     <Box

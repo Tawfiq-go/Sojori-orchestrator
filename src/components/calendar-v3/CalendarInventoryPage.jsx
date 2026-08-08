@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { T, resolveSelectionCurrency } from './_shared';
+import { T, resolveSelectionCurrency, sortCalendarColumns } from './_shared';
 import MultiView from './MultiView';
 import SimpleView from './SimpleView';
 import ColumnFilters from './ColumnFilters';
@@ -26,6 +26,7 @@ import {
   formatHorizonEndLabel,
   getCalendarWindowBounds,
 } from './inventoryCalendarConstants';
+import { toIsoDay } from './multiCalendarReservations';
 import { useWriteAccess } from '../../hooks/useWriteAccess';
 import { useAuth } from '../../hooks/useAuth';
 import { fetchPilotConfig } from '../../services/dynamicPricingApi';
@@ -169,6 +170,43 @@ export default function CalendarInventoryPage({
 
   const windowStart = useMemo(() => startOfDay(pivotDate), [pivotDate]);
 
+  /**
+   * Multi only — fetch résas uniquement si filtre « Rés. » (affichage sur rooms).
+   * Calendrier = dispo ; résas = option filtre, pas la vue inventaire.
+   */
+  const [multiOverlayReservations, setMultiOverlayReservations] = useState([]);
+  const resaFilterOn = view === 'multi' && selectedColumns.includes('reservations');
+  useEffect(() => {
+    if (!resaFilterOn) {
+      setMultiOverlayReservations([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const from = toIsoDay(windowStart);
+    const end = new Date(windowStart);
+    end.setDate(end.getDate() + MULTI_VISIBLE_DAYS);
+    const to = toIsoDay(end);
+    if (!from || !to) return undefined;
+    (async () => {
+      try {
+        const res = await reservationsService.getList({
+          limit: 500,
+          status: 'Confirmed,Pending,Inside',
+          dateType: 'arrival_or_departure',
+          startDate: from,
+          endDate: to,
+        });
+        if (!cancelled) setMultiOverlayReservations(Array.isArray(res?.data) ? res.data : []);
+      } catch (err) {
+        console.warn('[CalendarMulti] fetch résas overlay:', err);
+        if (!cancelled) setMultiOverlayReservations([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [resaFilterOn, windowStart]);
+
   useEffect(() => {
     setPivotDate(clampPivotDate(startDate));
   }, [startDate]);
@@ -220,25 +258,51 @@ export default function CalendarInventoryPage({
     [onUpdateInventory],
   );
 
-  /** RoomTypes issus de l'inventaire du listing sélectionné (noms + capacité + jours). */
-  const roomTypesForSelected = useMemo(() => {
-    if (!selectedListingId) return [];
-    const block = inventoryData[selectedListingId] || {};
-    return Object.entries(block)
-      .map(([id, v]) => ({
-        _id: String(id),
-        name: (v && v.name) || `Type ${String(id).slice(-4)}`,
-        roomNumber: Number(v?.roomNumber) || 0,
-        personCapacityMax: Number(v?.personCapacityMax) || 0,
-        availability: (v && v.availability) || {},
-      }))
-      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
-  }, [inventoryData, selectedListingId]);
-
   const catalogListing = useMemo(
     () => listings.find((l) => String(l._id) === String(selectedListingId)) || null,
     [listings, selectedListingId],
   );
+
+  /** RoomTypes inventaire + chambres physiques (listing forCalendar). */
+  const roomTypesForSelected = useMemo(() => {
+    if (!selectedListingId) return [];
+    const block = inventoryData[selectedListingId] || {};
+    const catalogRts = Array.isArray(catalogListing?.roomTypes) ? catalogListing.roomTypes : [];
+    const roomsByRtId = new Map();
+    catalogRts.forEach((rt) => {
+      const id = String(rt?._id || rt?.id || '');
+      if (!id) return;
+      const roomsSrc = Array.isArray(rt.rooms) ? rt.rooms : [];
+      roomsByRtId.set(
+        id,
+        roomsSrc
+          .map((rm) => {
+            const rid = String(rm?._id || rm?.id || '');
+            const name =
+              rm?.roomName ||
+              rm?.name ||
+              (rm?.roomNumber != null ? `Chambre ${rm.roomNumber}` : '');
+            if (!rid || !name) return null;
+            return {
+              id: rid,
+              name: String(name),
+              number: rm?.roomNumber != null ? Number(rm.roomNumber) : undefined,
+            };
+          })
+          .filter(Boolean),
+      );
+    });
+    return Object.entries(block)
+      .map(([id, v]) => ({
+        _id: String(id),
+        name: (v && v.name) || `Type ${String(id).slice(-4)}`,
+        roomNumber: Number(v?.roomNumber) || roomsByRtId.get(String(id))?.length || 0,
+        personCapacityMax: Number(v?.personCapacityMax) || 0,
+        availability: (v && v.availability) || {},
+        rooms: roomsByRtId.get(String(id)) || [],
+      }))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
+  }, [inventoryData, selectedListingId, catalogListing]);
 
   /** Simple Airbnb Multi : rail = room types (pas l'agrégat hôtel). */
   const isMultiListing = Boolean(catalogListing) && String(catalogListing.propertyUnit || '') === 'Multi';
@@ -307,15 +371,22 @@ export default function CalendarInventoryPage({
     const rtName = isMultiListing
       ? activeRoomType?.name || roomTypesForSelected[0]?.name || ''
       : roomTypesForSelected[0]?.name || 'Standard';
+    const rooms = Array.isArray(activeRoomType?.rooms)
+      ? activeRoomType.rooms
+      : Array.isArray(roomTypesForSelected[0]?.rooms)
+        ? roomTypesForSelected[0].rooms
+        : [];
     return {
       ...catalogListing,
       roomTypeId: rtId,
       roomTypeName: isMultiListing ? rtName : undefined,
+      rooms,
       roomTypes: [
         {
           _id: rtId || 'default',
           name: rtName || 'Standard',
           inventories: simpleInventories,
+          rooms,
         },
       ],
     };
@@ -452,6 +523,37 @@ export default function CalendarInventoryPage({
       >
         {view === 'multi' && (
           <ColumnFilters selectedColumns={selectedColumns} onChange={setSelectedColumns} />
+        )}
+
+        {view === 'multi' && (
+          <button
+            type="button"
+            title="Affiche les chambres physiques sous chaque type, avec les barres de réservation"
+            onClick={() => {
+              setSelectedColumns((prev) =>
+                prev.includes('reservations')
+                  ? prev.filter((id) => id !== 'reservations')
+                  : sortCalendarColumns([...prev, 'reservations']),
+              );
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 12px',
+              borderRadius: 9,
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              border: `1px solid ${resaFilterOn ? T.primary : T.border}`,
+              background: resaFilterOn ? T.primaryTint : T.bg1,
+              color: resaFilterOn ? T.primaryDeep : T.text2,
+              flexShrink: 0,
+            }}
+          >
+            {resaFilterOn ? 'Rooms + résas ✓' : 'Rooms + résas'}
+          </button>
         )}
 
         <div
@@ -666,6 +768,7 @@ export default function CalendarInventoryPage({
           dpEnabledByListing={dpEnabledByListing}
           inventoriesByListing={inventoriesByListing}
           inventoryData={inventoryData}
+          overlayReservations={multiOverlayReservations}
           calendarBlocksById={calendarBlocksById}
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
@@ -722,6 +825,7 @@ export default function CalendarInventoryPage({
         <SimpleView
           listing={selectedListing}
           listings={simpleRailItems}
+          rooms={selectedListing?.rooms || []}
           dpEnabled={dpOn(selectedListingId)}
           selectedListingId={isMultiSimple ? selectedRoomTypeId : selectedListingId}
           onSelectListing={handleSimpleRailSelect}

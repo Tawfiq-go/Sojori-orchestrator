@@ -506,12 +506,42 @@ export function resolveChannelStayFinance(
   // ── Booking.com : EUR canal → MAD (taux admin) ; commission TOUJOURS recalculée ──
   const bookingChannel = isBookingChannel(r);
   const ruTotalRaw = num(ruBreakdown.Total);
-  const hasBookingEurSignal =
+  const isMewsSource = String(r.source || '').toLowerCase() === 'mews';
+  // Mews / MAD déjà stocké : ne pas passer par EUR→MAD (sinon totalPrice masqué).
+  const bookingTotalAlreadyMad =
+    bookingChannel &&
+    totalPrice > 0 &&
+    (isMewsSource || /totalEst:\s*\d+/i.test(blob));
+  const hasRealBookingEur =
     booking.roomPriceEur != null ||
     booking.guestTotalEur != null ||
     booking.paidEur != null ||
     booking.originalPriceEur != null ||
-    (bookingChannel && (channelTotalRaw > 0 || ruTotalRaw > 0 || alreadyPaid > 0 || totalPrice > 0));
+    /original price is\s*[\d.]+\s*EUR/i.test(blob) ||
+    (channelTotalRaw > 0 && channelTotalCur === 'EUR') ||
+    (ruTotalRaw > 0 && /EUR/i.test(blob));
+  const hasBookingEurSignal =
+    hasRealBookingEur ||
+    (bookingChannel &&
+      !bookingTotalAlreadyMad &&
+      (channelTotalRaw > 0 || ruTotalRaw > 0 || alreadyPaid > 0 || totalPrice > 0));
+
+  if (bookingChannel && bookingTotalAlreadyMad && !hasRealBookingEur) {
+    const guestPaidMad = totalPrice;
+    const commissionMad = round2((guestPaidMad * BOOKING_COMMISSION_PCT) / 100);
+    return {
+      guestPaidMad,
+      commissionMad,
+      netHostMad: round2(guestPaidMad - commissionMad),
+      commissionPct: BOOKING_COMMISSION_PCT,
+      stayMad: guestPaidMad,
+      feesMad: 0,
+      touristTaxMad: 0,
+      source: 'booking-mad-total',
+      note: 'totalPrice MAD (Mews)',
+      commissionHint: `${BOOKING_COMMISSION_PCT} % × total MAD`,
+    };
+  }
 
   if (bookingChannel && hasBookingEurSignal) {
     // Priorité montant EUR réel (Comments / Channel / RU) — jamais sojoriPriceTotal

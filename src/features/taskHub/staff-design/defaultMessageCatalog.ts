@@ -1,10 +1,14 @@
 import {
   WHATSAPP_RESERVATION_LINK_VAR,
   ensureCatalogWhatsAppLink,
+  withEmailSubject,
 } from './orchestrationMessageVars';
 import type { CatalogMessage } from './types';
 
-/** 10 messages alignés design Claude / seeds srv-fulltask (OTA + email, WA Meta). */
+const WA_CTA = `Appuyer pour ouvrir WhatsApp (réf. {reservationNumber}) :
+${WHATSAPP_RESERVATION_LINK_VAR}`;
+
+/** Socle unique OTA = email (sans signature) ; email = Objet + corps. */
 export const CLAUDE_DEFAULT_MESSAGE_CATALOG: CatalogMessage[] = [
   {
     id: 'welcome_sojori_v2',
@@ -21,13 +25,10 @@ Pour préparer votre arrivée, écrivez-nous sur WhatsApp :
 {babyCotBlock}• Navette aéroport
 • Ménage, courses, conciergerie et autres services
 
-👉 WhatsApp (réf. {reservationNumber}) :
-${WHATSAPP_RESERVATION_LINK_VAR}
-
-Équipe Sojori`,
-    messageFrEmail: `Objet : Bienvenue — {listingName} · {reservationNumber}
-
-Bonjour {firstName},
+${WA_CTA}`,
+    messageFrEmail: withEmailSubject(
+      'Bienvenue — {listingName} · {reservationNumber}',
+      `Bonjour {firstName},
 
 Votre réservation {reservationNumber} pour {listingName} est confirmée.
 Arrivée : {arrivalDate} · Départ : {departureDate} · {nights} nuit(s)
@@ -38,10 +39,8 @@ Pour préparer votre arrivée, écrivez-nous sur WhatsApp :
 {babyCotBlock}• Navette aéroport
 • Ménage, courses, conciergerie et autres services
 
-👉 WhatsApp (réf. {reservationNumber}) :
-${WHATSAPP_RESERVATION_LINK_VAR}
-
-Équipe Sojori`,
+${WA_CTA}`,
+    ),
   },
   {
     id: 'checkin_feedback',
@@ -49,23 +48,21 @@ ${WHATSAPP_RESERVATION_LINK_VAR}
     whatsappTemplateId: '',
     messageFrOta: `Bonjour {firstName},
 
-Nous espérons que votre séjour à {listingName} se déroule bien.
-N'hésitez pas à nous contacter via la messagerie de la plateforme ou sur WhatsApp :
+Nous espérons que votre séjour à {listingName} se passe bien.
 
-${WHATSAPP_RESERVATION_LINK_VAR}
+Besoin d'un ménage, d'un transport ou d'aide ? Écrivez-nous sur WhatsApp :
 
-Belle journée,
-Équipe Sojori`,
-    messageFrEmail: `Objet : Votre séjour — {listingName}
+${WA_CTA}`,
+    messageFrEmail: withEmailSubject(
+      'Votre séjour à {listingName} — tout se passe bien ?',
+      `Bonjour {firstName},
 
-Bonjour {firstName},
+Nous espérons que votre séjour à {listingName} se passe bien.
 
-Nous espérons que votre séjour à {listingName} se déroule bien.
+Besoin d'un ménage, d'un transport ou d'aide ? Écrivez-nous sur WhatsApp :
 
-${WHATSAPP_RESERVATION_LINK_VAR}
-
-Belle journée,
-Équipe Sojori`,
+${WA_CTA}`,
+    ),
   },
   {
     id: 'departure_instructions',
@@ -81,12 +78,11 @@ Avant de partir, merci de :
 {cityTaxParagraph}
 
 Une question ?
-${WHATSAPP_RESERVATION_LINK_VAR}
 
-Équipe Sojori · Réf. {reservationNumber}`,
-    messageFrEmail: `Objet : Instructions de départ — {listingName} · {departureDate}
-
-Bonjour {firstName},
+${WA_CTA}`,
+    messageFrEmail: withEmailSubject(
+      'Instructions de départ — {listingName} · {departureDate}',
+      `Bonjour {firstName},
 
 Votre départ de {listingName} approche : demain à {checkoutTime}.
 
@@ -95,8 +91,10 @@ Avant de partir, merci de :
 
 {cityTaxParagraph}
 
-Question de dernière minute :
-${WHATSAPP_RESERVATION_LINK_VAR}`,
+Une question ?
+
+${WA_CTA}`,
+    ),
   },
   {
     id: 'checkout_feedback',
@@ -105,11 +103,24 @@ ${WHATSAPP_RESERVATION_LINK_VAR}`,
     messageFrOta: `Bonjour {firstName},
 
 Merci d'avoir séjourné à {listingName}.
+
 Votre avis sur la plateforme nous aide à améliorer l'accueil de futurs voyageurs.
 
-À bientôt,
-Équipe Sojori · Réf. {reservationNumber}`,
-    messageFrEmail: '',
+Une question ou un retour ?
+
+${WA_CTA}`,
+    messageFrEmail: withEmailSubject(
+      'Merci pour votre séjour — {listingName}',
+      `Bonjour {firstName},
+
+Merci d'avoir séjourné à {listingName}.
+
+Votre avis sur la plateforme nous aide à améliorer l'accueil de futurs voyageurs.
+
+Une question ou un retour ?
+
+${WA_CTA}`,
+    ),
   },
   {
     id: 'msg_relance_arrival_choose',
@@ -117,19 +128,21 @@ Votre avis sur la plateforme nous aide à améliorer l'accueil de futurs voyageu
     whatsappTemplateId: '',
     messageFrOta: `Bonjour {firstName},
 
-Pour préparer votre arrivée à {listingName}, merci de nous indiquer votre heure d'arrivée prévue via WhatsApp ou la messagerie OTA.
-Réf. réservation : {reservationNumber}
+Votre arrivée à {listingName} est prévue le {arrivalDate}.
 
-Équipe Sojori`,
-    messageFrEmail: `Objet : Heure d'arrivée — {listingName}
+Merci d'indiquer votre heure d'arrivée estimée pour que nous préparions votre accueil.
 
-Bonjour {firstName},
+${WA_CTA}`,
+    messageFrEmail: withEmailSubject(
+      "Heure d'arrivée — {listingName} · {arrivalDate}",
+      `Bonjour {firstName},
 
-Nous attendons encore votre choix d'heure d'arrivée pour {listingName} ({arrivalDate}).
-${WHATSAPP_RESERVATION_LINK_VAR}
+Votre arrivée à {listingName} est prévue le {arrivalDate}.
 
-Réf. {reservationNumber}
-Équipe Sojori`,
+Merci d'indiquer votre heure d'arrivée estimée pour que nous préparions votre accueil.
+
+${WA_CTA}`,
+    ),
   },
   {
     id: 'msg_relance_departure_choose',
@@ -137,14 +150,21 @@ Réf. {reservationNumber}
     whatsappTemplateId: '',
     messageFrOta: `Bonjour {firstName},
 
-Merci d'indiquer votre heure de départ pour {listingName} (départ prévu {departureDate}).
-Réf. {reservationNumber} — Équipe Sojori`,
-    messageFrEmail: `Objet : Heure de départ — {listingName}
+Votre départ de {listingName} est prévu le {departureDate}.
 
-Bonjour {firstName},
+Merci de confirmer votre heure de départ. Les instructions de départ vous seront envoyées séparément.
 
-Merci de confirmer votre heure de départ pour {listingName}.
-Équipe Sojori · Réf. {reservationNumber}`,
+${WA_CTA}`,
+    messageFrEmail: withEmailSubject(
+      'Heure de départ — {listingName} · {departureDate}',
+      `Bonjour {firstName},
+
+Votre départ de {listingName} est prévu le {departureDate}.
+
+Merci de confirmer votre heure de départ. Les instructions de départ vous seront envoyées séparément.
+
+${WA_CTA}`,
+    ),
   },
   {
     id: 'msg_relance_arrival_declare',
@@ -152,9 +172,21 @@ Merci de confirmer votre heure de départ pour {listingName}.
     whatsappTemplateId: '',
     messageFrOta: `Bonjour {firstName},
 
-Pouvez-vous nous confirmer vos informations d'arrivée (vol/train, heure) pour {listingName} ?
-Réf. {reservationNumber}`,
-    messageFrEmail: '',
+Êtes-vous bien arrivé(e) à {listingName} ?
+
+Merci de nous confirmer votre arrivée. Notre équipe reste disponible si besoin :
+
+${WA_CTA}`,
+    messageFrEmail: withEmailSubject(
+      "Confirmation d'arrivée — {listingName}",
+      `Bonjour {firstName},
+
+Êtes-vous bien arrivé(e) à {listingName} ?
+
+Merci de nous confirmer votre arrivée. Notre équipe reste disponible si besoin :
+
+${WA_CTA}`,
+    ),
   },
   {
     id: 'msg_relance_departure_declare',
@@ -164,18 +196,19 @@ Réf. {reservationNumber}`,
 
 Avez-vous bien quitté {listingName} ?
 
-Merci de nous confirmer votre départ.
+Merci de nous confirmer votre départ :
 
-Équipe Sojori · Réf. {reservationNumber}`,
-    messageFrEmail: `Objet : Confirmation de départ — {listingName}
-
-Bonjour {firstName},
+${WA_CTA}`,
+    messageFrEmail: withEmailSubject(
+      'Confirmation de départ — {listingName}',
+      `Bonjour {firstName},
 
 Avez-vous bien quitté {listingName} ?
 
-Merci de nous confirmer votre départ en répondant à cet email.
+Merci de nous confirmer votre départ :
 
-Équipe Sojori · Réf. {reservationNumber}`,
+${WA_CTA}`,
+    ),
   },
   {
     id: 'msg_relance_registration',
@@ -183,14 +216,21 @@ Merci de nous confirmer votre départ en répondant à cet email.
     whatsappTemplateId: '',
     messageFrOta: `Bonjour {firstName},
 
-Pour votre séjour à {listingName}, merci de compléter l'enregistrement voyageurs (obligatoire avant l'arrivée).
-Réf. {reservationNumber} — Équipe Sojori`,
-    messageFrEmail: `Objet : Enregistrement à compléter — {listingName}
+L'enregistrement voyageurs pour {listingName} n'est pas encore finalisé (obligatoire avant l'arrivée).
 
-Bonjour {firstName},
+Complétez-le en quelques minutes sur WhatsApp :
 
-L'enregistrement pour {listingName} n'est pas encore finalisé. Complétez-le via WhatsApp Sojori.
-Réf. {reservationNumber}`,
+${WA_CTA}`,
+    messageFrEmail: withEmailSubject(
+      'Enregistrement à compléter — {listingName} · avant {arrivalDate}',
+      `Bonjour {firstName},
+
+L'enregistrement voyageurs pour {listingName} n'est pas encore finalisé (obligatoire avant l'arrivée).
+
+Complétez-le en quelques minutes sur WhatsApp :
+
+${WA_CTA}`,
+    ),
   },
   {
     id: 'msg_relance_cleaning',
@@ -198,9 +238,21 @@ Réf. {reservationNumber}`,
     whatsappTemplateId: '',
     messageFrOta: `Bonjour {firstName},
 
-Rappel : votre créneau de ménage pour {listingName} approche. Confirmez ou modifiez via WhatsApp.
-Réf. {reservationNumber}`,
-    messageFrEmail: '',
+Votre séjour à {listingName} inclut un ménage gratuit.
+
+Planifiez votre créneau sur WhatsApp :
+
+${WA_CTA}`,
+    messageFrEmail: withEmailSubject(
+      'Ménage inclus — {listingName}',
+      `Bonjour {firstName},
+
+Votre séjour à {listingName} inclut un ménage gratuit.
+
+Planifiez votre créneau sur WhatsApp :
+
+${WA_CTA}`,
+    ),
   },
 ];
 

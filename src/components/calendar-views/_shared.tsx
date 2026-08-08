@@ -494,7 +494,14 @@ export interface ReservationRow {
   blockAuthor?: string;
 }
 
-export type PlanningRoomTypeRef = { id: string; name: string };
+export type PlanningRoomRef = { id: string; name: string; number?: number };
+
+export type PlanningRoomTypeRef = {
+  id: string;
+  name: string;
+  /** Chambres physiques (Multi ops / ménage). */
+  rooms?: PlanningRoomRef[];
+};
 
 /**
  * Contexte déduit d'un clic droit sur une cellule du planning : la POSITION
@@ -512,6 +519,8 @@ export interface PlanningCreateContext {
   isDepartureDay?: boolean;
   /** true si le jour cliqué est le jour d'arrivée (check-in probable). */
   isArrivalDay?: boolean;
+  roomTypeId?: string;
+  roomId?: string;
 }
 
 export interface ListingRow {
@@ -528,11 +537,26 @@ export interface ListingRow {
   roomTypes?: PlanningRoomTypeRef[];
   /** Ligne enfant roomType (synthetic). */
   isRoomTypeRow?: boolean;
+  /** Ligne enfant chambre physique (sous roomType). */
+  isRoomRow?: boolean;
   parentListingId?: string;
-  /** Nom hôtel (sur ligne roomType) pour hover / drawer. */
+  /** Nom hôtel (sur ligne roomType / room) pour hover / drawer. */
   parentListingName?: string;
+  parentRoomTypeId?: string;
+  parentRoomTypeName?: string;
   roomTypeId?: string;
+  roomId?: string;
+  /** Sur ligne roomType : nb de rooms ; sur hôtel : nb de roomTypes. */
   roomTypeCount?: number;
+  rooms?: PlanningRoomRef[];
+  /**
+   * Multi — ligne agrégée (building / roomType / orphelin) :
+   * pastilles nombre de résas par jour, jamais de barres Gantt.
+   * Les barres restent sur les lignes room uniquement.
+   */
+  occupancyDayCounts?: boolean;
+  /** @deprecated alias → occupancyDayCounts */
+  roomTypeCollapsedSummary?: boolean;
 }
 
 export interface StaffMember {

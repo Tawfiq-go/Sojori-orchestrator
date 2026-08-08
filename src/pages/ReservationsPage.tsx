@@ -40,7 +40,10 @@ import reservationsService from '../services/reservationsService';
 import type { ReservationFilter } from '../types/reservations.types';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import { CreateReservationModal } from '../components/modals/CreateReservationModal';
-import { ReservationSourceIcon } from '../components/reservations/ReservationSourceIcon';
+import {
+  ReservationSourceIcon,
+  resolveReservationSourceKind,
+} from '../components/reservations/ReservationSourceIcon';
 import { blurActiveElement } from '../utils/domFocus';
 import { logResaGuest, reservationStaySummary } from '../utils/resaGuestActionDebug';
 import { formatGuestCountryDisplay } from '../utils/guestCountryDisplay';
@@ -69,6 +72,7 @@ interface Reservation {
   channelName: string;
   source?: string;
   byRentals?: boolean;
+  notes?: string | null;
   listing: {
     name: string;
     _id: string;
@@ -299,23 +303,98 @@ const GuestCountryCell = ({
   );
 };
 
-// ─── Tri intelligent (comme legacy) ─────────────────────────────────
-const sortReservationsList = (list: Reservation[]): Reservation[] => {
-  return list.sort((a, b) => {
-    // 1️⃣ Annulations non acquittées d'abord (priorité absolue)
-    const aUnacked = isReservationCancelled(a.status) && a.cancellationAcknowledged !== true;
-    const bUnacked = isReservationCancelled(b.status) && b.cancellationAcknowledged !== true;
-    if (aUnacked && !bUnacked) return -1;
-    if (!aUnacked && bUnacked) return 1;
+type ResaSortField = 'default' | 'createdAt' | 'checkin' | 'checkout';
+type ResaSortOrder = 'asc' | 'desc';
 
-    // 2️⃣ Puis autres annulés
-    const aCancelled = isReservationCancelled(a.status);
-    const bCancelled = isReservationCancelled(b.status);
-    if (aCancelled && !bCancelled) return -1;
-    if (!aCancelled && bCancelled) return 1;
+const startOfLocalTodayMs = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+const endOfLocalTodayMs = () => {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+};
 
-    // 3️⃣ Enfin par date de création (plus récent d'abord)
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+/**
+ * Tri page courante — miroir du backend (pagination = tri serveur).
+ * default : annulations → créées auj. → arrivées les plus proches.
+ */
+const sortReservationsList = (
+  list: Reservation[],
+  sortField: ResaSortField,
+  sortOrder: ResaSortOrder,
+): Reservation[] => {
+  if (!Array.isArray(list) || list.length < 2) return list;
+  const safeTs = (d?: string | null) => {
+    const t = new Date(d || 0).getTime();
+    return Number.isFinite(t) ? t : 0;
+  };
+  const t0 = startOfLocalTodayMs();
+  const t1 = endOfLocalTodayMs();
+  const arrivalTs = (r: Reservation) => safeTs(r.arrivalDate);
+  const departureTs = (r: Reservation) => safeTs(r.departureDate);
+  const createdTs = (r: Reservation) => safeTs(r.createdAt);
+  const cancelTs = (r: Reservation) =>
+    safeTs(
+      (r as Reservation & { cancellationDate?: string }).cancellationDate ||
+        r.createdAt,
+    );
+  const unacked = (r: Reservation) =>
+    isReservationCancelled(r.status) && r.cancellationAcknowledged !== true;
+  const cancelled = (r: Reservation) => isReservationCancelled(r.status);
+  const createdToday = (r: Reservation) => {
+    const t = createdTs(r);
+    return t >= t0 && t <= t1;
+  };
+  const cmpUpcomingFirst = (ta: number, tb: number) => {
+    const pa = ta < t0;
+    const pb = tb < t0;
+    if (!pa && pb) return -1;
+    if (pa && !pb) return 1;
+    if (!pa && !pb) return ta - tb;
+    return tb - ta;
+  };
+
+  if (sortField === 'checkin') {
+    return [...list].sort((a, b) =>
+      sortOrder === 'asc'
+        ? cmpUpcomingFirst(arrivalTs(a), arrivalTs(b))
+        : arrivalTs(b) - arrivalTs(a),
+    );
+  }
+  if (sortField === 'checkout') {
+    return [...list].sort((a, b) =>
+      sortOrder === 'asc'
+        ? cmpUpcomingFirst(departureTs(a), departureTs(b))
+        : departureTs(b) - departureTs(a),
+    );
+  }
+  if (sortField === 'createdAt') {
+    return [...list].sort((a, b) => {
+      if (unacked(a) !== unacked(b)) return unacked(a) ? -1 : 1;
+      if (cancelled(a) !== cancelled(b)) return cancelled(a) ? -1 : 1;
+      return sortOrder === 'asc'
+        ? createdTs(a) - createdTs(b)
+        : createdTs(b) - createdTs(a);
+    });
+  }
+
+  /* default */
+  return [...list].sort((a, b) => {
+    const prio = (r: Reservation) => {
+      if (unacked(r)) return 0;
+      if (cancelled(r)) return 1;
+      if (createdToday(r)) return 2;
+      return 3;
+    };
+    const pa = prio(a);
+    const pb = prio(b);
+    if (pa !== pb) return pa - pb;
+    if (pa <= 1) return cancelTs(b) - cancelTs(a);
+    if (pa === 2) return createdTs(b) - createdTs(a);
+    return cmpUpcomingFirst(arrivalTs(a), arrivalTs(b));
   });
 };
 
@@ -351,11 +430,35 @@ export function ReservationsPage() {
     ),
   );
 
+  /** Totaux pills / KPI — source backend (`total`), jamais le length de la page. */
+  const [backendCounts, setBackendCounts] = useState({
+    arrToday: 0,
+    depToday: 0,
+    arrTomorrow: 0,
+    depTomorrow: 0,
+    arr7days: 0,
+    dep7days: 0,
+  });
+
   const PAGE_SIZE_OPTIONS = [100, 200, 300] as const;
   const [page, setPage] = useState(0);
   const [totalReservations, setTotalReservations] = useState(0);
   const [limit, setLimit] = useState<number>(100);
   const totalPages = Math.max(1, Math.ceil(totalReservations / limit));
+
+  /** Mode normal = default (annulations + créées auj. + arrivées proches). */
+  const [sortField, setSortField] = useState<ResaSortField>('default');
+  const [sortOrder, setSortOrder] = useState<ResaSortOrder>('asc');
+
+  const handleSortChange = (field: 'createdAt' | 'checkin' | 'checkout') => {
+    setPage(0);
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
+      return;
+    }
+    setSortField(field);
+    setSortOrder(field === 'checkin' || field === 'checkout' ? 'asc' : 'desc');
+  };
 
   // Deep-link Ma journée / KPI → synchronise pills + statuts depuis l’URL
   useEffect(() => {
@@ -466,8 +569,8 @@ export function ReservationsPage() {
         limit,
         status: selectedStatuses.join(','),
         reservationNumber: sjSearch,
-        sortField: 'createdAt',
-        sortOrder: 'desc',
+        sortField,
+        sortOrder: sortField === 'default' ? 'asc' : sortOrder,
         filterOwnerId: requestOwnerId || undefined,
         // Filtre date fort : pas d’élargissement via cancellationDate
         ...(urlFilter ? { filter: urlFilter, strictArrivalWindow: true } : {}),
@@ -481,7 +584,11 @@ export function ReservationsPage() {
           : {}),
       });
 
-      const sorted = sortReservationsList(response.data as Reservation[]);
+      const sorted = sortReservationsList(
+        response.data as Reservation[],
+        sortField,
+        sortField === 'default' ? 'asc' : sortOrder,
+      );
       logResaGuest('page:fetchList ← srv-reservations', {
         count: sorted.length,
         total: response.total ?? sorted.length,
@@ -510,6 +617,8 @@ export function ReservationsPage() {
     createdToday,
     createdStart,
     createdEnd,
+    sortField,
+    sortOrder,
   ]);
 
   useEffect(() => { setPage(0); }, [requestOwnerId]);
@@ -520,6 +629,41 @@ export function ReservationsPage() {
   }, [totalReservations, limit, page]);
 
   useEffect(() => { fetchReservations(); }, [fetchReservations]);
+
+  // Totaux Arr./Dép. — appels backend dédiés (indépendants de la pagination liste)
+  const fetchBackendCounts = useCallback(async () => {
+    if (!scopeFetchReady) {
+      setBackendCounts({
+        arrToday: 0,
+        depToday: 0,
+        arrTomorrow: 0,
+        depTomorrow: 0,
+        arr7days: 0,
+        dep7days: 0,
+      });
+      return;
+    }
+    try {
+      const c = await reservationsService.getCounts({
+        status: selectedStatuses.join(','),
+        filterOwnerId: requestOwnerId || undefined,
+      });
+      setBackendCounts({
+        arrToday: c.CHECKIN_TODAY,
+        depToday: c.CHECKOUT_TODAY,
+        arrTomorrow: c.CHECKIN_TOMORROW,
+        depTomorrow: c.CHECKOUT_TOMORROW,
+        arr7days: c.CHECKIN_7DAYS,
+        dep7days: c.CHECKOUT_7DAYS,
+      });
+    } catch (err) {
+      console.error('[ReservationsPage] getCounts failed', err);
+    }
+  }, [scopeFetchReady, selectedStatuses, requestOwnerId]);
+
+  useEffect(() => {
+    void fetchBackendCounts();
+  }, [fetchBackendCounts]);
 
   // ─── Temps réel (socket.io) ───────────────────────────────────────
   const socketRooms = useMemo(() => {
@@ -533,6 +677,7 @@ export function ReservationsPage() {
     onReconnect: () => {
       if (isModalOpenRef.current) return;
       fetchReservations();
+      void fetchBackendCounts();
     },
     handlers: {
       [SOCKET_EVENTS.NEW_RESERVATION]: (reservation: Reservation) => {
@@ -541,11 +686,13 @@ export function ReservationsPage() {
           return [reservation, ...prev];
         });
         setTotalReservations(prev => prev + 1);
+        void fetchBackendCounts();
       },
       [SOCKET_EVENTS.UPDATE_RESERVATION]: (reservation: Reservation) => {
         setReservations(prev =>
           prev.map(r => (r._id === reservation._id ? { ...r, ...reservation } : r)),
         );
+        void fetchBackendCounts();
       },
     },
   });
@@ -578,10 +725,19 @@ export function ReservationsPage() {
     }
     if (selectedChannels.length > 0) {
       f = f.filter(r => {
-        const c = r.channelName?.toLowerCase() || '';
+        const kind = resolveReservationSourceKind({
+          source: r.source,
+          channelName: r.channelName,
+          byRentals: r.byRentals,
+          notes: r.notes,
+          listingName: r.listing?.name,
+        });
         return selectedChannels.some(ch => {
-          if (ch === 'sojori') return !c.includes('airbnb') && !c.includes('booking');
-          return c.includes(ch.toLowerCase());
+          if (ch === 'nommos') return kind === 'nommos';
+          if (ch === 'AirBNB') return kind === 'airbnb';
+          if (ch === 'BookingCom') return kind === 'booking';
+          if (ch === 'sojori') return kind === 'vente' || kind === 'admin' || kind === 'whatsapp';
+          return false;
         });
       });
     }
@@ -602,31 +758,22 @@ export function ReservationsPage() {
     return f;
   }, [reservations, globalFilter, selectedChannels, selectedListings, quickFilters, urlFilter]);
 
-  // ─── KPIs ──────────────────────────────────────────────────────────
+  // ─── KPIs / pills — totaux backend ; Présents/Pending restent sur la page courante
   const kpis = useMemo(() => {
-    const t = moment();
-    const arrToday = reservations.filter(r => moment(r.arrivalDate).isSame(t, 'day')).length;
-    const depToday = reservations.filter(r => moment(r.departureDate).isSame(t, 'day')).length;
     const present = reservations.filter((r) => {
       const p = presenceMetaFromReservation(r as never);
       return p.label === 'Arrivé' || (p.label === 'Séjour' && p.declared);
     }).length;
-    const pending  = reservations.filter(r => r.status === 'Pending').length;
-    return { arrToday, depToday, present, pending };
-  }, [reservations]);
-
-  // ─── Quick filter counts (label live) ───────────────────────────
-  const filterCounts = useMemo(() => {
-    const t = moment(), tm = moment().add(1, 'd'), n7 = moment().add(7, 'd');
+    const pending = reservations.filter((r) => r.status === 'Pending').length;
     return {
-      arrToday:    reservations.filter(r => moment(r.arrivalDate).isSame(t, 'day')).length,
-      depToday:    reservations.filter(r => moment(r.departureDate).isSame(t, 'day')).length,
-      arrTomorrow: reservations.filter(r => moment(r.arrivalDate).isSame(tm, 'day')).length,
-      depTomorrow: reservations.filter(r => moment(r.departureDate).isSame(tm, 'day')).length,
-      arr7days:    reservations.filter(r => moment(r.arrivalDate).isBetween(t, n7, 'day', '[]')).length,
-      dep7days:    reservations.filter(r => moment(r.departureDate).isBetween(t, n7, 'day', '[]')).length,
+      arrToday: backendCounts.arrToday,
+      depToday: backendCounts.depToday,
+      present,
+      pending,
     };
-  }, [reservations]);
+  }, [reservations, backendCounts.arrToday, backendCounts.depToday]);
+
+  const filterCounts = backendCounts;
 
   const toggleQuick = (k: QuickFilterKey) => {
     const isActive = quickFilters[k];
@@ -719,6 +866,9 @@ export function ReservationsPage() {
           onAcknowledge={handleAcknowledgeCancellation}
           onStayUpdate={handleStayFieldUpdate}
           onRegistrationUpdate={handleRegistrationUpdate}
+          sortField={sortField}
+          sortOrder={sortOrder}
+          onSortChange={handleSortChange}
           fillViewport
         />
       )
@@ -897,9 +1047,10 @@ export function ReservationsPage() {
               onChange={(e) => setSelectedChannels(e.target.value as string[])}
               renderValue={(s) => `Source · ${(s as string[]).length || 'toutes'}`}>
               {[
-                { val: 'sojori', label: 'Direct / Sojori', icon: 'Direct / Sojori' },
-                { val: 'AirBNB', label: 'Airbnb', icon: 'Airbnb' },
-                { val: 'BookingCom', label: 'Booking.com', icon: 'Booking.com' },
+                { val: 'nommos', label: 'Nommos (direct)' },
+                { val: 'AirBNB', label: 'Airbnb' },
+                { val: 'BookingCom', label: 'Booking.com' },
+                { val: 'sojori', label: 'Sojori' },
               ].map((ch) => (
                 <MenuItem key={ch.val} value={ch.val}>
                   <Checkbox checked={selectedChannels.indexOf(ch.val) > -1} size="small" />
@@ -936,33 +1087,13 @@ export function ReservationsPage() {
               label="Arr. auj."
               value={kpis.arrToday}
               accent={T.info}
-              onClick={() => {
-                const isActive = quickFilters.arrToday;
-                setQuickFilters({
-                  arrToday: !isActive,
-                  depToday: false,
-                  arrTomorrow: false,
-                  depTomorrow: false,
-                  arr7days: false,
-                  dep7days: false,
-                });
-              }}
+              onClick={() => toggleQuick('arrToday')}
             />
             <KpiCompact
               label="Dép. auj."
               value={kpis.depToday}
               accent={T.warning}
-              onClick={() => {
-                const isActive = quickFilters.depToday;
-                setQuickFilters({
-                  arrToday: false,
-                  depToday: !isActive,
-                  arrTomorrow: false,
-                  depTomorrow: false,
-                  arr7days: false,
-                  dep7days: false,
-                });
-              }}
+              onClick={() => toggleQuick('depToday')}
             />
             <KpiCompact
               label="Présents"
@@ -974,7 +1105,12 @@ export function ReservationsPage() {
                 } else {
                   setSelectedStatuses(['Confirmed']);
                 }
-                setQuickFilters({ arrToday: false, depToday: false, arrTomorrow: false, depTomorrow: false, arr7days: false, dep7days: false });
+                setQuickFilters({ ...EMPTY_QUICK_FILTERS });
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.delete('filter');
+                  return next;
+                }, { replace: true });
               }}
             />
             <KpiCompact
@@ -987,7 +1123,12 @@ export function ReservationsPage() {
                 } else {
                   setSelectedStatuses(['Pending']);
                 }
-                setQuickFilters({ arrToday: false, depToday: false, arrTomorrow: false, depTomorrow: false, arr7days: false, dep7days: false });
+                setQuickFilters({ ...EMPTY_QUICK_FILTERS });
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.delete('filter');
+                  return next;
+                }, { replace: true });
               }}
             />
           </Stack>
@@ -1203,14 +1344,34 @@ function ResaColGroup() {
   );
 }
 
+const SORTABLE_HEADERS: Record<string, 'createdAt' | 'checkin' | 'checkout'> = {
+  Créé: 'createdAt',
+  'Check-in': 'checkin',
+  'Check-out': 'checkout',
+};
+
 // ─── Desktop table ─────────────────────────────────────────────────
-function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdate, onRegistrationUpdate, fillViewport = false }: {
+function DesktopTable({
+  rows,
+  onRowClick,
+  onNavigate,
+  onAcknowledge,
+  onStayUpdate,
+  onRegistrationUpdate,
+  sortField,
+  sortOrder,
+  onSortChange,
+  fillViewport = false,
+}: {
   rows: Reservation[];
   onRowClick: (r: Reservation) => void;
   onNavigate: (path: string) => void;
   onAcknowledge?: (r: Reservation) => void;
   onStayUpdate?: (reservationId: string, patch: StayFieldPatch) => void;
   onRegistrationUpdate?: (reservationId: string, patch: RegistrationFieldPatch) => void;
+  sortField: ResaSortField;
+  sortOrder: ResaSortOrder;
+  onSortChange: (field: 'createdAt' | 'checkin' | 'checkout') => void;
   /** Remplit la hauteur parent — header fixe + scroll body (calendrier multi) */
   fillViewport?: boolean;
 }) {
@@ -1279,25 +1440,59 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
           <ResaColGroup />
           <Box component="thead">
             <Box component="tr">
-              {RESA_HEADERS.map((h) => (
-                <Box component="th" key={h} sx={{
-                  textAlign: h === 'Nuits' || h === 'Présence' || h === 'Voyageurs' || h === 'Actions' ? 'center' : 'left',
-                  px: 1.5, py: 1.25,
-                  fontSize: 10.75, fontWeight: 700,
-                  letterSpacing: '0.08em', textTransform: 'uppercase',
-                  color: T.text2,
-                  whiteSpace: 'nowrap',
-                  bgcolor: T.bg2,
-                  background: `linear-gradient(180deg, ${T.bg1} 0%, ${T.bg2} 100%)`,
-                  ...(h === 'Voyageur' && {
-                    position: 'sticky',
-                    left: 0,
-                    zIndex: 6,
-                    boxShadow: pinnedShadow,
-                    transition: 'box-shadow 0.15s ease',
-                  }),
-                }}>{h}</Box>
-              ))}
+              {RESA_HEADERS.map((h) => {
+                const sortKey = SORTABLE_HEADERS[h];
+                const active =
+                  !!sortKey &&
+                  (sortField === sortKey ||
+                    (sortField === 'default' && sortKey === 'checkin'));
+                return (
+                  <Box
+                    component="th"
+                    key={h}
+                    onClick={sortKey ? () => onSortChange(sortKey) : undefined}
+                    sx={{
+                      textAlign: h === 'Nuits' || h === 'Présence' || h === 'Voyageurs' || h === 'Actions' ? 'center' : 'left',
+                      px: 1.5, py: 1.25,
+                      fontSize: 10.75, fontWeight: 700,
+                      letterSpacing: '0.08em', textTransform: 'uppercase',
+                      color: active ? T.primary : T.text2,
+                      whiteSpace: 'nowrap',
+                      bgcolor: T.bg2,
+                      background: `linear-gradient(180deg, ${T.bg1} 0%, ${T.bg2} 100%)`,
+                      cursor: sortKey ? 'pointer' : 'default',
+                      userSelect: 'none',
+                      ...(h === 'Voyageur' && {
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 6,
+                        boxShadow: pinnedShadow,
+                        transition: 'box-shadow 0.15s ease',
+                      }),
+                      ...(sortKey && {
+                        '&:hover': { color: T.primary },
+                      }),
+                    }}
+                  >
+                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.35 }}>
+                      {h}
+                      {sortKey ? (
+                        active && sortField !== 'default' ? (
+                          sortOrder === 'asc' ? (
+                            <ArrowUpIcon sx={{ fontSize: 12 }} />
+                          ) : (
+                            <ArrowDownIcon sx={{ fontSize: 12 }} />
+                          )
+                        ) : (
+                          <Box component="span" sx={{ opacity: active ? 0.7 : 0.35, fontSize: 10 }}>
+                            {sortField === 'default' && sortKey === 'checkin' ? '↑' : '↕'}
+                          </Box>
+                        )
+                      ) : null}
+                    </Box>
+                  </Box>
+                );
+              })}
             </Box>
           </Box>
         </Box>
@@ -1368,7 +1563,15 @@ function DesktopTable({ rows, onRowClick, onNavigate, onAcknowledge, onStayUpdat
                     </Box>
                   </Box>
                   <Box component="td" sx={{ textAlign: 'center' }}>
-                    <ReservationSourceIcon reservation={r} />
+                    <ReservationSourceIcon
+                      reservation={{
+                        source: r.source,
+                        channelName: r.channelName,
+                        byRentals: r.byRentals,
+                        notes: r.notes,
+                        listingName: r.listing?.name,
+                      }}
+                    />
                   </Box>
                   <Box component="td" sx={{ maxWidth: 220 }}>
                     <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
@@ -1603,7 +1806,16 @@ function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpd
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
           <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
-            <ReservationSourceIcon reservation={r} size={20} />
+            <ReservationSourceIcon
+              reservation={{
+                source: r.source,
+                channelName: r.channelName,
+                byRentals: r.byRentals,
+                notes: r.notes,
+                listingName: r.listing?.name,
+              }}
+              size={20}
+            />
             <Typography sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 12, fontWeight: 700, color: T.primaryDeep }}>
               {r.reservationNumber}
             </Typography>
