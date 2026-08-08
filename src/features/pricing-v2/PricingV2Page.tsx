@@ -53,6 +53,19 @@ import {
 
 import { T, cardSx, kickerSx } from './tokens';
 
+/**
+ * ⚠️ DOIT rester identique à GAMME_OFFSET (apps/srv-pricing-v2/src/engine/
+ * config.ts:5). Sert uniquement à inverser le calcul de `base` pour poser le
+ * curseur doré pile sur le repère cliqué (voir onGammeChange) — ce n'est PAS
+ * une deuxième source de vérité sur le prix, juste son inverse côté UI.
+ */
+const GAMME_OFFSET_FRONT: Record<'economique' | 'normal' | 'premium' | 'luxe', number> = {
+  economique: 0.9,
+  normal: 1.0,
+  premium: 1.08,
+  luxe: 1.15,
+};
+
 // Table de traduction (brief §2) — aucun terme technique nu à l'écran.
 /**
  * ⚠️ `pct` DOIT rester aligné sur MODE.tilt (apps/srv-pricing-v2/src/engine/
@@ -390,11 +403,43 @@ export default function PricingV2Page() {
               /* Clic sur le curseur VOUS → le détail complet (même ticket que
                  le calendrier) : base, saison, jour, remplissage, bornes. */
               onExplainYours={() => setTicketDay(today)}
-              /* Cliquer une gamme = raccourci pour poser le curseur doré sur ce
-                 palier. On remet donc annualTilt à 1 : sinon un réglage fin
-                 précédent resterait appliqué par-dessus et le curseur ne
-                 tomberait pas sur le repère cliqué. */
-              onGammeChange={(g) => void patch({ gamme: g, annualTilt: 1 })}
+              /* Cliquer une gamme = poser le curseur doré PILE sur ce repère
+                 (502/550/702/747 affichés). `result.meta.base` (= benchmark ×
+                 GAMME_OFFSET × momentum × mode.tilt) et `scale.p25/p50/p75/p90`
+                 (percentile pondéré sur le compset qualité-ajusté, market.ts)
+                 sont deux calculs INDÉPENDANTS — ils ne coïncident pas
+                 forcément, l'écart étant le plus visible sur premium/luxe où
+                 GAMME_OFFSET amplifie la divergence. Sans ce calcul, le
+                 curseur retombait sur meta.base et semblait "décalé" du
+                 repère qu'on venait de cliquer (signalé par Tawfiq 08/08/2026).
+                 On calcule donc l'annualTilt qui fait ATTERRIR base exactement
+                 sur la valeur du repère, comme pour un drag manuel. */
+              onGammeChange={(g) => {
+                const scaleByGamme: Record<typeof g, number> = {
+                  economique: market.scale.p25,
+                  normal: market.scale.p50,
+                  premium: market.scale.p75,
+                  luxe: market.scale.p90,
+                };
+                const targetForGamme = scaleByGamme[g];
+                // base = benchmarkRaw × GAMME_OFFSET[gamme] × momentum × mode.tilt × annualTilt
+                // (engine/engine.ts:462). GAMME_OFFSET_FRONT ci-dessous DOIT rester
+                // synchronisé avec GAMME_OFFSET côté moteur (engine/config.ts:5) — ce
+                // n'est PAS le calcul de prix, juste l'inverse pour poser le curseur.
+                // On retire l'offset de la gamme ACTUELLE de currentBase pour retomber
+                // sur la partie constante (benchmarkRaw × momentum × mode.tilt × oldTilt),
+                // puis on calcule le tilt qui, combiné au NOUVEL offset, atterrit
+                // exactement sur targetForGamme.
+                const currentGamme = config?.gamme ?? 'normal';
+                const currentBase = result.meta.base || 1;
+                const oldTilt = config?.annualTilt ?? 1;
+                const constantPart = currentBase / GAMME_OFFSET_FRONT[currentGamme] / oldTilt;
+                const tilt = targetForGamme / GAMME_OFFSET_FRONT[g] / constantPart;
+                void patch({
+                  gamme: g,
+                  annualTilt: Math.min(1.6, Math.max(0.6, Number(tilt.toFixed(3)))),
+                });
+              }}
               /* Cible = prix de base du moteur, ajusté du réglage fin du PM.
                  Tant qu'il n'a rien touché (annualTilt = 1), elle se superpose
                  au constat — les deux curseurs sont alors alignés. */
