@@ -9,6 +9,8 @@ export type SidebarNavUser = {
   role?: string | null;
   featureGrants?: FeatureGrant[];
   ownerAccess?: boolean;
+  /** Requis pour les entrées à verrou nominatif (CRM clients). */
+  email?: string | null;
 };
 
 export function useSidebarNav(user: SidebarNavUser | null | undefined): NavGroupConfig[] {
@@ -18,6 +20,11 @@ export function useSidebarNav(user: SidebarNavUser | null | undefined): NavGroup
     if (simulationActive && hasAdminAccess(user?.role)) {
       return navGroupsForRole(Roles.Owner);
     }
-    return navGroupsForRole(user?.role, user?.featureGrants, user?.ownerAccess);
-  }, [user?.role, user?.featureGrants, user?.ownerAccess, simulationActive]);
+    return navGroupsForRole(
+      user?.role,
+      user?.featureGrants,
+      user?.ownerAccess,
+      user?.email,
+    );
+  }, [user?.role, user?.featureGrants, user?.ownerAccess, user?.email, simulationActive]);
 }
