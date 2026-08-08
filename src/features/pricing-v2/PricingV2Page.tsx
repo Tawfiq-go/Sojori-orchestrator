@@ -103,28 +103,19 @@ export default function PricingV2Page() {
   const [stale, setStale] = useState<{ ageDays: number | null; maxAgeDays: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  // ── Sélection de plage (consigne maquette : « glisser = plage ») ──
+  // ── Sélection de plage — LE geste unique du calendrier ──
+  // Cliquer ou glisser sélectionne, rien de plus. Aucun popup ne s'ouvre seul :
+  // le détail se demande via « Voir le détail » dans la barre de plage, et le
+  // graphe de gauche suit la sélection. Il n'y a donc plus de clic/glisser à
+  // distinguer ni de clic droit détourné (Tawfiq 08/08/2026).
   // Un seul objet : `from`/`to` bougent toujours ensemble, sinon la barre
   // d'action se rendait un instant avec des bornes dépareillées.
-  // `dragging` distingue le geste en cours du résultat figé ; il ne suffit pas
-  // de le poser au mousedown car un clic simple doit AUSSI ouvrir le ticket.
   const [sel, setSel] = useState<{ from: string; to: string } | null>(null);
   const [dragging, setDragging] = useState(false);
-  /** Vrai dès que la souris a survolé une AUTRE cellule pendant le geste :
-   *  c'est ce qui sépare « clic » (ticket de caisse) de « glisser » (plage). */
-  const movedRef = useRef(false);
-  /** Cellule où le geste a commencé. Sert à ne PAS compter comme glisser un
-   *  `pointerenter` sur la cellule de départ (sinon le clic simple, qui doit
-   *  ouvrir le ticket de caisse, était pris pour une sélection). */
+  /** Cellule où le geste a commencé — l'ancre depuis laquelle la plage s'étend. */
   const anchorRef = useRef<string | null>(null);
   /** Sur les nuits VENDUES : afficher le prix payé (figé) ou le prix du moteur. */
   const [showBookedPrices, setShowBookedPrices] = useState(false);
-  /** Jour cliqué dans le calendrier — la courbe "Le marché, et vous dessus"
-   *  et le texte "marché autour de chez vous ce soir" doivent refléter CE
-   *  jour, pas rester figés sur aujourd'hui (demandé par Tawfiq 08/08/2026:
-   *  chaque clic cellule doit changer le statut marché affiché). null =
-   *  aucun clic encore → on retombe sur `today`. */
-  const [selectedMarketDate, setSelectedMarketDate] = useState<string | null>(null);
   /** Liste { listingId, name } pour le sélecteur — chargée UNE fois, jamais
    *  reliée à `reload()` : changer de bien ne doit ni re-fetcher le portfolio
    *  ni naviguer vers /pricing-v2 (l'atterrissage), juste changer l'URL. */
@@ -219,7 +210,7 @@ export default function PricingV2Page() {
   const clearSelection = () => {
     setSel(null);
     setDragging(false);
-    movedRef.current = false;
+    anchorRef.current = null;
   };
 
   /** Applique Fixer / Ajuster / Revenir au calcul sur la plage sélectionnée. */
@@ -308,12 +299,12 @@ export default function PricingV2Page() {
 
   const today = result.days[0];
   // Jour affiché par la courbe "Le marché, et vous dessus" + le texte
-  // "marché autour de chez vous" — le dernier jour cliqué dans le calendrier,
-  // sinon aujourd'hui. Cherché par date (pas par index) : le calendrier ne
-  // garantit pas que la position cliquée == l'index dans result.days une
-  // fois qu'on a navigué entre biens/rechargé.
-  const marketDay =
-    (selectedMarketDate && result.days.find((d) => d.date === selectedMarketDate)) || today;
+  // "marché autour de chez vous" — il SUIT LA SÉLECTION du calendrier (début de
+  // plage), sinon aujourd'hui. C'est ce qui rend le clic droit inutile : voir un
+  // jour dans le marché = le sélectionner, un seul geste pour les deux.
+  // Cherché par date (pas par index) : le calendrier ne garantit pas que la
+  // position cliquée == l'index dans result.days après navigation/rechargement.
+  const marketDay = (sel && result.days.find((d) => d.date === sel.from)) || today;
   const lowConfidence = result.meta.compsetSize < 3;
   const trendPct = Math.round((result.meta.momentum - 1) * 100);
 
@@ -493,10 +484,9 @@ export default function PricingV2Page() {
           {/* Distribution — écran signature, en tête de colonne gauche */}
           {market?.scale ? (
             <>
-            {/* Date affichée par la courbe — sans ça, un clic droit change les
-                chiffres sans dire lesquels (pas de popup ici, contrairement au
-                ticket de caisse). Bouton "Aujourd'hui" seulement si on s'est
-                écarté de la date du jour. */}
+            {/* Date affichée par la courbe : la sélection du calendrier change
+                ces chiffres, il faut donc dire lesquels. Bouton "Aujourd'hui"
+                seulement si on s'est écarté de la date du jour. */}
             {marketDay.date !== today.date ? (
               <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', px: 0.25 }}>
                 <Typography sx={{ fontSize: 12, color: T.ink2 }}>
@@ -513,7 +503,7 @@ export default function PricingV2Page() {
                 <Box
                   component="button"
                   type="button"
-                  onClick={() => setSelectedMarketDate(null)}
+                  onClick={clearSelection}
                   sx={{
                     all: 'unset',
                     cursor: 'pointer',
@@ -761,6 +751,15 @@ export default function PricingV2Page() {
               <Box component="span" sx={{ color: T.crit }}>▢</Box> orphan gap
             </Typography>
           </Stack>
+          {/* Mode d'emploi du geste, à la place qu'occupera la barre d'action :
+              le modèle « sélectionner puis agir » doit être lu, pas deviné.
+              Disparaît dès qu'une cellule est prise (la barre prend le relais). */}
+          {!range ? (
+            <Typography sx={{ fontSize: 11.5, color: T.mut, mb: 1.25 }}>
+              Cliquez une nuit — ou glissez sur plusieurs — pour changer le prix.
+              Le marché à gauche suit la nuit sélectionnée.
+            </Typography>
+          ) : null}
           {/* Nuits vendues : quel prix afficher ? (maquette : « Prix actuels / Prix à la résa »)
               Le PM compare ce qu'il a encaissé à ce que le moteur aurait proposé. */}
           {result.days.some((d) => d.status === 'booked') ? (
@@ -798,9 +797,11 @@ export default function PricingV2Page() {
             </Stack>
           ) : null}
 
-          {/* Barre d'action — apparaît dès qu'une plage est sélectionnée au drag.
-              Reste montée pendant le glisser (opacité seule) : la démonter puis
-              la remonter faisait sauter la page et vidait le champ « MAD ». */}
+          {/* Barre d'action — LE point d'entrée de toute action sur le calendrier
+              (modifier le prix, ou demander le détail). Apparaît dès qu'une
+              cellule est sélectionnée, même une seule. Reste montée pendant le
+              glisser (opacité seule) : la démonter puis la remonter faisait
+              sauter la page et vidait le champ « MAD ». */}
           {range ? (
             <RangeActionBar
               fromDate={range.from}
@@ -814,6 +815,16 @@ export default function PricingV2Page() {
               busy={saving}
               onApply={(a) => void applyRange(a)}
               onCancel={clearSelection}
+              // Une seule nuit → on peut expliquer SON prix. Sur une plage, le
+              // ticket de caisse n'aurait aucun jour à détailler.
+              onShowDetail={
+                range.from === range.to
+                  ? () => {
+                      const day = result.days.find((d) => d.date === range.from);
+                      if (day) setTicketDay(day);
+                    }
+                  : undefined
+              }
             />
           ) : null}
           {/* Les 6 mois du moteur, sur deux colonnes, sans zone défilante. */}
@@ -891,71 +902,40 @@ export default function PricingV2Page() {
                         key={d.date}
                         component="button"
                         type="button"
-                        // clic = ticket de caisse · glisser = sélection de plage.
-                        // Pointer events (pas mouse) : gère aussi le tactile, et
-                        // `releasePointerCapture` permet de suivre le survol des
-                        // cellules voisines pendant le glisser.
+                        /* UN SEUL GESTE : cliquer ou glisser SÉLECTIONNE. Rien ne
+                           s'ouvre tout seul (Tawfiq 08/08/2026 — « les clics sont
+                           confondus »). Le détail se demande explicitement via
+                           « Voir le détail » dans la barre de plage, et le graphe
+                           de gauche suit la sélection. Même modèle que le
+                           calendrier inventaire (InventoryGridV2 « comme Excel »).
+                           Plus de distinction clic/glisser à deviner, plus de clic
+                           droit détourné : il n'y a plus rien à confondre. */
                         onPointerDown={(e) => {
-                          // Bouton droit : géré par onContextMenu, ne démarre pas
-                          // un glisser (sinon la sélection restait coincée).
                           if (e.button !== 0) return;
+                          // Laisse le pointeur traverser les cellules voisines
+                          // (sans ça, tout le geste reste captif de la cellule).
                           e.currentTarget.releasePointerCapture(e.pointerId);
-                          // Maj + clic = étendre depuis l'ancre existante. Sur 6
-                          // mois affichés, un glisser de septembre à février est
+                          // Maj + clic = étendre depuis l'ancre. Sur 6 mois
+                          // affichés, glisser de septembre à février est
                           // impraticable ; c'est le geste attendu d'un tableur.
                           if (e.shiftKey && sel) {
-                            movedRef.current = true;
                             setSel({ from: sel.from, to: d.date });
                             return;
                           }
                           setDragging(true);
-                          movedRef.current = false;
                           anchorRef.current = d.date;
                           setSel({ from: d.date, to: d.date });
                         }}
                         onPointerEnter={() => {
                           if (!dragging) return;
-                          // ⚠️ `movedRef` ne passe à vrai QUE sur une AUTRE cellule
-                          // que l'ancre : `pointerenter` se déclenche aussi sur la
-                          // cellule de départ (re-entrée, micro-mouvement), et le
-                          // compter comme un glisser cassait le clic simple, qui
-                          // n'ouvrait plus le ticket de caisse.
-                          // En revanche la plage suit TOUJOURS le survol : revenir
-                          // sur l'ancre après en être sorti doit bien la réduire
-                          // à une nuit (sans ce `setSel`, elle restait à deux).
-                          if (d.date !== anchorRef.current) movedRef.current = true;
                           // Étend depuis l'ancre `from`, jamais depuis `to` : en
                           // repartant en arrière la plage se réduit correctement.
                           setSel((s) => (s ? { from: s.from, to: d.date } : s));
                         }}
                         onPointerUp={(e) => {
                           if (e.button !== 0) return;
-                          // Maj + clic vient d'étendre la plage : ne pas ouvrir le
-                          // ticket ni effacer ce qu'on vient de sélectionner.
-                          if (e.shiftKey) return;
                           setDragging(false);
-                          // Clic sans changement de cellule = consultation : le
-                          // ticket de caisse s'ouvre EXACTEMENT comme avant.
-                          if (!movedRef.current) {
-                            setSel(null);
-                            setTicketDay(d);
-                          }
-                          movedRef.current = false;
                           anchorRef.current = null;
-                        }}
-                        /* Clic droit = changer le jour affiché par "Le marché,
-                           et vous dessus" SANS ouvrir le ticket de caisse —
-                           demandé par Tawfiq 08/08/2026 (clic simple garde le
-                           popup, clic droit met juste à jour la courbe). */
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          // Le clic droit ne doit RIEN laisser derrière lui : sans
-                          // ça, le pointerdown droit (ignoré) pouvait laisser un
-                          // geste ouvert et figer la sélection suivante.
-                          setDragging(false);
-                          movedRef.current = false;
-                          anchorRef.current = null;
-                          setSelectedMarketDate(d.date);
                         }}
                         title={
                           (gap
@@ -969,8 +949,7 @@ export default function PricingV2Page() {
                             : blocked
                               ? `${d.date} — bloqué (fermé à la vente)`
                               : `${d.date} — ${d.price} MAD (marché : ${Math.round(d.comp)})`) +
-                          ' · clic : détail du prix · glisser ou Maj+clic : sélectionner une plage' +
-                          ' · clic droit : voir dans "Le marché, et vous dessus"'
+                          ' · cliquez ou glissez pour sélectionner (Maj+clic : étendre)'
                         }
                         sx={{
                           all: 'unset',

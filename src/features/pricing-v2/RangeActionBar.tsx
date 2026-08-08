@@ -38,6 +38,10 @@ export default function RangeActionBar({
   dragging = false,
   onApply,
   onCancel,
+  /** Ouvre le ticket de caisse. Fourni UNIQUEMENT quand une seule nuit est
+   *  sélectionnée : le détail explique un prix, pas une plage. C'est le seul
+   *  chemin vers le popup depuis que le clic ne l'ouvre plus tout seul. */
+  onShowDetail,
   busy,
 }: {
   fromDate: string;
@@ -48,6 +52,7 @@ export default function RangeActionBar({
   dragging?: boolean;
   onApply: (a: RangeAction) => void;
   onCancel: () => void;
+  onShowDetail?: () => void;
   busy?: boolean;
 }) {
   const [fixed, setFixed] = useState('');
@@ -195,6 +200,19 @@ export default function RangeActionBar({
           Revenir au calcul
         </Button>
 
+        {/* Le détail explique UN prix : proposé sur une nuit seule, jamais sur
+            une plage. Remplace le popup qui s'ouvrait à chaque clic. */}
+        {onShowDetail ? (
+          <Button
+            size="medium"
+            variant="text"
+            disabled={busy}
+            onClick={onShowDetail}
+            sx={{ ...actionSx, color: T.ink2, px: 1.25 }}
+          >
+            🧾 Voir le détail
+          </Button>
+        ) : null}
       </Stack>
     </Box>
   );
