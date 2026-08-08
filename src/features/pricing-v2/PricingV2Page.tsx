@@ -328,6 +328,15 @@ export default function PricingV2Page() {
               {currentListingName}
             </Typography>
           ) : null}
+          {/* Paramètres utilisés pour l'estimation — discret, sous le nom,
+              sans casser la verticalité de l'en-tête (demandé par Tawfiq
+              08/08/2026). null = donnée absente en base, on ne l'invente pas. */}
+          {market?.subject ? (
+            <Typography sx={{ fontSize: 11.5, color: T.mut, mt: 0.25 }}>
+              {market.subject.bedrooms} ch · {market.subject.guests} pers
+              {market.subject.bathrooms != null ? ` · ${market.subject.bathrooms} SdB` : ''}
+            </Typography>
+          ) : null}
         </Box>
         {/* Changer de bien SANS repasser par le portfolio (/pricing-v2) — juste
             une navigation directe vers /pricing-v2/bien/:id. Recherche par nom
