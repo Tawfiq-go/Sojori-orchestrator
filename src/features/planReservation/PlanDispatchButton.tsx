@@ -15,6 +15,8 @@ interface Props {
   /** Indique qu’un envoi a déjà eu lieu — renvoi avec confirmation. */
   wasSent?: boolean;
   itemLabel?: string;
+  /** Affiche un libellé texte (ex. messages 📨 Manuel). */
+  buttonLabel?: string;
   onDone?: (planDoc?: FulltaskPlanDoc) => void;
   onLoadingChange?: (loading: boolean) => void;
 }
@@ -43,6 +45,7 @@ export default function PlanDispatchButton({
   disabled,
   wasSent,
   itemLabel = 'ce message',
+  buttonLabel,
   onDone,
   onLoadingChange,
 }: Props) {
@@ -137,13 +140,13 @@ export default function PlanDispatchButton({
   return (
     <button
       type="button"
-      className={`plan-send-btn${loading ? ' plan-send-btn--loading' : ''}${wasSent ? ' plan-send-btn--resent' : ''}`}
+      className={`plan-send-btn${buttonLabel ? ' plan-send-btn--labeled' : ''}${loading ? ' plan-send-btn--loading' : ''}${wasSent ? ' plan-send-btn--resent' : ''}`}
       disabled={!canSend}
       title={title}
       onClick={(e) => void handleClick(e)}
       aria-busy={loading}
     >
-      {loading ? '…' : wasSent ? '↻' : '▶'}
+      {loading ? '…' : buttonLabel ? buttonLabel : wasSent ? '↻' : '▶'}
     </button>
   );
 }

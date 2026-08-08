@@ -27,7 +27,13 @@ export function processInventoryResponse(inventory: unknown[]): ProcessedInvento
       personCapacityMax?: number;
       availableRoomsByDay?: Array<Record<string, unknown>>;
     }) => {
-      processedData[listing.listingId][room.roomTypeId] = {
+      const rtId = String(
+        (room as { roomTypeId?: unknown }).roomTypeId ??
+          (room as { _id?: unknown })._id ??
+          '',
+      );
+      if (!rtId || rtId === '[object Object]') return;
+      processedData[listing.listingId][rtId] = {
         name: room.name,
         roomNumber: Number(room.roomNumber) || 0,
         personCapacityMax: Number(room.personCapacityMax) || 0,

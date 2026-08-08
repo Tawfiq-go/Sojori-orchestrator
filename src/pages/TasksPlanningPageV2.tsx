@@ -69,7 +69,7 @@ export default function TasksPlanningPageV2() {
   });
   const { loading: authLoading } = useAuth();
   const scope = usePmTasksScope();
-  const listingsCacheKey = `planning-multi-v2:${scope.scopeCacheKey}`;
+  const listingsCacheKey = `planning-multi-v3-rooms:${scope.scopeCacheKey}`;
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -285,7 +285,19 @@ export default function TasksPlanningPageV2() {
         cleanlinessEmergency: Boolean(op?.cleanlinessEmergency),
         propertyUnit: String(listing.propertyUnit || 'Single'),
         roomTypes: listing.roomTypes?.length
-          ? listing.roomTypes.map((rt) => ({ id: String(rt.id), name: String(rt.name) }))
+          ? listing.roomTypes.map((rt) => ({
+              id: String(rt.id),
+              name: String(rt.name),
+              ...(Array.isArray(rt.rooms) && rt.rooms.length
+                ? {
+                    rooms: rt.rooms.map((rm) => ({
+                      id: String(rm.id),
+                      name: String(rm.name),
+                      ...(rm.number != null ? { number: Number(rm.number) } : {}),
+                    })),
+                  }
+                : {}),
+            }))
           : undefined,
         reservations: resas.map((r) => ({
           reservationId: String(r.reservationId || r._id || ''),

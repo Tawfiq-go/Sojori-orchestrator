@@ -12,11 +12,15 @@ import {
 } from './_shared';
 
 /** Fonds soft — uniquement statut inventaire (jamais M/D). */
-/** Couleurs par canal de résa — repères familiers Airbnb/Booking + or brand Sojori. */
+/** Couleurs par canal de résa — aligné SimpleView (Airbnb / Booking / Mews / …). */
 const CHANNEL_COLORS = {
   airbnb:  { bg: 'rgba(255,90,95,0.16)',  accent: '#FF5A5F' },
   booking: { bg: 'rgba(0,113,194,0.14)',  accent: '#0071C2' },
+  vrbo:    { bg: 'rgba(59,130,246,0.14)', accent: '#3B82F6' },
+  expedia: { bg: 'rgba(255,201,51,0.22)', accent: '#F5C518' },
+  mews:    { bg: 'rgba(13,148,136,0.16)', accent: '#0D9488' },
   sojori:  { bg: 'rgba(184,133,26,0.18)', accent: '#b8851a' },
+  pending: { bg: 'rgba(245,158,11,0.18)', accent: '#F59E0B' },
   other:   { bg: 'rgba(124,58,237,0.13)', accent: '#7C3AED' },
 };
 
@@ -26,11 +30,16 @@ const CELL_BG = {
   blocked: 'repeating-linear-gradient(-45deg, rgba(136,135,128,0.22), rgba(136,135,128,0.22) 3px, transparent 3px, transparent 6px)',
 };
 
-function reservationChannelKind(channelName) {
+function reservationChannelKind(channelName, status) {
+  const st = String(status || '').toLowerCase();
+  if (st.includes('pend')) return 'pending';
   const n = String(channelName || '').toLowerCase();
-  if (n.includes('airbnb')) return 'airbnb';
+  if (n.includes('airbnb') || n.includes('air bnb')) return 'airbnb';
   if (n.includes('booking')) return 'booking';
-  if (n.includes('sojori')) return 'sojori';
+  if (n.includes('vrbo') || n.includes('homeaway')) return 'vrbo';
+  if (n.includes('expedia')) return 'expedia';
+  if (n.includes('mews')) return 'mews';
+  if (n.includes('sojori') || n.includes('direct') || n.includes('manual')) return 'sojori';
   return 'other';
 }
 
@@ -42,16 +51,19 @@ function dayChannelColors(inv) {
   for (const r of resas) {
     if (String(r?.arrivalDate || '') > String(pick?.arrivalDate || '')) pick = r;
   }
-  return CHANNEL_COLORS[reservationChannelKind(pick?.channelName)];
+  return CHANNEL_COLORS[reservationChannelKind(pick?.channelName, pick?.status)];
 }
 
-/** Couleur de fond cellule selon canal résa / dispo / bloqué — pas selon M/D. */
+/**
+ * Fond cellule inventaire (dispo / bloqué).
+ * Les résas ne teintent plus la cellule : pastilles / barres Gantt (comme /planning).
+ */
 function inventoryStatusBackground(state, inv) {
   if (state === 'out_of_window') return OUT_OF_WINDOW_CELL_BG;
   if (state === 'archive') return ARCHIVE_CELL_BG;
   if (state === 'missing' || !hasInventoryData(inv)) return T.bg2;
-  const chan = dayChannelColors(inv);
-  if (chan) return chan.bg;
+  // Jour avec résa → fond neutre (la barre / pastille porte la couleur OTA)
+  if ((inv?.reservations?.length ?? 0) > 0) return CELL_BG.available;
   const isStop = inv?.stopSell === true;
   const ar = inv?.availableRoom;
   const isZero = ar != null && Number(ar) <= 0;
@@ -60,11 +72,240 @@ function inventoryStatusBackground(state, inv) {
   return CELL_BG.available;
 }
 
-/** Barre d'accent (haut de cellule) couleur canal quand le jour est réservé. */
-function channelAccentShadow(state, inv) {
-  if (state !== 'data' && state !== 'archive') return undefined;
-  const chan = dayChannelColors(inv);
-  return chan ? `inset 0 2px 0 ${chan.accent}` : undefined;
+/** Plus d’accent canal sur la cellule — réservé aux barres / pastilles. */
+function channelAccentShadow() {
+  return undefined;
+}
+
+function isoDay(v) {
+  return toIsoDay(v);
+}
+
+/** Index jour relatif à la fenêtre visible (peut être hors [0, n)). */
+function isoOffsetInWindow(iso, days) {
+  if (!days?.length || !iso) return null;
+  const t0 = Date.parse(`${days[0].iso}T00:00:00`);
+  const t = Date.parse(`${iso}T00:00:00`);
+  if (!Number.isFinite(t0) || !Number.isFinite(t)) return null;
+  return Math.round((t - t0) / 86400000);
+}
+
+/**
+ * Overlay résas (filtre « Rés. ») :
+ * barres Gantt uniquement sur lignes room (ou Single unité).
+ */
+function MultiResaOverlay({
+  mode, // 'pastilles' | 'bars'
+  days,
+  cellW,
+  reservations,
+  inventories,
+  onReservationClick,
+  rowHeight,
+}) {
+  if (mode === 'pastilles') {
+    // Pastilles en bas de ligne (dispo / tarif restent en haut) — format /planning multi
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'flex-end',
+          paddingBottom: 3,
+          pointerEvents: 'none',
+          zIndex: 5,
+        }}
+      >
+        {days.map((d) => {
+          const fromInv = inventories?.[d.iso]?.reservations || [];
+          const n =
+            fromInv.length > 0
+              ? new Set(fromInv.map((r) => String(r._id || r.reservationId || ''))).size
+              : countReservationsOnDay(reservations, d.iso);
+          return (
+            <div
+              key={d.iso}
+              style={{
+                width: cellW,
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+              }}
+            >
+              {n > 0 ? (
+                <button
+                  type="button"
+                  title={`${n} réservation${n > 1 ? 's' : ''} le ${d.iso}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const list =
+                      fromInv.length > 0
+                        ? fromInv
+                        : reservations.filter((r) => {
+                            const arr = isoDay(r.arrivalDate);
+                            const dep = isoDay(r.departureDate);
+                            return arr && dep && arr <= d.iso && d.iso < dep;
+                          });
+                    onReservationClick?.(e.currentTarget.getBoundingClientRect(), d.iso, list);
+                  }}
+                  style={(() => {
+                    const list =
+                      fromInv.length > 0
+                        ? fromInv
+                        : reservations.filter((r) => {
+                            const arr = isoDay(r.arrivalDate);
+                            const dep = isoDay(r.departureDate);
+                            return arr && dep && arr <= d.iso && d.iso < dep;
+                          });
+                    const ch = n === 1 ? dayChannelColors({ reservations: list }) : null;
+                    return {
+                      minWidth: 24,
+                      height: 24,
+                      padding: '0 6px',
+                      borderRadius: 999,
+                      border: ch
+                        ? `1px solid ${ch.accent}66`
+                        : '1px solid rgba(37,99,235,0.35)',
+                      background: ch
+                        ? ch.bg
+                        : n >= 3
+                          ? 'rgba(59,130,246,0.22)'
+                          : 'rgba(59,130,246,0.14)',
+                      color: T.text,
+                      fontFamily: '"Geist Mono", monospace',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      pointerEvents: 'auto',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: ch ? `inset 3px 0 0 ${ch.accent}` : undefined,
+                    };
+                  })()}
+                >
+                  {n}
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Barres Gantt (même géométrie check-in/out que /planning)
+  const segments = [];
+  reservations.forEach((r) => {
+    const arr = isoDay(r.arrivalDate);
+    const dep = isoDay(r.departureDate);
+    if (!arr || !dep || !days.length) return;
+    const arrIdx = isoOffsetInWindow(arr, days);
+    const depIdx = isoOffsetInWindow(dep, days);
+    if (arrIdx == null || depIdx == null) return;
+    if (depIdx < 0 || arrIdx > days.length - 1) return;
+    const startIdx = Math.max(0, arrIdx);
+    const endIdx = Math.min(days.length - 1, depIdx);
+    segments.push({
+      r,
+      startIdx,
+      endIdx,
+      clippedStart: arrIdx < 0,
+      clippedEnd: depIdx > days.length - 1,
+    });
+  });
+
+  // Ligne haute : tarif en haut, barre en bas (comme planning / SimpleView)
+  const barH = Math.min(24, Math.max(18, rowHeight - 16));
+  const barTop = Math.max(12, rowHeight - barH - 3);
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        zIndex: 5,
+      }}
+    >
+      {segments.map(({ r, startIdx, endIdx, clippedStart, clippedEnd }) => {
+        const { leftPct, widthPct } = computeReservationBarLayout(
+          startIdx,
+          endIdx,
+          days.length,
+          { clippedStart, clippedEnd },
+        );
+        const channel = channelFromName(r.channelName);
+        const ch = CHANNEL_COCKPIT[channel] || CHANNEL_COCKPIT.direct;
+        const name = r.guestName || r.guestFirstName || 'Réservation';
+        const nights = (() => {
+          const a = Date.parse(`${isoDay(r.arrivalDate)}T00:00:00`);
+          const b = Date.parse(`${isoDay(r.departureDate)}T00:00:00`);
+          if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return null;
+          return Math.round((b - a) / 86400000);
+        })();
+        const pending = String(r.status || '').toLowerCase().includes('pend');
+        return (
+          <button
+            key={String(r._id || r.reservationId)}
+            type="button"
+            title={`${name} · ${isoDay(r.arrivalDate)} → ${isoDay(r.departureDate)}${r.channelName ? ` · ${r.channelName}` : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onReservationClick?.(e.currentTarget.getBoundingClientRect(), isoDay(r.arrivalDate), [r]);
+            }}
+            style={{
+              position: 'absolute',
+              top: barTop,
+              left: `${leftPct}%`,
+              width: `${widthPct}%`,
+              height: barH,
+              boxSizing: 'border-box',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '0 6px 0 5px',
+              borderRadius: 6,
+              border: `1px solid ${ch.color}55`,
+              borderLeft: `4px solid ${ch.color}`,
+              background: `linear-gradient(90deg, ${ch.color}22 0%, ${ch.wash} 28%, ${ch.wash} 100%)`,
+              color: T.text,
+              fontSize: 11,
+              fontWeight: 700,
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              cursor: 'pointer',
+              pointerEvents: 'auto',
+              boxShadow: `0 1px 2px ${ch.color}18`,
+              fontFamily: 'inherit',
+              textAlign: 'left',
+            }}
+          >
+            {pending ? <span style={{ fontSize: 9, color: T.warning, flexShrink: 0 }}>⏳</span> : null}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
+              {name}
+              {nights != null && nights > 0 ? (
+                <span
+                  style={{
+                    fontFamily: '"Geist Mono", monospace',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: T.text3,
+                    marginLeft: 4,
+                  }}
+                >
+                  {nights}n
+                </span>
+              ) : null}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
@@ -78,6 +319,20 @@ import {
   finishListingCalendarImportReview,
   isCalendarImportReviewActive,
 } from '../../services/calendarImportReviewService';
+import {
+  CHANNEL_COCKPIT,
+  channelFromName,
+  computeReservationBarLayout,
+} from '../calendar-views/_shared';
+import { countReservationsOnDay } from '../../utils/planningMultiExpand';
+import {
+  filterReservationsForRoom,
+  filterReservationsForRoomType,
+  groupMultiReservationsByListing,
+  mongoId,
+  resolveRoomsForRoomType,
+  toIsoDay,
+} from './multiCalendarReservations';
 
 /** Métadonnées CalendarBlock par blockId — contexte pour éviter le prop drilling jusqu'aux cellules. */
 const CalendarBlocksContext = React.createContext({});
@@ -110,6 +365,8 @@ export default function MultiView({
   listings: listingsLegacy,
   inventoriesByListing = {},
   inventoryData = {},
+  /** Résas srv-reservations (comme /planning) — pastilles building / barres roomType. */
+  overlayReservations = [],
   calendarBlocksById = {},
   inventoryLoading = false,
   selectedColumns = [],
@@ -132,6 +389,12 @@ export default function MultiView({
   const bodyRef = useRef(null);
   const syncing = useRef(false);
 
+  /** listingId → résas normalisées (source planning, pas inventaire). */
+  const reservationsByListing = useMemo(
+    () => groupMultiReservationsByListing(overlayReservations, listings),
+    [overlayReservations, listings],
+  );
+
   /* ─── Expand/collapse par listing — fermé par défaut ─── */
   const [expanded, setExpanded] = useState({});
   /** Multi only: collapse détail (min stay…) par roomType — clé `${listingId}:${rtId}` */
@@ -141,18 +404,72 @@ export default function MultiView({
     setRtExpanded((p) => ({ ...p, [key]: !p[key] }));
   }, []);
 
+  const showResaFilter = selectedColumns.includes('reservations');
+
   const roomTypesByListing = useMemo(() => {
     const map = {};
     listings.forEach((listing) => {
-      const inv = inventoryData[listing._id] || {};
-      map[listing._id] = Object.entries(inv).map(([id, v]) => ({
-        id,
-        name: v?.name || `Type ${String(id).slice(-4)}`,
-        availability: v?.availability || {},
-      }));
+      const listingId = String(listing._id || listing.id || '');
+      const inv = inventoryData[listing._id] || inventoryData[listingId] || {};
+      const catalogRts = Array.isArray(listing.roomTypes) ? listing.roomTypes : [];
+      const catalogById = new Map();
+      const catalogByName = new Map();
+      catalogRts.forEach((rt) => {
+        const id = mongoId(rt?._id || rt?.id);
+        const name = String(rt?.roomTypeName || rt?.name || '')
+          .trim()
+          .toLowerCase();
+        if (id) catalogById.set(id, rt);
+        if (name) catalogByName.set(name, rt);
+      });
+      const listingResas =
+        reservationsByListing.get(listingId) ||
+        reservationsByListing.get(String(listing._id)) ||
+        [];
+
+      map[listing._id] = Object.entries(inv).map(([id, v]) => {
+        const rtId = mongoId(id) || String(id);
+        const rtName = v?.name || `Type ${String(id).slice(-4)}`;
+        const catalogRt =
+          catalogById.get(rtId) ||
+          catalogByName.get(String(rtName).trim().toLowerCase()) ||
+          null;
+        const rooms = resolveRoomsForRoomType({
+          catalogRt,
+          roomTypeId: rtId,
+          roomTypeName: rtName,
+          roomNumber: Number(v?.roomNumber) || Number(catalogRt?.roomNumber) || 0,
+          reservations: listingResas,
+        });
+        return {
+          id: rtId,
+          name: rtName,
+          availability: v?.availability || {},
+          rooms,
+        };
+      });
     });
     return map;
-  }, [listings, inventoryData]);
+  }, [listings, inventoryData, reservationsByListing]);
+
+  /* Filtre Rés. : ouvrir tous les Multi pour voir types + rooms */
+  useEffect(() => {
+    if (!showResaFilter) return;
+    setExpanded((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      listings.forEach((listing) => {
+        const rts = roomTypesByListing[listing._id] || [];
+        const isMulti =
+          String(listing.propertyUnit || '') === 'Multi' && rts.length > 1;
+        if (isMulti && !next[listing._id]) {
+          next[listing._id] = true;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [showResaFilter, listings, roomTypesByListing]);
 
   /* ─── Sélection Excel vs clic détail tarif ─── */
   const [isDragging, setIsDragging] = useState(false);
@@ -595,6 +912,15 @@ export default function MultiView({
             const isMultiHotel =
               String(listing.propertyUnit || '') === 'Multi' && roomTypes.length > 1;
             const isOpen = !!expanded[listing._id];
+            const listingResas = showResaFilter
+              ? (reservationsByListing.get(String(listing._id))
+                || reservationsByListing.get(String(listing.id))
+                || [])
+              : [];
+            const buildingInventories = inventoriesByListing[listing._id] || {};
+            /* Single / monotype : barres résa sur la ligne unité si filtre Rés. (pas de drill rooms). */
+            const singleUnitResas =
+              !isMultiHotel && showResaFilter ? listingResas : null;
             return (
               <div key={listing._id}>
                 <ListingRow
@@ -603,7 +929,8 @@ export default function MultiView({
                     roomTypeCount: roomTypes.length,
                   }}
                   dpEnabled={dpEnabledByListing[String(listing._id)] !== false}
-                  inventories={inventoriesByListing[listing._id] || {}}
+                  inventories={buildingInventories}
+                  overlayLineReservations={singleUnitResas}
                   days={days}
                   leftW={LEFT_W}
                   cellW={CELL_W}
@@ -630,9 +957,13 @@ export default function MultiView({
                   ? roomTypes.map((rt) => {
                       const rtKey = `${listing._id}:${rt.id}`;
                       const rtOpen = !!rtExpanded[rtKey];
+                      const rooms = Array.isArray(rt.rooms) ? rt.rooms : [];
+                      const rtResas = showResaFilter
+                        ? filterReservationsForRoomType(listingResas, rt.id, rt.name)
+                        : [];
                       return (
+                      <React.Fragment key={`${listing._id}-${rt.id}`}>
                       <ListingRow
-                        key={`${listing._id}-${rt.id}`}
                         listing={{
                           ...listing,
                           _id: listing._id,
@@ -641,15 +972,18 @@ export default function MultiView({
                           roomTypeName: rt.name,
                           propertyUnit: 'Single',
                           _isRoomTypeRow: true,
+                          _roomCount: rooms.length,
+                          _showResaRooms: showResaFilter && rooms.length > 0,
                         }}
                         dpEnabled={dpEnabledByListing[String(listing._id)] !== false}
-                        inventories={rt.availability}
+                        inventories={rt.availability || {}}
+                        overlayLineReservations={null}
                         days={days}
                         leftW={LEFT_W}
                         cellW={CELL_W}
                         expanded={rtOpen}
                         onToggle={() => toggleRoomType(rtKey)}
-                        forceChevron
+                        forceChevron={!showResaFilter || rooms.length === 0}
                         hideDetailCollapse={false}
                         selectedColumns={selectedColumns}
                         isSelected={isSelected}
@@ -662,6 +996,101 @@ export default function MultiView({
                           isCalendarImportReviewActive(listing) ? undefined : onToggleDynamicPrice
                         }
                       />
+                      {/* Filtre Rés. : rooms sous le type — barres résa uniquement ici */}
+                      {showResaFilter && rooms.length === 0 ? (
+                        <ListingRow
+                          key={`${listing._id}-${rt.id}-no-rooms`}
+                          listing={{
+                            ...listing,
+                            _id: listing._id,
+                            name: 'Aucune room configurée',
+                            roomTypeId: rt.id,
+                            roomTypeName: rt.name,
+                            propertyUnit: 'Single',
+                            _isRoomTypeRow: false,
+                            _isRoomRow: true,
+                          }}
+                          dpEnabled={false}
+                          inventories={{}}
+                          overlayLineReservations={rtResas}
+                          days={days}
+                          leftW={LEFT_W}
+                          cellW={CELL_W}
+                          expanded={false}
+                          onToggle={undefined}
+                          forceChevron={false}
+                          hideDetailCollapse
+                          selectedColumns={selectedColumns}
+                          isSelected={isSelected}
+                          onMouseDown={onMouseDown}
+                          onMouseEnter={onMouseEnter}
+                          onPriceClick={onPriceClick}
+                          onReservationClick={handleReservationDayClick}
+                          activeTip={activeTip}
+                        />
+                      ) : null}
+                      {showResaFilter
+                        ? (() => {
+                            const claimed = new Set();
+                            const roomRows = rooms.map((room) => {
+                              const roomResas = filterReservationsForRoom(
+                                rtResas,
+                                room.id,
+                                room.name,
+                              );
+                              roomResas.forEach((r) =>
+                                claimed.add(String(r._id || r.reservationId || '')),
+                              );
+                              return { room, roomResas };
+                            });
+                            const leftover = rtResas.filter(
+                              (r) => !claimed.has(String(r._id || r.reservationId || '')),
+                            );
+                            if (leftover.length > 0) {
+                              roomRows.push({
+                                room: {
+                                  id: `${rt.id}:unassigned`,
+                                  name: 'Non assignée',
+                                },
+                                roomResas: leftover,
+                              });
+                            }
+                            return roomRows.map(({ room, roomResas }) => (
+                              <ListingRow
+                                key={`${listing._id}-${rt.id}-room-${room.id}`}
+                                listing={{
+                                  ...listing,
+                                  _id: listing._id,
+                                  name: room.name,
+                                  roomTypeId: rt.id,
+                                  roomTypeName: rt.name,
+                                  roomId: room.id,
+                                  propertyUnit: 'Single',
+                                  _isRoomTypeRow: false,
+                                  _isRoomRow: true,
+                                }}
+                                dpEnabled={false}
+                                inventories={{}}
+                                overlayLineReservations={roomResas}
+                                days={days}
+                                leftW={LEFT_W}
+                                cellW={CELL_W}
+                                expanded={false}
+                                onToggle={undefined}
+                                forceChevron={false}
+                                hideDetailCollapse
+                                selectedColumns={selectedColumns}
+                                isSelected={isSelected}
+                                onMouseDown={onMouseDown}
+                                onMouseEnter={onMouseEnter}
+                                onPriceClick={onPriceClick}
+                                onReservationClick={handleReservationDayClick}
+                                activeTip={activeTip}
+                              />
+                            ));
+                          })()
+                        : null}
+                      </React.Fragment>
                     );
                     })
                   : null}
@@ -672,9 +1101,16 @@ export default function MultiView({
       </div>
 
       {activeTip && (() => {
-        const inv = inventoriesByListing[activeTip.listingId]?.[activeTip.dateStr];
         const listing = listings.find((l) => String(l._id) === String(activeTip.listingId));
-        if (!inv || !listing || !hasInventoryData(inv)) return null;
+        if (!listing) return null;
+        // RoomType : prendre l’inventaire du type, pas l’agrégat building.
+        const rtId = activeTip.roomTypeId;
+        const rtDay =
+          rtId && rtId !== 'default'
+            ? inventoryData?.[activeTip.listingId]?.[rtId]?.availability?.[activeTip.dateStr]
+            : null;
+        const inv = rtDay || inventoriesByListing[activeTip.listingId]?.[activeTip.dateStr];
+        if (!inv || !hasInventoryData(inv)) return null;
         /* Résa gagne vs Import initial : tooltip ne montre le blocage que s’il n’y a pas de résa. */
         const dayBlock =
           (inv?.reservations?.length ?? 0) > 0
@@ -753,12 +1189,18 @@ const ListingLabel = memo(function ListingLabel({
 }) {
   const isSingle = listing.propertyUnit === 'Single';
   const isRoomTypeRow = Boolean(listing._isRoomTypeRow);
+  const isRoomRow = Boolean(listing._isRoomRow);
+  const isMultiHotelParent = !isRoomTypeRow && !isRoomRow && Number(listing.roomTypeCount) > 1;
   const currency = listing.currencyCode || listing.currency || 'MAD';
   const dpHref = `/dynamic-pricing/bien/${listing._id}`;
   const roomTypeCount = Number(listing.roomTypeCount) || 0;
-  const reviewActive = !isRoomTypeRow && isCalendarImportReviewActive(listing);
+  const reviewActive = !isRoomTypeRow && !isRoomRow && isCalendarImportReviewActive(listing);
   // Fond OPAQUE obligatoire : sticky left laisse passer les cellules dates si rgba translucide
-  const labelBg = reviewActive ? '#fef2f2' : (isRoomTypeRow ? T.bg2 : T.bg1);
+  const labelBg = reviewActive
+    ? '#fef2f2'
+    : isRoomRow
+      ? T.bg1
+      : (isRoomTypeRow ? T.bg2 : T.bg1);
   const simpleHref =
     isRoomTypeRow && listing.roomTypeId
       ? `/calendar?view=simple&listing=${encodeURIComponent(String(listing._id))}&roomType=${encodeURIComponent(String(listing.roomTypeId))}`
@@ -767,7 +1209,11 @@ const ListingLabel = memo(function ListingLabel({
     <div
       onClick={showChevron ? onToggle : undefined}
       style={{
-        padding: isRoomTypeRow ? '6px 12px 6px 28px' : '6px 12px',
+        padding: isRoomRow
+          ? '5px 12px 5px 44px'
+          : isRoomTypeRow
+            ? '6px 12px 6px 28px'
+            : '6px 12px',
         display: 'flex',
         alignItems: 'center',
         gap: 9,
@@ -795,7 +1241,7 @@ const ListingLabel = memo(function ListingLabel({
           ▶
         </span>
       )}
-      {!isRoomTypeRow && (
+      {!isRoomTypeRow && !isRoomRow && (
         <div
           style={{
             width: 24,
@@ -810,6 +1256,23 @@ const ListingLabel = memo(function ListingLabel({
         />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
+        {isRoomRow ? (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              lineHeight: 1.1,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: 'block',
+              color: T.text2,
+            }}
+            title={listing.name}
+          >
+            {listing.name}
+          </span>
+        ) : (
         <Link
           to={simpleHref}
           title={reviewActive ? 'Import calendrier non terminé — ouvrir vue simple' : 'Ouvrir la vue simple (Airbnb)'}
@@ -828,6 +1291,7 @@ const ListingLabel = memo(function ListingLabel({
         >
           {listing.name}
         </Link>
+        )}
         {reviewActive ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 9.5, fontWeight: 800, color: '#b91c1c', letterSpacing: '0.02em' }}>
@@ -859,7 +1323,8 @@ const ListingLabel = memo(function ListingLabel({
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-            {avgPrice > 0 ? (
+            {/* Building multi : pas de prix (tarif = roomType). RoomType / Single : Moy. */}
+            {avgPrice > 0 && !isMultiHotelParent ? (
               <span
                 style={{
                   fontSize: 10,
@@ -875,20 +1340,21 @@ const ListingLabel = memo(function ListingLabel({
                 <span style={{ fontSize: 8, fontWeight: 700, color: T.text4, letterSpacing: '0.04em' }}>
                   {currency}
                 </span>
-                {!isRoomTypeRow && roomTypeCount > 1 ? (
-                  <span style={{ fontSize: 9, color: T.text4, marginLeft: 4 }}>
-                    · {roomTypeCount} types
-                  </span>
-                ) : null}
               </span>
-            ) : isSingle && !isRoomTypeRow ? (
-              <span style={{ fontSize: 9.5, color: T.text4 }}>Tarif · ▶ Dispo / Min stay</span>
-            ) : !isRoomTypeRow && roomTypeCount > 1 ? (
+            ) : isMultiHotelParent ? (
               <span style={{ fontSize: 9.5, color: T.text4 }}>
-                {roomTypeCount} types — ▶ types, puis ▶ Dispo / Min stay
+                {roomTypeCount} types — dispo somme · tarif ▶ type
               </span>
+            ) : isRoomRow ? (
+              <span style={{ fontSize: 9.5, color: T.text4 }}>Barres résas</span>
+            ) : isSingle && !isRoomTypeRow ? (
+              <span style={{ fontSize: 9.5, color: T.text4 }}>Dispo · tarif</span>
             ) : isRoomTypeRow ? (
-              <span style={{ fontSize: 9.5, color: T.text4 }}>▶ Dispo / Min stay</span>
+              <span style={{ fontSize: 9.5, color: T.text4 }}>
+                {listing._showResaRooms
+                  ? `Dispo · ${listing._roomCount || 0} room${(listing._roomCount || 0) > 1 ? 's' : ''} ↓`
+                  : 'Dispo · tarif · ▶ Min stay'}
+              </span>
             ) : null}
             {!isRoomTypeRow && onAuditClick ? (
               <button
@@ -940,7 +1406,7 @@ const ListingLabel = memo(function ListingLabel({
           </div>
         )}
       </div>
-      {!isRoomTypeRow && (
+      {!isRoomTypeRow && !isRoomRow && (
       <Link
         to={dpHref}
         title={
@@ -991,7 +1457,7 @@ const ListingLabel = memo(function ListingLabel({
 
 /* ─── Ligne d'un listing (prix + dispo sur une ligne, détail en collapse) ─── */
 function ListingRow({
-  listing, inventories, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onPriceClick, onReservationClick, activeTip,
+  listing, inventories, overlayLineReservations = null, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onPriceClick, onReservationClick, activeTip,
   onToggleDynamicPrice, dpEnabled = true, forceChevron = false, hideDetailCollapse = false,
   onCalendarImportReviewFinished,
   onCalendarImportReviewActivated,
@@ -1004,11 +1470,13 @@ function ListingRow({
     return true;
   });
   const isRoomTypeRow = Boolean(listing._isRoomTypeRow);
-  // Multi roomType rows: chevron pour min stay / détail ; Single listing inchangé
+  const isRoomRow = Boolean(listing._isRoomRow);
+  // Multi roomType rows: chevron pour min stay / détail ; rooms = pas de chevron
   const showChevron =
-    forceChevron ||
-    (!isRoomTypeRow && !hideDetailCollapse && collapseColumns.length > 0) ||
-    (isRoomTypeRow && collapseColumns.length > 0);
+    !isRoomRow &&
+    (forceChevron ||
+      (!isRoomTypeRow && !hideDetailCollapse && collapseColumns.length > 0) ||
+      (isRoomTypeRow && collapseColumns.length > 0));
   const showDispo = primaryCols.includes('availableRoom');
   const showRate = primaryCols.includes('rate');
   const getInv = (dateStr) => inventories[dateStr];
@@ -1122,81 +1590,124 @@ function ListingRow({
     return Math.round(prices.reduce((sum, p) => sum + p, 0) / prices.length);
   }, [days, inventories]);
 
+  /**
+   * Calendrier Multi = dispo (building / roomType).
+   * Barres résa uniquement : ligne room (filtre Rés.) ou Single unité.
+   */
+  const isMultiHotelParent = hideDetailCollapse && !isRoomTypeRow && !isRoomRow;
+  // Jamais de barres sur building / roomType. Rooms (ou Single + filtre Rés.) via overlay prop.
+  const lineReservations = useMemo(() => {
+    if (isMultiHotelParent || isRoomTypeRow) return [];
+    return Array.isArray(overlayLineReservations) ? overlayLineReservations : [];
+  }, [overlayLineReservations, isMultiHotelParent, isRoomTypeRow]);
+  const resaOverlayMode = lineReservations.length > 0 ? 'bars' : 'none';
+  const primaryRowH = resaOverlayMode === 'bars' ? 48 : (isRoomRow ? 36 : 32);
+
   return (
     <div>
-      {/* Ligne principale — prix + dispo (filtre par défaut) */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: `${LEFT_W}px repeat(${days.length}, ${CELL_W}px)`,
-        borderBottom: `1px solid ${T.border}`,
-      }}>
-        <ListingLabel
-          listing={listing}
-          expanded={expanded}
-          showChevron={showChevron}
-          onToggle={onToggle}
-          avgPrice={avgPrice}
-          dpEnabled={dpEnabled}
-          onFinishCalendarImport={
-            !isRoomTypeRow && isCalendarImportReviewActive(listing)
-              ? handleAuditClick
-              : undefined
-          }
-          finishingCalendarImport={false}
-          onAuditClick={
-            !isRoomTypeRow &&
-            !isCalendarImportReviewActive(listing) &&
-            isCalendarAuditFilterOn(selectedColumns)
-              ? handleAuditClick
-              : undefined
-          }
-          onActivateCalendarImport={
-            canActivateCalendarImport &&
-            !isRoomTypeRow &&
-            !isCalendarImportReviewActive(listing)
-              ? handleActivateCalendarImport
-              : undefined
-          }
-          activatingCalendarImport={activatingCalendarImport}
-        />
+      {/* Ligne principale — inventaire + overlay résas (planning) */}
+      <div style={{ position: 'relative' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `${LEFT_W}px repeat(${days.length}, ${CELL_W}px)`,
+          borderBottom: `1px solid ${T.border}`,
+          minHeight: primaryRowH,
+        }}>
+          <ListingLabel
+            listing={listing}
+            expanded={expanded}
+            showChevron={showChevron}
+            onToggle={onToggle}
+            avgPrice={avgPrice}
+            dpEnabled={dpEnabled}
+            onFinishCalendarImport={
+              !isRoomTypeRow && !isRoomRow && isCalendarImportReviewActive(listing)
+                ? handleAuditClick
+                : undefined
+            }
+            finishingCalendarImport={false}
+            onAuditClick={
+              !isRoomTypeRow &&
+              !isRoomRow &&
+              !isCalendarImportReviewActive(listing) &&
+              isCalendarAuditFilterOn(selectedColumns)
+                ? handleAuditClick
+                : undefined
+            }
+            onActivateCalendarImport={
+              canActivateCalendarImport &&
+              !isRoomTypeRow &&
+              !isRoomRow &&
+              !isCalendarImportReviewActive(listing)
+                ? handleActivateCalendarImport
+                : undefined
+            }
+            activatingCalendarImport={activatingCalendarImport}
+          />
 
-        {days.map(d => {
-          const inv = getInv(d.iso);
-          const roomTypeId = listing.roomTypeId || 'default';
-          const cellState = resolveInventoryCellState(d.iso, inv, {
-            futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS,
-          });
-          const draggable = cellState === 'data';
-          return (
-            <PrimaryInventoryCell
-              key={d.iso}
-              day={d}
-              inv={inv}
-              listing={listing}
-              showRate={showRate}
-              showDispo={showDispo}
-              isSelected={isSelected}
-              onMouseDown={onMouseDown}
-              onMouseEnter={onMouseEnter}
-              onPriceClick={onPriceClick}
-              listingId={listing._id}
-              roomTypeId={roomTypeId}
-              draggable={draggable}
-              dpEnabled={dpEnabled}
-              tipOpen={
-                activeTip?.listingId === listing._id &&
-                activeTip?.dateStr === d.iso &&
-                activeTip?.column === 'rate'
-              }
+          {days.map(d => {
+            const inv = getInv(d.iso);
+            const roomTypeId = listing.roomTypeId || 'default';
+            const cellState = resolveInventoryCellState(d.iso, inv, {
+              futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS,
+            });
+            const draggable = !isRoomRow && cellState === 'data';
+            return (
+              <PrimaryInventoryCell
+                key={d.iso}
+                day={d}
+                inv={isRoomRow ? {} : inv}
+                listing={listing}
+                showRate={isRoomRow ? false : showRate}
+                showDispo={isRoomRow ? false : showDispo}
+                rowHeight={primaryRowH}
+                isSelected={isSelected}
+                onMouseDown={onMouseDown}
+                onMouseEnter={onMouseEnter}
+                onPriceClick={onPriceClick}
+                listingId={listing._id}
+                roomTypeId={roomTypeId}
+                draggable={draggable}
+                dpEnabled={dpEnabled}
+                tipOpen={
+                  activeTip?.listingId === listing._id &&
+                  activeTip?.dateStr === d.iso &&
+                  activeTip?.column === 'rate' &&
+                  String(activeTip?.roomTypeId || 'default') === String(roomTypeId)
+                }
+              />
+            );
+          })}
+        </div>
+        <div
+          style={{
+            position: 'absolute',
+            left: LEFT_W,
+            top: 0,
+            right: 0,
+            height: primaryRowH,
+            pointerEvents: 'none',
+            zIndex: 5,
+          }}
+        >
+          {resaOverlayMode === 'bars' ? (
+            <MultiResaOverlay
+              mode="bars"
+              days={days}
+              cellW={CELL_W}
+              reservations={lineReservations}
+              inventories={inventories}
+              onReservationClick={onReservationClick}
+              rowHeight={primaryRowH}
             />
-          );
-        })}
+          ) : null}
+        </div>
       </div>
 
       {/* Lignes sélection Excel — collapse (colonnes hors ligne principale).
           Multi hôtel parent: hideDetailCollapse → détail sur chaque roomType.
-          Simple / roomType: expanded montre min stay, max stay, etc. */}
-      {expanded && !hideDetailCollapse && collapseColumns.map(colId => {
+          Rooms : jamais de collapse. */}
+      {expanded && !hideDetailCollapse && !isRoomRow && collapseColumns.map(colId => {
         const col = ALL_COLUMNS.find(c => c.id === colId);
         if (!col) return null;
         return (
@@ -1425,14 +1936,26 @@ function blockedNoResaInfo(inv, block) {
   };
 }
 
-/* ─── Ligne principale : bandeau Excel (+) · prix clic · M/D (pas de 0/1 Single) ─── */
+/* ─── Ligne principale : building = dispo/résas (pas de prix) · roomType = tarif + dispo ─── */
 function PrimaryInventoryCell({
-  day, inv, listing, showRate, showDispo, isSelected, onMouseDown, onMouseEnter, onPriceClick,
+  day, inv, listing, showRate, showDispo, rowHeight = 32,
+  isSelected, onMouseDown, onMouseEnter, onPriceClick,
   listingId, roomTypeId, draggable, tipOpen, dpEnabled = true,
 }) {
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
-  const isSingle = listing.propertyUnit === 'Single' || Boolean(listing._isRoomTypeRow);
+  const isRoomTypeRow = Boolean(listing._isRoomTypeRow);
+  const isRoomRow = Boolean(listing._isRoomRow);
+  const isMultiHotelParent =
+    listing.propertyUnit === 'Multi' && !isRoomTypeRow && !isRoomRow;
+  // Room : uniquement barres overlay — pas de tarif / dispo inventaire.
+  // Building : jamais de tarif. RoomType / Single : tarif si filtre Tarif.
+  const effectiveShowRate = Boolean(showRate) && !isMultiHotelParent && !isRoomRow;
+  // Dispo sur building (somme) + roomType ; Single classique : aussi si filtre Dispo.
+  const showDispoNumber =
+    Boolean(showDispo) &&
+    !isRoomRow &&
+    (isMultiHotelParent || isRoomTypeRow || listing.propertyUnit === 'Single');
   const state = resolveInventoryCellState(day.iso, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
   const rate = formatInventoryRateLabel(state, inv);
   const archived = state === 'archive';
@@ -1440,34 +1963,34 @@ function PrimaryInventoryCell({
   const mode = resolvePriceMode(inv);
   const modeLetter = mode === 'dynamic' ? 'D' : mode === 'manual' ? 'M' : null;
   const canInteract = draggable && !archived;
-  const canPriceClick = canInteract && showRate && hasInventoryData(inv) && !noData;
+  const canPriceClick = canInteract && effectiveShowRate && hasInventoryData(inv) && !noData;
 
   const blocksById = useContext(CalendarBlocksContext);
   const dayBlock = inv?.blockId ? blocksById[String(inv.blockId)] : null;
   const blockInfo = state === 'data' ? blockedNoResaInfo(inv, dayBlock) : null;
-  // Fond = uniquement canal résa / dispo / bloqué (jamais M/D)
   const background = inventoryStatusBackground(state, inv);
   const accentShadow = channelAccentShadow(state, inv);
+  // Inventaire en haut, place libre en bas (barres roomType OU pastilles building)
+  const stackForBars = rowHeight >= 38;
 
   const dash = '—';
-  // Single : jamais 0/1 sur la ligne principale (dispo → collapse). Multi : compteur si filtre Dispo actif.
-  const showDispoNumber = showDispo && !isSingle;
   const dispoVal = inv?.stopSell ? '🚫' : (inv?.availableRoom != null ? inv.availableRoom : dash);
   const dispoColor = inv?.stopSell || blockInfo ? 'rgba(220,38,38,0.95)' : T.text2;
 
   const rateMeta = { listingId, roomTypeId, dateStr: day.iso, column: 'rate' };
   const dispoMeta = { listingId, roomTypeId, dateStr: day.iso, column: 'availableRoom' };
-  const excelMeta = showRate ? rateMeta : dispoMeta;
+  const excelMeta = effectiveShowRate ? rateMeta : dispoMeta;
   const excelSelected = isSelected?.(excelMeta);
-  const anySelected = excelSelected || isSelected?.(showRate ? dispoMeta : rateMeta);
+  const anySelected = excelSelected
+    || isSelected?.(effectiveShowRate ? dispoMeta : rateMeta);
 
   const bindExcel = (meta) => ({
     onMouseDown: canInteract ? (e) => { e.stopPropagation(); onMouseDown?.(meta, e); } : undefined,
     onMouseEnter: canInteract ? () => onMouseEnter?.(meta) : undefined,
   });
 
-  const hasExcelZone = showRate || showDispo;
-  const hasPriceZone = showRate;
+  const hasExcelZone = effectiveShowRate || showDispoNumber;
+  const hasPriceZone = effectiveShowRate;
 
   return (
     <div
@@ -1475,16 +1998,18 @@ function PrimaryInventoryCell({
       style={{
         borderRight: `1px solid ${T.border}`,
         display: 'flex',
-        flexDirection: 'row',
+        flexDirection: stackForBars ? 'column' : 'row',
         alignItems: 'stretch',
-        padding: '2px 2px',
-        minHeight: 30,
+        justifyContent: stackForBars ? 'flex-start' : 'stretch',
+        padding: stackForBars ? '1px 2px 0' : '2px 2px',
+        minHeight: rowHeight,
+        height: '100%',
         position: 'relative',
         fontFamily: '"Geist Mono", monospace',
         background: anySelected ? T.primaryTint3 : background,
         boxShadow: anySelected ? undefined : accentShadow,
         userSelect: 'none',
-        gap: 2,
+        gap: stackForBars ? 0 : 2,
       }}
     >
 
@@ -1522,6 +2047,7 @@ function PrimaryInventoryCell({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            gap: 4,
             minHeight: 26,
             borderRadius: 4,
             cursor: archived ? 'not-allowed' : canInteract ? 'cell' : 'default',
@@ -1530,7 +2056,7 @@ function PrimaryInventoryCell({
           }}
         >
           {showDispoNumber && (
-            <span style={{ fontSize: 10, fontWeight: 700, color: dispoColor, whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: dispoColor, whiteSpace: 'nowrap' }}>
               {dispoVal}
             </span>
           )}
@@ -1541,23 +2067,24 @@ function PrimaryInventoryCell({
         <div
           onClick={canPriceClick ? (e) => onPriceClick?.(rateMeta, e) : undefined}
           style={{
-            flex: 1,
+            flex: stackForBars ? '0 0 auto' : 1,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: 3,
             minWidth: 0,
-            minHeight: 26,
+            minHeight: stackForBars ? 14 : 26,
             borderRadius: 4,
             cursor: canPriceClick ? 'pointer' : archived ? 'not-allowed' : 'default',
             boxShadow: tipOpen ? `inset 0 0 0 2px ${T.primary}` : 'none',
             background: tipOpen ? T.primaryTint : 'transparent',
             position: 'relative',
+            zIndex: 1,
           }}
         >
           <span
             style={{
-              fontSize: state === 'data' ? 12 : 11,
+              fontSize: stackForBars ? 10 : state === 'data' ? 12 : 11,
               fontWeight: 700,
               color: archived ? ARCHIVE_CELL_TEXT : noData ? T.text4 : T.text,
               letterSpacing: '-0.01em',
@@ -1593,6 +2120,9 @@ function PrimaryInventoryCell({
           )}
         </div>
       )}
+
+      {/* Place réservée aux barres Gantt (overlay) */}
+      {stackForBars ? <div style={{ flex: 1, minHeight: 22 }} /> : null}
     </div>
   );
 }

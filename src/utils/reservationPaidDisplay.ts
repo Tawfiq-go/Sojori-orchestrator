@@ -36,9 +36,16 @@ export function reservationPaidDisplay(r: {
   }
   const total = Number(r.totalPrice);
   if (Number.isFinite(total) && total > 0) {
-    // Booking mal labellé EUR sous currency MAD → ne pas afficher brut
-    if (/booking/i.test(String(r.channelName || r.source || ''))) {
-      return { amount: null, currency: 'MAD', source: null };
+    const channel = String(r.channelName || r.source || '');
+    const source = String(r.source || '').toLowerCase();
+    // Ancien piège RU Booking : EUR stocké comme totalPrice avec currency MAD.
+    // Mews / totalEst → totalPrice déjà en MAD (séjour estimé).
+    if (/booking/i.test(channel)) {
+      const notesBlob = String(r.notes || r.comments || '');
+      const madTrusted = source === 'mews' || /totalEst:\s*\d+/i.test(notesBlob);
+      if (!madTrusted) {
+        return { amount: null, currency: 'MAD', source: null };
+      }
     }
     return { amount: total, currency: 'MAD', source: 'totalPrice' };
   }

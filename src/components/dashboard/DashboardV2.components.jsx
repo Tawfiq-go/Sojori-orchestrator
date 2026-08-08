@@ -30,6 +30,7 @@ import { IconColored } from './IconColored';
 import { NotificationBell, SidebarNotificationBadge, getSidebarGroupUnread, getSidebarItemUnread, useSidebarNotificationCounts, useTaskOperationalIndicators } from '../../features/notifications';
 import { useUnreadCount } from '../../features/notifications/useNotifications';
 import { SojoriBrandLockup } from '../brand/SojoriBrandLogo';
+import { ModalScrollColumn } from '../common/ModalScrollColumn';
 import {
   Box, Stack, Typography, Button, IconButton, Avatar, Chip, Switch,
   TextField, InputAdornment, Divider, Tooltip, Drawer,
@@ -219,7 +220,6 @@ const NAV_ICON_BY_ID = {
   payments: ShowChartOutlined,
   'tasks/list': AssignmentTurnedInOutlined,
   'tasks/planning': TodayOutlined,
-  'tasks/kanban': DashboardOutlined,
   'tasks/team': GroupsOutlined,
   'tasks/orchestration': HubOutlined,
   'tasks/plans': AutoAwesomeOutlined,
@@ -492,143 +492,116 @@ export function AppSidebar({
         />
       </Stack>
 
-      <Stack
-        ref={navScrollRef}
+      {/* Pattern docs/scroll : une seule zone scroll + wheel non-passif (menu + sous-menus). */}
+      <ModalScrollColumn
+        active
+        className="sidebar-nav-scroll"
+        scrollRef={navScrollRef}
         onScroll={persistSidebarScroll}
-        spacing={0.5}
-        sx={{
-        p: '16px 14px',
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        flex: 1,
-        minHeight: 0,
-        // Smooth scrolling avec momentum (comme Claude Desktop)
-        WebkitOverflowScrolling: 'touch',
-        scrollBehavior: 'smooth',
-        // Performance GPU
-        willChange: 'transform',
-        transform: 'translateZ(0)',
-        backfaceVisibility: 'hidden',
-        // Scrollbar ultra-moderne
-        '&::-webkit-scrollbar': {
-          width: 8,
-        },
-        '&::-webkit-scrollbar-track': {
-          background: 'transparent',
-          m: '4px',
-        },
-        '&::-webkit-scrollbar-thumb': {
-          background: 'linear-gradient(180deg, rgba(230,176,34,0.3), rgba(230,176,34,0.2))',
-          borderRadius: '10px',
-          border: '2px solid transparent',
-          backgroundClip: 'padding-box',
-          '&:hover': {
-            background: 'linear-gradient(180deg, rgba(230,176,34,0.5), rgba(230,176,34,0.3))',
-            borderRadius: '10px',
-            border: '2px solid transparent',
-            backgroundClip: 'padding-box',
-          },
-        },
-      }}>
-        {navGroups.map((group, groupIndex) => {
-          const isCollapsed = collapsed[group.group] ?? true;
-          const isCore = Boolean(group.core);
-          const isTaskGroup = group.group === 'Task';
-          const groupUnread =
-            isTaskGroup && taskIndicators
-              ? taskIndicators.actionRequired
-              : getSidebarGroupUnread(group.group, byFacet, byEventKey);
-          const groupBadgeTitle =
-            isTaskGroup && taskIndicators
-              ? `${taskIndicators.unassigned} tÃ¢che(s) non assignÃ©e(s), ${taskIndicators.overdue} en retard`
-              : undefined;
-          return (
-            <React.Fragment key={`${group.group}-${groupIndex}`}>
-              <Box
-                onClick={() => toggleGroup(group.group)}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontSize: 10,
-                  fontFamily: 'system-ui, -apple-system, sans-serif',
-                  fontWeight: 700,
-                  color: isCore ? t.ai : t.text2,
-                  letterSpacing: 0.5,
-                  textTransform: 'uppercase',
-                  p: '14px 12px 8px',
-                  mx: '-2px',
-                  cursor: 'pointer',
-                  userSelect: 'none',
-                  borderRadius: '10px',
-                  background: isCollapsed
-                    ? 'transparent'
-                    : isCore
-                      ? 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.02))'
-                      : 'linear-gradient(135deg, rgba(230,176,34,0.04), rgba(230,176,34,0.01))',
-                  borderLeft: isCollapsed ? 'none' : isCore ? `2px solid rgba(139,92,246,0.35)` : `2px solid rgba(230,176,34,0.3)`,
-                  pl: isCollapsed ? '12px' : '14px',
-                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                  '&:hover': {
-                    color: t.text,
-                    bgcolor: isCore ? 'rgba(139,92,246,0.06)' : 'rgba(230,176,34,0.06)',
-                    borderLeft: isCore ? `2px solid rgba(139,92,246,0.5)` : `2px solid rgba(230,176,34,0.5)`,
-                    pl: '14px',
-                  },
-                }}
-              >
-                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
-                  <span>{group.group}</span>
-                  {isCore ? (
-                    <Chip label="CORE" size="small" sx={{ height: 16, fontSize: 9, fontWeight: 800, bgcolor: t.aiTint, color: t.ai }} />
-                  ) : null}
-                  {isCollapsed && groupUnread > 0 ? (
-                    <SidebarNotificationBadge count={groupUnread} title={groupBadgeTitle} />
-                  ) : null}
-                </Stack>
-                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
-                  {!isCollapsed && groupUnread > 0 ? (
-                    <SidebarNotificationBadge count={groupUnread} title={groupBadgeTitle} />
-                  ) : null}
-                  <ExpandMore
-                    sx={{
-                      fontSize: 19,
-                      color: 'currentColor',
-                      opacity: 0.6,
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                      transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-                    }}
-                  />
-                </Stack>
-              </Box>
-              {!isCollapsed && group.items.map((item) => (
-                <React.Fragment key={item.id}>
-                  <SideLink
-                    item={item}
-                    active={navItemMatchesPath(item, activePath)}
-                    disabled={Boolean(item.navDisabled && item.sub?.length)}
-                    notificationCount={getSidebarItemUnread(item.id, byFacet, byEventKey)}
-                    onClick={() => {
-                      if (item.navDisabled && item.sub?.length) return;
-                      onNavigate?.(item.id);
-                    }}
-                  />
-                  {item.sub?.map((s) => (
-                    <SideLink
-                      key={s.id}
-                      item={s}
-                      sub
-                      active={activePath === s.id}
-                      notificationCount={getSidebarItemUnread(s.id, byFacet, byEventKey)}
-                      onClick={() => onNavigate?.(s.id)}
+        wrapperSx={{ flex: 1, minHeight: 0 }}
+        innerSx={{ p: '16px 14px' }}
+      >
+        <Stack spacing={0.5}>
+          {navGroups.map((group, groupIndex) => {
+            const isCollapsed = collapsed[group.group] ?? true;
+            const isCore = Boolean(group.core);
+            const isTaskGroup = group.group === 'Task';
+            const groupUnread =
+              isTaskGroup && taskIndicators
+                ? taskIndicators.actionRequired
+                : getSidebarGroupUnread(group.group, byFacet, byEventKey);
+            const groupBadgeTitle =
+              isTaskGroup && taskIndicators
+                ? `${taskIndicators.unassigned} tÃ¢che(s) non assignÃ©e(s), ${taskIndicators.overdue} en retard`
+                : undefined;
+            return (
+              <React.Fragment key={`${group.group}-${groupIndex}`}>
+                <Box
+                  onClick={() => toggleGroup(group.group)}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: 10,
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontWeight: 700,
+                    color: isCore ? t.ai : t.text2,
+                    letterSpacing: 0.5,
+                    textTransform: 'uppercase',
+                    p: '14px 12px 8px',
+                    mx: '-2px',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    borderRadius: '10px',
+                    background: isCollapsed
+                      ? 'transparent'
+                      : isCore
+                        ? 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.02))'
+                        : 'linear-gradient(135deg, rgba(230,176,34,0.04), rgba(230,176,34,0.01))',
+                    borderLeft: isCollapsed ? 'none' : isCore ? `2px solid rgba(139,92,246,0.35)` : `2px solid rgba(230,176,34,0.3)`,
+                    pl: isCollapsed ? '12px' : '14px',
+                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                    '&:hover': {
+                      color: t.text,
+                      bgcolor: isCore ? 'rgba(139,92,246,0.06)' : 'rgba(230,176,34,0.06)',
+                      borderLeft: isCore ? `2px solid rgba(139,92,246,0.5)` : `2px solid rgba(230,176,34,0.5)`,
+                      pl: '14px',
+                    },
+                  }}
+                >
+                  <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+                    <span>{group.group}</span>
+                    {isCore ? (
+                      <Chip label="CORE" size="small" sx={{ height: 16, fontSize: 9, fontWeight: 800, bgcolor: t.aiTint, color: t.ai }} />
+                    ) : null}
+                    {isCollapsed && groupUnread > 0 ? (
+                      <SidebarNotificationBadge count={groupUnread} title={groupBadgeTitle} />
+                    ) : null}
+                  </Stack>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
+                    {!isCollapsed && groupUnread > 0 ? (
+                      <SidebarNotificationBadge count={groupUnread} title={groupBadgeTitle} />
+                    ) : null}
+                    <ExpandMore
+                      sx={{
+                        fontSize: 19,
+                        color: 'currentColor',
+                        opacity: 0.6,
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                      }}
                     />
-                  ))}
-                </React.Fragment>
-              ))}
-            </React.Fragment>
-          );
-        })}
-      </Stack>
+                  </Stack>
+                </Box>
+                {!isCollapsed && group.items.map((item) => (
+                  <React.Fragment key={item.id}>
+                    <SideLink
+                      item={item}
+                      active={navItemMatchesPath(item, activePath)}
+                      disabled={Boolean(item.navDisabled && item.sub?.length)}
+                      notificationCount={getSidebarItemUnread(item.id, byFacet, byEventKey)}
+                      onClick={() => {
+                        if (item.navDisabled && item.sub?.length) return;
+                        onNavigate?.(item.id);
+                      }}
+                    />
+                    {item.sub?.map((s) => (
+                      <SideLink
+                        key={s.id}
+                        item={s}
+                        sub
+                        active={activePath === s.id}
+                        notificationCount={getSidebarItemUnread(s.id, byFacet, byEventKey)}
+                        onClick={() => onNavigate?.(s.id)}
+                      />
+                    ))}
+                  </React.Fragment>
+                ))}
+              </React.Fragment>
+            );
+          })}
+        </Stack>
+      </ModalScrollColumn>
 
       {user ? <SidebarUserProfileMenu user={user} onLogout={onLogout} /> : null}
     </Box>
@@ -722,7 +695,6 @@ const OWNER_QUICK_ACTIONS = [
   { emoji: '✅', label: 'Tâches', to: '/tasks' },
   { emoji: '🧭', label: 'Cockpit IA', to: '/orchestration/cockpit' },
   { emoji: '☀️', label: 'Ma journée', to: '/ma-journee' },
-  { emoji: '📋', label: 'Plan de journée', to: '/orchestration/day-plan' },
   { emoji: '🎛', label: 'Plans d’orchestration', to: '/orchestration/plans' },
   { emoji: '📈', label: 'Prix dynamique', to: '/dynamic-pricing/portefeuille' },
   { emoji: '🏠', label: 'Annonces', to: '/listings' },

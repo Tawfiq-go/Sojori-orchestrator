@@ -64,7 +64,11 @@ interface ListingImage {
   url: string;
   caption?: string | null;
   importedFromRu?: boolean;
+  /** Multi — RoomType._id associés pour push OTA */
+  roomTypeIds?: string[];
 }
+
+export type MediaGridRoomTypeOption = { id: string; name: string };
 
 interface MediaGridProps {
   listingId?: string;
@@ -74,6 +78,17 @@ interface MediaGridProps {
   onImagesPersisted?: (images: ListingImage[]) => void;
   /** Si false, la zone d’upload est repliée (galerie visible en premier). */
   defaultUploadExpanded?: boolean;
+  /** Multi — associer chaque photo building à des room types (sous chaque carte). */
+  roomTypeOptions?: MediaGridRoomTypeOption[];
+  /**
+   * Persist custom (ex. Multi roomTypeImages via update-property roomTypes).
+   * Si fourni, remplace le persist listingImages par défaut.
+   */
+  persistImages?: (
+    updatedImages: ListingImage[],
+    action: string,
+    successMessage?: string,
+  ) => Promise<void>;
 }
 
 const MediaGrid: React.FC<MediaGridProps> = ({
@@ -82,6 +97,8 @@ const MediaGrid: React.FC<MediaGridProps> = ({
   onChange,
   onImagesPersisted,
   defaultUploadExpanded = false,
+  roomTypeOptions,
+  persistImages,
 }) => {
   const dispatch = useDispatch();
   const uploadLoading = useSelector((state: RootState) => state.uploadData.loading);
@@ -111,9 +128,32 @@ const MediaGrid: React.FC<MediaGridProps> = ({
 
   const ruImageTypesNormalizedRef = useRef(false);
 
+  const persistImagesRef = useRef(persistImages);
+  persistImagesRef.current = persistImages;
+
   /** Enregistre listingImages sur le listing (update-property) — pas besoin du bouton Sauvegarder global. */
   const persistListingImages = useCallback(
     async (updatedImages: ListingImage[], action: string, successMessage?: string): Promise<void> => {
+      const customPersist = persistImagesRef.current;
+      if (customPersist) {
+        setPersisting(true);
+        logListingMedia('grid.persist.custom.start', { action, count: updatedImages.length, listingId });
+        try {
+          await customPersist(updatedImages, action, successMessage);
+          onChange(updatedImages);
+          onImagesPersistedRef.current?.(updatedImages);
+          logListingMedia('grid.persist.custom.ok', { action, count: updatedImages.length });
+          if (successMessage) toast.success(successMessage);
+        } catch (error: unknown) {
+          logListingMedia('grid.persist.custom.err', { action, error: formatUploadError(error) });
+          toast.error(`Échec enregistrement photos: ${formatUploadError(error)}`);
+          throw error;
+        } finally {
+          setPersisting(false);
+        }
+        return;
+      }
+
       if (!isPersistedListingId(listingId)) {
         onChange(updatedImages);
         if (successMessage) {
@@ -675,6 +715,36 @@ const MediaGrid: React.FC<MediaGridProps> = ({
     [handleRemove],
   );
 
+  const handleToggleRoomType = useCallback(
+    async (index: number, roomTypeId: string) => {
+      const updatedImages = listingImages.map((img, i) => {
+        if (i !== index) return img;
+        const cur = Array.isArray(img.roomTypeIds) ? [...img.roomTypeIds] : [];
+        const at = cur.indexOf(roomTypeId);
+        if (at >= 0) cur.splice(at, 1);
+        else cur.push(roomTypeId);
+        return { ...img, roomTypeIds: cur };
+      });
+      try {
+        await persistListingImages(
+          updatedImages,
+          'grid.roomTypeAssoc',
+          'Association OTA mise à jour',
+        );
+      } catch {
+        // toast déjà affiché
+      }
+    },
+    [listingImages, persistListingImages],
+  );
+
+  const onToggleRoomTypeStable = useCallback(
+    (idx: number, roomTypeId: string) => {
+      void handleToggleRoomType(idx, roomTypeId);
+    },
+    [handleToggleRoomType],
+  );
+
   const onTypeChangeStable = useCallback(
     (idx: number, typeId: string | null) => {
       void handleChangeImageType(idx, typeId);
@@ -905,6 +975,8 @@ const MediaGrid: React.FC<MediaGridProps> = ({
               onRemove={onRemoveStable}
               onTypeChange={onTypeChangeStable}
               onStartTypeEdit={handleStartTypeEdit}
+              roomTypeOptions={roomTypeOptions}
+              onToggleRoomType={roomTypeOptions?.length ? onToggleRoomTypeStable : undefined}
             />
           ))}
         </Box>

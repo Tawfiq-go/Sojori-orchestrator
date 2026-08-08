@@ -651,6 +651,7 @@ export default function SequencePlanCard({
   guestName,
   reservationRef,
   checkInIso,
+  guestManualSendDisabled,
   onDispatched,
 }: {
   seq: PlanSequenceView;
@@ -659,6 +660,7 @@ export default function SequencePlanCard({
   guestName?: string;
   reservationRef?: string;
   checkInIso?: string;
+  guestManualSendDisabled?: boolean;
   onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
 }) {
   const taskId = seq.taskId || seq.id;
@@ -747,6 +749,7 @@ export default function SequencePlanCard({
             actionCompleted={relancesResolved}
             clientChosenTime={seq.clientChosenTime}
             checkInIso={checkInIso}
+            guestManualSendDisabled={guestManualSendDisabled}
             onDone={onDispatched}
           />
           {seq.taskType === 'registration' && seq.deferredToArrival && !relancesResolved ? (

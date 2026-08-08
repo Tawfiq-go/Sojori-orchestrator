@@ -33,6 +33,9 @@ export type MultiListingImage = {
   sortOrder?: number;
   fileName?: string | null;
   caption?: string;
+  /** Catégorie OTA (Bedroom, Pool…) — même contrat que listingImages / villa */
+  imageTypeId?: string;
+  imageTypeRuId?: string[] | number[];
 };
 
 export type MultiRoomTypeDraft = {

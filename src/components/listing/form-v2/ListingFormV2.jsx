@@ -205,6 +205,7 @@ export default function ListingFormV2({
         return (
           <PricingTab
             {...common}
+            listingId={listingId}
             roomTypeConfigs={roomTypeConfigs}
             propertyTypes={propertyTypes}
           />

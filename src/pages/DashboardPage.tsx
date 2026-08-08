@@ -135,6 +135,8 @@ function DashboardPageContent() {
   const [listingFilterOptions, setListingFilterOptions] = useState<DashboardPropertyOption[]>([]);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
+  /** Multi drill — filtre stays/arrivées seulement ; KPIs restent listingIds. */
+  const [selectedRoomTypeIds, setSelectedRoomTypeIds] = useState<string[]>([]);
   const [snapshot, setSnapshot] = useState<DashboardSnapshot>(EMPTY_DASHBOARD_SNAPSHOT);
   /** false tant que l’agrégation multi-API n’est pas terminée (évite flash KPI à 0). */
   const [dashboardReady, setDashboardReady] = useState(false);
@@ -150,6 +152,7 @@ function DashboardPageContent() {
       clearAllDashboardSnapshotCaches();
       setRefreshKey((k) => k + 1);
       setSelectedPropertyIds([]);
+      setSelectedRoomTypeIds([]);
       setSnapshot(EMPTY_DASHBOARD_SNAPSHOT);
       setProperties([]);
       setListingFilterOptions([]);
@@ -226,6 +229,12 @@ function DashboardPageContent() {
 
       const CACHE_FRESH_MS = 180_000;
       const cacheIsFresh = cacheEntry != null && cacheEntry.ageMs < CACHE_FRESH_MS;
+      /** Cache « mois à 0 » alors qu’il y a de l’occupation → stats ratées, forcer refetch. */
+      const cacheBookingKpisEmpty =
+        !!cached &&
+        cached.kpis.totalReservations.value <= 0 &&
+        cached.kpis.monthlyRevenue.value <= 0 &&
+        (cached.kpis.occupancyRate.value > 0 || !!selectedMonth);
 
       logDashboard('DashboardPage load', {
         authLoading,
@@ -237,11 +246,19 @@ function DashboardPageContent() {
         hadCache: !!cached,
         cacheAgeMs: cacheEntry?.ageMs,
         cacheIsFresh,
+        cacheBookingKpisEmpty,
       });
 
       const cacheHasListings = (cached?.properties?.length ?? 0) > 0;
 
-      if (cacheIsFresh && refreshKey === 0 && dashboardDataRevision === 0 && cacheHasListings && !showOwnerFilter) {
+      if (
+        cacheIsFresh &&
+        !cacheBookingKpisEmpty &&
+        refreshKey === 0 &&
+        dashboardDataRevision === 0 &&
+        cacheHasListings &&
+        !showOwnerFilter
+      ) {
         logDashboard('DashboardPage — cache frais (<3 min), skip refetch réseau', {
           cacheAgeMs: cacheEntry.ageMs,
         });
@@ -486,13 +503,32 @@ function DashboardPageContent() {
       const m = w.match(/(\d{2})\/(\d{2})/);
       return m ? `${m[2]}${m[1]}` : '9999';
     };
+    const selectedRtNames = new Set(
+      listingOptions
+        .flatMap((l) => l.roomTypes || [])
+        .filter((rt) => selectedRoomTypeIds.includes(rt.id))
+        .map((rt) => rt.name.trim().toLowerCase())
+        .filter(Boolean),
+    );
     return [
       ...snapshot.upcomingCheckIns.map((i) => ({ ...i, kind: '🛬 Arrivée' })),
       ...snapshot.upcomingCheckOuts.map((i) => ({ ...i, kind: '🛫 Départ' })),
     ]
+      .filter((i) => {
+        if (selectedRtNames.size === 0) return true;
+        const rt = String(i.roomTypeName || '').trim().toLowerCase();
+        // Single / sans type : on garde ; Multi avec type hors sélection : on exclut
+        if (!rt) return true;
+        return selectedRtNames.has(rt);
+      })
       .map((i) => ({ ...i, when: strip(i.when) }))
       .sort((a, b) => sortKey(a.when).localeCompare(sortKey(b.when)));
-  }, [snapshot.upcomingCheckIns, snapshot.upcomingCheckOuts]);
+  }, [
+    snapshot.upcomingCheckIns,
+    snapshot.upcomingCheckOuts,
+    listingOptions,
+    selectedRoomTypeIds,
+  ]);
 
   const occupancyPanelDesc = useMemo(() => {
     const scope =
@@ -527,8 +563,9 @@ function DashboardPageContent() {
     [displayedOccupancyByProperty, withRealName],
   );
 
-  const applyListingFilter = (ids: string[]) => {
-    setSelectedPropertyIds(ids);
+  const applyListingFilter = (next: { listingIds: string[]; roomTypeIds: string[] }) => {
+    setSelectedPropertyIds(next.listingIds);
+    setSelectedRoomTypeIds(next.roomTypeIds);
   };
 
   const ratingDisplay = formatDashboardRating(snapshot.kpis.averageRating.value);
@@ -646,12 +683,20 @@ function DashboardPageContent() {
         <ListingCheckboxFilter
           listings={listingOptions}
           selectedIds={selectedPropertyIds}
+          selectedRoomTypeIds={selectedRoomTypeIds}
           onApply={applyListingFilter}
           loading={listingsLoading}
           disabled={listingOptions.length === 0}
         />
-        {selectedPropertyIds.length > 0 ? (
-          <Button size="small" sx={btnGhostSx} onClick={() => setSelectedPropertyIds([])}>
+        {selectedPropertyIds.length > 0 || selectedRoomTypeIds.length > 0 ? (
+          <Button
+            size="small"
+            sx={btnGhostSx}
+            onClick={() => {
+              setSelectedPropertyIds([]);
+              setSelectedRoomTypeIds([]);
+            }}
+          >
             Réinitialiser listings
           </Button>
         ) : null}

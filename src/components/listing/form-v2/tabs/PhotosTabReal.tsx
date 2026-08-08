@@ -1,4 +1,4 @@
-// PhotosTabReal.tsx — Galerie (Single = MediaGrid) · Multi = PhotoZone bâtiment + types
+// PhotosTabReal.tsx — Galerie (Single + Multi building/types = MediaGrid)
 import React, { useState, memo, useMemo, useCallback } from 'react';
 import {
   Box,
@@ -11,18 +11,13 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { useDispatch } from 'react-redux';
-import { toast } from 'react-toastify';
 import MediaGrid from '../../upload/MediaGrid';
 import { LegacyReduxProvider } from '../../../LegacyReduxBridge';
 import { FieldIndicator } from '../components/FieldIndicator';
 import { RuFormLegend } from './_shared';
-import { PhotoZone } from '../../multi/PhotoZone';
-import { uploadMultipleImagesToAPI } from '../../../../redux/slices/UploadSlice';
 import listingsService from '../../../../services/listingsService';
 import { cleanListingImagesForPayload } from '../../../../utils/listingFormV2ApiAdapter';
 import { isPersistedListingId } from '../../../../utils/listingId';
-import type { MultiListingImage } from '../../multi/multiTypes';
 
 const T = {
   primary: '#b8851a',
@@ -39,10 +34,12 @@ const T = {
 interface ListingImage {
   fileName?: string | null;
   imageTypeId?: string;
-  imageTypeRuId?: number[];
+  imageTypeRuId?: number[] | string[];
   sortOrder?: number;
   url: string;
   caption?: string;
+  /** Multi only — RoomType._id associés pour push OTA */
+  roomTypeIds?: string[];
 }
 
 interface PhotosTabProps {
@@ -55,37 +52,6 @@ interface PhotosTabProps {
   propertyUnit?: string;
   roomTypes?: Array<Record<string, unknown>>;
   onRoomTypesChange?: (roomTypes: Array<Record<string, unknown>>) => void;
-}
-
-function extractUrls(result: unknown): string[] {
-  if (!result) return [];
-  if (Array.isArray(result)) {
-    return result
-      .map((row) => {
-        if (typeof row === 'string') return row;
-        if (row && typeof row === 'object' && 'url' in row) {
-          return String((row as { url: string }).url);
-        }
-        return '';
-      })
-      .filter(Boolean);
-  }
-  if (typeof result === 'object' && result && 'urls' in result) {
-    const urls = (result as { urls?: unknown }).urls;
-    return Array.isArray(urls) ? urls.map(String) : [];
-  }
-  return [];
-}
-
-function toMultiImages(images: ListingImage[]): MultiListingImage[] {
-  return images
-    .filter((img) => img?.url)
-    .map((img, i) => ({
-      url: img.url,
-      sortOrder: img.sortOrder ?? i,
-      fileName: img.fileName ?? null,
-      caption: img.caption,
-    }));
 }
 
 function SectionLabel({
@@ -120,150 +86,100 @@ function SectionLabel({
   );
 }
 
-/** Doit vivre sous LegacyReduxProvider (useDispatch). */
+/** Doit vivre sous LegacyReduxProvider (useDispatch / MediaGrid). Multi only. */
 function MultiBuildingGallery({
   listingId,
   listingImages,
   onChange,
   onImagesPersisted,
+  roomTypes = [],
 }: {
   listingId?: string;
   listingImages: ListingImage[];
   onChange: (images: ListingImage[]) => void;
   onImagesPersisted?: (images: ListingImage[]) => void;
+  roomTypes?: Array<Record<string, unknown>>;
 }) {
-  const dispatch = useDispatch();
-  const [uploading, setUploading] = useState(false);
-
-  const persist = useCallback(
-    async (next: ListingImage[]) => {
-      onChange(next);
-      if (!listingId || !isPersistedListingId(listingId)) return;
-      try {
-        await listingsService.updateListingProperty(listingId, {
-          listingImages: cleanListingImagesForPayload(next),
-        });
-        onImagesPersisted?.(next);
-      } catch {
-        toast.error('Photos bâtiment non enregistrées — réessayez Sauvegarder');
-      }
-    },
-    [listingId, onChange, onImagesPersisted],
-  );
-
-  const onPickFiles = useCallback(
-    async (files: FileList) => {
-      const list = Array.from(files).slice(0, 20);
-      if (!list.length) return;
-      setUploading(true);
-      try {
-        const result = await dispatch(
-          uploadMultipleImagesToAPI({ files: list, folder: 'listings' }) as never,
-        ).unwrap();
-        const urls = extractUrls(result);
-        if (!urls.length) {
-          toast.error('Upload échoué');
-          return;
-        }
-        const added: ListingImage[] = urls.map((url, i) => ({
-          url,
-          sortOrder: listingImages.length + i,
-          fileName: list[i]?.name || null,
-        }));
-        await persist([...listingImages, ...added]);
-        toast.success(`${added.length} photo(s) bâtiment`);
-      } catch {
-        toast.error('Upload bâtiment échoué');
-      } finally {
-        setUploading(false);
-      }
-    },
-    [dispatch, listingImages, persist],
-  );
-
-  const onZoneChange = useCallback(
-    (images: MultiListingImage[]) => {
-      void persist(
-        images.map((img, i) => {
-          const prev = listingImages.find((p) => p.url === img.url);
-          return {
-            url: img.url,
-            sortOrder: i,
-            fileName: img.fileName ?? prev?.fileName ?? null,
-            caption: img.caption ?? prev?.caption,
-            imageTypeId: prev?.imageTypeId,
-            imageTypeRuId: prev?.imageTypeRuId,
-          };
-        }),
-      );
-    },
-    [listingImages, persist],
+  const roomTypeOptions = useMemo(
+    () =>
+      roomTypes
+        .map((rt, i) => ({
+          id: String(rt._id || ''),
+          name: String(rt.otaDisplayName || rt.roomTypeName || `Type ${i + 1}`),
+        }))
+        .filter((r) => Boolean(r.id)),
+    [roomTypes],
   );
 
   return (
-    <PhotoZone
-      variant="common"
-      compact
-      images={toMultiImages(listingImages)}
-      onChange={onZoneChange}
-      uploading={uploading}
-      onPickFiles={onPickFiles}
-    />
+    <Stack spacing={1}>
+      <MediaGrid
+        listingId={listingId}
+        listingImages={listingImages}
+        onChange={onChange}
+        onImagesPersisted={onImagesPersisted}
+        roomTypeOptions={roomTypeOptions}
+      />
+      {roomTypeOptions.length > 0 ? (
+        <Typography sx={{ fontSize: 11, color: T.text3, lineHeight: 1.4 }}>
+          Sous chaque photo : <strong>Associer</strong> → cochez les types OTA qui réutilisent
+          l’image. Non associé = building only (pas poussé sur Airbnb via RU).
+        </Typography>
+      ) : null}
+    </Stack>
   );
 }
 
 function MultiRoomTypeGalleries({
+  listingId,
   roomTypes,
   onRoomTypesChange,
 }: {
+  listingId?: string;
   roomTypes: Array<Record<string, unknown>>;
   onRoomTypesChange: (roomTypes: Array<Record<string, unknown>>) => void;
 }) {
-  const dispatch = useDispatch();
-  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
-
-  const setRoomTypeImages = useCallback(
-    (index: number, images: MultiListingImage[]) => {
+  const persistRoomTypeImages = useCallback(
+    async (index: number, images: ListingImage[]) => {
       const next = roomTypes.map((rt, i) =>
         i === index ? { ...rt, roomTypeImages: images } : { ...rt },
       );
       onRoomTypesChange(next);
-    },
-    [onRoomTypesChange, roomTypes],
-  );
 
-  const uploadForRoomType = useCallback(
-    async (index: number, files: FileList) => {
-      const list = Array.from(files).slice(0, 12);
-      if (!list.length) return;
-      const key = String(roomTypes[index]?._id || index);
-      setUploadingKey(key);
-      try {
-        const result = await dispatch(
-          uploadMultipleImagesToAPI({ files: list, folder: 'listings' }) as never,
-        ).unwrap();
-        const urls = extractUrls(result);
-        if (!urls.length) {
-          toast.error('Upload échoué');
-          return;
-        }
-        const prev = Array.isArray(roomTypes[index]?.roomTypeImages)
-          ? (roomTypes[index].roomTypeImages as MultiListingImage[])
-          : [];
-        const added: MultiListingImage[] = urls.map((url, i) => ({
-          url,
-          sortOrder: prev.length + i,
-          fileName: list[i]?.name || null,
-        }));
-        setRoomTypeImages(index, [...prev, ...added]);
-        toast.success(`${added.length} photo(s)`);
-      } catch {
-        toast.error('Upload type échoué');
-      } finally {
-        setUploadingKey(null);
+      if (!listingId || !isPersistedListingId(listingId)) return;
+
+      const targetId = String(roomTypes[index]?._id || '').trim();
+      if (!targetId) {
+        // Draft local sans _id : mémoire formulaire seulement
+        return;
       }
+
+      // Tous les _id présents → passe le garde « delete roomtype ».
+      // Pas de clé `rooms` → le backend ne touche pas aux units.
+      const payloadRoomTypes = next
+        .map((rt, i) => {
+          const id = String(rt._id || '').trim();
+          if (!id) return null;
+          if (i === index) {
+            return {
+              _id: id,
+              roomTypeImages: cleanListingImagesForPayload(images),
+            };
+          }
+          return { _id: id };
+        })
+        .filter(Boolean);
+
+      const persistedCount = next.filter((rt) => String(rt._id || '').trim()).length;
+      if (payloadRoomTypes.length !== persistedCount) {
+        throw new Error('Room types incomplets — impossible d’enregistrer les photos type');
+      }
+
+      await listingsService.updateListingProperty(listingId, {
+        roomTypes: payloadRoomTypes,
+      });
     },
-    [dispatch, roomTypes, setRoomTypeImages],
+    [listingId, onRoomTypesChange, roomTypes],
   );
 
   if (!roomTypes.length) {
@@ -275,12 +191,12 @@ function MultiRoomTypeGalleries({
   }
 
   return (
-    <Stack spacing={1.1}>
+    <Stack spacing={1.5}>
       {roomTypes.map((rt, index) => {
         const imgs = (
           Array.isArray(rt.roomTypeImages) ? rt.roomTypeImages : []
-        ) as MultiListingImage[];
-        const name = String(rt.roomTypeName || `Type ${index + 1}`);
+        ) as ListingImage[];
+        const name = String(rt.otaDisplayName || rt.roomTypeName || `Type ${index + 1}`);
         const units = Math.max(1, Number(rt.roomNumber) || 1);
         const key = String(rt._id || index);
         const n = imgs.filter((i) => i?.url).length;
@@ -292,17 +208,26 @@ function MultiRoomTypeGalleries({
                 {n} · ×{units}
               </Typography>
             </Stack>
-            <PhotoZone
-              variant="type"
-              compact
-              images={imgs}
-              onChange={(next) => setRoomTypeImages(index, next)}
-              uploading={uploadingKey === key}
-              onPickFiles={(files) => uploadForRoomType(index, files)}
+            <MediaGrid
+              listingId={listingId}
+              listingImages={imgs}
+              onChange={(images) => {
+                const next = roomTypes.map((row, i) =>
+                  i === index ? { ...row, roomTypeImages: images } : { ...row },
+                );
+                onRoomTypesChange(next);
+              }}
+              persistImages={async (images, _action, _msg) => {
+                await persistRoomTypeImages(index, images);
+              }}
             />
           </Box>
         );
       })}
+      <Typography sx={{ fontSize: 11, color: T.text3, lineHeight: 1.4 }}>
+        Même logique que building : catégorie OTA sous chaque photo (Bedroom, Pool…). Ces tags
+        partent avec le sync RU → Airbnb comme pour une villa.
+      </Typography>
     </Stack>
   );
 }
@@ -400,7 +325,7 @@ export const PhotosTabReal = memo(function PhotosTabReal({
         >
           <Typography sx={{ fontSize: 12, color: T.text2, lineHeight: 1.45 }}>
             {isMulti
-              ? '+ ajouter · clic vignette = retirer. Communes = immédiat. Types = Sauvegarder. R = OTA · * = obligatoire.'
+              ? 'Building + chaque type = MediaGrid (upload, corbeille, catégorie OTA). Associer sous photo building = partage OTA vers types. Enregistrement immédiat.'
               : 'Cover = 1ʳᵉ image OTA. Upload immédiat. JPG / PNG / WEBP · min 1024×768.'}
           </Typography>
         </Box>
@@ -418,6 +343,7 @@ export const PhotosTabReal = memo(function PhotosTabReal({
                 listingImages={listingImages}
                 onChange={onChange}
                 onImagesPersisted={onImagesPersisted}
+                roomTypes={roomTypes}
               />
             </Box>
             {onRoomTypesChange ? (
@@ -426,6 +352,7 @@ export const PhotosTabReal = memo(function PhotosTabReal({
                   Types · {typePhotoCount}
                 </Typography>
                 <MultiRoomTypeGalleries
+                  listingId={listingId}
                   roomTypes={roomTypes}
                   onRoomTypesChange={onRoomTypesChange}
                 />

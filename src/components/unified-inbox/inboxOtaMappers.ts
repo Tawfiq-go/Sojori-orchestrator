@@ -26,6 +26,7 @@ import {
   ownerLabelForPlanCatalog,
 } from './waThreadPreview';
 import {
+  otaThreadNeedsReply,
   resolveOtaListLastMessage,
   resolveOtaProgrammedAutoLine,
 } from './otaExchangePresence';
@@ -122,6 +123,8 @@ export function isOtaDirectChannel(
   if (resolveOtaPlatformChannel(row) != null) return false;
   const raw = `${row.channelNameRaw || ''} ${row.channel || ''} ${row.source || ''}`.toLowerCase();
   if (raw.includes('whatsapp')) return false;
+  // Direct Mews / Nommos n'est pas le canal direct Sojori
+  if (raw.includes('mews') || raw.includes('nommos')) return false;
   if (
     raw.includes('sojori') ||
     raw.includes('direct') ||
@@ -349,10 +352,7 @@ export function mapApiItemToOtaThread(item: any): OtaThreadRow {
 }
 
 function otaRowNeedsReply(row: OtaThreadRow): boolean {
-  const s = (row.messageStatus || '').toLowerCase();
-  if (s === 'received' || s === 'pending') return true;
-  if (s === 'responded' || s === 'ignored' || s === 'replied') return false;
-  return row.lastMessageIsIncoming === true;
+  return otaThreadNeedsReply(row);
 }
 
 /** Q / R réels uniquement (hors plan auto). */

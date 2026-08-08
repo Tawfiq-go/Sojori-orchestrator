@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React from 'react';
 import { Box, Stack, Typography, IconButton } from '@mui/material';
-import { T, emojiFor } from './_tokens';
+import { T } from './_tokens';
 import type { Amenity, Density, SelectedAmenity } from './_tokens';
 
 export interface AmenityCardProps {
@@ -26,13 +26,12 @@ export default React.memo(function AmenityCard({ amenity, selected, density, onT
         display: 'flex', flexDirection: isOn ? 'column' : 'row', gap: isOn ? 0.5 : 1,
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, width: '100%' }}>
-          <Box sx={{ fontSize: 15, width: 18, textAlign: 'center', flexShrink: 0 }}>{emojiFor(amenity)}</Box>
           <Typography sx={{ ...nmSx(isOn, 11.5), whiteSpace: isOn ? 'normal' : 'nowrap' }}>{amenity.nameFr}</Typography>
           {!isOn && amenity.basic && <BasicBadge tiny />}
           <Box sx={{ ml: 'auto', flexShrink: 0 }}><Check on={isOn} /></Box>
         </Box>
         {isOn && (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75, pl: 3.25 }}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75 }}
             onClick={(e) => e.stopPropagation()}>
             {amenity.basic && <BasicBadge tiny />}
             <Stepper count={selected!.count} onMinus={() => onQty(amenity, -1)} onPlus={() => onQty(amenity, +1)} mini />
@@ -46,14 +45,13 @@ export default React.memo(function AmenityCard({ amenity, selected, density, onT
     return (
       <Box onClick={() => onToggle(amenity)} sx={{
         ...baseSx(isOn), position: 'relative', flexDirection: 'column',
-        alignItems: 'center', textAlign: 'center', p: '12px 10px', minHeight: 96, gap: 1.125,
+                alignItems: 'center', textAlign: 'center', p: '10px 8px', minHeight: 64, gap: 0.75,
       }}>
         {amenity.basic && (
           <Box sx={{ position: 'absolute', top: 6, left: 6 }}><BasicBadge /></Box>
         )}
         <Box sx={{ position: 'absolute', top: 6, right: 6 }}><Check on={isOn} /></Box>
-        <Box sx={{ fontSize: 26, lineHeight: 1, animation: isOn ? 'sj-scaleIn 0.2s' : undefined }}>{emojiFor(amenity)}</Box>
-        <Typography sx={{ ...nmSx(isOn, 12), whiteSpace: 'normal' }}>{amenity.nameFr}</Typography>
+        <Typography sx={{ ...nmSx(isOn, 12), whiteSpace: 'normal', mt: amenity.basic ? 1.5 : 0 }}>{amenity.nameFr}</Typography>
         {isOn && <Stepper count={selected!.count} onMinus={() => onQty(amenity, -1)} onPlus={() => onQty(amenity, +1)} />}
         {hasRooms && (
           <Box sx={{ position: 'absolute', bottom: 4, left: 6, fontSize: 8, color: T.info, fontFamily: '"Geist Mono", monospace', fontWeight: 800, bgcolor: T.infoTint, px: 0.625, borderRadius: 0.5, letterSpacing: '0.04em' }}>
@@ -77,15 +75,9 @@ export default React.memo(function AmenityCard({ amenity, selected, density, onT
       position: 'relative',
     }}>
       <Box sx={{
-        display: 'flex', alignItems: 'flex-start', gap: 1.125, minWidth: 0, width: '100%',
+        display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 0, width: '100%',
       }}>
         <Box sx={{ pt: 0.125, flexShrink: 0 }}><Check on={isOn} dense /></Box>
-        <Box sx={{
-          fontSize: 18, width: 22, textAlign: 'center', flexShrink: 0,
-          animation: isOn ? 'sj-scaleIn 0.2s' : undefined,
-        }}>
-          {emojiFor(amenity)}
-        </Box>
         <Typography sx={{
           ...nmSx(isOn, 12),
           whiteSpace: isOn ? 'normal' : 'nowrap',
@@ -101,7 +93,7 @@ export default React.memo(function AmenityCard({ amenity, selected, density, onT
       {isOn && (
         <Box
           onClick={(e) => e.stopPropagation()}
-          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75, pl: 4.5 }}
+          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75, pl: 3.5 }}
         >
           {amenity.basic && <BasicBadge tiny />}
           <Stepper

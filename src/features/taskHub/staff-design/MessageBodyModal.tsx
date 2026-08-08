@@ -9,7 +9,8 @@ interface Props {
   messageFr: string;
   channelLabel: string;
   onClose: () => void;
-  onChange: (text: string) => void;
+  /** Absent = aperçu lecture seule (ex. avec signature). */
+  onChange?: (text: string) => void;
 }
 
 /** Aperçu + édition message Email/OTA avec variables résa / listing */
@@ -21,6 +22,7 @@ export default function MessageBodyModal({
   onClose,
   onChange,
 }: Props) {
+  const readOnly = !onChange;
   const [showVars, setShowVars] = useState(true);
 
   const groupedVars = useMemo(() => {
@@ -54,6 +56,7 @@ export default function MessageBodyModal({
   if (!open) return null;
 
   const insertVar = (key: string) => {
+    if (!onChange) return;
     onChange(`${messageFr}${messageFr.endsWith('\n') || messageFr === '' ? '' : '\n'}${key}`);
   };
 
@@ -85,12 +88,19 @@ export default function MessageBodyModal({
               id="orch-msg-textarea"
               className="orch-msg-textarea"
               value={messageFr}
-              onChange={(e) => onChange(e.target.value)}
+              readOnly={readOnly}
+              onChange={(e) => onChange?.(e.target.value)}
               spellCheck={false}
             />
           </div>
 
           <aside className="orch-msg-vars-col">
+            {readOnly ? (
+              <p style={{ fontSize: 12, color: 'var(--t3)', margin: '8px 0' }}>
+                Aperçu (signature incluse) — modifiez le texte dans la carte message.
+              </p>
+            ) : null}
+            {!readOnly ? (
             <button
               type="button"
               className="orch-msg-vars-toggle"
@@ -98,7 +108,8 @@ export default function MessageBodyModal({
             >
               {showVars ? '▼' : '▶'} Variables réservation / listing
             </button>
-            {showVars && (
+            ) : null}
+            {!readOnly && showVars && (
               <ModalScrollColumn
                 active={open}
                 className="orch-message-vars-scroll"

@@ -206,12 +206,14 @@ export interface FulltaskPlanDoc {
       label: string;
       scheduledAt: string | Date;
       sentAt?: string | Date | null;
-      status: 'en_attente' | 'envoye' | 'saute' | 'echec';
+      status: 'en_attente' | 'envoye' | 'saute' | 'echec' | 'fait';
       canal: 'whatsapp' | 'OTA' | 'email';
       effectiveCanal?: 'whatsapp' | 'OTA' | 'email';
       template?: string;
       messageFr?: string;
       messageId?: string;
+      /** auto = scheduler · manual = envoi cockpit seulement */
+      triggerMode?: 'auto' | 'manual';
       dispatchPreview?: import('./planDispatchPreview').MessageDispatchPreview;
       dispatchLog?: Array<{
         at: string | Date;
@@ -224,6 +226,8 @@ export interface FulltaskPlanDoc {
   uiPlanListOrder?: string[];
   /** Origine config utilisée pour ce plan (API srv-fulltask). */
   orchestrationConfigSource?: 'owner' | 'global_template';
+  /** true = Relancer client WA/OTA bloqué (listing). */
+  guestManualSendDisabled?: boolean;
   dispatchContext?: import('./planDispatchPreview').PlanDispatchContext;
   guestPhone?: string;
   guestName?: string;
@@ -1666,14 +1670,19 @@ function buildSequenceView(
     };
   };
 
+  /** Digeste journalier / saut plateforme mode_digest → ne plus afficher ni compter. */
+  const isHiddenDigestReminder = (r: { reason?: string; intentionalSkip?: boolean }) =>
+    String(r.reason || '') === 'mode_digest' ||
+    (r.intentionalSkip === true && String(r.reason || '') === 'mode_digest');
+
   const staffReminders: PlanStaffReminderItem[] = [
     ...(seq.staffReminders ?? [])
       .map((r, i) => ({ r, i }))
-      .filter(({ r }) => !isScheduledManualRow(r))
+      .filter(({ r }) => !isScheduledManualRow(r) && !isHiddenDigestReminder(r))
       .map(({ r, i }) => mapStaffRemRow(r, i)),
-    ...(seq.staffStartReminders ?? []).map((r, i) =>
-      mapStaffRemRow(r, (seq.staffReminders?.length ?? 0) + i),
-    ),
+    ...(seq.staffStartReminders ?? [])
+      .filter((r) => !isHiddenDigestReminder(r))
+      .map((r, i) => mapStaffRemRow(r, (seq.staffReminders?.length ?? 0) + i)),
   ];
 
   const staffAssignment = mapStaffAssignment(seq, staffNames, now);
@@ -1828,6 +1837,7 @@ export function buildPlanViewModel(
       planOrderKey,
       messageCategory,
       messageIndex,
+      triggerMode: m.triggerMode === 'manual' ? 'manual' : 'auto',
       lastDispatch,
       lastDispatchAttempt,
       dispatchLog,
@@ -1935,6 +1945,7 @@ export function buildPlanViewModel(
     ownerId: plan.ownerId,
     listingId: plan.listingId,
     orchestrationConfigSource: plan.orchestrationConfigSource,
+    guestManualSendDisabled: plan.guestManualSendDisabled === true,
     dispatchContext: plan.dispatchContext,
     guestPhone: plan.guestPhone,
     guestName: plan.guestName,

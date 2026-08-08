@@ -24,8 +24,12 @@ export interface ListingSummary {
   occupancyStatus?: string;
   cleanlinessStatus_v2?: string;
   cleanlinessEmergency?: boolean;
-  /** Compact / planning Multi — ids + noms des roomTypes. */
-  roomTypes?: Array<{ id: string; name: string }>;
+  /** Compact / planning Multi — ids + noms des roomTypes (+ rooms physiques si compact). */
+  roomTypes?: Array<{
+    id: string;
+    name: string;
+    rooms?: Array<{ id: string; name: string; number?: number }>;
+  }>;
   raw: Record<string, unknown>;
 }
 

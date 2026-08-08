@@ -46,6 +46,9 @@ function sendModeLabel(ch: MessageDeliveryChannel): string {
 }
 
 function formatSubtitle(rule: ScheduledOrchestrationMessage, catalogLabel?: string): string {
+  if (rule.sendMode === 'manual') {
+    return `${catalogLabel ?? '—'} · 📨 Manuel · ${sendModeLabel(rule.deliveryChannel)}`;
+  }
   const ref = REF_OPTIONS.find(o => o.value === rule.trigger.reference)?.label ?? rule.trigger.reference;
   const abs = Math.abs(rule.trigger.delay.value);
   const sign = rule.trigger.delay.value >= 0 ? '+' : '−';
@@ -430,13 +433,36 @@ function TimingEditor({
   rule: ScheduledOrchestrationMessage;
   onPatch: (patch: Partial<ScheduledOrchestrationMessage>) => void;
 }) {
+  const sendMode = rule.sendMode === 'manual' ? 'manual' : 'auto';
   return (
     <div className="wf-block">
       <div className="wf-block-h">
         <span className="wf-block-h-ic">⏰</span>
         <span className="wf-block-h-txt">TIMING ENVOI</span>
       </div>
-      <div className="rel-table">
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3, #888)' }}>MODE</span>
+        <button
+          type="button"
+          className={`pill-toggle${sendMode === 'auto' ? ' on' : ''}`}
+          onClick={() => onPatch({ sendMode: 'auto' })}
+        >
+          Auto
+        </button>
+        <button
+          type="button"
+          className={`pill-toggle${sendMode === 'manual' ? ' on' : ''}`}
+          onClick={() => onPatch({ sendMode: 'manual' })}
+        >
+          📨 Manuel
+        </button>
+        {sendMode === 'manual' ? (
+          <span style={{ fontSize: 11, color: 'var(--t3, #888)' }}>
+            Pas d’auto — Relancer dans le plan
+          </span>
+        ) : null}
+      </div>
+      <div className="rel-table" style={sendMode === 'manual' ? { opacity: 0.45, pointerEvents: 'none' } : undefined}>
         <div
           className={`rel-table-h rel-table-h--timing${rule.trigger.delay.unit === 'hours' ? ' compact' : ''}`}
         >

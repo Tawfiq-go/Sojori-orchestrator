@@ -280,7 +280,7 @@ function normalizeRoomTypes(source: unknown): ListingRoomTypeSummary[] {
     const record = asRecord(item);
     return {
       id: asString(record._id || record.id || `room-type-${index}`),
-      name: pickFirstString(record, ['roomTypeName', 'name']) || `Room type ${index + 1}`,
+      name: pickFirstString(record, ['otaDisplayName', 'roomTypeName', 'name']) || `Room type ${index + 1}`,
       basePrice: pickFirstNumber(record, ['basePrice', 'price', 'minimumPrice']),
       roomCount: Array.isArray(record.rooms) ? record.rooms.length : asNumber(record.roomCount) ?? 0,
       channexRoomTypeId: asString(record.channexRoomTypeId),
@@ -391,11 +391,36 @@ function normalizeListingSummary(source: unknown): ListingSummary {
         .map((rt) => {
           const row = asRecord(rt);
           const id = asString(row._id || row.id);
-          const name = pickFirstString(row, ['roomTypeName', 'name']);
+          const name = pickFirstString(row, ['otaDisplayName', 'roomTypeName', 'name']);
           if (!id || !name) return null;
-          return { id, name };
+          const roomsSrc = Array.isArray(row.rooms) ? row.rooms : [];
+          const rooms = roomsSrc
+            .map((rm) => {
+              const r = asRecord(rm);
+              const rid = asString(r._id || r.id);
+              const rname =
+                pickFirstString(r, ['roomName', 'name']) ||
+                (asNumber(r.roomNumber) != null ? `Chambre ${r.roomNumber}` : '');
+              if (!rid || !rname) return null;
+              const number = asNumber(r.roomNumber);
+              return {
+                id: rid,
+                name: rname,
+                ...(number != null ? { number } : {}),
+              };
+            })
+            .filter(Boolean) as Array<{ id: string; name: string; number?: number }>;
+          return {
+            id,
+            name,
+            ...(rooms.length > 0 ? { rooms } : {}),
+          };
         })
-        .filter(Boolean) as Array<{ id: string; name: string }>;
+        .filter(Boolean) as Array<{
+        id: string;
+        name: string;
+        rooms?: Array<{ id: string; name: string; number?: number }>;
+      }>;
       return mapped.length > 0 ? mapped : undefined;
     })(),
     raw: record,

@@ -6,6 +6,11 @@ export interface DashboardPropertyOption {
   name: string;
   city?: string;
   isActive?: boolean;
+  /** Single | Multi — absent = Single (inchangé). */
+  propertyUnit?: string;
+  /** RoomTypes Multi (filtre recherche / badge) — apply reste listingIds. */
+  roomTypes?: Array<{ id: string; name: string }>;
+  roomTypeCount?: number;
 }
 
 export interface DashboardListingStatsRaw {
@@ -155,6 +160,9 @@ export interface DashboardBookingItem {
   when: string;
   source: string;
   type?: string;
+  /** Multi only — roomType / room ; Single = absent. */
+  roomTypeName?: string;
+  roomName?: string;
 }
 
 export interface DashboardTaskItem {

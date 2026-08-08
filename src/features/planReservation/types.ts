@@ -119,6 +119,8 @@ export interface PlanEvent {
   messageSendStatus?: 'en_attente' | 'fait' | 'envoye' | 'saute' | 'echec';
   /** Index dans plan.messages (srv-fulltask) pour envoi manuel. */
   messageIndex?: number;
+  /** auto = scheduler · manual = Relancer / Envoyer manuellement seulement */
+  triggerMode?: 'auto' | 'manual';
   channelMeta?: string;            // "Envoyé · 14:08"
   lastDispatch?: import('./planDispatchDisplay').PlanLastDispatchView;
   lastDispatchAttempt?: import('./planDispatchDisplay').PlanLastDispatchView;
@@ -294,6 +296,8 @@ export interface ReservationPlan {
   guestName?: string;
   /** owner = config PM dédiée ; global_template = repli template admin (ownerId null). */
   orchestrationConfigSource?: 'owner' | 'global_template';
+  /** true = Relancer client WA/OTA bloqué (listing). */
+  guestManualSendDisabled?: boolean;
   /** Source résa + arbitrage Email/OTA (srv-fulltask). */
   dispatchContext?: import('./planDispatchPreview').PlanDispatchContext;
   /** Tous les événements (progression globale, filtres legacy). */

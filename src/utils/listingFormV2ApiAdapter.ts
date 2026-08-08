@@ -350,13 +350,18 @@ export function cleanListingImagesForPayload(images: unknown): UnknownRecord[] {
       const url = asString(row.url).trim();
       if (!url) return null;
       const sortOrder = asNumber(row.sortOrder);
-      return {
+      const out: UnknownRecord = {
         fileName: asString(row.fileName),
         imageTypeId: row.imageTypeId ?? '',
         imageTypeRuId: Array.isArray(row.imageTypeRuId) ? row.imageTypeRuId : [],
         sortOrder: sortOrder ?? 0,
         url,
       };
+      // Multi only — association building → roomType(s) pour PutProperty
+      if (Array.isArray(row.roomTypeIds)) {
+        out.roomTypeIds = row.roomTypeIds.map((id) => String(id)).filter(Boolean);
+      }
+      return out;
     })
     .filter((row): row is UnknownRecord => row !== null);
 }
@@ -426,6 +431,40 @@ function cleanRoomTypeRowForApi(row: UnknownRecord): UnknownRecord {
     delete out.rentalPropertyTypeId;
   } else {
     out.rentalPropertyTypeId = ruPt;
+  }
+  const ruObj = asString(out.ruObjectTypeId).trim();
+  if (ruObj) out.ruObjectTypeId = ruObj;
+  else delete out.ruObjectTypeId;
+  const otaName = asString(out.otaDisplayName).trim();
+  if (otaName) out.otaDisplayName = otaName;
+  else delete out.otaDisplayName;
+  if (Array.isArray(out.descriptions)) {
+    out.descriptions = out.descriptions
+      .map((d) => (isRecord(d) ? d : null))
+      .filter(Boolean)
+      .map((d) => {
+        const row = d as UnknownRecord;
+        return {
+          languageRuId: asString(row.languageRuId) || asNumber(row.languageRuId),
+          value: asString(row.value),
+          ...(isMongoObjectId(asString(row.languageId))
+            ? { languageId: asString(row.languageId) }
+            : {}),
+        };
+      });
+  }
+  if (Array.isArray(out.amenitiesIds)) {
+    out.amenitiesIds = out.amenitiesIds
+      .map((row) => {
+        const r = isRecord(row) ? row : {};
+        const rawId = r._id;
+        const id = isRecord(rawId)
+          ? asString(rawId._id ?? rawId.id)
+          : asString(rawId);
+        if (!id) return null;
+        return { _id: id, count: asNumber(r.count) ?? 1 };
+      })
+      .filter(Boolean);
   }
   return out;
 }
@@ -852,7 +891,16 @@ export function mergeFormV2ToUpdatePropertyPayload(
           ? asString(rawId._id ?? rawId.id)
           : asString(rawId);
         if (!id) return null;
-        return { _id: id, count: asNumber(r.count) ?? 1 };
+        const out: UnknownRecord = { _id: id, count: asNumber(r.count) ?? 1 };
+        // Multi only — share flags building → roomTypes
+        if (typeof r.shareToAllRoomTypes === 'boolean') {
+          out.shareToAllRoomTypes = r.shareToAllRoomTypes;
+        }
+        if (Array.isArray(r.roomTypeIds)) {
+          out.roomTypeIds = r.roomTypeIds.map((x) => String(x)).filter(Boolean);
+        }
+        // Ne pas persister amenityData (lookup API) — sinon strip des flags share au re-save.
+        return out;
       })
       .filter(Boolean);
   }

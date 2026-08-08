@@ -34,7 +34,7 @@ export const DETAIL_TABS = [
     { id: 'general',      icon: '🏠', label: 'General Information' },
     { id: 'location',     icon: '📍', label: 'Location & Address' },
     { id: 'photos',       icon: '📸', label: 'Photos & Media' },
-    { id: 'amenities',    icon: '✨', label: 'Équipements' },
+    { id: 'amenities',    icon: '', label: 'Équipements' },
   ]},
   { group: 'Commercial', items: [
     { id: 'pricing',      icon: '💰', label: 'Pricing' },
@@ -64,7 +64,7 @@ export const DETAIL_TABS_MULTI = [
     { id: 'general',      icon: '🏛', label: 'Infos bâtiment' },
     { id: 'location',     icon: '📍', label: 'Adresse' },
     { id: 'photos',       icon: '📸', label: 'Photos' },
-    { id: 'amenities',    icon: '✨', label: 'Équipements communs' },
+    { id: 'amenities',    icon: '', label: 'Équipements' },
   ]},
   { group: 'Commercial', items: [
     { id: 'pricing',      icon: '🛏', label: 'Config Rooms' },
@@ -583,7 +583,7 @@ export default function ListingFormShell({
                   m: 0,
                 }}
               >
-                {activeTabMeta.icon} {activeTabMeta.label}
+                {activeTabMeta.icon ? `${activeTabMeta.icon} ` : ''}{activeTabMeta.label}
               </Typography>
               {tabsStatus[activeTab] && <StatusChip {...tabsStatus[activeTab]} />}
             </Stack>

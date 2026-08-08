@@ -333,11 +333,21 @@ export default function StaffPageView({
     const modes = { ...(form.taskTypeModes || {}) };
     if (on) {
       set.add(key);
+      // Aligné srv-fulltask defaultTaskTypeModeEntry :
+      // ménage = auto_accept + digeste 17h ; accueil = auto start + digeste 17h.
+      const isMenage = [
+        'cleaning_free',
+        'cleaning_paid',
+        'cleaning_sojori',
+        'checkout_cleaning',
+      ].includes(key);
+      const isAccueil = key === 'receive_arrival' || key === 'receive_departure';
       modes[key] = modes[key] || {
-        notifyAssign: true,
-        remindMode: 'individual',
-        autoAccept: false,
-        readyToFinish: false,
+        notifyAssign: false,
+        remindMode: isMenage || isAccueil ? 'daily_digest' : 'individual',
+        digestTime: '17:00',
+        autoAccept: isMenage || isAccueil,
+        readyToFinish: isAccueil,
       };
     } else {
       set.delete(key);
@@ -360,6 +370,7 @@ export default function StaffPageView({
       digestTime: string;
       autoAccept: boolean;
       readyToFinish: boolean;
+      opsRole: 'agent' | 'supervisor';
     }>,
   ) => {
     const prev = form.taskTypeModes?.[key] || {
@@ -367,6 +378,7 @@ export default function StaffPageView({
       remindMode: 'individual' as const,
       autoAccept: false,
       readyToFinish: false,
+      opsRole: 'agent' as const,
     };
     let next = { ...prev, ...patch };
     // Auto accept et Auto start sont orthogonaux (ne pas forcer l’un via l’autre).
@@ -975,7 +987,14 @@ export default function StaffPageView({
                     remindMode: 'individual' as const,
                     autoAccept: false,
                     readyToFinish: false,
+                    opsRole: 'agent' as const,
                   };
+                  const canBeCleaningSupervisor = [
+                    'cleaning_free',
+                    'cleaning_paid',
+                    'cleaning_sojori',
+                    'checkout_cleaning',
+                  ].includes(p.key);
                   return (
                     <div
                       key={p.key}
@@ -1219,6 +1238,39 @@ export default function StaffPageView({
                                 ))}
                               </div>
                             </div>
+
+                            {canBeCleaningSupervisor ? (
+                              <div
+                                className="activity-cfg-item"
+                                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                                title="Superviseur planning : porte le planning ménage sans FdM staff. S’il couvre le listing, l’auto-assignation lui donne la tâche."
+                              >
+                                <span className="nm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                                  Superviseur planning
+                                </span>
+                                <div className="pill-group">
+                                  {(
+                                    [
+                                      { id: 'supervisor' as const, label: 'Oui' },
+                                      { id: 'agent' as const, label: 'Non' },
+                                    ] as const
+                                  ).map((opt) => (
+                                    <button
+                                      key={`ops-${opt.id}`}
+                                      type="button"
+                                      className={`pill-toggle${
+                                        (cfg.opsRole || 'agent') === opt.id ? ' on' : ''
+                                      }`}
+                                      onClick={() =>
+                                        patchTaskTypeCfg(p.key, { opsRole: opt.id })
+                                      }
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       ) : null}

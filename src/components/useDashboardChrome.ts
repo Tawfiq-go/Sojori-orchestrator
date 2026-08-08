@@ -37,9 +37,6 @@ export function useDashboardChrome() {
       if (role === 'worker' || role === 'landlord') return 'my-sched';
       return 'planning';
     }
-    if (path.startsWith('/tasks/kanban')) {
-      return 'tasks/kanban';
-    }
     if (path.startsWith('/tasks/team')) {
       return 'tasks/team';
     }

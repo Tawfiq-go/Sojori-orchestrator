@@ -78,6 +78,11 @@ export interface Staff {
       digestTime?: string;
       autoAccept: boolean;
       readyToFinish: boolean;
+      /**
+       * agent = exécutant FdM · supervisor = coursier owner du planning.
+       * Pertinent pour activités ménage.
+       */
+      opsRole?: 'agent' | 'supervisor';
     }
   >;
   /**
@@ -204,6 +209,8 @@ export interface ScheduledOrchestrationMessage {
     time?: string;
   };
   deliveryChannel: MessageDeliveryChannel;
+  /** auto = scheduler · manual = Relancer 📨 seulement */
+  sendMode?: 'auto' | 'manual';
 }
 
 /** @deprecated — ancien type monolithique */

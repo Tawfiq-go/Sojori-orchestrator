@@ -374,12 +374,32 @@ export async function fetchDashboardListingDirectory(
           (listing.city as { name?: string })?.name || listing.cityName || listing.city || '',
         ).trim();
         if (!id || !name) return null;
+        const propertyUnit = String(listing.propertyUnit || '').trim() || undefined;
+        const rawRoomTypes = Array.isArray(listing.roomTypes) ? listing.roomTypes : [];
+        const roomTypes = rawRoomTypes
+          .map((rt) => {
+            const row = rt as { id?: string; _id?: string; name?: string };
+            const rtId = String(row.id ?? row._id ?? '').trim();
+            const rtName = String(row.name || '').trim();
+            if (!rtId || !rtName) return null;
+            return { id: rtId, name: rtName };
+          })
+          .filter((rt): rt is { id: string; name: string } => rt != null);
+        const roomTypeCount =
+          typeof listing.roomTypeCount === 'number'
+            ? listing.roomTypeCount
+            : roomTypes.length > 0
+              ? roomTypes.length
+              : undefined;
         return {
           id,
           name,
           label: String(listing.label || (city ? `${name} - ${city}` : name)),
           city: city || undefined,
           isActive: (listing.active ?? listing.isActive ?? true) as boolean,
+          propertyUnit,
+          roomTypes: roomTypes.length > 0 ? roomTypes : undefined,
+          roomTypeCount,
         } satisfies DashboardPropertyOption;
       })
       .filter((listing): listing is DashboardPropertyOption => listing != null)
@@ -615,8 +635,19 @@ export async function fetchDashboardV1Charts(
   query: DashboardV1Query,
 ): Promise<Partial<DashboardSnapshot> & { kpis?: Partial<DashboardKpis> }> {
   const snapshot = await fetchDashboardV1Full({ ...query, mode: 'charts' });
+  /** Ne fusionner que les KPIs extras positifs — jamais les compteurs résa à 0 du mode charts. */
+  const kpis: Partial<DashboardKpis> = {};
+  if (snapshot.kpis.occupancyRate.value > 0) kpis.occupancyRate = snapshot.kpis.occupancyRate;
+  if (snapshot.kpis.adr.value > 0) kpis.adr = snapshot.kpis.adr;
+  if (snapshot.kpis.revpar.value > 0) kpis.revpar = snapshot.kpis.revpar;
+  if (snapshot.kpis.activeProperties.value > 0) {
+    kpis.activeProperties = snapshot.kpis.activeProperties;
+  }
+  if (snapshot.kpis.averageRating.value > 0) {
+    kpis.averageRating = snapshot.kpis.averageRating;
+  }
   return {
-    kpis: snapshot.kpis,
+    kpis,
     revenueChart: snapshot.revenueChart,
     sourceDistribution: snapshot.sourceDistribution,
     occupancyByProperty: snapshot.occupancyByProperty,

@@ -176,7 +176,6 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
     items: [
       { id: 'tasks/list', label: 'Liste', iconType: 'check', iconColor: '#93C47D' },
-      { id: 'tasks/kanban', label: 'Kanban', iconType: 'check', iconColor: '#93C47D' },
       { id: 'tasks/team', label: 'Équipe', iconType: 'check', iconColor: '#93C47D', description: 'Staff terrain & admin WhatsApp' },
     ],
   },
@@ -186,14 +185,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     core: true,
     items: [
       { id: 'orch/plans', label: 'Plans par séjour', iconType: 'settings', iconColor: '#666666', badge: 'CORE' },
-      {
-        id: 'orch/day-plan',
-        label: 'Plan de journée',
-        iconType: 'settings',
-        iconColor: '#666666',
-        description: 'Vue orchestration détaillée (triage / fil chronologique)',
-      },
-      { id: 'orch/workflows', label: 'Workflows · config', iconType: 'settings', iconColor: '#666666' },
+      { id: 'orch/workflows', label: 'Messages clients', iconType: 'settings', iconColor: '#666666' },
     ],
   },
   {

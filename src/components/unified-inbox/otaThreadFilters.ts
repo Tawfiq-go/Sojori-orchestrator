@@ -9,9 +9,9 @@ import {
   type StayQuickFilter,
   type StayQuickFilterCounts,
 } from './inboxStayFilters';
-import { hasOtaRealExchange } from './otaExchangePresence';
+import { hasOtaRealExchange, otaThreadNeedsReply } from './otaExchangePresence';
 
-export { hasOtaRealExchange } from './otaExchangePresence';
+export { hasOtaRealExchange, otaThreadNeedsReply } from './otaExchangePresence';
 
 export type OtaStayQuickFilter = StayQuickFilter;
 export type OtaStayQuickFilterCounts = StayQuickFilterCounts;
@@ -170,13 +170,12 @@ export function sortOtaThreadsByActivity(rows: OtaThreadRow[]): OtaThreadRow[] {
   return [...rows].sort((a, b) => threadActivityTimestamp(b) - threadActivityTimestamp(a));
 }
 
-/** Non répondu : messageStatus received (ou legacy pending), ou dernier message entrant. */
+/**
+ * Non répondu — aligné Ma journée / inbox.
+ * Voir `otaThreadNeedsReply` (dernier Q/R réel > messageStatus périmé).
+ */
 export function isOtaUnreplied(row: OtaThreadRow): boolean {
-  const status = normalizeOtaMessageStatus(row.messageStatus);
-  if (status === 'received') return true;
-  if (status === 'responded' || status === 'ignored') return false;
-  if (row.lastMessageIsIncoming === true) return true;
-  return false;
+  return otaThreadNeedsReply(row);
 }
 
 export function applyOtaChannelFilter(
