@@ -19,9 +19,10 @@
 //   [ ] Drag du curseur de positionnement sur la distribution (aujourd'hui : 3 cartes)
 // ════════════════════════════════════════════════════════════════════════════
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
+  Autocomplete,
   Box,
   Chip,
   CircularProgress,
@@ -43,11 +44,13 @@ import PriceTicket from './PriceTicket';
 import {
   fetchPricingV2Config,
   fetchPricingV2Market,
+  fetchPricingV2Portfolio,
   fetchPricingV2Preview,
   savePricingV2Config,
   type PricingV2Config,
   type PricingV2Day,
   type PricingV2Market,
+  type PricingV2PortfolioRow,
   type PricingV2Result,
 } from './api';
 
@@ -86,6 +89,7 @@ const CALENDAR_MONTHS = 6;
 
 export default function PricingV2Page() {
   const { listingId } = useParams<{ listingId: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   // Mécanique du calcul nocturne (shadow/AirROI) = admin only, cf. DynamicPricingPage.
   // L'owner ne doit ni voir ni savoir que ce calcul existe (Tawfiq, 07/08/2026).
@@ -105,6 +109,17 @@ export default function PricingV2Page() {
   const [dragging, setDragging] = useState(false);
   /** Sur les nuits VENDUES : afficher le prix payé (figé) ou le prix du moteur. */
   const [showBookedPrices, setShowBookedPrices] = useState(true);
+  /** Liste { listingId, name } pour le sélecteur — chargée UNE fois, jamais
+   *  reliée à `reload()` : changer de bien ne doit ni re-fetcher le portfolio
+   *  ni naviguer vers /pricing-v2 (l'atterrissage), juste changer l'URL. */
+  const [allListings, setAllListings] = useState<PricingV2PortfolioRow[]>([]);
+  useEffect(() => {
+    void fetchPricingV2Portfolio()
+      .then((r) => setAllListings(r.data.success ? r.data.rows : []))
+      .catch(() => setAllListings([]));
+  }, []);
+  const currentListingName =
+    allListings.find((r) => r.listingId === listingId)?.name ?? null;
 
   const reload = useCallback(async () => {
     if (!listingId) return;
@@ -250,14 +265,40 @@ export default function PricingV2Page() {
           respiration. Le plafond à 1240 px bridait le calendrier sur grand
           écran alors que c'est la zone qui a le plus besoin de place. */}
       <Box sx={{ maxWidth: 1800, mx: 'auto' }}>
-      {/* ── En-tête ── */}
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-        <Typography sx={{ fontWeight: 750, fontSize: 20, color: T.ink }}>
-          Prix dynamiques
-          <Box component="span" sx={{ ml: 1, ...kickerSx, color: T.gold }}>
-            v2 · bêta
-          </Box>
-        </Typography>
+      {/* ── En-tête + nom du bien + sélecteur ── */}
+      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexWrap: 'wrap', gap: 1.5 }}>
+        <Box>
+          <Typography sx={{ fontWeight: 750, fontSize: 20, color: T.ink }}>
+            Prix dynamiques
+            <Box component="span" sx={{ ml: 1, ...kickerSx, color: T.gold }}>
+              v2 · bêta
+            </Box>
+          </Typography>
+          {currentListingName ? (
+            <Typography sx={{ fontSize: 14, color: T.ink2, mt: 0.25 }}>
+              {currentListingName}
+            </Typography>
+          ) : null}
+        </Box>
+        {/* Changer de bien SANS repasser par le portfolio (/pricing-v2) — juste
+            une navigation directe vers /pricing-v2/bien/:id. Recherche par nom
+            (Autocomplete filtre déjà en tapant, pas besoin de logique perso). */}
+        {allListings.length > 0 ? (
+          <Autocomplete
+            options={allListings}
+            getOptionLabel={(o) => o.name}
+            value={allListings.find((r) => r.listingId === listingId) ?? null}
+            onChange={(_, next) => {
+              if (next) navigate(`/pricing-v2/bien/${next.listingId}`);
+            }}
+            isOptionEqualToValue={(o, v) => o.listingId === v.listingId}
+            size="small"
+            sx={{ width: { xs: '100%', sm: 320 } }}
+            renderInput={(params) => (
+              <TextField {...params} placeholder="Changer de bien…" />
+            )}
+          />
+        ) : null}
       </Stack>
 
       {/* ── Hero sur DEUX colonnes ──────────────────────────────────────────
