@@ -27,10 +27,15 @@ const PCT_STEPS = [-30, -20, -15, -10, -5, 5, 10, 15, 20, 30];
 export default function RangeActionBar({
   fromDate,
   toDate,
-  /** Nuits modifiables (réservées exclues). */
+  /** Nuits de la plage — TOUTES reçoivent la consigne (réservées incluses). */
   nbDays,
-  /** Nuits réservées dans la plage — annoncées pour lever toute ambiguïté. */
+  /** Réservées dans la plage : la consigne s'y applique pour l'après-annulation. */
   nbBooked = 0,
+  /** Bloquées dans la plage : idem, la consigne sert au déblocage. */
+  nbBlocked = 0,
+  /** Glisser en cours : la barre reste montée mais en retrait (pas de démontage,
+   *  sinon le champ « MAD » se vide et la page saute à chaque geste). */
+  dragging = false,
   onApply,
   onCancel,
   busy,
@@ -39,6 +44,8 @@ export default function RangeActionBar({
   toDate: string;
   nbDays: number;
   nbBooked?: number;
+  nbBlocked?: number;
+  dragging?: boolean;
   onApply: (a: RangeAction) => void;
   onCancel: () => void;
   busy?: boolean;
@@ -69,6 +76,11 @@ export default function RangeActionBar({
         p: 1.75,
         mb: 1.5,
         position: 'relative',
+        // Pendant le glisser : lisible (les dates suivent le geste) mais non
+        // cliquable, pour ne pas capter le relâchement de la souris.
+        opacity: dragging ? 0.6 : 1,
+        pointerEvents: dragging ? 'none' : 'auto',
+        transition: 'opacity 120ms',
       }}
     >
       {/* ✕ ancré dans le coin : en flux, il retombait sur une 3e ligne. */}
@@ -99,8 +111,18 @@ export default function RangeActionBar({
         <Typography sx={{ fontSize: 14.5, fontWeight: 750, color: T.ink }}>
           {fmt(fromDate)} → {fmt(toDate)}
           <Box component="span" sx={{ fontWeight: 400, color: T.ink2, ml: 1 }}>
-            · {nbDays} nuit{nbDays > 1 ? 's' : ''} libre{nbDays > 1 ? 's' : ''}
-            {nbBooked > 0 ? ` (${nbBooked} réservée${nbBooked > 1 ? 's' : ''} ignorée${nbBooked > 1 ? 's' : ''})` : ''}
+            · {nbDays} nuit{nbDays > 1 ? 's' : ''}
+            {/* On annonce réservées/bloquées sans dire « ignorées » : la consigne
+                s'applique bien à elles, elle prendra effet au déblocage ou à
+                l'annulation (le prix encaissé d'une résa ne change pas). */}
+            {nbBooked > 0 || nbBlocked > 0
+              ? ` (dont ${[
+                  nbBooked > 0 ? `${nbBooked} réservée${nbBooked > 1 ? 's' : ''}` : null,
+                  nbBlocked > 0 ? `${nbBlocked} bloquée${nbBlocked > 1 ? 's' : ''}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' et ')} — la consigne s'appliquera à la libération)`
+              : ''}
           </Box>
         </Typography>
 

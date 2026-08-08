@@ -877,13 +877,11 @@ export default function PricingV2Page() {
                     // nuits. On les signale explicitement — c'est de l'argent qui
                     // dort, invisible autrement.
                     const gap = d.gap;
-                    const borderCol = gap
-                      ? T.crit
-                      : booked
-                        ? T.manual
-                        : inRange(d.date)
-                          ? T.manual
-                          : T.line;
+                    const picked = inRange(d.date);
+                    // La sélection PRIME sur l'état : avant, une nuit réservée
+                    // sélectionnée gardait la même bordure `T.manual` que non
+                    // sélectionnée — le PM ne voyait pas ce qu'il avait pris.
+                    const borderCol = picked ? T.goldPure : gap ? T.crit : booked ? T.manual : T.line;
                     return (
                       <Box
                         key={d.date}
@@ -898,6 +896,14 @@ export default function PricingV2Page() {
                           // un glisser (sinon la sélection restait coincée).
                           if (e.button !== 0) return;
                           e.currentTarget.releasePointerCapture(e.pointerId);
+                          // Maj + clic = étendre depuis l'ancre existante. Sur 6
+                          // mois affichés, un glisser de septembre à février est
+                          // impraticable ; c'est le geste attendu d'un tableur.
+                          if (e.shiftKey && sel) {
+                            movedRef.current = true;
+                            setSel({ from: sel.from, to: d.date });
+                            return;
+                          }
                           setDragging(true);
                           movedRef.current = false;
                           setSel({ from: d.date, to: d.date });
@@ -911,6 +917,9 @@ export default function PricingV2Page() {
                         }}
                         onPointerUp={(e) => {
                           if (e.button !== 0) return;
+                          // Maj + clic vient d'étendre la plage : ne pas ouvrir le
+                          // ticket ni effacer ce qu'on vient de sélectionner.
+                          if (e.shiftKey) return;
                           setDragging(false);
                           // Clic sans déplacement = consultation, pas sélection.
                           if (!movedRef.current) {
@@ -939,6 +948,7 @@ export default function PricingV2Page() {
                             : blocked
                               ? `${d.date} — bloqué (fermé à la vente)`
                               : `${d.date} — ${d.price} MAD (marché : ${Math.round(d.comp)})`) +
+                          ' · clic : détail du prix · glisser ou Maj+clic : sélectionner une plage' +
                           ' · clic droit : voir dans "Le marché, et vous dessus"'
                         }
                         sx={{
@@ -950,13 +960,28 @@ export default function PricingV2Page() {
                           py: 0.4,
                           fontSize: 11.5,
                           fontFamily: T.mono,
-                          color: blocked ? T.mut : T.ink,
-                          opacity: blocked ? 0.7 : 1,
+                          color: blocked && !picked ? T.mut : T.ink,
+                          // Une nuit bloquée SÉLECTIONNÉE doit être aussi lisible
+                          // que les autres : elle reçoit bien la consigne de prix.
+                          opacity: blocked && !picked ? 0.7 : 1,
                           border: `1px solid ${borderCol}`,
-                          bgcolor: inRange(d.date) ? T.manualBg : bg,
+                          // Le fond garde l'ÉTAT (vendu / bloqué / niveau de prix) :
+                          // seul le contour dit la sélection, sinon on perdait
+                          // l'information métier en sélectionnant.
+                          bgcolor: bg,
                           borderBottom: d.breakdown.clamped
                             ? `2px solid ${T.crit}`
                             : `1px solid ${borderCol}`,
+                          // Contour épais + halo : visible sur TOUS les fonds,
+                          // y compris les nuits réservées et bloquées.
+                          ...(picked
+                            ? {
+                                outline: `2px solid ${T.goldPure}`,
+                                outlineOffset: -1,
+                                boxShadow: `inset 0 0 0 2px ${T.manualBg}`,
+                                fontWeight: 700,
+                              }
+                            : {}),
                           '&:hover': { outline: `1.5px solid ${T.gold}` },
                         }}
                       >
