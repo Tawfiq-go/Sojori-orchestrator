@@ -522,17 +522,20 @@ th.twv-today .twv-day-num {
   width: 120px;
   min-width: 120px;
   max-width: 120px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
-/* 3 colonnes kanban par cellule → ~100px par colonne pour rester lisible ;
+/* 3 colonnes kanban par cellule → ~80px / colonne ;
    le scroll horizontal de .twv-scroll absorbe la largeur totale.
    Séparateur franc + fond alterné : sans ça on perd la frontière de journée
    au milieu des 3 sous-colonnes quand on scrolle. */
 .twv-enriched .twv-day-cell,
 .twv-enriched .twv-day-head {
-  width: 360px;
-  min-width: 360px;
-  max-width: 360px;
+  width: 252px;
+  min-width: 252px;
+  max-width: 252px;
+  padding: 3px 2px;
   border-left: 2px solid rgba(26, 22, 17, 0.18);
 }
 .twv-enriched .twv-day-cell:last-child,
@@ -564,26 +567,32 @@ th.twv-today .twv-day-num {
 }
 
 /* 3 colonnes kanban dans chaque cellule staff × jour.
-   Chaque colonne est une zone de dépôt large (glisser = changer de statut). */
+   minmax(0,1fr) + min-width:0 : les chips ne forcent pas la largeur hors cellule. */
 .twv-cell-kanban {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
   align-items: start;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 .twv-kcol {
-  min-height: 48px;
-  border-radius: 6px;
-  padding: 5px 4px;
+  min-width: 0;
+  min-height: 36px;
+  border-radius: 4px;
+  padding: 3px 2px;
   border: 1px dashed transparent;
   transition: background 0.12s, border-color 0.12s;
+  overflow: hidden;
 }
 .twv-kcol-h {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   text-align: center;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   white-space: nowrap;
+  line-height: 1.2;
 }
 .twv-kcol--waiting-start {
   background: #eef3fd;
@@ -611,9 +620,25 @@ th.twv-today .twv-day-num {
    Le badge « → Commencer » et le statut courant sont redondants ici : la
    colonne porte déjà l'information. Le détail reste dans le title + le menu. */
 .twv-cell-kanban .twv-chip {
-  font-size: 10px;
-  padding: 4px 6px;
-  margin-bottom: 4px;
+  font-size: 9px;
+  line-height: 1.2;
+  padding: 2px 4px;
+  margin-bottom: 2px;
+  border-left-width: 2px;
+  border-radius: 0 4px 4px 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.twv-cell-kanban .twv-chip-head {
+  gap: 2px;
+  margin-bottom: 0;
+}
+.twv-cell-kanban .twv-chip-time {
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .twv-cell-kanban .twv-chip-status,
 .twv-cell-kanban .twv-chip-lc {
@@ -622,12 +647,13 @@ th.twv-today .twv-day-num {
 /* Nom de l'annonce conservé sur chaque tâche — repère métier essentiel. */
 .twv-cell-kanban .twv-chip-listing {
   display: block;
-  font-size: 8.5px;
-  line-height: 1.25;
+  font-size: 7.5px;
+  line-height: 1.2;
   opacity: 0.75;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* Annonces accessibles, sous le nom du staff. */

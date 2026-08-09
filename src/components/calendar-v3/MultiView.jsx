@@ -54,14 +54,40 @@ function dayChannelColors(inv) {
   return CHANNEL_COLORS[reservationChannelKind(pick?.channelName, pick?.status)];
 }
 
+/** Résa overlay couvre-t-elle ce jour calendaire (arrivée inclusive, départ exclusif) ? */
+function dayHasRoomResa(reservations, iso) {
+  if (!Array.isArray(reservations) || !iso) return false;
+  return reservations.some((r) => {
+    const arr = isoDay(r.arrivalDate);
+    const dep = isoDay(r.departureDate);
+    return Boolean(arr && dep && arr <= iso && iso < dep);
+  });
+}
+
 /**
  * Fond cellule inventaire (dispo / bloqué).
  * Les résas ne teintent plus la cellule : pastilles / barres Gantt (comme /planning).
+ *
+ * Lignes room : on hérite du statut inventaire du roomType (pool / stopSell).
+ * - occupée (barre) → blanc (la barre porte l’info)
+ * - type fermé (0 / stopSell) → hachuré — pas « faux disponible »
+ * - type ouvert + pas de barre → blanc = libre / réservable
+ * (aligné mental model Mews : resource free | occupied | blocked)
  */
-function inventoryStatusBackground(state, inv) {
+function inventoryStatusBackground(state, inv, opts = {}) {
+  const { roomRow = false, roomOccupied = false } = opts;
   if (state === 'out_of_window') return OUT_OF_WINDOW_CELL_BG;
   if (state === 'archive') return ARCHIVE_CELL_BG;
   if (state === 'missing' || !hasInventoryData(inv)) return T.bg2;
+  if (roomRow) {
+    if (roomOccupied) return CELL_BG.available;
+    const isStop = inv?.stopSell === true;
+    const ar = inv?.availableRoom;
+    const isZero = ar != null && Number(ar) <= 0;
+    const isClosed = inv?.available === false;
+    if (isStop || isZero || isClosed) return CELL_BG.blocked;
+    return CELL_BG.available;
+  }
   // Jour avec résa → fond neutre (la barre / pastille porte la couleur OTA)
   if ((inv?.reservations?.length ?? 0) > 0) return CELL_BG.available;
   const isStop = inv?.stopSell === true;
@@ -834,8 +860,8 @@ export default function MultiView({
           <Legend dot={CHANNEL_COLORS.booking.accent} label="Résa Booking" />
           <Legend dot={CHANNEL_COLORS.sojori.accent} label="Résa Sojori" />
           <Legend dot={CHANNEL_COLORS.other.accent} label="Autre canal" />
-          <Legend dot="repeating-linear-gradient(-45deg, rgba(136,135,128,0.6), rgba(136,135,128,0.6) 2px, transparent 2px, transparent 4px)" label="Bloqué" />
-          <Legend dot="#fff" dotBorder label="Disponible" />
+          <Legend dot="repeating-linear-gradient(-45deg, rgba(136,135,128,0.6), rgba(136,135,128,0.6) 2px, transparent 2px, transparent 4px)" label="Bloqué (type fermé / stop sell)" />
+          <Legend dot="#fff" dotBorder label="Disponible (room vide = libre)" />
           <Legend dot="#b91c1c" label="Import calendrier à finir" />
           <span style={{ color: T.text3, fontWeight: 600 }}>Lettres : M = manuel · D = dynamique</span>
           <Legend dot={ARCHIVE_CELL_BG} label="Historique (lecture seule)" />
@@ -1011,7 +1037,7 @@ export default function MultiView({
                             _isRoomRow: true,
                           }}
                           dpEnabled={false}
-                          inventories={{}}
+                          inventories={rt.availability || {}}
                           overlayLineReservations={rtResas}
                           days={days}
                           leftW={LEFT_W}
@@ -1070,7 +1096,7 @@ export default function MultiView({
                                   _isRoomRow: true,
                                 }}
                                 dpEnabled={false}
-                                inventories={{}}
+                                inventories={rt.availability || {}}
                                 overlayLineReservations={roomResas}
                                 days={days}
                                 leftW={LEFT_W}
@@ -1592,7 +1618,7 @@ function ListingRow({
 
   /**
    * Calendrier Multi = dispo (building / roomType).
-   * Barres résa uniquement : ligne room (filtre Rés.) ou Single unité.
+   * Rooms : héritent inventaire du type pour hachures ; barres = occupation réelle.
    */
   const isMultiHotelParent = hideDetailCollapse && !isRoomTypeRow && !isRoomRow;
   // Jamais de barres sur building / roomType. Rooms (ou Single + filtre Rés.) via overlay prop.
@@ -1600,8 +1626,10 @@ function ListingRow({
     if (isMultiHotelParent || isRoomTypeRow) return [];
     return Array.isArray(overlayLineReservations) ? overlayLineReservations : [];
   }, [overlayLineReservations, isMultiHotelParent, isRoomTypeRow]);
-  const resaOverlayMode = lineReservations.length > 0 ? 'bars' : 'none';
-  const primaryRowH = resaOverlayMode === 'bars' ? 48 : (isRoomRow ? 36 : 32);
+  // Rooms : toujours assez haut pour barres éventuelles + fond bloqué lisible
+  const resaOverlayMode =
+    isRoomRow || lineReservations.length > 0 ? (lineReservations.length > 0 ? 'bars' : 'none') : 'none';
+  const primaryRowH = isRoomRow || resaOverlayMode === 'bars' ? 48 : 32;
 
   return (
     <div>
@@ -1652,11 +1680,12 @@ function ListingRow({
               futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS,
             });
             const draggable = !isRoomRow && cellState === 'data';
+            const roomOccupied = isRoomRow && dayHasRoomResa(lineReservations, d.iso);
             return (
               <PrimaryInventoryCell
                 key={d.iso}
                 day={d}
-                inv={isRoomRow ? {} : inv}
+                inv={inv}
                 listing={listing}
                 showRate={isRoomRow ? false : showRate}
                 showDispo={isRoomRow ? false : showDispo}
@@ -1669,6 +1698,7 @@ function ListingRow({
                 roomTypeId={roomTypeId}
                 draggable={draggable}
                 dpEnabled={dpEnabled}
+                roomOccupied={roomOccupied}
                 tipOpen={
                   activeTip?.listingId === listing._id &&
                   activeTip?.dateStr === d.iso &&
@@ -1941,6 +1971,7 @@ function PrimaryInventoryCell({
   day, inv, listing, showRate, showDispo, rowHeight = 32,
   isSelected, onMouseDown, onMouseEnter, onPriceClick,
   listingId, roomTypeId, draggable, tipOpen, dpEnabled = true,
+  roomOccupied = false,
 }) {
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
@@ -1948,7 +1979,7 @@ function PrimaryInventoryCell({
   const isRoomRow = Boolean(listing._isRoomRow);
   const isMultiHotelParent =
     listing.propertyUnit === 'Multi' && !isRoomTypeRow && !isRoomRow;
-  // Room : uniquement barres overlay — pas de tarif / dispo inventaire.
+  // Room : pas de tarif / chiffre dispo — fond hérité du type (bloqué vs libre).
   // Building : jamais de tarif. RoomType / Single : tarif si filtre Tarif.
   const effectiveShowRate = Boolean(showRate) && !isMultiHotelParent && !isRoomRow;
   // Dispo sur building (somme) + roomType ; Single classique : aussi si filtre Dispo.
@@ -1967,8 +1998,12 @@ function PrimaryInventoryCell({
 
   const blocksById = useContext(CalendarBlocksContext);
   const dayBlock = inv?.blockId ? blocksById[String(inv.blockId)] : null;
-  const blockInfo = state === 'data' ? blockedNoResaInfo(inv, dayBlock) : null;
-  const background = inventoryStatusBackground(state, inv);
+  // Room : pas de tooltip « bloqué canal » du type (évite bruit) ; fond suffit.
+  const blockInfo = !isRoomRow && state === 'data' ? blockedNoResaInfo(inv, dayBlock) : null;
+  const background = inventoryStatusBackground(state, inv, {
+    roomRow: isRoomRow,
+    roomOccupied: Boolean(roomOccupied),
+  });
   const accentShadow = channelAccentShadow(state, inv);
   // Inventaire en haut, place libre en bas (barres roomType OU pastilles building)
   const stackForBars = rowHeight >= 38;

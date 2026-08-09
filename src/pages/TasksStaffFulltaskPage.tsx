@@ -114,10 +114,12 @@ function TasksStaffFulltaskPageInner() {
   const scope = useMemo(() => resolveTasksUserScope(user), [user]);
   const filterOwnerId = useMemo(
     () =>
-      scope.canAccessAllOwners
-        ? normalizeOwnerId(requestOwnerId) || undefined
-        : normalizeOwnerId(scope.ownerId),
-    [scope.canAccessAllOwners, scope.ownerId, requestOwnerId],
+      // requestOwnerId suit déjà getPropertyOwnerScopeId (Owner = _id compte).
+      // Ne pas retomber sur un scope.ownerId dérivé de user.ownerId (bug liste staff vide).
+      normalizeOwnerId(requestOwnerId) ||
+      (scope.canAccessAllOwners ? undefined : normalizeOwnerId(scope.ownerId)) ||
+      undefined,
+    [requestOwnerId, scope.canAccessAllOwners, scope.ownerId],
   );
 
   const [hubTab, setHubTab] = useState<HubTab>(() => hubTabFromParam(searchParams.get('tab')));
@@ -201,14 +203,25 @@ function TasksStaffFulltaskPageInner() {
           params.ownerId = filterOwnerId;
         }
         const staffRes = await fulltaskApi.listStaff(params);
-        let rows = (staffRes?.data || []) as Record<string, unknown>[];
-        if (filterOwnerId) {
-          rows = rows.filter((r) => {
-            const oid = normalizeOwnerId(r.ownerId);
-            return !oid || oid === filterOwnerId;
+        // Le backend scope déjà (Owner JWT / ?ownerId admin) — pas de refiltre client
+        // qui peut vider la liste si filterOwnerId ≠ staff.ownerId.
+        const rows = (staffRes?.data || []) as Record<string, unknown>[];
+        const mapped: Staff[] = [];
+        for (const r of rows) {
+          try {
+            mapped.push(apiStaffToDesign(r) as Staff);
+          } catch (err) {
+            console.error('[tasks/team] apiStaffToDesign failed', r?._id, r?.name, r?.phone, err);
+          }
+        }
+        if (import.meta.env.DEV) {
+          console.log('[tasks/team] listStaff', {
+            filterOwnerId: filterOwnerId || null,
+            count: mapped.length,
+            skipped: rows.length - mapped.length,
           });
         }
-        setStaff(rows.map((r) => apiStaffToDesign(r) as Staff));
+        setStaff(mapped);
       } catch (e: unknown) {
         const err = e as { message?: string };
         toast.error(err.message || 'Erreur chargement équipe');

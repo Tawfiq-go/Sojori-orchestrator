@@ -353,7 +353,7 @@ export default function StaffScheduleListView({
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    let list = staff.filter((s) => s.status !== 'off');
+    let list = staff.filter((s) => s.status === 'active' || s.status === 'off');
 
     if (needle) {
       list = list.filter(

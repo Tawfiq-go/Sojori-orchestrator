@@ -447,16 +447,17 @@ export default function TeamWeekView({
   }, [tasks, cityFilterId, listingFilterId, listingsInCity]);
 
   const eligibleStaff = useMemo(() => {
-    const active = staff.filter((s) => s.status === 'active');
+    // Actifs + inactifs (off) — comme avant ; le crash Config était taskTypeModes objet, pas ce filtre.
+    const base = staff.filter((s) => s.status === 'active' || s.status === 'off');
     if (listingFilterId && selectedListing) {
-      return active.filter((s) =>
+      return base.filter((s) =>
         staffMatchesListingAccess(s, selectedListing.id, selectedListing.cityId),
       );
     }
     if (cityFilterId) {
-      return active.filter((s) => staffMatchesCityAccess(s, cityFilterId, listingsInCity));
+      return base.filter((s) => staffMatchesCityAccess(s, cityFilterId, listingsInCity));
     }
-    return active;
+    return base;
   }, [staff, listingFilterId, selectedListing, cityFilterId, listingsInCity]);
 
   const scopeLabel = useMemo(() => {
@@ -1108,7 +1109,7 @@ export default function TeamWeekView({
     return (
       <tr
         key={row.key}
-        className={`twv-row${row.unassigned ? ' twv-row--unassigned' : ''}${!row.unassigned && row.total === 0 ? ' twv-row--idle' : ''}${isDropTarget || unassignDropOk ? ' twv-row--drop' : ''}${isDropDenied || unassignDropDenied ? ' twv-row--drop-denied' : ''}${dimWhileDrag ? ' twv-row--no-access' : ''}${focusLifecycle !== 'all' ? ' twv-row--focused' : ''}`}
+        className={`twv-row${row.unassigned ? ' twv-row--unassigned' : ''}${!row.unassigned && row.total === 0 ? ' twv-row--idle' : ''}${!row.unassigned && row.staff?.status === 'off' ? ' twv-row--off' : ''}${isDropTarget || unassignDropOk ? ' twv-row--drop' : ''}${isDropDenied || unassignDropDenied ? ' twv-row--drop-denied' : ''}${dimWhileDrag ? ' twv-row--no-access' : ''}${focusLifecycle !== 'all' ? ' twv-row--focused' : ''}`}
         onDragOver={
           sid
             ? (e) => onStaffDragOver(sid, e)

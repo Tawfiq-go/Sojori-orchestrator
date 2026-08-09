@@ -601,8 +601,17 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
           opsRole?: 'agent' | 'supervisor';
         }
       > = {};
-      const rows =
-        (row.taskTypeModes as Array<Record<string, unknown>> | undefined) || [];
+      // API/Mongo : tableau [{ taskType, ... }] OU map legacy { [taskType]: {...} }
+      // (Lab +33 stocké en objet → crash for…of si on ne normalise pas).
+      const rawModes = row.taskTypeModes;
+      const rows: Record<string, unknown>[] = Array.isArray(rawModes)
+        ? (rawModes as Record<string, unknown>[])
+        : rawModes && typeof rawModes === 'object'
+          ? Object.entries(rawModes as Record<string, unknown>).map(([taskType, cfg]) => ({
+              taskType,
+              ...((cfg && typeof cfg === 'object' ? cfg : {}) as Record<string, unknown>),
+            }))
+          : [];
       for (const m of rows) {
         const t = String(m.taskType || '').trim();
         if (!t) continue;

@@ -251,6 +251,66 @@ export async function getOrchestrationConfig(
   return data;
 }
 
+/** Aperçu texte catalogue (OTA/email) sur la dernière résa du PM — avec / sans taxe. */
+export async function previewCatalogMessage(
+  ownerId: string,
+  body: {
+    catalogId: string;
+    channel: 'ota' | 'email';
+    messageFr?: string;
+    signature?: string;
+  },
+): Promise<{
+  success: boolean;
+  error?: string;
+  data?: {
+    reservation: {
+      id: string;
+      number: string;
+      guestName: string;
+      listingName: string;
+      arrivalDate: string;
+      departureDate: string;
+      nights: number;
+      channelName?: string;
+    };
+    catalogId: string;
+    channel: 'ota' | 'email';
+    cityTaxWouldCollect: boolean;
+    withTax: string;
+    withoutTax: string;
+    checkoutInstructionsPreview?: string;
+  };
+}> {
+  const { data } = await apiClient.post(
+    `${BASE}/orchestration/${encodeURIComponent(ownerId)}/catalog-message-preview`,
+    body,
+    { timeout: ORCH_HTTP_TIMEOUT_MS, validateStatus: () => true },
+  );
+  return data as {
+    success: boolean;
+    error?: string;
+    data?: {
+      reservation: {
+        id: string;
+        number: string;
+        guestName: string;
+        listingName: string;
+        arrivalDate: string;
+        departureDate: string;
+        nights: number;
+        channelName?: string;
+      };
+      catalogId: string;
+      channel: 'ota' | 'email';
+      cityTaxWouldCollect: boolean;
+      withTax: string;
+      withoutTax: string;
+      checkoutInstructionsPreview?: string;
+    };
+  };
+}
+
 export async function upsertOrchestrationConfig(ownerId: string, body: Record<string, unknown>) {
   const { data } = await apiClient.put(`${BASE}/orchestration/${ownerId}`, body, { timeout: ORCH_HTTP_TIMEOUT_MS,
   });

@@ -1,6 +1,7 @@
 import apiClient from './apiClient';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 import { hasAdminAccess } from '../utils/rbac.utils';
+import { getPropertyOwnerScopeId } from '../utils/taskScope.utils';
 import type {
   ReservationTasksResult,
   StaffAssignmentsResult,
@@ -61,11 +62,8 @@ export function resolveTasksUserScope(user: TasksAuthLikeUser | null | undefined
     return { ownerId: undefined, canAccessAllOwners: true, role };
   }
 
-  const ownerId =
-    user?.ownerId ||
-    user?.theOwnerId ||
-    user?.id ||
-    user?._id;
+  // Owner → _id du compte ; Worker/Landlord → ownerId employeur
+  const ownerId = getPropertyOwnerScopeId(user) || user?.id || user?._id;
 
   if (ownerId) {
     return { ownerId: String(ownerId), canAccessAllOwners: false, role };

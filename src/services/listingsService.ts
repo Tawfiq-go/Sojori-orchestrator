@@ -390,6 +390,8 @@ function normalizeListingSummary(source: unknown): ListingSummary {
       const mapped = rts
         .map((rt) => {
           const row = asRecord(rt);
+          // Belt: inactive room types must not feed calendar / task planning rows
+          if (row.active === false) return null;
           const id = asString(row._id || row.id);
           const name = pickFirstString(row, ['otaDisplayName', 'roomTypeName', 'name']);
           if (!id || !name) return null;

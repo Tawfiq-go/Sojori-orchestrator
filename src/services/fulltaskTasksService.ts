@@ -6,7 +6,10 @@ import { LEGACY_TO_FULLTASK_STATUS, fullTaskToListItem } from '../utils/fulltask
 import type { ReservationMetaLike } from '../utils/fulltaskMappers';
 import type { TaskFulltaskUpdatePayload, TaskListItem, TasksSearchParams } from '../types/tasks.types';
 import { toLegacyAuthUser } from '../utils/legacyAuthUser';
-import { canSelectOwnerInAdminFilter } from '../utils/taskScope.utils';
+import {
+  canSelectOwnerInAdminFilter,
+  getPropertyOwnerScopeId,
+} from '../utils/taskScope.utils';
 
 export interface TasksAuthLikeUser {
   id?: string;
@@ -26,8 +29,8 @@ export function resolveTasksUserScope(user: TasksAuthLikeUser | null | undefined
   if (canSelectOwnerInAdminFilter(legacy)) {
     return { ownerId: undefined, canAccessAllOwners: true, role };
   }
-  const ownerId =
-    legacy?.ownerId || user?.ownerId || user?.theOwnerId || legacy?.id || user?.id || user?._id;
+  // Owner → compte _id ; Worker/Landlord → ownerId employeur (pas user.ownerId en premier pour Owner)
+  const ownerId = getPropertyOwnerScopeId(legacy);
   return {
     ownerId: ownerId ? String(ownerId) : undefined,
     canAccessAllOwners: false,

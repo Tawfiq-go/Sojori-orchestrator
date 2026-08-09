@@ -73,6 +73,8 @@ interface Props {
   guestMessageSignature?: string;
   onGuestMessageSignatureChange?: (value: string) => void;
   ownerScopeExtra?: ReactNode;
+  /** Owner courant — requis pour aperçu sur vraie réservation. */
+  previewOwnerId?: string;
 }
 
 function OrchPlanSaveRow({
@@ -137,6 +139,7 @@ export default function OrchestrationPageView({
   guestMessageSignature = '',
   onGuestMessageSignatureChange,
   ownerScopeExtra,
+  previewOwnerId,
 }: Props) {
   const sortableSensors = useOrchSortableSensors();
   const [subTab, setSubTab] = useState<OrchestrationSubTab>(initialSubTab);
@@ -162,24 +165,54 @@ export default function OrchestrationPageView({
   const [previewField, setPreviewField] = useState<'ota' | 'email'>('ota');
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
   /** Champ texte actif pour y insérer une variable Sojori. */
-  const [activeEditField, setActiveEditField] = useState<'ota' | 'email'>('ota');
+  const [activeEditField, setActiveEditField] = useState<'body' | 'title' | 'ota' | 'email'>('body');
   const otaTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const emailTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  /** Garde la position du curseur (le clic variable retire le focus → selectionStart=0). */
+  const bodyCaretRef = useRef<{ start: number; end: number } | null>(null);
+  const titleCaretRef = useRef<{ start: number; end: number } | null>(null);
+
+  const rememberCaret = (
+    el: HTMLTextAreaElement | HTMLInputElement | null,
+    store: { current: { start: number; end: number } | null },
+  ) => {
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? start;
+    store.current = { start, end };
+  };
 
   const previewCatalog = catalog.find((c) => c.id === previewCatalogId);
   const journeyGroups = useMemo(() => groupCatalog(catalog), [catalog]);
 
-  const previewWithSignature = (text: string) => {
-    const body = String(text || '').trimEnd();
-    const sig = String(guestMessageSignature || '').trim();
-    if (!body || !sig) return body;
-    const lower = body.toLowerCase();
-    const sigLower = sig.toLowerCase();
-    if (lower.endsWith(sigLower) || lower.endsWith(`— ${sigLower}`)) return body;
-    return `${body}\n\n— ${sig}`;
+  /** Met à jour le corps unique (OTA = email sans objet). */
+  const patchSharedBody = (entry: CatalogMessage, nextBody: string) => {
+    const { subject } = parseEmailSubjectAndBody(entry.messageFrEmail);
+    const fallbackSubject =
+      subject ||
+      (entry.id === 'welcome_sojori_v2'
+        ? 'Bienvenue — {listingName} · {reservationNumber}'
+        : '');
+    onUpdateCatalogEntry(entry.id, {
+      messageFrOta: nextBody,
+      messageFrEmail: withEmailSubject(fallbackSubject, nextBody),
+    });
   };
 
-  const renderCatalogForm = (entry: CatalogMessage) => (
+  const patchEmailTitle = (entry: CatalogMessage, nextSubject: string) => {
+    const body = String(entry.messageFrOta || '').trimEnd();
+    onUpdateCatalogEntry(entry.id, {
+      messageFrEmail: withEmailSubject(nextSubject, body),
+    });
+  };
+
+  const renderCatalogForm = (entry: CatalogMessage) => {
+    const { subject: emailTitle } = parseEmailSubjectAndBody(entry.messageFrEmail);
+    const sharedBody = String(entry.messageFrOta || '');
+
+    return (
     <div className="msg-form msg-form--catalog" onClick={(e) => e.stopPropagation()}>
       {pmSafeMode ? null : (
         <>
@@ -236,169 +269,188 @@ export default function OrchestrationPageView({
 
       {pmSafeMode ? (
         <PmVariablePicker
-          targetLabel={activeEditField === 'ota' ? 'Message OTA' : 'Message Email'}
+          targetLabel={
+            activeEditField === 'title' ? 'Titre email' : 'Message (OTA + email)'
+          }
           onPick={(token) => {
-            if (activeEditField === 'email') {
+            if (activeEditField === 'title') {
               insertVarAtCursor(
-                emailTextareaRef.current,
-                entry.messageFrEmail,
+                titleInputRef.current,
+                emailTitle,
                 token,
-                (next) => onUpdateCatalogEntry(entry.id, { messageFrEmail: next }),
+                (next) => patchEmailTitle(entry, next),
+                titleCaretRef.current,
               );
             } else {
               insertVarAtCursor(
-                otaTextareaRef.current,
-                entry.messageFrOta,
+                bodyTextareaRef.current,
+                sharedBody,
                 token,
-                (next) => onUpdateCatalogEntry(entry.id, { messageFrOta: next }),
+                (next) => patchSharedBody(entry, next),
+                bodyCaretRef.current,
               );
             }
           }}
         />
       ) : null}
 
-      <div className="row full">
-        <div className="lbl">
-          Message OTA (texte FR)
-          {pmSafeMode ? (
-            <span style={{ fontWeight: 400, color: 'var(--t3)', marginLeft: 6 }}>
-              — Airbnb / Booking
-              {activeEditField === 'ota' ? ' · actif pour variables' : ''}
-            </span>
-          ) : null}
-        </div>
-        <textarea
-          ref={pmSafeMode ? otaTextareaRef : undefined}
-          className="input"
-          rows={pmSafeMode ? 16 : 5}
-          value={entry.messageFrOta}
-          onFocus={() => setActiveEditField('ota')}
-          onClick={() => setActiveEditField('ota')}
-          onChange={(e) => onUpdateCatalogEntry(entry.id, { messageFrOta: e.target.value })}
-          placeholder="Bonjour {firstName}, …"
-          style={
-            pmSafeMode
-              ? {
-                  minHeight: 280,
-                  resize: 'vertical',
-                  fontSize: 14,
-                  lineHeight: 1.45,
-                  outline:
-                    activeEditField === 'ota' ? '2px solid rgba(6,115,179,0.35)' : undefined,
-                }
-              : undefined
-          }
-        />
-        {pmSafeMode ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-            <button
-              type="button"
-              className="btn-prim"
-              style={{ fontSize: 12, padding: '7px 12px' }}
-              onClick={() =>
-                onUpdateCatalogEntry(entry.id, {
-                  messageFrOta: insertCatalogWhatsAppLink(entry.messageFrOta),
-                })
-              }
-            >
-              + Lien WhatsApp
-            </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              style={{ fontSize: 12, padding: '7px 12px' }}
-              onClick={() => {
-                setPreviewField('ota');
-                setPreviewCatalogId(entry.id);
-              }}
-            >
-              Aperçu + signature
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="btn-ghost"
-            style={{ fontSize: 11, marginTop: 6 }}
-            onClick={() =>
-              onUpdateCatalogEntry(entry.id, {
-                messageFrOta: entry.messageFrOta.trim()
-                  ? entry.messageFrOta
-                  : WELCOME_MESSAGE_TEMPLATE_FR,
-              })
-            }
-          >
-            Charger modèle Bienvenue (OTA)
-          </button>
-        )}
-      </div>
-      <div className="row full" style={{ marginTop: pmSafeMode ? 16 : undefined }}>
-        <div className="lbl">
-          Message Email (texte FR)
-          {pmSafeMode ? (
-            <span style={{ fontWeight: 400, color: 'var(--t3)', marginLeft: 6 }}>
-              — email / secours
-              {activeEditField === 'email' ? ' · actif pour variables' : ''}
-            </span>
-          ) : null}
-        </div>
-        <textarea
-          ref={pmSafeMode ? emailTextareaRef : undefined}
-          className="input"
-          rows={pmSafeMode ? 16 : 5}
-          value={entry.messageFrEmail}
-          onFocus={() => setActiveEditField('email')}
-          onClick={() => setActiveEditField('email')}
-          onChange={(e) => onUpdateCatalogEntry(entry.id, { messageFrEmail: e.target.value })}
-          style={
-            pmSafeMode
-              ? {
-                  minHeight: 280,
-                  resize: 'vertical',
-                  fontSize: 14,
-                  lineHeight: 1.45,
-                  outline:
-                    activeEditField === 'email' ? '2px solid rgba(6,115,179,0.35)' : undefined,
-                }
-              : undefined
-          }
-        />
-        {pmSafeMode ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-            <button
-              type="button"
-              className="btn-prim"
-              style={{ fontSize: 12, padding: '7px 12px' }}
-              onClick={() =>
-                onUpdateCatalogEntry(entry.id, {
-                  messageFrEmail: insertCatalogWhatsAppLink(entry.messageFrEmail),
-                })
-              }
-            >
-              + Lien WhatsApp
-            </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              style={{ fontSize: 12, padding: '7px 12px' }}
-              onClick={() => {
-                setPreviewField('email');
-                setPreviewCatalogId(entry.id);
-              }}
-            >
-              Aperçu + signature
-            </button>
-          </div>
-        ) : null}
-      </div>
       {pmSafeMode ? (
-        <p style={{ fontSize: 11, color: 'var(--t3)', margin: '10px 0 0' }}>
-          La signature (bandeau bleu) s&apos;ajoute toute seule à l&apos;envoi — ne la recopiez pas dans
-          le texte.
-        </p>
-      ) : null}
+        <>
+          <div className="row full">
+            <div className="lbl">
+              Titre email
+              <span style={{ fontWeight: 400, color: 'var(--t3)', marginLeft: 6 }}>
+                — objet uniquement (OTA n&apos;utilise pas ce champ)
+              </span>
+            </div>
+            <input
+              ref={titleInputRef}
+              className="input"
+              value={emailTitle}
+              onFocus={() => setActiveEditField('title')}
+              onClick={() => {
+                setActiveEditField('title');
+                rememberCaret(titleInputRef.current, titleCaretRef);
+              }}
+              onSelect={() => rememberCaret(titleInputRef.current, titleCaretRef)}
+              onKeyUp={() => rememberCaret(titleInputRef.current, titleCaretRef)}
+              onBlur={() => rememberCaret(titleInputRef.current, titleCaretRef)}
+              onChange={(e) => {
+                patchEmailTitle(entry, e.target.value);
+                rememberCaret(e.target, titleCaretRef);
+              }}
+              placeholder="ex: Bienvenue — {listingName} · {reservationNumber}"
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                outline:
+                  activeEditField === 'title' ? '2px solid rgba(6,115,179,0.35)' : undefined,
+              }}
+            />
+          </div>
+          <div className="row full" style={{ marginTop: 12 }}>
+            <div className="lbl">
+              Message (texte FR)
+              <span style={{ fontWeight: 400, color: 'var(--t3)', marginLeft: 6 }}>
+                — Airbnb / Booking / email · un seul texte
+                {activeEditField === 'body' ? ' · actif pour variables' : ''}
+              </span>
+            </div>
+            <textarea
+              ref={bodyTextareaRef}
+              className="input"
+              rows={16}
+              value={sharedBody}
+              onFocus={() => setActiveEditField('body')}
+              onClick={() => {
+                setActiveEditField('body');
+                rememberCaret(bodyTextareaRef.current, bodyCaretRef);
+              }}
+              onSelect={() => rememberCaret(bodyTextareaRef.current, bodyCaretRef)}
+              onKeyUp={() => rememberCaret(bodyTextareaRef.current, bodyCaretRef)}
+              onBlur={() => rememberCaret(bodyTextareaRef.current, bodyCaretRef)}
+              onChange={(e) => {
+                patchSharedBody(entry, e.target.value);
+                rememberCaret(e.target, bodyCaretRef);
+              }}
+              placeholder="Bonjour {firstName}, …"
+              style={{
+                minHeight: 280,
+                resize: 'vertical',
+                fontSize: 14,
+                lineHeight: 1.45,
+                outline:
+                  activeEditField === 'body' ? '2px solid rgba(6,115,179,0.35)' : undefined,
+              }}
+            />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+              <button
+                type="button"
+                className="btn-prim"
+                style={{ fontSize: 12, padding: '7px 12px' }}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() =>
+                  patchSharedBody(entry, insertCatalogWhatsAppLink(sharedBody))
+                }
+              >
+                + Lien WhatsApp
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ fontSize: 12, padding: '7px 12px' }}
+                onClick={() => {
+                  setPreviewField('ota');
+                  setPreviewCatalogId(entry.id);
+                }}
+              >
+                Aperçu OTA + signature
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ fontSize: 12, padding: '7px 12px' }}
+                onClick={() => {
+                  setPreviewField('email');
+                  setPreviewCatalogId(entry.id);
+                }}
+              >
+                Aperçu email + signature
+              </button>
+            </div>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--t3)', margin: '10px 0 0' }}>
+            Ne mettez pas « Équipe Sojori » dans le texte — la signature (bandeau bleu) s&apos;ajoute
+            à l&apos;envoi. Le bouton WhatsApp insère : « Appuyer pour ouvrir WhatsApp » + le lien avec
+            votre numéro de réservation.
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="row full">
+            <div className="lbl">Message OTA (texte FR)</div>
+            <textarea
+              ref={otaTextareaRef}
+              className="input"
+              rows={5}
+              value={entry.messageFrOta}
+              onFocus={() => setActiveEditField('ota')}
+              onClick={() => setActiveEditField('ota')}
+              onChange={(e) => onUpdateCatalogEntry(entry.id, { messageFrOta: e.target.value })}
+              placeholder="Bonjour {firstName}, …"
+            />
+            <button
+              type="button"
+              className="btn-ghost"
+              style={{ fontSize: 11, marginTop: 6 }}
+              onClick={() =>
+                onUpdateCatalogEntry(entry.id, {
+                  messageFrOta: entry.messageFrOta.trim()
+                    ? entry.messageFrOta
+                    : WELCOME_MESSAGE_TEMPLATE_FR,
+                })
+              }
+            >
+              Charger modèle Bienvenue (OTA)
+            </button>
+          </div>
+          <div className="row full">
+            <div className="lbl">Message Email (texte FR)</div>
+            <textarea
+              ref={emailTextareaRef}
+              className="input"
+              rows={5}
+              value={entry.messageFrEmail}
+              onFocus={() => setActiveEditField('email')}
+              onClick={() => setActiveEditField('email')}
+              onChange={(e) => onUpdateCatalogEntry(entry.id, { messageFrEmail: e.target.value })}
+            />
+          </div>
+        </>
+      )}
     </div>
-  );
+    );
+  };
 
   const renderMessageCards = (items: CatalogMessage[], withDnd: boolean) => {
     const list = (
@@ -477,8 +529,8 @@ export default function OrchestrationPageView({
           <div className="sub">
             {pmSafeMode ? (
               <>
-                Modifiez librement les <b>textes OTA / email</b> et votre <b>signature</b>. Les templates
-                WhatsApp Meta restent protégés (admin). Timing / on-off → orchestration par annonce.
+                Un seul texte pour <b>OTA + email</b>, un petit <b>titre</b> pour l&apos;email, et
+                votre <b>signature</b> en bandeau. Templates WhatsApp Meta protégés (admin).
               </>
             ) : (
               <>
@@ -649,10 +701,14 @@ export default function OrchestrationPageView({
         <MessageBodyModal
           open={Boolean(previewCatalogId)}
           title={`${previewCatalog.label} · ${previewField === 'ota' ? 'OTA' : 'Email'}`}
-          messageFr={previewWithSignature(
-            previewField === 'ota' ? previewCatalog.messageFrOta : previewCatalog.messageFrEmail,
-          )}
+          messageFr={
+            previewField === 'ota' ? previewCatalog.messageFrOta : previewCatalog.messageFrEmail
+          }
           channelLabel={previewField === 'ota' ? 'OTA' : 'Email'}
+          channel={previewField}
+          catalogId={previewCatalog.id}
+          ownerId={previewOwnerId}
+          signature={guestMessageSignature}
           onClose={() => setPreviewCatalogId(null)}
           onChange={
             pmSafeMode
@@ -719,24 +775,42 @@ const PM_PRIMARY_VARS = [
 ] as const;
 
 function insertVarAtCursor(
-  el: HTMLTextAreaElement | null,
+  el: HTMLTextAreaElement | HTMLInputElement | null,
   current: string,
   token: string,
   apply: (next: string) => void,
+  saved?: { start: number; end: number } | null,
 ) {
   const value = String(current || '');
-  if (!el) {
-    apply(`${value}${token}`);
-    return;
+  const focused = Boolean(el && document.activeElement === el);
+  let start: number;
+  let end: number;
+  if (focused && el) {
+    start = el.selectionStart ?? value.length;
+    end = el.selectionEnd ?? start;
+  } else if (saved) {
+    start = Math.max(0, Math.min(saved.start, value.length));
+    end = Math.max(start, Math.min(saved.end ?? saved.start, value.length));
+  } else {
+    // Pas de curseur connu → fin du texte (jamais forcer le début)
+    start = value.length;
+    end = value.length;
   }
-  const start = el.selectionStart ?? value.length;
-  const end = el.selectionEnd ?? value.length;
   const next = value.slice(0, start) + token + value.slice(end);
   apply(next);
+  const pos = start + token.length;
+  if (saved) {
+    saved.start = pos;
+    saved.end = pos;
+  }
   requestAnimationFrame(() => {
+    if (!el) return;
     el.focus();
-    const pos = start + token.length;
-    el.setSelectionRange(pos, pos);
+    try {
+      el.setSelectionRange(pos, pos);
+    } catch {
+      /* ignore */
+    }
   });
 }
 
@@ -776,8 +850,8 @@ function PmVariablePicker({
         Variables Sojori
       </div>
       <p style={{ fontSize: 11, color: 'var(--t3)', margin: '0 0 10px', lineHeight: 1.35 }}>
-        Insertion dans <b>{targetLabel}</b> (curseur). Ex. <code>{'{firstName}'}</code> → prénom
-        client.
+        Insertion dans <b>{targetLabel}</b> à la position du curseur. Ex.{' '}
+        <code>{'{firstName}'}</code> → prénom client.
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {primary.map((v) => (
@@ -786,6 +860,7 @@ function PmVariablePicker({
             type="button"
             className="btn-ghost"
             title={`${v.label} · ${v.key}`}
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => onPick(v.key)}
             style={{
               fontSize: 11,
@@ -805,6 +880,7 @@ function PmVariablePicker({
         type="button"
         className="btn-ghost"
         style={{ fontSize: 11, marginTop: 10, padding: '4px 8px' }}
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => setShowAll((v) => !v)}
       >
         {showAll ? '▼ Moins de variables' : '▶ Toutes les variables'}
@@ -832,6 +908,7 @@ function PmVariablePicker({
                     type="button"
                     className="btn-ghost"
                     title={v.key}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => onPick(v.key)}
                     style={{
                       fontSize: 11,
