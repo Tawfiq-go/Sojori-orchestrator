@@ -14,6 +14,7 @@ import {
   FormControl,
   Select,
   MenuItem,
+  Switch,
 } from '@mui/material';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
@@ -257,6 +258,7 @@ function draftToConfigRoomType(draft, ranking) {
   const name = String(draft.roomTypeName || `Type ${ranking + 1}`);
   return {
     roomTypeName: name,
+    active: draft.active !== false,
     roomNumber,
     count: roomNumber,
     personCapacity: Math.max(1, Number(draft.personCapacity) || 2),
@@ -485,9 +487,13 @@ export function PricingTab({
                   sx={{
                     px: 1.25,
                     py: 0.75,
-                    bgcolor: T.primaryTint || 'rgba(184,133,26,0.10)',
+                    bgcolor:
+                      rt.active === false
+                        ? 'rgba(148,163,184,0.14)'
+                        : T.primaryTint || 'rgba(184,133,26,0.10)',
                     borderBottom: `1px solid ${T.border}`,
                     gap: 1,
+                    opacity: rt.active === false ? 0.78 : 1,
                   }}
                 >
                   <Stack direction="row" alignItems="center" gap={0.75} sx={{ minWidth: 0 }}>
@@ -495,7 +501,7 @@ export function PricingTab({
                       sx={{
                         fontSize: 10,
                         fontWeight: 800,
-                        color: T.primaryDeep,
+                        color: rt.active === false ? T.text2 : T.primaryDeep,
                         letterSpacing: '0.06em',
                         textTransform: 'uppercase',
                         flexShrink: 0,
@@ -514,23 +520,42 @@ export function PricingTab({
                       }}
                     >
                       {typeTitle}
+                      {rt.active === false ? ' · désactivé' : ''}
                     </Typography>
                   </Stack>
-                  <Typography
-                    sx={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: T.text2,
-                      flexShrink: 0,
-                      bgcolor: '#fff',
-                      border: `1px solid ${T.border}`,
-                      borderRadius: '999px',
-                      px: 0.9,
-                      py: 0.15,
-                    }}
-                  >
-                    {units} unité{units > 1 ? 's' : ''}
-                  </Typography>
+                  <Stack direction="row" alignItems="center" gap={0.75} sx={{ flexShrink: 0 }}>
+                    <Stack direction="row" alignItems="center" gap={0.5}>
+                      <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: T.text2, whiteSpace: 'nowrap' }}>
+                        {rt.active === false ? 'Off' : 'Actif'}
+                      </Typography>
+                      <Switch
+                        size="small"
+                        checked={rt.active !== false}
+                        onChange={(e) => patchRoomType(i, { active: e.target.checked })}
+                        inputProps={{ 'aria-label': 'Activer le room type (calendrier / planning)' }}
+                        sx={{
+                          '& .MuiSwitch-switchBase.Mui-checked': { color: T.primary },
+                          '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                            backgroundColor: T.primary,
+                          },
+                        }}
+                      />
+                    </Stack>
+                    <Typography
+                      sx={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: T.text2,
+                        bgcolor: '#fff',
+                        border: `1px solid ${T.border}`,
+                        borderRadius: '999px',
+                        px: 0.9,
+                        py: 0.15,
+                      }}
+                    >
+                      {units} unité{units > 1 ? 's' : ''}
+                    </Typography>
+                  </Stack>
                 </Stack>
                 <Box
                   sx={{

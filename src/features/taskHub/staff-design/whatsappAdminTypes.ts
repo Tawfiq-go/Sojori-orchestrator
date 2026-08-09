@@ -40,13 +40,13 @@ export const WA_ADMIN_TYPES = [
   { type: 'Reviews', label: 'Avis', menuLetter: 'V', abbr: 'AV' },
   { type: 'Lead', label: 'Leads', menuLetter: 'L', abbr: 'LD' },
   { type: 'Reservation', label: 'Réservations', menuLetter: 'R', abbr: 'RS' },
-  { type: 'ArrivalDeparture', label: 'Arr. / dép.', menuLetter: 'D', abbr: 'DC' },
-  { type: 'Finances', label: 'Dépense / Extra', menuLetter: 'E', abbr: 'EX' },
-  { type: 'Enregistrement', label: 'Enregistrement (passeports)', menuLetter: 'P', abbr: 'PG' },
-  { type: 'Task:Cleaning', label: 'Superviseur Ménage', menuLetter: 'T', abbr: 'TM' },
-  { type: 'Task:Arrival', label: 'Superviseur Accueil', menuLetter: 'T', abbr: 'TA' },
-  { type: 'Task:Support', label: 'Superviseur Support', menuLetter: 'T', abbr: 'TP' },
-  { type: 'Task:ServiceClient', label: 'Superviseur Service client', menuLetter: 'T', abbr: 'TC' },
+  { type: 'ArrivalDeparture', label: 'Arr. / dép.', menuLetter: 'P', abbr: 'DC' },
+  { type: 'Finances', label: 'Dépense / Extra', menuLetter: 'D', abbr: 'EX' },
+  { type: 'Enregistrement', label: 'Enregistrement (passeports)', menuLetter: 'E', abbr: 'PG' },
+  { type: 'Task:Cleaning', label: 'Superviseur Ménage', menuLetter: 'S', abbr: 'SM' },
+  { type: 'Task:Arrival', label: 'Superviseur Accueil', menuLetter: 'S', abbr: 'SA' },
+  { type: 'Task:Support', label: 'Superviseur Support', menuLetter: 'S', abbr: 'SP' },
+  { type: 'Task:ServiceClient', label: 'Superviseur Service client', menuLetter: 'S', abbr: 'SC' },
 ] as const;
 
 /** Types T encore lus en base (legacy) mais plus exposés dans l’UI. */
@@ -99,8 +99,8 @@ export const DEFAULT_TASK_NOTIFY_ENABLED: Record<(typeof FULLTASK_TASK_TYPES)[nu
   departure_declare: false,
   registration: false,
   cleaning_free: false,
-  cleaning_paid: true,
-  checkout_cleaning: true,
+  cleaning_paid: false,
+  checkout_cleaning: false,
   transport: true,
   groceries: true,
   concierge: true,
@@ -292,7 +292,7 @@ export function emptyWhatsappAdmin(): WhatsappAdminDesign {
     banned: false,
     permissions: WA_ADMIN_TYPES.map((t) => ({
       type: t.type,
-      // T métiers à none par défaut — l’opérateur active Superviseur Ménage / Accueil / …
+      // S (supervision) métiers à none par défaut — l’opérateur active Superviseur Ménage / Accueil / …
       access: (t.type.startsWith('Task:') ? 'none' : 'write') as 'read' | 'write' | 'none',
     })),
     notifications: defaultAdminNotifications(),

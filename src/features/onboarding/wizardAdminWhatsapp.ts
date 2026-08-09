@@ -24,11 +24,11 @@ export const WA_MENU_TYPES = [
   { type: 'Reviews', label: 'Avis', menuLetter: 'V' },
   { type: 'Lead', label: 'Leads', menuLetter: 'L' },
   { type: 'Reservation', label: 'Réservations', menuLetter: 'R' },
-  { type: 'ArrivalDeparture', label: 'Arr. / dép.', menuLetter: 'D' },
-  { type: 'Task:Cleaning', label: 'Superviseur Ménage', menuLetter: 'T' },
-  { type: 'Task:Arrival', label: 'Superviseur Accueil', menuLetter: 'T' },
-  { type: 'Task:Support', label: 'Superviseur Support', menuLetter: 'T' },
-  { type: 'Task:ServiceClient', label: 'Superviseur Service client', menuLetter: 'T' },
+  { type: 'ArrivalDeparture', label: 'Arr. / dép.', menuLetter: 'P' },
+  { type: 'Task:Cleaning', label: 'Superviseur Ménage', menuLetter: 'S' },
+  { type: 'Task:Arrival', label: 'Superviseur Accueil', menuLetter: 'S' },
+  { type: 'Task:Support', label: 'Superviseur Support', menuLetter: 'S' },
+  { type: 'Task:ServiceClient', label: 'Superviseur Service client', menuLetter: 'S' },
 ] as const;
 
 const RESERVATION_PUSH_KEYS = [

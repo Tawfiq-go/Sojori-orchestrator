@@ -466,6 +466,16 @@ function cleanRoomTypeRowForApi(row: UnknownRecord): UnknownRecord {
       })
       .filter(Boolean);
   }
+  // Explicit boolean so deactivate (false) is never stripped by sparse payloads.
+  if (typeof out.active === 'boolean') {
+    /* keep */
+  } else if (out.active === 'false' || out.active === 0) {
+    out.active = false;
+  } else if (out.active === 'true' || out.active === 1) {
+    out.active = true;
+  } else {
+    out.active = true;
+  }
   return out;
 }
 

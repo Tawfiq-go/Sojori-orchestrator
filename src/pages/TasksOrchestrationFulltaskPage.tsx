@@ -450,6 +450,7 @@ function TasksOrchestrationFulltaskPageInner() {
         pmSafeMode={!showWhatsAppConfigTab}
         guestMessageSignature={guestMessageSignature}
         onGuestMessageSignatureChange={setGuestMessageSignature}
+        previewOwnerId={effectiveOwnerKey !== 'global' ? effectiveOwnerKey : undefined}
         ownerDisplayName={hideOwnerScopeLabels ? undefined : effectiveDisplayName}
         ownerKeyDetail={hideOwnerScopeLabels ? undefined : effectiveKeyDetail}
         initialSubTab={subTab}
