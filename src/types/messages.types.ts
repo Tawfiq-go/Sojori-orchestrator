@@ -73,12 +73,78 @@ export interface AiPromptPart {
   label: string;
   content: string;
   estimatedTokens: number;
+  rawCharacterCount?: number;
+  attributedInputTokens?: number;
+  inputSharePercent?: number;
+  measurementMethod?: string;
+  tokenBudget?: number;
+  truncated?: boolean;
+  included?: boolean;
+  selectionReason?: string;
+  source?: string;
+  sourceUpdatedAt?: string;
+  retrievalStatus?: string;
+  authority?: string;
+  stale?: boolean;
+}
+
+export interface ContextPlanSection {
+  included: boolean;
+  reason: string;
+  source?: string;
+  sourceUpdatedAt?: string;
+  retrievalStatus?: string;
+  authority?: string;
+  stale?: boolean;
+  truncated?: boolean;
+  maxTokens?: number;
+}
+
+export interface ContextPlan {
+  version: 1;
+  builtAt: string;
+  stayPhase?: string;
+  historyWindow?: {
+    defaultExchanges: number;
+    expandedExchanges: number;
+    expandReason?: string;
+  };
+  ota?: {
+    needed: boolean;
+    reason: string;
+    fetchAttempted: boolean;
+    fetchFailed?: boolean;
+    failureReason?: string;
+  };
+  guestContextFreshness?: {
+    status: string;
+    source: string;
+    sourceUpdatedAt?: string;
+    stale: boolean;
+    allowStrongConfirmation: boolean;
+  };
+  sections: Record<string, ContextPlanSection>;
 }
 
 export interface AiPromptAudit {
   parts: AiPromptPart[];
   totalEstimatedInputTokens: number;
+  /** True when section tokens were proportionally attributed to provider usage. */
   scaledToProvider?: boolean;
+  measurementNote?: string;
+  contextPlan?: ContextPlan;
+  summary?: {
+    relevantContextTokens?: number;
+    stableRuleTokens?: number;
+    historyTokens?: number;
+    omittedSectionKeys?: string[];
+    duplicatedTokensDetected?: number;
+    providerOverheadTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+    approximateCostUsd?: number;
+  };
+  duplicateHashes?: Array<{ hash: string; keys: string[]; estimatedTokens: number }>;
 }
 
 export interface AiUsageAudit {
@@ -91,6 +157,8 @@ export interface AiUsageAudit {
   tokensUsed?: number;
   costUsd?: number;
   costEquation?: string;
+  cacheAwarePricing?: boolean;
+  usedDefaultPricing?: boolean;
 }
 
 export interface ProcessingTraceStep {
