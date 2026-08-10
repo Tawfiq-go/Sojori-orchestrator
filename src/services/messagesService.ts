@@ -843,18 +843,25 @@ class MessagesService {
   async sendOTAMessage(
     threadId: string,
     message: string,
-    opts?: { aiAssisted?: boolean; replyMode?: 'manual' | 'ai_assisted' },
+    opts?: {
+      aiAssisted?: boolean;
+      replyMode?: 'manual' | 'ai_assisted' | 'ai_generated';
+      generationId?: string;
+    },
   ): Promise<any> {
     try {
       const numericThreadId = Number(String(threadId).replace(/\D/g, '')) || threadId;
+      const mode =
+        opts?.replyMode ||
+        (opts?.aiAssisted || opts?.generationId ? 'ai_assisted' : 'manual');
       const response = await apiClient.post(
         `${MICROSERVICE_BASE_URL.SRV_RESERVATION}/rentals/send-message`,
         {
           threadId: numericThreadId,
           messageBody: message,
-          ...(opts?.aiAssisted || opts?.replyMode === 'ai_assisted'
-            ? { aiAssisted: true, replyMode: 'ai_assisted' }
-            : { replyMode: 'manual' }),
+          replyMode: mode,
+          ...(mode !== 'manual' ? { aiAssisted: true } : {}),
+          ...(opts?.generationId ? { generationId: opts.generationId } : {}),
         },
       );
 

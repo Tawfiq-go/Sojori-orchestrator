@@ -126,6 +126,10 @@ export interface Message {
   originalLanguage?: string | null;
   /** Texte d'origine, conservé quand une traduction prend sa place dans la bulle. */
   originalText?: string | null;
+  /** Lien audit génération OTA (dashboard / WhatsApp Flow). */
+  generationId?: string | null;
+  replyMode?: 'manual' | 'ai_generated' | 'ai_assisted' | 'automation' | string | null;
+  replyOrigin?: string | null;
 }
 
 export interface QuickTemplate {

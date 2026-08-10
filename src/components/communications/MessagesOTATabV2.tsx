@@ -148,6 +148,8 @@ export default function MessagesOTATabV2() {
   const [showAIModal, setShowAIModal] = useState(false);
   const [composerDraft, setComposerDraft] = useState('');
   const [aiSourceDraft, setAiSourceDraft] = useState('');
+  const [pendingGenerationId, setPendingGenerationId] = useState<string | null>(null);
+  const [pendingAiDraft, setPendingAiDraft] = useState<string | null>(null);
   const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
   const [whatsappGuest, setWhatsappGuest] = useState<{
     kind: 'loading' | 'actif' | 'jamais' | 'nonum';
@@ -1114,16 +1116,55 @@ export default function MessagesOTATabV2() {
   );
 
   const handleOtaSend = useCallback(
-    async (text: string, opts?: { aiAssisted?: boolean }) => {
+    async (
+      text: string,
+      opts?: {
+        aiAssisted?: boolean;
+        generationId?: string;
+        replyMode?: 'manual' | 'ai_assisted' | 'ai_generated';
+      },
+    ) => {
       if (!inbox.activeRow) return;
       const trimmed = text.trim();
       if (!trimmed) return;
       const row = inbox.activeRow;
+      const generationId = opts?.generationId || pendingGenerationId || undefined;
+      let replyMode = opts?.replyMode;
+      if (!replyMode && generationId) {
+        replyMode =
+          pendingAiDraft &&
+          pendingAiDraft.replace(/\s+/g, ' ').trim().toLowerCase() ===
+            trimmed.replace(/\s+/g, ' ').trim().toLowerCase()
+            ? 'ai_generated'
+            : 'ai_assisted';
+      } else if (!replyMode && opts?.aiAssisted) {
+        replyMode = 'ai_assisted';
+      }
       inbox.appendOutboundMessage(trimmed);
       try {
-        await messagesService.sendOTAMessage(row.threadId, trimmed, {
-          aiAssisted: opts?.aiAssisted === true,
+        const sendRes = await messagesService.sendOTAMessage(row.threadId, trimmed, {
+          aiAssisted: Boolean(generationId) || opts?.aiAssisted === true,
+          replyMode,
+          generationId,
         });
+        if (generationId) {
+          const messageId = Number(sendRes?.result?.ID ?? sendRes?.messageId);
+          if (Number.isFinite(messageId) && messageId > 0) {
+            try {
+              const { linkOtaAiGenerationAudit } = await import(
+                '../../services/communicationsAiService'
+              );
+              await linkOtaAiGenerationAudit(generationId, {
+                messageId,
+                finalBody: trimmed,
+              });
+            } catch (linkErr) {
+              console.warn('[OTA] generation audit link failed', linkErr);
+            }
+          }
+        }
+        setPendingGenerationId(null);
+        setPendingAiDraft(null);
         setInboxRows((prev) => {
           const bumped = bumpOtaThreadAfterSend(prev, row.threadId, trimmed, row);
           setCachedOtaInbox(bumped);
@@ -1135,7 +1176,7 @@ export default function MessagesOTATabV2() {
         throw err;
       }
     },
-    [inbox],
+    [inbox, pendingGenerationId, pendingAiDraft],
   );
 
   const [markingOtaStatus, setMarkingOtaStatus] = useState(false);
@@ -1351,12 +1392,18 @@ export default function MessagesOTATabV2() {
       <AISuggestionModal
         open={showAIModal}
         onClose={() => setShowAIModal(false)}
-        onUseSuggestion={(text) => {
+        onUseSuggestion={(text, meta) => {
           setComposerDraft(text);
+          setPendingGenerationId(meta?.generationId || null);
+          setPendingAiDraft(meta?.generationId ? text : null);
           setShowAIModal(false);
         }}
-        onSendSuggestion={async (text) => {
-          await handleOtaSend(text, { aiAssisted: true });
+        onSendSuggestion={async (text, meta) => {
+          await handleOtaSend(text, {
+            aiAssisted: true,
+            generationId: meta?.generationId,
+            replyMode: meta?.replyMode || 'ai_generated',
+          });
           setComposerDraft('');
           setShowAIModal(false);
         }}
@@ -1367,6 +1414,18 @@ export default function MessagesOTATabV2() {
           draft: aiSourceDraft,
           guestName: inbox.activeRow?.guestName,
           reservationNumber: inbox.reservation?.reservationNumber,
+          reservationMongoId: inbox.rawReservation
+            ? String(
+                (inbox.rawReservation as { _id?: string })._id ||
+                  (inbox.rawReservation as { id?: string }).id ||
+                  '',
+              )
+            : undefined,
+          guestPhone:
+            inbox.reservation?.guestPhone || inbox.activeRow?.guestPhone || undefined,
+          listingName:
+            inbox.reservation?.listingName || inbox.activeRow?.listingName || undefined,
+          threadId: inbox.activeRow?.threadId,
           channelName: otaPlatform,
           type: 'ota',
         }}

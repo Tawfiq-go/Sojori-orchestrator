@@ -274,6 +274,7 @@ export default function ConversationThread({
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [inspectedMessage, setInspectedMessage] = useState<Message | null>(null);
+  const [inspectLoading, setInspectLoading] = useState(false);
   const [expandedTraceSteps, setExpandedTraceSteps] = useState<Record<string, boolean>>({});
   const [inspectTab, setInspectTab] = useState<'process' | 'prompt' | 'cost'>('process');
   const [expandedPromptParts, setExpandedPromptParts] = useState<Record<string, boolean>>({});
@@ -344,16 +345,55 @@ export default function ConversationThread({
     (planDetails?.categories as string[] | undefined) ??
     (routingDetails?.selectedCategories as string[] | undefined) ??
     [];
-  const openTrace = (message: Message) => {
+  const isInspectableMessage = (message: Message) => {
+    if (!canInspectAi) return false;
+    if (message.type === 'day-separator' || message.type === 'system-note') return false;
+    // WhatsApp bot answers
+    if (message.isAI && !message.isAdmin) return true;
+    // OTA AI-generated / AI-assisted outgoing (staff-authored but inspectable)
+    if (message.generationId || message.replyMode === 'ai_assisted' || message.replyMode === 'ai_generated') {
+      return message.from === 'you' || message.from === 'sojori' || Boolean(message.isAI);
+    }
+    return Boolean(message.processingTrace || message.aiPrompt);
+  };
+
+  const openTrace = async (message: Message) => {
     if (onSelectMessage) {
       onSelectMessage(message);
       return;
     }
-    if (!canInspectAi || !message.isAI || message.isAdmin) return;
+    if (!isInspectableMessage(message)) return;
     setExpandedTraceSteps({});
     setExpandedPromptParts({});
     setInspectTab('process');
+
+    const hasEmbeddedAudit = Boolean(message.processingTrace || message.aiPrompt || message.aiUsage);
+    if (hasEmbeddedAudit || !message.generationId) {
+      setInspectedMessage(message);
+      return;
+    }
+
+    setInspectLoading(true);
     setInspectedMessage(message);
+    try {
+      const { fetchOtaAiGenerationAudit } = await import('../../services/communicationsAiService');
+      const data = await fetchOtaAiGenerationAudit(message.generationId);
+      if (data.success && data.generation) {
+        setInspectedMessage({
+          ...message,
+          isAI: true,
+          processingTrace: data.generation.processingTrace ?? undefined,
+          aiPrompt: data.generation.aiPrompt ?? null,
+          aiUsage: data.generation.aiUsage ?? null,
+          aiModel: data.generation.aiUsage?.model,
+          tokensUsed: data.generation.aiUsage?.tokensUsed,
+        });
+      }
+    } catch (err) {
+      console.warn('[AI inspector] OTA audit fetch failed', err);
+    } finally {
+      setInspectLoading(false);
+    }
   };
 
   const isOta =
@@ -1109,7 +1149,7 @@ export default function ConversationThread({
                   lineHeight: 1.7,
                   boxShadow: '0 1px 2px rgba(20,17,10,0.06)',
                   cursor:
-                    onSelectMessage || (canInspectAi && message.isAI && !message.isAdmin)
+                    onSelectMessage || isInspectableMessage(message)
                       ? 'pointer'
                       : 'default',
                   transition: 'box-shadow 120ms ease',
@@ -1119,7 +1159,7 @@ export default function ConversationThread({
                       : undefined,
                   outlineOffset: 2,
                   '&:hover':
-                    onSelectMessage || (canInspectAi && message.isAI && !message.isAdmin)
+                    onSelectMessage || isInspectableMessage(message)
                       ? { boxShadow: '0 0 0 2px rgba(13,148,136,0.22)' }
                       : undefined,
                 }}
@@ -1891,9 +1931,13 @@ export default function ConversationThread({
                 <Box>
                   <Typography sx={{ fontSize: 16, fontWeight: 800 }}>How this answer was made</Typography>
                   <Typography sx={{ mt: 0.5, fontSize: 11, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
-                    {inspectedMessage.processingTrace
-                      ? `${inspectedMessage.processingTrace.route || 'response'} · ${inspectedMessage.processingTrace.durationMs} ms`
-                      : 'Trace unavailable for this response'}
+                    {inspectLoading
+                      ? 'Loading audit…'
+                      : inspectedMessage.processingTrace
+                        ? `${inspectedMessage.processingTrace.route || 'response'} · ${inspectedMessage.processingTrace.durationMs} ms`
+                        : inspectedMessage.generationId
+                          ? 'No embedded trace — audit unavailable or historical'
+                          : 'Trace unavailable for this response'}
                   </Typography>
                 </Box>
                 <Box component="button" onClick={() => setInspectedMessage(null)} sx={iconBtnSx} aria-label="Close">
