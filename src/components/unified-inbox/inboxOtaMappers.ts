@@ -541,7 +541,7 @@ export function otaReplyOriginTag(msg: {
   body?: string | null;
 }): string | null {
   if (msg.isIncoming) return null;
-  if (msg.replyMode === 'ai_assisted') return 'AI';
+  if (msg.replyMode === 'ai_assisted' || msg.replyMode === 'ai_generated') return 'AI';
   if (
     msg.replyOrigin === 'automation' ||
     msg.replyMode === 'automation' ||
@@ -668,6 +668,15 @@ export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Me
           isAutomation: msg.isAutomation,
           body: rawBody,
         });
+    const generationId =
+      typeof msg.generationId === 'string' && msg.generationId.trim()
+        ? msg.generationId.trim()
+        : null;
+    const isAiReply =
+      !isGuestSide &&
+      (msg.replyMode === 'ai_assisted' ||
+        msg.replyMode === 'ai_generated' ||
+        Boolean(generationId));
     // Traductions opérateur : messages VOYAGEUR seulement (pas Host/Cohost).
     const translatedFr = isGuestSide ? cleanTranslation(msg.translatedFr) : null;
     const translatedAry = isGuestSide ? cleanTranslation(msg.translatedAry) : null;
@@ -685,6 +694,10 @@ export function mapOtaApiMessagesToInbox(messages: any[], guestName: string): Me
         : '',
       status: !isGuestSide ? msg.status : undefined,
       ...(originTag && !isGuestSide ? { tags: [originTag] } : {}),
+      ...(isAiReply ? { isAI: true } : {}),
+      ...(generationId ? { generationId } : {}),
+      ...(!isGuestSide && msg.replyMode ? { replyMode: msg.replyMode } : {}),
+      ...(!isGuestSide && msg.replyOrigin ? { replyOrigin: msg.replyOrigin } : {}),
       ...(translatedFr ? { translatedFr } : {}),
       ...(translatedAry ? { translatedAry } : {}),
       ...(originalLanguage ? { originalLanguage } : {}),

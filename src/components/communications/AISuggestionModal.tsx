@@ -23,12 +23,19 @@ import { i18nLanguageToApiCode } from '../../services/communicationsAi.helpers';
 interface AISuggestionModalProps {
   open: boolean;
   onClose: () => void;
-  onUseSuggestion: (text: string) => void;
-  onSendSuggestion?: (text: string) => Promise<void> | void;
+  onUseSuggestion: (text: string, meta?: { generationId?: string }) => void;
+  onSendSuggestion?: (
+    text: string,
+    meta?: { generationId?: string; replyMode?: 'ai_generated' | 'ai_assisted' },
+  ) => Promise<void> | void;
   context: {
     conversationHistory?: unknown[];
     guestName?: string;
     reservationNumber?: string;
+    reservationMongoId?: string;
+    guestPhone?: string;
+    listingName?: string;
+    threadId?: string | number;
     channelName?: string;
     type: 'whatsapp' | 'staff' | 'ota' | 'leads' | 'reviews';
     /** Fil OTA / WhatsApp deja formate pour l'IA */
@@ -72,6 +79,7 @@ export default function AISuggestionModal({
 }: AISuggestionModalProps) {
   const [suggestion, setSuggestion] = useState('');
   const [staffPreview, setStaffPreview] = useState('');
+  const [generationId, setGenerationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
@@ -111,8 +119,13 @@ export default function AISuggestionModal({
             typeof navigator !== 'undefined' ? navigator.language : 'fr',
           ),
           reservationId: context.reservationNumber || '',
+          reservationMongoId: context.reservationMongoId || '',
           channelName: context.channelName,
           guestName: context.guestName,
+          guestPhone: context.guestPhone,
+          listingName: context.listingName,
+          threadId: context.threadId,
+          currentGuestMessage: context.lastGuestMessage,
           reviewContent: context.reviewContent,
           isRatingOnly: context.isRatingOnly,
           rating: context.rating,
@@ -125,6 +138,7 @@ export default function AISuggestionModal({
 
         setSuggestion(data.responseClient.trim());
         setStaffPreview(data.responseAdmin?.trim() || '');
+        setGenerationId(data.generationId?.trim() || null);
         setProvider(data.provider || 'claude');
         // Après détection serveur : verrouiller sur la langue utilisée.
         if (autoDetectLanguage) {
@@ -155,7 +169,9 @@ export default function AISuggestionModal({
 
   const handleUse = () => {
     if (suggestion.trim()) {
-      onUseSuggestion(suggestion.trim());
+      onUseSuggestion(suggestion.trim(), {
+        generationId: generationId || undefined,
+      });
       handleClose();
     }
   };
@@ -166,7 +182,10 @@ export default function AISuggestionModal({
     try {
       setSendingSuggestion(true);
       setError(null);
-      await onSendSuggestion(text);
+      await onSendSuggestion(text, {
+        generationId: generationId || undefined,
+        replyMode: generationId ? 'ai_generated' : 'ai_assisted',
+      });
       handleClose();
     } catch (err: unknown) {
       console.error('Erreur envoi suggestion IA:', err);
@@ -185,6 +204,7 @@ export default function AISuggestionModal({
     if (sendingSuggestion) return;
     setSuggestion('');
     setStaffPreview('');
+    setGenerationId(null);
     setError(null);
     setProvider(null);
     setSendingSuggestion(false);
@@ -195,6 +215,7 @@ export default function AISuggestionModal({
     if (!open) return;
     setSuggestion(context.draft?.trim() || '');
     setStaffPreview('');
+    setGenerationId(null);
     setError(null);
     setProvider(null);
     setSendingSuggestion(false);
