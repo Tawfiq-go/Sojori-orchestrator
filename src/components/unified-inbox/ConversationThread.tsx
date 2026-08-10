@@ -2125,17 +2125,61 @@ export default function ConversationThread({
                           fontSize: 11,
                           color: T.text3,
                           fontFamily: '"Geist Mono", monospace',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 0.5,
                         }}
                       >
-                        Total input ≈ {inspectedMessage.aiPrompt.totalEstimatedInputTokens.toLocaleString()} tokens
-                        {inspectedMessage.aiPrompt.scaledToProvider
-                          ? ' (scaled to provider usage)'
-                          : ' (char estimate ~4 chars/token)'}
+                        <Box>
+                          Total input ≈ {inspectedMessage.aiPrompt.totalEstimatedInputTokens.toLocaleString()} tokens
+                          {inspectedMessage.aiPrompt.scaledToProvider
+                            ? ' (proportional attribution to provider usage)'
+                            : ' (char estimate ~4 chars/token)'}
+                        </Box>
+                        {inspectedMessage.aiPrompt.measurementNote && (
+                          <Box sx={{ fontSize: 10, opacity: 0.9 }}>{inspectedMessage.aiPrompt.measurementNote}</Box>
+                        )}
+                        {inspectedMessage.aiPrompt.summary && (
+                          <Box sx={{ mt: 0.5, fontSize: 10, lineHeight: 1.5 }}>
+                            relevant {inspectedMessage.aiPrompt.summary.relevantContextTokens?.toLocaleString() ?? '—'}
+                            {' · '}stable {inspectedMessage.aiPrompt.summary.stableRuleTokens?.toLocaleString() ?? '—'}
+                            {' · '}history {inspectedMessage.aiPrompt.summary.historyTokens?.toLocaleString() ?? '—'}
+                            {' · '}overhead {inspectedMessage.aiPrompt.summary.providerOverheadTokens?.toLocaleString() ?? '—'}
+                            {(inspectedMessage.aiPrompt.summary.cacheReadTokens ||
+                              inspectedMessage.aiPrompt.summary.cacheWriteTokens) && (
+                              <>
+                                {' · '}cache r/w {inspectedMessage.aiPrompt.summary.cacheReadTokens ?? 0}/
+                                {inspectedMessage.aiPrompt.summary.cacheWriteTokens ?? 0}
+                              </>
+                            )}
+                            {inspectedMessage.aiPrompt.summary.omittedSectionKeys?.length ? (
+                              <>
+                                {' · '}omitted {inspectedMessage.aiPrompt.summary.omittedSectionKeys.length}
+                              </>
+                            ) : null}
+                            {(inspectedMessage.aiPrompt.summary.duplicatedTokensDetected ?? 0) > 0 && (
+                              <>
+                                {' · '}dup≈{inspectedMessage.aiPrompt.summary.duplicatedTokensDetected}
+                              </>
+                            )}
+                            {inspectedMessage.aiPrompt.summary.approximateCostUsd != null && (
+                              <>
+                                {' · '}≈${inspectedMessage.aiPrompt.summary.approximateCostUsd.toFixed(6)}
+                              </>
+                            )}
+                          </Box>
+                        )}
                       </Box>
-                      {inspectedMessage.aiPrompt.parts.map((part) => (
+                      {inspectedMessage.aiPrompt.parts.map((part) => {
+                        const omitted = part.included === false
+                        const body =
+                          (part as { content?: string; text?: string }).content ??
+                          (part as { text?: string }).text ??
+                          ''
+                        return (
                         <Box
                           key={part.key}
-                          sx={{ borderBottom: `1px solid ${T.border}`, pb: 1.25 }}
+                          sx={{ borderBottom: `1px solid ${T.border}`, pb: 1.25, opacity: omitted ? 0.72 : 1 }}
                         >
                           <Box
                             component="button"
@@ -2153,19 +2197,47 @@ export default function ConversationThread({
                               color: 'inherit',
                             }}
                           >
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
-                              <Typography sx={{ fontSize: 12.5, fontWeight: 750 }}>{part.label}</Typography>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'baseline' }}>
+                              <Typography sx={{ fontSize: 12.5, fontWeight: 750 }}>
+                                {part.label}
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    ml: 1,
+                                    fontSize: 9,
+                                    fontWeight: 700,
+                                    color: omitted ? T.text4 : '#047857',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: 0.3,
+                                  }}
+                                >
+                                  {omitted ? 'omitted' : 'included'}
+                                </Box>
+                              </Typography>
                               <Typography
                                 sx={{ fontSize: 9.5, color: T.text4, fontFamily: '"Geist Mono", monospace' }}
                               >
-                                {part.estimatedTokens.toLocaleString()} tok
+                                {(part.attributedInputTokens ?? part.estimatedTokens).toLocaleString()} tok
+                                {part.inputSharePercent != null ? ` · ${part.inputSharePercent}%` : ''}
                               </Typography>
                             </Box>
-                            <Typography sx={{ mt: 0.5, fontSize: 9.5, color: T.ai, fontWeight: 700 }}>
-                              {expandedPromptParts[part.key] ? '▾ Hide content' : '› Show content'}
-                            </Typography>
+                            {(part.selectionReason || part.source || part.truncated || part.stale) && (
+                              <Typography sx={{ mt: 0.35, fontSize: 10, color: T.text3, lineHeight: 1.4 }}>
+                                {part.selectionReason}
+                                {part.source ? ` · src: ${part.source}` : ''}
+                                {part.sourceUpdatedAt ? ` · @ ${part.sourceUpdatedAt}` : ''}
+                                {part.truncated ? ' · truncated' : ''}
+                                {part.stale ? ' · stale' : ''}
+                                {part.tokenBudget != null ? ` · budget ${part.tokenBudget}` : ''}
+                              </Typography>
+                            )}
+                            {!omitted && (
+                              <Typography sx={{ mt: 0.5, fontSize: 9.5, color: T.ai, fontWeight: 700 }}>
+                                {expandedPromptParts[part.key] ? '▾ Hide content' : '› Show content'}
+                              </Typography>
+                            )}
                           </Box>
-                          {expandedPromptParts[part.key] && (
+                          {!omitted && expandedPromptParts[part.key] && (
                             <Box
                               component="pre"
                               sx={{
@@ -2183,11 +2255,12 @@ export default function ConversationThread({
                                 overflowY: 'auto',
                               }}
                             >
-                              {part.content}
+                              {body || '(empty)'}
                             </Box>
                           )}
                         </Box>
-                      ))}
+                        )
+                      })}
                     </>
                   )}
                 </>
@@ -2221,6 +2294,8 @@ export default function ConversationThread({
                           <Typography sx={{ mt: 0.5, fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
                             cache read {inspectedMessage.aiUsage.cacheReadTokens ?? 0} · cache write{' '}
                             {inspectedMessage.aiUsage.cacheWriteTokens ?? 0}
+                            {inspectedMessage.aiUsage.cacheAwarePricing ? ' · cache-aware pricing' : ''}
+                            {inspectedMessage.aiUsage.usedDefaultPricing ? ' · default rates' : ''}
                           </Typography>
                         )}
                       </Box>
