@@ -150,15 +150,20 @@ export interface AiPromptAudit {
 export interface AiUsageAudit {
   provider?: 'claude' | 'openai' | 'gemini' | null;
   model?: string;
+  /** Uncached input tokens (Claude input_tokens). */
   promptTokens?: number;
   completionTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  /** Uncached + cache read + cache write. */
+  processedInputTokens?: number;
   tokensUsed?: number;
   costUsd?: number;
   costEquation?: string;
   cacheAwarePricing?: boolean;
   usedDefaultPricing?: boolean;
+  guestVisibleOutputTokensEstimate?: number;
+  hiddenOutputTokensEstimate?: number;
 }
 
 export interface ProcessingTraceStep {

@@ -1958,7 +1958,14 @@ export default function ConversationThread({
                     `Tokens: ${
                       inspectedMessage.aiUsage?.promptTokens != null ||
                       inspectedMessage.aiUsage?.completionTokens != null
-                        ? `${inspectedMessage.aiUsage.promptTokens ?? '—'} in / ${inspectedMessage.aiUsage.completionTokens ?? '—'} out`
+                        ? `${
+                            inspectedMessage.aiUsage.processedInputTokens ??
+                            (inspectedMessage.aiUsage.promptTokens != null
+                              ? (inspectedMessage.aiUsage.promptTokens ?? 0) +
+                                (inspectedMessage.aiUsage.cacheReadTokens ?? 0) +
+                                (inspectedMessage.aiUsage.cacheWriteTokens ?? 0)
+                              : '—')
+                          } in / ${inspectedMessage.aiUsage.completionTokens ?? '—'} out`
                         : inspectedMessage.tokensUsed ?? 'n/a'
                     }`,
                   ].map((label) => (
@@ -2284,27 +2291,101 @@ export default function ConversationThread({
                           {inspectedMessage.aiUsage?.model ?? inspectedMessage.aiModel ?? '—'}
                         </Typography>
                       </Box>
-                      <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
-                        <Typography sx={{ fontSize: 11, color: T.text3, fontWeight: 700 }}>Input tokens</Typography>
-                        <Typography sx={{ mt: 0.5, fontSize: 18, fontWeight: 800, fontFamily: '"Geist Mono", monospace' }}>
-                          {inspectedMessage.aiUsage?.promptTokens?.toLocaleString() ?? 'n/a'}
-                        </Typography>
-                        {(inspectedMessage.aiUsage?.cacheReadTokens ||
-                          inspectedMessage.aiUsage?.cacheWriteTokens) && (
-                          <Typography sx={{ mt: 0.5, fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
-                            cache read {inspectedMessage.aiUsage.cacheReadTokens ?? 0} · cache write{' '}
-                            {inspectedMessage.aiUsage.cacheWriteTokens ?? 0}
-                            {inspectedMessage.aiUsage.cacheAwarePricing ? ' · cache-aware pricing' : ''}
-                            {inspectedMessage.aiUsage.usedDefaultPricing ? ' · default rates' : ''}
-                          </Typography>
-                        )}
-                      </Box>
+
+                      {(() => {
+                        const u = inspectedMessage.aiUsage
+                        const uncached = u?.promptTokens ?? 0
+                        const cacheRead = u?.cacheReadTokens ?? 0
+                        const cacheWrite = u?.cacheWriteTokens ?? 0
+                        const processed =
+                          u?.processedInputTokens ??
+                          (u?.promptTokens != null
+                            ? uncached + cacheRead + cacheWrite
+                            : null)
+                        const row = (label: string, value: number | null | undefined, hint?: string) => (
+                          <Box
+                            key={label}
+                            sx={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              gap: 1,
+                              alignItems: 'baseline',
+                            }}
+                          >
+                            <Typography sx={{ fontSize: 12, color: T.text2 }}>
+                              {label}
+                              {hint ? (
+                                <Typography component="span" sx={{ ml: 0.5, fontSize: 10, color: T.text3 }}>
+                                  {hint}
+                                </Typography>
+                              ) : null}
+                            </Typography>
+                            <Typography sx={{ fontSize: 13, fontWeight: 700, fontFamily: '"Geist Mono", monospace' }}>
+                              {value != null ? value.toLocaleString() : 'n/a'}
+                            </Typography>
+                          </Box>
+                        )
+                        return (
+                          <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
+                            <Typography sx={{ fontSize: 11, color: T.text3, fontWeight: 700, mb: 1 }}>
+                              Processed input (provider)
+                            </Typography>
+                            {row('Uncached input', u?.promptTokens)}
+                            {row('Cache read input', cacheRead)}
+                            {row('Cache write input', cacheWrite)}
+                            <Box sx={{ my: 0.75, borderTop: `1px solid ${T.border}` }} />
+                            {row(
+                              'Total processed input',
+                              processed,
+                              '= uncached + cache read + cache write',
+                            )}
+                            {(u?.cacheAwarePricing || u?.usedDefaultPricing) && (
+                              <Typography sx={{ mt: 0.75, fontSize: 10, color: T.text3 }}>
+                                {u.cacheAwarePricing ? 'Cache-aware pricing' : ''}
+                                {u.cacheAwarePricing && u.usedDefaultPricing ? ' · ' : ''}
+                                {u.usedDefaultPricing ? 'Default rates' : ''}
+                              </Typography>
+                            )}
+                            <Typography sx={{ mt: 0.75, fontSize: 10, color: T.text3, lineHeight: 1.45 }}>
+                              Do not treat uncached-only as total input when cache read/write tokens were also processed.
+                            </Typography>
+                          </Box>
+                        )
+                      })()}
+
                       <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
                         <Typography sx={{ fontSize: 11, color: T.text3, fontWeight: 700 }}>Output tokens</Typography>
                         <Typography sx={{ mt: 0.5, fontSize: 18, fontWeight: 800, fontFamily: '"Geist Mono", monospace' }}>
                           {inspectedMessage.aiUsage?.completionTokens?.toLocaleString() ?? 'n/a'}
                         </Typography>
+                        <Typography sx={{ mt: 0.5, fontSize: 10, color: T.text3, lineHeight: 1.45 }}>
+                          Provider output includes guest-visible WhatsApp text plus hidden structured metadata
+                          (LLM_LANGUAGE, topic, owner summary, FR/ARY translations) stripped before delivery.
+                        </Typography>
+                        {(inspectedMessage.aiUsage?.guestVisibleOutputTokensEstimate != null ||
+                          inspectedMessage.aiUsage?.hiddenOutputTokensEstimate != null) && (
+                          <Typography sx={{ mt: 0.75, fontSize: 10, color: T.text3, fontFamily: '"Geist Mono", monospace' }}>
+                            local est. guest-visible{' '}
+                            {inspectedMessage.aiUsage.guestVisibleOutputTokensEstimate ?? '—'} · hidden metadata{' '}
+                            {inspectedMessage.aiUsage.hiddenOutputTokensEstimate ?? '—'}
+                          </Typography>
+                        )}
                       </Box>
+
+                      {inspectedMessage.aiUsage?.tokensUsed != null && (
+                        <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
+                          <Typography sx={{ fontSize: 11, color: T.text3, fontWeight: 700 }}>
+                            Total processed tokens
+                          </Typography>
+                          <Typography sx={{ mt: 0.5, fontSize: 16, fontWeight: 800, fontFamily: '"Geist Mono", monospace' }}>
+                            {inspectedMessage.aiUsage.tokensUsed.toLocaleString()}
+                          </Typography>
+                          <Typography sx={{ mt: 0.35, fontSize: 10, color: T.text3 }}>
+                            Input (processed) + output
+                          </Typography>
+                        </Box>
+                      )}
+
                       <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: '#ecfdf5', border: '1px solid #a7f3d0' }}>
                         <Typography sx={{ fontSize: 11, color: '#047857', fontWeight: 700 }}>Approx. cost</Typography>
                         {inspectedMessage.aiUsage?.costEquation ? (
