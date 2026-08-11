@@ -1944,10 +1944,20 @@ export default function ConversationThread({
                   ✕
                 </Box>
               </Box>
-              {(inspectedMessage.aiModel || inspectedMessage.tokensUsed != null) && (
+              {(inspectedMessage.aiModel ||
+                inspectedMessage.tokensUsed != null ||
+                inspectedMessage.processingTrace ||
+                inspectedMessage.messageSource) && (
                 <Typography sx={{ mt: 1.5, fontSize: 11, color: T.text3 }}>
-                  {inspectedMessage.aiModel || 'No AI model'}
-                  {inspectedMessage.tokensUsed != null ? ` · ${inspectedMessage.tokensUsed} tokens` : ''}
+                  {inspectedMessage.isAI || inspectedMessage.messageSource === 'ai'
+                    ? inspectedMessage.aiModel || 'LLM reply'
+                    : 'No LLM call · cost $0'}
+                  {inspectedMessage.isAI && inspectedMessage.tokensUsed != null
+                    ? ` · ${inspectedMessage.tokensUsed} tokens`
+                    : ''}
+                  {inspectedMessage.messageSource
+                    ? ` · source ${inspectedMessage.messageSource}`
+                    : ''}
                 </Typography>
               )}
               {inspectedMessage.processingTrace && (
@@ -1956,17 +1966,19 @@ export default function ConversationThread({
                     `Route: ${inspectedMessage.processingTrace.route || 'unknown'}`,
                     `Categories: ${inspectedCategories.length ? inspectedCategories.join(', ') : 'none'}`,
                     `Tokens: ${
-                      inspectedMessage.aiUsage?.promptTokens != null ||
-                      inspectedMessage.aiUsage?.completionTokens != null
-                        ? `${
-                            inspectedMessage.aiUsage.processedInputTokens ??
-                            (inspectedMessage.aiUsage.promptTokens != null
-                              ? (inspectedMessage.aiUsage.promptTokens ?? 0) +
-                                (inspectedMessage.aiUsage.cacheReadTokens ?? 0) +
-                                (inspectedMessage.aiUsage.cacheWriteTokens ?? 0)
-                              : '—')
-                          } in / ${inspectedMessage.aiUsage.completionTokens ?? '—'} out`
-                        : inspectedMessage.tokensUsed ?? 'n/a'
+                      inspectedMessage.isAI || inspectedMessage.messageSource === 'ai'
+                        ? inspectedMessage.aiUsage?.promptTokens != null ||
+                          inspectedMessage.aiUsage?.completionTokens != null
+                          ? `${
+                              inspectedMessage.aiUsage.processedInputTokens ??
+                              (inspectedMessage.aiUsage.promptTokens != null
+                                ? (inspectedMessage.aiUsage.promptTokens ?? 0) +
+                                  (inspectedMessage.aiUsage.cacheReadTokens ?? 0) +
+                                  (inspectedMessage.aiUsage.cacheWriteTokens ?? 0)
+                                : '—')
+                            } in / ${inspectedMessage.aiUsage.completionTokens ?? '—'} out`
+                          : inspectedMessage.tokensUsed ?? 'n/a'
+                        : 'No LLM · $0'
                     }`,
                   ].map((label) => (
                     <Box
@@ -2277,9 +2289,32 @@ export default function ConversationThread({
                 <>
                   {!inspectedMessage.aiUsage && inspectedMessage.tokensUsed == null ? (
                     <Box sx={{ p: 2, borderRadius: 2, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
-                      <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>No AI cost for this reply</Typography>
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>No LLM call · cost $0</Typography>
                       <Typography sx={{ mt: 0.75, fontSize: 12, color: T.text3, lineHeight: 1.55 }}>
-                        No LLM call was billed for this message (menu shortcut / backend template). Meta WhatsApp messaging fees are tracked separately.
+                        Deterministic menu/flow/backend routes do not call the LLM. Meta WhatsApp messaging fees
+                        are tracked separately.
+                        {inspectedMessage.processingTrace?.route
+                          ? ` Route: ${inspectedMessage.processingTrace.route}.`
+                          : ''}
+                        {inspectedMessage.whatsappDeliveryError
+                          ? ` Failure: ${inspectedMessage.whatsappDeliveryError}`
+                          : ''}
+                      </Typography>
+                    </Box>
+                  ) : inspectedMessage.aiUsage?.costEquation === 'No LLM call · cost $0' ||
+                    (inspectedMessage.aiUsage?.costUsd === 0 &&
+                      !inspectedMessage.aiUsage?.model &&
+                      (inspectedMessage.aiUsage?.tokensUsed ?? 0) === 0) ? (
+                    <Box sx={{ p: 2, borderRadius: 2, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>No LLM call · cost $0</Typography>
+                      <Typography sx={{ mt: 0.75, fontSize: 12, color: T.text3, lineHeight: 1.55 }}>
+                        Deterministic route — no conversational model was billed.
+                        {inspectedMessage.processingTrace?.route
+                          ? ` Route: ${inspectedMessage.processingTrace.route}.`
+                          : ''}
+                        {inspectedMessage.whatsappDeliveryError
+                          ? ` Failure reason: ${inspectedMessage.whatsappDeliveryError}`
+                          : ''}
                       </Typography>
                     </Box>
                   ) : (

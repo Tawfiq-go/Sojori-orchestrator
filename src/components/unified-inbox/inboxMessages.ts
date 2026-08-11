@@ -74,12 +74,15 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
         const waStatus = exchange.ai_response_send_status;
         const waFailed = waStatus === 'failed';
         const isAdminOutbound = Boolean(exchange.sent_by_admin) && Boolean(aiText);
+        const src = String(exchange.ai_response_message_source || '').toLowerCase();
+        const isLlmReply = src === 'ai';
         msgs.push({
           id: `ai-${index}`,
           from: exchange.sent_by_admin ? 'you' : 'sojori',
           text: aiText,
           time: formatTime(exchange.timestamp),
-          isAI: isAdminOutbound ? false : !exchange.sent_by_admin,
+          // Only true LLM conversational replies — never menu/backend/orchestrator.
+          isAI: isAdminOutbound ? false : isLlmReply,
           isAdmin: isAdminOutbound,
           status: waFailed ? undefined : waStatus === 'sent' ? 'sent' : undefined,
           whatsappDelivery: waStatus,
@@ -91,6 +94,7 @@ export function buildInboxMessages(exchanges: MessageExchange[], isOta = false):
           aiUsage: exchange.ai_usage ?? null,
           contentType: exchange.ai_response_content_type,
           ownerSummary: exchange.owner_summary ?? null,
+          messageSource: exchange.ai_response_message_source,
         });
       }
     }

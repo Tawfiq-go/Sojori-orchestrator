@@ -103,6 +103,8 @@ export interface Message {
   contentType?: MessageContentType | null;
   /** Résumé PM (ownerSummary) — libellé non technique. */
   ownerSummary?: string | null;
+  /** backend | menu | ai | orchestrator — drives SOJORI AI badge. */
+  messageSource?: string | null;
   /** Inbox Resa — tags (audio, demande, confirmation…) */
   tags?: string[];
   /** Inbox Resa — URL blob locale pour lecture audio */
