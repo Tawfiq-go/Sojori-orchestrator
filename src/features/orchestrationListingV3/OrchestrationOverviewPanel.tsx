@@ -69,6 +69,7 @@ import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
 import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
 import V3InformSyndicPanel from './V3InformSyndicPanel';
 import CleaningChecklistPanel from '../listing/components/ConfigOrchestration/CleaningChecklistPanel';
+import CleaningDeclarePanel from '../listing/components/ConfigOrchestration/CleaningDeclarePanel';
 import MenageOpsPanel from '../listing/components/ConfigOrchestration/MenageOpsPanel';
 import OrchestrationGlobalSwitch from './OrchestrationGlobalSwitch';
 import CapabilityAuditStrip from './CapabilityAuditStrip';
@@ -1004,6 +1005,7 @@ export default function OrchestrationOverviewPanel({
   const [openGroups, setOpenGroups] = useState<Set<CapabilityGroupId | 'messages'>>(new Set());
   /** Checklist ménage sous Flows — repliée par défaut. */
   const [cleaningChecklistOpen, setCleaningChecklistOpen] = useState(false);
+  const [cleaningDeclareOpen, setCleaningDeclareOpen] = useState(false);
 
   const reload = useCallback((_opts?: { silent?: boolean }) => {
     // Pas de setLoading(true) ici : évite de démonter la grille / les modals (effet « reload page »).
@@ -2935,7 +2937,7 @@ export default function OrchestrationOverviewPanel({
                     </Typography>
                     {!cleaningChecklistOpen ? (
                       <Typography sx={{ fontSize: 10.5, color: V3.t3, mt: 0.15 }}>
-                        Repliée · clic pour éditer (FR/EN/AR · thèmes)
+                        Repliée · clic pour éditer (FR/DA/EN/AR · thèmes)
                       </Typography>
                     ) : null}
                   </Box>
@@ -2953,7 +2955,7 @@ export default function OrchestrationOverviewPanel({
                 <Collapse in={cleaningChecklistOpen} unmountOnExit={false}>
                   <Box sx={{ pt: 1 }}>
                     <Typography sx={{ fontSize: 11, color: V3.t3, mb: 1.25, lineHeight: 1.4 }}>
-                      Thèmes (Chambres, SDB, Cuisine…) · FR/EN/AR · police compacte. WA Terminer = 1
+                      Thèmes (Chambres, SDB, Cuisine…) · FR/DA/EN/AR · police compacte. WA Terminer = 1
                       CheckboxGroup / cat sur le même écran (non bloquant au début).
                     </Typography>
                     <CleaningChecklistPanel
@@ -2976,6 +2978,92 @@ export default function OrchestrationOverviewPanel({
                               e instanceof Error
                                 ? e.message
                                 : 'Enregistrement checklist impossible',
+                            );
+                            throw e;
+                          }
+                        }
+                      }}
+                    />
+                  </Box>
+                </Collapse>
+
+                <Box
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setCleaningDeclareOpen((v) => !v)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setCleaningDeclareOpen((v) => !v);
+                    }
+                  }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.75,
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    py: 0.5,
+                    px: 0.25,
+                    mt: 1.25,
+                    borderRadius: 1,
+                    '&:hover': { bgcolor: V3.alt },
+                  }}
+                >
+                  <ExpandMoreIcon
+                    sx={{
+                      fontSize: 18,
+                      color: V3.t3,
+                      transform: cleaningDeclareOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                      transition: 'transform 0.15s ease',
+                    }}
+                  />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.t, lineHeight: 1.3 }}>
+                      ⚠️ Déclarations problèmes
+                    </Typography>
+                    {!cleaningDeclareOpen ? (
+                      <Typography sx={{ fontSize: 10.5, color: V3.t3, mt: 0.15 }}>
+                        Repliée · clic pour éditer (FR/DA/EN/AR · liste plate)
+                      </Typography>
+                    ) : null}
+                  </Box>
+                  <Typography
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: V3.t4,
+                    }}
+                  >
+                    {cleaningDeclareOpen ? 'ouvert' : 'fermé'}
+                  </Typography>
+                </Box>
+                <Collapse in={cleaningDeclareOpen} unmountOnExit={false}>
+                  <Box sx={{ pt: 1 }}>
+                    <Typography sx={{ fontSize: 11, color: V3.t3, mb: 1.25, lineHeight: 1.4 }}>
+                      Liste des problèmes à cocher (cassé, tache, fuite…) · même écran Terminer WA.
+                    </Typography>
+                    <CleaningDeclarePanel
+                      listingId={listingId || ''}
+                      listingValues={listingValues}
+                      templateMode={!isListingScope}
+                      onListingPatch={async (patch) => {
+                        setListingValues((prev) => ({ ...prev, ...patch }));
+                        if (!isListingScope) {
+                          try {
+                            const next = { ...listingValues, ...patch };
+                            await listingsService.putListingOwnerConfigTemplateSection(
+                              ownerKey,
+                              'listing',
+                              next,
+                            );
+                            toast.success('Déclarations template enregistrées');
+                          } catch (e: unknown) {
+                            toast.error(
+                              e instanceof Error
+                                ? e.message
+                                : 'Enregistrement déclarations impossible',
                             );
                             throw e;
                           }
