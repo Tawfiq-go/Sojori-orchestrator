@@ -402,7 +402,7 @@ export default function CleaningChecklistPanel({
   return (
     <Box>
       <ConfigIntroBar saveState={savingState}>
-        Pattern : 1 catégorie = 1 thème · items FR/EN/AR · WA Terminer = 1 CheckboxGroup / cat (même
+        Pattern : 1 catégorie = 1 thème · items FR/DA/EN/AR · WA Terminer = 1 CheckboxGroup / cat (même
         écran, non bloquant au début).
       </ConfigIntroBar>
 

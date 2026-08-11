@@ -33,6 +33,16 @@ export type CleaningChecklistCategory = {
   items: CleaningChecklistItem[];
 };
 
+/** Déclarations problèmes FdM (liste plate, multi-langue). */
+export type CleaningDeclareOption = {
+  id: string;
+  label: string;
+  labelDa?: string;
+  labelEn?: string;
+  labelAr?: string;
+  order: number;
+};
+
 export type CleaningSojoriConfig = {
   enabled: boolean;
   preferredDayAfterCheckout: number;
@@ -41,6 +51,8 @@ export type CleaningSojoriConfig = {
   checklistCategories: CleaningChecklistCategory[];
   /** Flat dérivé (compat lecture / tâches) */
   checklist: CleaningChecklistItem[];
+  /** Déclarations WA Terminer */
+  declareOptions: CleaningDeclareOption[];
 };
 
 /** Tokens typo du pattern checklist PM (petite police). */
@@ -429,6 +441,47 @@ export function normalizeChecklistCategories(raw: unknown, flatFallback?: unknow
   return categoriesFromFlat(flatFallback);
 }
 
+export const DEFAULT_CLEANING_DECLARE_OPTIONS: CleaningDeclareOption[] = [
+  { id: 'broken_missing', label: 'Objet cassé ou manquant', labelDa: 'حاجة مكسورة ولا ناقصة', labelEn: 'Broken or missing item', labelAr: 'شيء مكسور أو ناقص', order: 0 },
+  { id: 'degraded', label: 'Appartement dégradé', labelDa: 'الشقة فيها تخسار', labelEn: 'Damaged apartment', labelAr: 'شقة متضررة', order: 1 },
+  { id: 'stain_sofa', label: 'Tache canapé / fauteuil', labelDa: 'بقعة فالصالون ولا فالكنبة', labelEn: 'Stain on sofa', labelAr: 'بقعة على الكنبة', order: 2 },
+  { id: 'stain_bed', label: 'Tache lit / matelas / linge', labelDa: 'بقعة فالسرير ولا فالماتلا', labelEn: 'Stain on bed/linen', labelAr: 'بقعة على السرير', order: 3 },
+  { id: 'linen_missing', label: 'Linge/serviette manquant', labelDa: 'مناشف ولا بياضات ناقصين', labelEn: 'Missing linen/towel', labelAr: 'بياضات ناقصة', order: 4 },
+  { id: 'ac_issue', label: 'Problème climatisation', labelDa: 'مشكل فالكليماتيزور', labelEn: 'A/C problem', labelAr: 'مشكلة تكييف', order: 5 },
+  { id: 'water_leak', label: 'Fuite eau / plomberie', labelDa: 'تسريب الما / السباكة', labelEn: 'Water leak / plumbing', labelAr: 'تسرب ماء / سباكة', order: 6 },
+  { id: 'equipment', label: 'Équipement en panne', labelDa: 'جهاز ما خدامش', labelEn: 'Equipment not working', labelAr: 'جهاز معطل', order: 7 },
+  { id: 'glass_damage', label: 'Vitre/miroir abîmé', labelDa: 'زجاج ولا مرآة مكسورين', labelEn: 'Broken glass/mirror', labelAr: 'زجاج أو مرآة تالف', order: 8 },
+  { id: 'guest_left', label: 'Objet client oublié', labelDa: 'حاجة الزبون نساها', labelEn: 'Guest left an item', labelAr: 'غرض نزيل', order: 9 },
+  { id: 'extra_clean', label: 'Nettoyage exceptionnel', labelDa: 'خاص تنظيف إضافي', labelEn: 'Extra cleaning needed', labelAr: 'تنظيف إضافي', order: 10 },
+  { id: 'other', label: 'Autre problème', labelDa: 'مشكل آخر', labelEn: 'Other issue', labelAr: 'مشكلة أخرى', order: 11 },
+];
+
+export function normalizeDeclareOptions(raw: unknown): CleaningDeclareOption[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return DEFAULT_CLEANING_DECLARE_OPTIONS.map((o, i) => ({ ...o, order: i }));
+  }
+  const out: CleaningDeclareOption[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const r = raw[i] as Record<string, unknown>;
+    const id = strOpt(r.id).slice(0, 40);
+    const label = strOpt(r.label) || strOpt(r.title);
+    if (!id || !label) continue;
+    if (!/^[a-z0-9_]{1,40}$/i.test(id)) continue;
+    out.push({
+      id,
+      label,
+      labelDa: strOpt(r.labelDa),
+      labelEn: strOpt(r.labelEn),
+      labelAr: strOpt(r.labelAr),
+      order: typeof r.order === 'number' ? r.order : i,
+    });
+    if (out.length >= 20) break;
+  }
+  return out.length
+    ? out.sort((a, b) => a.order - b.order).map((o, i) => ({ ...o, order: i }))
+    : DEFAULT_CLEANING_DECLARE_OPTIONS.map((o, i) => ({ ...o, order: i }));
+}
+
 export function mapListingToCleaningSojoriConfig(raw: Record<string, unknown>): CleaningSojoriConfig {
   const orch = (raw.cleaningOrchestration as Record<string, unknown>) || {};
   const enabled = orch.enabled === true || raw.orchestration_cleaning_sojori === true;
@@ -445,6 +498,7 @@ export function mapListingToCleaningSojoriConfig(raw: Record<string, unknown>): 
     safetyMaxDirtyDays: safety,
     checklistCategories,
     checklist: flattenCategories(checklistCategories),
+    declareOptions: normalizeDeclareOptions(orch.declareOptions),
   };
 }
 
@@ -487,6 +541,14 @@ export function mapCleaningSojoriToListingPatch(
 ): Record<string, unknown> {
   const existing = existingCleaningOrch(listingValues);
   const checklistCategories = serializeCategories(cfg.checklistCategories);
+  const declareOptions = normalizeDeclareOptions(cfg.declareOptions).map((o, i) => ({
+    id: o.id,
+    label: o.label,
+    labelDa: strOpt(o.labelDa),
+    labelEn: strOpt(o.labelEn),
+    labelAr: strOpt(o.labelAr),
+    order: i,
+  }));
   return {
     orchestration_cleaning_sojori: cfg.enabled,
     cleaningOrchestration: {
@@ -496,6 +558,7 @@ export function mapCleaningSojoriToListingPatch(
       safetyMaxDirtyDays: cfg.safetyMaxDirtyDays,
       checklistCategories,
       checklist: flattenCategories(cfg.checklistCategories),
+      declareOptions,
     },
   };
 }
@@ -528,6 +591,38 @@ export function mapCleaningChecklistPatch(
       checklistCategories: cats,
       checklist: flattenCategories(checklistCategories),
     },
+  };
+}
+
+export function mapCleaningDeclarePatch(
+  declareOptions: CleaningDeclareOption[],
+  listingValues?: Record<string, unknown>,
+): Record<string, unknown> {
+  const existing = existingCleaningOrch(listingValues);
+  const opts = normalizeDeclareOptions(declareOptions).map((o, i) => ({
+    id: o.id,
+    label: o.label,
+    labelDa: strOpt(o.labelDa),
+    labelEn: strOpt(o.labelEn),
+    labelAr: strOpt(o.labelAr),
+    order: i,
+  }));
+  return {
+    cleaningOrchestration: {
+      ...existing,
+      declareOptions: opts,
+    },
+  };
+}
+
+export function createEmptyDeclareOption(order: number): CleaningDeclareOption {
+  return {
+    id: newId('decl'),
+    label: '',
+    labelDa: '',
+    labelEn: '',
+    labelAr: '',
+    order,
   };
 }
 
