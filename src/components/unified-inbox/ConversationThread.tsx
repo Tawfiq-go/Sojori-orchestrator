@@ -365,11 +365,26 @@ export default function ConversationThread({
     if (!isInspectableMessage(message)) return;
     setExpandedTraceSteps({});
     setExpandedPromptParts({});
-    setInspectTab('process');
+    // OTA AI audit is prompt/cost only — WhatsApp keeps Process tab.
+    const isOtaAiAudit = Boolean(
+      message.generationId ||
+        message.replyMode === 'ai_assisted' ||
+        message.replyMode === 'ai_generated',
+    );
+    setInspectTab(isOtaAiAudit ? 'prompt' : 'process');
 
     const hasEmbeddedAudit = Boolean(message.processingTrace || message.aiPrompt || message.aiUsage);
-    if (hasEmbeddedAudit || !message.generationId) {
+    if (hasEmbeddedAudit) {
       setInspectedMessage(message);
+      return;
+    }
+    if (!message.generationId) {
+      setInspectedMessage({
+        ...message,
+        // Marker for precise OTA missing-link copy (not WhatsApp deterministic).
+        aiUsage: message.aiUsage ?? null,
+        aiPrompt: message.aiPrompt ?? null,
+      });
       return;
     }
 
@@ -388,9 +403,15 @@ export default function ConversationThread({
           aiModel: data.generation.aiUsage?.model,
           tokensUsed: data.generation.aiUsage?.tokensUsed,
         });
+      } else {
+        setInspectedMessage({
+          ...message,
+          // Keep generationId so UI can show audit-link error (not deterministic WA copy).
+        });
       }
     } catch (err) {
       console.warn('[AI inspector] OTA audit fetch failed', err);
+      setInspectedMessage({ ...message });
     } finally {
       setInspectLoading(false);
     }
@@ -1936,8 +1957,11 @@ export default function ConversationThread({
                       : inspectedMessage.processingTrace
                         ? `${inspectedMessage.processingTrace.route || 'response'} · ${inspectedMessage.processingTrace.durationMs} ms`
                         : inspectedMessage.generationId
-                          ? 'No embedded trace — audit unavailable or historical'
-                          : 'Trace unavailable for this response'}
+                          ? 'OTA AI · loading audit by generationId'
+                          : inspectedMessage.replyMode === 'ai_assisted' ||
+                              inspectedMessage.replyMode === 'ai_generated'
+                            ? 'OTA AI · generationId missing on message'
+                            : 'Trace unavailable for this response'}
                   </Typography>
                 </Box>
                 <Box component="button" onClick={() => setInspectedMessage(null)} sx={iconBtnSx} aria-label="Close">
@@ -2001,11 +2025,18 @@ export default function ConversationThread({
               )}
               <Box sx={{ display: 'flex', gap: 0.5, mt: 1.75 }}>
                 {(
-                  [
-                    { id: 'process' as const, label: 'Process' },
-                    { id: 'prompt' as const, label: 'AI Prompt' },
-                    { id: 'cost' as const, label: 'AI Cost' },
-                  ] as const
+                  inspectedMessage.generationId ||
+                  inspectedMessage.replyMode === 'ai_assisted' ||
+                  inspectedMessage.replyMode === 'ai_generated'
+                    ? ([
+                        { id: 'prompt' as const, label: 'AI Prompt' },
+                        { id: 'cost' as const, label: 'AI Cost' },
+                      ] as const)
+                    : ([
+                        { id: 'process' as const, label: 'Process' },
+                        { id: 'prompt' as const, label: 'AI Prompt' },
+                        { id: 'cost' as const, label: 'AI Cost' },
+                      ] as const)
                 ).map((tab) => (
                   <Box
                     key={tab.id}
@@ -2128,9 +2159,20 @@ export default function ConversationThread({
                 <>
                   {!inspectedMessage.aiPrompt?.parts?.length ? (
                     <Box sx={{ p: 2, borderRadius: 2, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
-                      <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>No AI prompt for this reply</Typography>
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>
+                        {inspectedMessage.generationId ||
+                        inspectedMessage.replyMode === 'ai_assisted' ||
+                        inspectedMessage.replyMode === 'ai_generated'
+                          ? 'OTA AI audit unavailable'
+                          : 'No AI prompt for this reply'}
+                      </Typography>
                       <Typography sx={{ mt: 0.75, fontSize: 12, color: T.text3, lineHeight: 1.55 }}>
-                        Deterministic menu/flow routes do not call the LLM. Prompt sections are saved only on conversational AI replies (new messages after this deploy).
+                        {inspectedMessage.generationId
+                          ? `generationId ${inspectedMessage.generationId} is on the message, but the stored prompt/cost audit could not be loaded (missing record, permissions, or srv-fulltask mismatch).`
+                          : inspectedMessage.replyMode === 'ai_assisted' ||
+                              inspectedMessage.replyMode === 'ai_generated'
+                            ? `This OTA reply is marked ${inspectedMessage.replyMode}, but generationId was not persisted on the message — the AI Prompt/Cost audit cannot be linked. Re-generate with AI and send again after the latest srv-reservations + orchestrator deploy.`
+                            : 'Deterministic menu/flow routes do not call the LLM. Prompt sections are saved only on conversational AI replies (new messages after this deploy).'}
                       </Typography>
                     </Box>
                   ) : (
@@ -2289,16 +2331,28 @@ export default function ConversationThread({
                 <>
                   {!inspectedMessage.aiUsage && inspectedMessage.tokensUsed == null ? (
                     <Box sx={{ p: 2, borderRadius: 2, bgcolor: T.bg2, border: `1px solid ${T.border}` }}>
-                      <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>No LLM call · cost $0</Typography>
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>
+                        {inspectedMessage.generationId ||
+                        inspectedMessage.replyMode === 'ai_assisted' ||
+                        inspectedMessage.replyMode === 'ai_generated'
+                          ? 'OTA AI cost audit unavailable'
+                          : 'No LLM call · cost $0'}
+                      </Typography>
                       <Typography sx={{ mt: 0.75, fontSize: 12, color: T.text3, lineHeight: 1.55 }}>
-                        Deterministic menu/flow/backend routes do not call the LLM. Meta WhatsApp messaging fees
-                        are tracked separately.
-                        {inspectedMessage.processingTrace?.route
-                          ? ` Route: ${inspectedMessage.processingTrace.route}.`
-                          : ''}
-                        {inspectedMessage.whatsappDeliveryError
-                          ? ` Failure: ${inspectedMessage.whatsappDeliveryError}`
-                          : ''}
+                        {inspectedMessage.generationId
+                          ? `generationId ${inspectedMessage.generationId} is on the message, but the stored prompt/cost audit could not be loaded (missing record, permissions, or srv-fulltask mismatch).`
+                          : inspectedMessage.replyMode === 'ai_assisted' ||
+                              inspectedMessage.replyMode === 'ai_generated'
+                            ? `This OTA reply is marked ${inspectedMessage.replyMode}, but generationId was not persisted on the message — the AI Cost audit cannot be linked. Re-generate with AI and send again after the latest srv-reservations + orchestrator deploy.`
+                            : `Deterministic menu/flow/backend routes do not call the LLM. Meta WhatsApp messaging fees are tracked separately.${
+                                inspectedMessage.processingTrace?.route
+                                  ? ` Route: ${inspectedMessage.processingTrace.route}.`
+                                  : ''
+                              }${
+                                inspectedMessage.whatsappDeliveryError
+                                  ? ` Failure: ${inspectedMessage.whatsappDeliveryError}`
+                                  : ''
+                              }`}
                       </Typography>
                     </Box>
                   ) : inspectedMessage.aiUsage?.costEquation === 'No LLM call · cost $0' ||
