@@ -45,29 +45,47 @@ export function useInboxOTAConversation() {
   const selectGenRef = useRef(0);
   const activeThreadIdRef = useRef<string | null>(null);
 
-  const appendOutboundMessage = useCallback((text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const msg: Message = {
-      id: `local-${Date.now()}`,
-      from: 'you',
-      text: trimmed,
-      time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      status: 'sent',
-    };
-    setMessages((prev) => {
-      const next = [...prev, msg];
-      const key = activeThreadIdRef.current;
-      if (key) {
-        const prevCache = otaMessagesCache.get(key);
-        otaMessagesCache.set(key, {
-          messages: next,
-          total: Math.max(prevCache?.total || 0, next.length),
-        });
-      }
-      return next;
-    });
-  }, []);
+  const appendOutboundMessage = useCallback(
+    (
+      text: string,
+      meta?: {
+        generationId?: string | null;
+        replyMode?: 'manual' | 'ai_generated' | 'ai_assisted' | string | null;
+      },
+    ) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const generationId =
+        typeof meta?.generationId === 'string' && meta.generationId.trim()
+          ? meta.generationId.trim()
+          : undefined;
+      const msg: Message = {
+        id: `local-${Date.now()}`,
+        from: 'you',
+        text: trimmed,
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        status: 'sent',
+        ...(generationId || meta?.replyMode === 'ai_assisted' || meta?.replyMode === 'ai_generated'
+          ? { isAI: true }
+          : {}),
+        ...(generationId ? { generationId } : {}),
+        ...(meta?.replyMode ? { replyMode: meta.replyMode } : {}),
+      };
+      setMessages((prev) => {
+        const next = [...prev, msg];
+        const key = activeThreadIdRef.current;
+        if (key) {
+          const prevCache = otaMessagesCache.get(key);
+          otaMessagesCache.set(key, {
+            messages: next,
+            total: Math.max(prevCache?.total || 0, next.length),
+          });
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const removeLastOutboundMessage = useCallback(() => {
     setMessages((prev) => {

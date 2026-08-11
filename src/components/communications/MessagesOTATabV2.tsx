@@ -1140,26 +1140,35 @@ export default function MessagesOTATabV2() {
       } else if (!replyMode && opts?.aiAssisted) {
         replyMode = 'ai_assisted';
       }
-      inbox.appendOutboundMessage(trimmed);
+      inbox.appendOutboundMessage(trimmed, {
+        generationId,
+        replyMode,
+      });
       try {
         const sendRes = await messagesService.sendOTAMessage(row.threadId, trimmed, {
           aiAssisted: Boolean(generationId) || opts?.aiAssisted === true,
           replyMode,
           generationId,
         });
-        if (generationId) {
+        // Prefer server-confirmed generationId (may echo body).
+        const confirmedGenerationId =
+          (typeof sendRes?.generationId === 'string' && sendRes.generationId.trim()) ||
+          generationId ||
+          undefined;
+        if (confirmedGenerationId) {
           const messageId = Number(sendRes?.result?.ID ?? sendRes?.messageId);
+          // Browser link is a backup — srv-reservations already links server-side.
           if (Number.isFinite(messageId) && messageId > 0) {
             try {
               const { linkOtaAiGenerationAudit } = await import(
                 '../../services/communicationsAiService'
               );
-              await linkOtaAiGenerationAudit(generationId, {
+              await linkOtaAiGenerationAudit(confirmedGenerationId, {
                 messageId,
                 finalBody: trimmed,
               });
             } catch (linkErr) {
-              console.warn('[OTA] generation audit link failed', linkErr);
+              console.warn('[OTA] generation audit link failed (backup)', linkErr);
             }
           }
         }

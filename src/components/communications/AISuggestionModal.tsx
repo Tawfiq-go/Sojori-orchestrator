@@ -168,23 +168,34 @@ export default function AISuggestionModal({
   );
 
   const handleUse = () => {
-    if (suggestion.trim()) {
-      onUseSuggestion(suggestion.trim(), {
-        generationId: generationId || undefined,
-      });
-      handleClose();
+    if (!suggestion.trim()) return;
+    if (!generationId?.trim()) {
+      setError(
+        'Aucun generationId — cliquez Améliorer / Régénérer avec AI avant d’utiliser la suggestion.',
+      );
+      return;
     }
+    onUseSuggestion(suggestion.trim(), {
+      generationId: generationId.trim(),
+    });
+    handleClose();
   };
 
   const handleSendSuggestion = async () => {
     const text = suggestion.trim();
     if (!text || !onSendSuggestion || sendingSuggestion) return;
+    if (!generationId?.trim()) {
+      setError(
+        'Aucun generationId — régénérez avec AI avant d’envoyer (audit prompt/coût requis).',
+      );
+      return;
+    }
     try {
       setSendingSuggestion(true);
       setError(null);
       await onSendSuggestion(text, {
-        generationId: generationId || undefined,
-        replyMode: generationId ? 'ai_generated' : 'ai_assisted',
+        generationId: generationId.trim(),
+        replyMode: 'ai_generated',
       });
       handleClose();
     } catch (err: unknown) {
