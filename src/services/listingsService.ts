@@ -405,13 +405,20 @@ function normalizeListingSummary(source: unknown): ListingSummary {
                 (asNumber(r.roomNumber) != null ? `Chambre ${r.roomNumber}` : '');
               if (!rid || !rname) return null;
               const number = asNumber(r.roomNumber);
+              const housekeepingState = pickFirstString(r, ['housekeepingState']) || undefined;
               return {
                 id: rid,
                 name: rname,
                 ...(number != null ? { number } : {}),
+                ...(housekeepingState ? { housekeepingState } : {}),
               };
             })
-            .filter(Boolean) as Array<{ id: string; name: string; number?: number }>;
+            .filter(Boolean) as Array<{
+            id: string;
+            name: string;
+            number?: number;
+            housekeepingState?: string;
+          }>;
           return {
             id,
             name,
@@ -421,7 +428,7 @@ function normalizeListingSummary(source: unknown): ListingSummary {
         .filter(Boolean) as Array<{
         id: string;
         name: string;
-        rooms?: Array<{ id: string; name: string; number?: number }>;
+        rooms?: Array<{ id: string; name: string; number?: number; housekeepingState?: string }>;
       }>;
       return mapped.length > 0 ? mapped : undefined;
     })(),

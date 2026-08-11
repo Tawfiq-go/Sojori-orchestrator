@@ -421,6 +421,7 @@ export type AnalyticsReservationRow = {
 const ANALYTICS_RESERVATION_STATUSES = [
   'Pending',
   'Confirmed',
+  'Started',
   'Completed',
   'CancelledByAdmin',
   'CancelledByCustomer',

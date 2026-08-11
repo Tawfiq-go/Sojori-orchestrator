@@ -14,19 +14,58 @@ const PM_FLOW_KEYS = [
   'pm_commission_income',
   'cleaning_retained_pm', // extras = ménages OTA récupérés
   'city_tax_collected',
+  'fixed_rent',
+  'fixed_wifi',
+  'fixed_electricity',
   'staff_salaries',
   'checkout_cleaning_cost',
   'expenses_pm',
 ] as const;
+
+const PM_FLOW_KEYS_SOUS_LOC = [
+  'gross_revenue',
+  'cleaning_retained_pm',
+  'ota_commission',
+  'fixed_rent',
+  'fixed_wifi',
+  'fixed_electricity',
+  'staff_salaries',
+  'checkout_cleaning_cost',
+  'expenses_pm',
+] as const;
+
+/** Libellés synthèse sous-location (ordre CA → ménage → charges). */
+export const SOUS_LOC_METRIC_LABELS: Record<string, string> = {
+  gross_revenue: 'Chiffre d’affaires',
+  cleaning_retained_pm: 'Ménage OTA récupéré',
+  ota_commission: 'Commission OTA',
+  fixed_rent: 'Loyers dus',
+  fixed_wifi: 'Internet',
+  fixed_electricity: 'Électricité',
+  staff_salaries: 'Salaires staff',
+  checkout_cleaning_cost: 'Ménage / séjour',
+  expenses_pm: 'Autres charges',
+};
 
 export function profitLandlordFlowMetrics(metrics: ProfitMetric[]): ProfitMetric[] {
   const byKey = new Map(metrics.map((m) => [m.key, m]));
   return LANDLORD_FLOW_KEYS.map((k) => byKey.get(k)).filter((m): m is ProfitMetric => !!m);
 }
 
-export function profitPmFlowMetrics(metrics: ProfitMetric[]): ProfitMetric[] {
+export function profitPmFlowMetrics(
+  metrics: ProfitMetric[],
+  opts?: { sousLocation?: boolean },
+): ProfitMetric[] {
   const byKey = new Map(metrics.map((m) => [m.key, m]));
-  return PM_FLOW_KEYS.map((k) => byKey.get(k)).filter((m): m is ProfitMetric => !!m);
+  const keys = opts?.sousLocation ? PM_FLOW_KEYS_SOUS_LOC : PM_FLOW_KEYS;
+  return keys
+    .map((k) => byKey.get(k))
+    .filter((m): m is ProfitMetric => !!m)
+    .map((m) =>
+      opts?.sousLocation && SOUS_LOC_METRIC_LABELS[m.key]
+        ? { ...m, label: SOUS_LOC_METRIC_LABELS[m.key] }
+        : m,
+    );
 }
 
 /** Totaux reversement propriétaire + marge PM (recalcule les anciens snapshots). */

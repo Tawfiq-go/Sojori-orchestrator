@@ -211,9 +211,11 @@ export function ReservationSejourPage() {
     }
   };
 
-  const statusBadge = reservationDetails?.status === 'Confirmed' ? {
-    bg: 'rgba(10,143,94,0.12)', color: T.success, label: 'Confirmé',
-  } : { bg: 'rgba(196,101,6,0.12)', color: T.warning, label: reservationDetails?.status || 'En attente' };
+  const statusBadge = reservationDetails?.status === 'Confirmed'
+    ? { bg: 'rgba(10,143,94,0.12)', color: T.success, label: 'Confirmé' }
+    : reservationDetails?.status === 'Started'
+      ? { bg: 'rgba(31,112,194,0.12)', color: T.info, label: 'Started' }
+      : { bg: 'rgba(196,101,6,0.12)', color: T.warning, label: reservationDetails?.status || 'En attente' };
 
   const tabContent = useMemo(() => {
     if (!reservationDetails) return null;

@@ -102,6 +102,14 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         iconColor: '#b8851a',
         badge: 'AI',
       },
+      {
+        id: 'ops-board',
+        label: 'Ops Board',
+        iconType: 'monitor',
+        iconColor: '#1E5B57',
+        badge: 'Live',
+        description: 'Suivi unités · ménage · arrivées — Nommos (kanban HK)',
+      },
     ],
   },
   {
@@ -140,6 +148,15 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     roles: PM_ROLES,
     items: [
       { id: 'comms/guests', label: 'WhatsApp', iconType: 'chat', iconColor: '#25D366' },
+      {
+        id: 'comms/owner-inbox',
+        label: 'Resa Proprio',
+        iconType: 'chat',
+        iconColor: '#0F766E',
+        roles: PM_ROLES,
+        description: 'Échanges bookers sur le n° Réservation (+212 669-742611)',
+        badge: 'NEW',
+      },
       { id: 'comms/ota', label: 'Messages OTA', iconType: 'chat', iconColor: '#FF5A5F' },
       { id: 'comms/leads', label: 'Demande', iconType: 'chat', iconColor: '#6D9EEB' },
       { id: 'comms/reviews', label: 'Avis', iconType: 'chat', iconColor: '#E6B022' },
@@ -238,6 +255,15 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     group: 'Direct booking',
     roles: PM_ROLES,
     items: [
+      {
+        id: 'comms/owner-booking',
+        label: 'Resa Proprio · Numéros',
+        iconType: 'chat',
+        iconColor: '#0F766E',
+        roles: PM_ROLES,
+        description:
+          'Allowlist sur le numéro Réservation (+212 669-742611) — pas le numéro Staff',
+      },
       {
         id: 'direct-booking/config',
         label: 'Config',

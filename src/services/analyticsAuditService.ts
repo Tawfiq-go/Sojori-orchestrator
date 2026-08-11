@@ -15,6 +15,7 @@ import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 const AUDIT_STATUSES = [
   'Pending',
   'Confirmed',
+  'Started',
   'Completed',
   'CancelledByAdmin',
   'CancelledByCustomer',

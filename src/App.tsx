@@ -63,6 +63,9 @@ const OrchestrationDailyOpsPage = lazyWithReload(() =>
 const AiCockpitPage = lazyWithReload(() =>
   import('./pages/AiCockpitPage').then((module) => ({ default: module.default }))
 );
+const OpsBoardPage = lazyWithReload(() =>
+  import('./pages/OpsBoardPage').then((module) => ({ default: module.default }))
+);
 const OrchestrationPlansPageV2 = lazyWithReload(() =>
   import("./pages/OrchestrationPlansPageV2").then((module) => ({ default: module.default }))
 );
@@ -169,6 +172,9 @@ const WhatsAppGuestsPage = lazyWithReload(() =>
 );
 const WhatsAppStaffPage = lazyWithReload(() =>
   import('./pages/WhatsAppStaffPageV2').then((module) => ({ default: module.default }))
+);
+const OwnerBookersPage = lazyWithReload(() =>
+  import('./pages/OwnerBookersPage').then((module) => ({ default: module.default }))
 );
 const UnifiedInboxPage = lazyWithReload(() =>
   import('./pages/UnifiedInboxPage').then((module) => ({ default: module.default }))
@@ -356,6 +362,7 @@ function App() {
               <Route path="/orchestration/ops" element={<LazyRoute><OrchestrationDailyOpsPage /></LazyRoute>} />
               <Route path="/orchestration/day-plan" element={<Navigate to="/orchestration/cockpit" replace />} />
               <Route path="/orchestration/cockpit" element={<LazyRoute><AiCockpitPage /></LazyRoute>} />
+              <Route path="/ops-board" element={<LazyRoute><OpsBoardPage /></LazyRoute>} />
               <Route path="/orchestration/config" element={<LazyRoute><TasksOrchestrationFulltaskPage /></LazyRoute>} />
               <Route path="/orchestration/whatsapp-messages" element={<LazyRoute><TasksWhatsAppMessagesPage /></LazyRoute>} />
               <Route path="/orchestration/mockup" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
@@ -406,6 +413,7 @@ function App() {
               <Route path="/communications/whatsapp" element={<LazyRoute><CommsPage /></LazyRoute>} />
               <Route path="/communications/whatsapp-guests" element={<LazyRoute><WhatsAppGuestsPage /></LazyRoute>} />
               <Route path="/communications/whatsapp-staff" element={<LazyRoute><WhatsAppStaffPage /></LazyRoute>} />
+              <Route path="/communications/owner-booking" element={<LazyRoute><OwnerBookersPage /></LazyRoute>} />
               <Route path="/communications/messages-ota" element={<Navigate to="/communications?section=guest&tab=ota" replace />} />
               <Route path="/communications/staff" element={<LazyRoute><StaffWhatsAppPage /></LazyRoute>} />
               <Route path="/communications/ota" element={<LazyRoute><OTAMessagesPage /></LazyRoute>} />

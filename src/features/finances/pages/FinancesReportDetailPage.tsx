@@ -563,7 +563,6 @@ export function FinancesReportDetailPage() {
   const contract = contractSnapshot?.type ? contractSnapshot : liveContract;
   const contractMissingInSnapshot = !contractSnapshot?.type && !!contract?.type;
   const landlordFlowMetrics = profitLandlordFlowMetrics(metrics);
-  const pmFlowMetrics = profitPmFlowMetrics(metrics);
   const { netLandlord, netPm, legacyFormula } = resolveProfitReportTotals(metrics);
   const pmExpenseCount = expenses.filter((e) => e.paidBy === 'pm').length;
   const landlordExpenseCount = expenses.filter((e) => e.paidBy === 'landlord').length;
@@ -578,6 +577,7 @@ export function FinancesReportDetailPage() {
 
   const net = netLandlord;
   const isPmBusiness = report.snapshot?.reportKind === 'pm_business';
+  const isSousLocation = report.snapshot?.businessModel === 'sous_location';
   const isDraft = report.status === 'draft';
   const contractBadgeInfo = contractBadge(contract);
   const metricVal = (key: string) => Math.abs(Number(metrics.find((m) => m.key === key)?.value) || 0);
@@ -587,6 +587,9 @@ export function FinancesReportDetailPage() {
   const cleaningExtras = metricVal('cleaning_retained_pm') || metricVal('cleaning_to_pm');
   const staffSalariesCost = metricVal('staff_salaries');
   const checkoutFdMCost = metricVal('checkout_cleaning_cost');
+  const fixedRentCost = metricVal('fixed_rent');
+  const fixedWifiCost = metricVal('fixed_wifi');
+  const fixedElectricityCost = metricVal('fixed_electricity');
   const checkoutFdMCount = expenses.filter((e) =>
     /ménage checkout|menage checkout|checkout/i.test(`${e.category || ''} ${e.name || ''}`),
   ).length;
@@ -602,11 +605,48 @@ export function FinancesReportDetailPage() {
     report.snapshot?.listingBilans?.filter((b) => (b.reservations || 0) > 0).length ||
     new Set(reservations.map((r) => String(r.listingId || '')).filter(Boolean)).size ||
     0;
-  const pmFlowDisplay = pmFlowMetrics.map((m) =>
-    m.key === 'cleaning_retained_pm'
-      ? { ...m, label: 'Extras (ménages OTA récupérés)', value: Math.abs(Number(m.value) || 0) }
-      : m,
-  );
+  const pmFlowDisplay = profitPmFlowMetrics(metrics, { sousLocation: isSousLocation }).map((m) => {
+    if (m.key === 'cleaning_retained_pm') {
+      return {
+        ...m,
+        label: isSousLocation ? 'Ménage OTA récupéré' : 'Extras (ménages OTA récupérés)',
+        value: Math.abs(Number(m.value) || 0),
+      };
+    }
+    return m;
+  });
+  /** Synthèse sous-loc : injecte « CA loyer » après le CA brut. */
+  const sousLocSynthLines = isSousLocation
+    ? (() => {
+        const lines: Array<{ key: string; label: string; value: number; hint?: string }> = [];
+        for (const m of pmFlowDisplay) {
+          lines.push({
+            key: m.key,
+            label: m.label,
+            value: Number(m.value) || 0,
+            hint:
+              m.key === 'cleaning_retained_pm'
+                ? 'facturé au voyageur · 100 % pour toi'
+                : m.key === 'gross_revenue'
+                  ? 'revenu hôte (après OTA dans le résultat)'
+                  : m.key === 'ota_commission'
+                    ? 'Airbnb / Booking'
+                    : m.key === 'fixed_rent'
+                      ? `${activeListings} bien(s) · loyer mensuel`
+                      : resolveProfitMetricHint(m, metricHintCtx),
+          });
+          if (m.key === 'gross_revenue') {
+            lines.push({
+              key: 'accommodation_ca',
+              label: 'dont CA loyer',
+              value: totalHebergement,
+              hint: 'hébergement canal (hors ménage OTA)',
+            });
+          }
+        }
+        return lines;
+      })()
+    : null;
 
   const headerSnap = normalizeProfitReportHeader(report.snapshot?.header);
   const pmRecoverName = (headerSnap.companyName || headerSnap.publicName || 'le PM').trim() || 'le PM';
@@ -737,7 +777,104 @@ export function FinancesReportDetailPage() {
 
         {isPmBusiness ? (
           <>
-            {/* Ligne 1 — ton compte PM (ce que tu gagnes) */}
+            {isSousLocation ? (
+              <>
+                <div className="kpis" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
+                  <div className="kpi green">
+                    <div className="k">★ Résultat</div>
+                    <div className="v" style={{ fontSize: 18 }}>
+                      {Number(netPm).toLocaleString('fr-FR')} <small>{currency}</small>
+                    </div>
+                    <div className="d">net après loyers &amp; salaires</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="k">Chiffre d’affaires</div>
+                    <div className="v" style={{ fontSize: 18 }}>
+                      {grossRevenue.toLocaleString('fr-FR')} <small>{currency}</small>
+                    </div>
+                    <div className="d">revenu hôte</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="k">CA loyer</div>
+                    <div className="v" style={{ fontSize: 18 }}>
+                      {totalHebergement.toLocaleString('fr-FR')} <small>{currency}</small>
+                    </div>
+                    <div className="d">hébergement canal</div>
+                  </div>
+                  <div className="kpi" style={{ borderColor: 'var(--suT)' }}>
+                    <div className="k">Ménage récupéré</div>
+                    <div className="v" style={{ fontSize: 18, color: 'var(--su)' }}>
+                      {cleaningExtras.toLocaleString('fr-FR')} <small>{currency}</small>
+                    </div>
+                    <div className="d">ménage OTA clients</div>
+                  </div>
+                  <div className="kpi rose">
+                    <div className="k">Loyers dus</div>
+                    <div className="v" style={{ fontSize: 18 }}>
+                      {fixedRentCost.toLocaleString('fr-FR')} <small>{currency}</small>
+                    </div>
+                    <div className="d">{activeListings} biens · mensuel</div>
+                  </div>
+                  <div className="kpi rose">
+                    <div className="k">Salaires</div>
+                    <div className="v" style={{ fontSize: 18 }}>
+                      {staffSalariesCost.toLocaleString('fr-FR')} <small>{currency}</small>
+                    </div>
+                    <div className="d">FdM + Accueil</div>
+                  </div>
+                  <div className="kpi rose">
+                    <div className="k">OTA</div>
+                    <div className="v" style={{ fontSize: 18 }}>
+                      {otaTaken.toLocaleString('fr-FR')} <small>{currency}</small>
+                    </div>
+                    <div className="d">Airbnb / Booking</div>
+                  </div>
+                </div>
+                <div className="kpis" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginTop: 8 }}>
+                  <div className="kpi rose">
+                    <div className="k">Internet &amp; électricité</div>
+                    <div className="v" style={{ fontSize: 17 }}>
+                      {(fixedWifiCost + fixedElectricityCost).toLocaleString('fr-FR')}{' '}
+                      <small>{currency}</small>
+                    </div>
+                    <div className="d kpi-split">
+                      <span>internet = {fixedWifiCost.toLocaleString('fr-FR')}</span>
+                      <span>élec = {fixedElectricityCost.toLocaleString('fr-FR')}</span>
+                    </div>
+                  </div>
+                  <div className="kpi">
+                    <div className="k">🏠 Réservations</div>
+                    <div className="v" style={{ fontSize: 17 }}>
+                      {reservations.length}
+                    </div>
+                    <div className="d">{activeListings} biens actifs</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="k">Total canal client</div>
+                    <div className="v" style={{ fontSize: 17 }}>
+                      {totalCanalClient.toLocaleString('fr-FR')} <small>{currency}</small>
+                    </div>
+                    <div className="d">ce que paie le voyageur</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="k">Total ménage OTA</div>
+                    <div className="v" style={{ fontSize: 17 }}>
+                      {totalMenageOta.toLocaleString('fr-FR')} <small>{currency}</small>
+                    </div>
+                    <div className="d">facturé clients</div>
+                  </div>
+                  <div className="kpi" title="Collectée pour la commune — pas dans ton résultat PM">
+                    <div className="k">Taxe de séjour</div>
+                    <div className="v" style={{ fontSize: 17 }}>
+                      {(totalTaxeSejour || cityTaxCollected).toLocaleString('fr-FR')} <small>{currency}</small>
+                    </div>
+                    <div className="d">collectée · pas ton gain</div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+            {/* Ligne 1 — ton compte PM (gestion) */}
             <div className="kpis" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
               <div className="kpi green">
                 <div className="k">★ Ce que tu gagnes</div>
@@ -767,8 +904,10 @@ export function FinancesReportDetailPage() {
                 </div>
                 <div className="d">
                   {checkoutFdMCount > 0
-                    ? `${checkoutFdMCount} départ(s) × 100 MAD FdM`
-                    : 'checkout FdM (100 MAD / départ)'}
+                    ? `${checkoutFdMCount} départ(s) × tarif FdM`
+                    : checkoutFdMCost > 0
+                      ? 'checkout FdM'
+                      : 'pas de ménage / séjour'}
                 </div>
               </div>
               <div className="kpi" style={{ borderColor: 'var(--suT)' }}>
@@ -798,7 +937,6 @@ export function FinancesReportDetailPage() {
                 <div className="d">ménages OTA récupérés</div>
               </div>
             </div>
-            {/* Ligne 2 — volumétrie business (pas tout = ton gain) */}
             <div className="kpis" style={{ gridTemplateColumns: 'repeat(6, 1fr)', marginTop: 8 }}>
               <div className="kpi">
                 <div className="k">Total brut</div>
@@ -843,6 +981,8 @@ export function FinancesReportDetailPage() {
                 <div className="d">collectée · pas ton gain</div>
               </div>
             </div>
+              </>
+            )}
           </>
         ) : (
           /* Rapport type propriétaire : 1er flash = loyer sans ménage */
@@ -898,11 +1038,11 @@ export function FinancesReportDetailPage() {
               <span className="ct">Synthèse P&amp;L</span>
               {contract?.type ? (
                 <span className={`bdg ${contractBadgeInfo.tone}`} style={{ marginLeft: 'auto' }}>
-                  Contrat : {contractBadgeInfo.label}
+                  {isSousLocation ? 'Modèle : sous-location' : `Contrat : ${contractBadgeInfo.label}`}
                 </span>
               ) : (
                 <span className="bdg gray" style={{ marginLeft: 'auto' }}>
-                  Contrat PM non défini
+                  {isSousLocation ? 'Modèle : sous-location' : 'Contrat PM non défini'}
                 </span>
               )}
             </div>
@@ -910,14 +1050,20 @@ export function FinancesReportDetailPage() {
               <div className="pl-lines">
                 {isPmBusiness ? (
                   <>
-                    <div className="pl-section-label">Ce que tu gagnes (marge PM)</div>
-                    {pmFlowDisplay.map((m) => {
+                    <div className="pl-section-label">
+                      {isSousLocation ? 'Compte de résultat (sous-location)' : 'Ce que tu gagnes (marge PM)'}
+                    </div>
+                    {(isSousLocation && sousLocSynthLines ? sousLocSynthLines : pmFlowDisplay).map((m) => {
                       const hint =
-                        m.key === 'cleaning_retained_pm'
-                          ? 'considéré comme extra — 100 % pour le PM'
-                          : resolveProfitMetricHint(m, metricHintCtx);
+                        'hint' in m && m.hint
+                          ? m.hint
+                          : m.key === 'cleaning_retained_pm'
+                            ? 'considéré comme extra — 100 % pour le PM'
+                            : resolveProfitMetricHint(m as (typeof pmFlowDisplay)[number], metricHintCtx);
                       const displayVal =
-                        m.key === 'cleaning_retained_pm' ? Math.abs(Number(m.value) || 0) : Number(m.value);
+                        m.key === 'cleaning_retained_pm' || m.key === 'accommodation_ca'
+                          ? Math.abs(Number(m.value) || 0)
+                          : Number(m.value);
                       return (
                         <div
                           key={m.key}
@@ -933,14 +1079,20 @@ export function FinancesReportDetailPage() {
                     })}
                     <div className="pl-line net-pm">
                       <span className="lbl">
-                        <span className="lbl-main">Résultat business PM</span>
-                        <span className="lbl-hint">commissions + extras ménages − salaires − FdM − autres charges</span>
+                        <span className="lbl-main">Résultat</span>
+                        <span className="lbl-hint">
+                          {isSousLocation
+                            ? 'CA − OTA − loyers dus − internet − électricité − salaires − charges'
+                            : 'commissions + extras ménages − salaires − FdM − autres charges'}
+                        </span>
                       </span>
                       <span className="v">
                         {Number(netPm).toLocaleString('fr-FR')} {currency}
                       </span>
                     </div>
 
+                    {!isSousLocation ? (
+                      <>
                     <div className="pl-section-label">Reversement propriétaires</div>
                     {landlordFlowMetrics.map((m) => {
                       const hint = resolveProfitMetricHint(m, metricHintCtx);
@@ -963,6 +1115,8 @@ export function FinancesReportDetailPage() {
                         {Number(netLandlord).toLocaleString('fr-FR')} {currency}
                       </span>
                     </div>
+                      </>
+                    ) : null}
                   </>
                 ) : (
                   <>
@@ -1075,10 +1229,10 @@ export function FinancesReportDetailPage() {
         </div>
 
         {report.snapshot?.reportKind === 'pm_business' &&
-          ((report.snapshot.landlordBilans?.length || 0) > 0 ||
+          (( !isSousLocation && (report.snapshot.landlordBilans?.length || 0) > 0) ||
             (report.snapshot.listingBilans?.length || 0) > 0) && (
             <div className="report-ledger-stack" style={{ marginBottom: 16 }}>
-              {(report.snapshot.landlordBilans?.length || 0) > 0 && (
+              {!isSousLocation && (report.snapshot.landlordBilans?.length || 0) > 0 && (
                 <div className="card">
                   <div className="card-h">
                     <span className="ct">Bilan par propriétaire (marge PM)</span>
@@ -1097,6 +1251,8 @@ export function FinancesReportDetailPage() {
                           <th>Propriétaire</th>
                           <th className="num">Biens</th>
                           <th className="num">Résas</th>
+                          <th className="num">Loyer total</th>
+                          <th className="num">Extras</th>
                           <th className="num">Comm. PM</th>
                           <th className="num">Ménage OTA</th>
                           <th className="num">Taxe séjour</th>
@@ -1111,6 +1267,12 @@ export function FinancesReportDetailPage() {
                             <td>{row.landlordName}</td>
                             <td className="num">{row.listings}</td>
                             <td className="num">{row.reservations}</td>
+                            <td className="num">
+                              {Number(row.accommodationTotal || 0).toLocaleString('fr-FR')} {currency}
+                            </td>
+                            <td className="num">
+                              {Number(row.extrasTotal || 0).toLocaleString('fr-FR')} {currency}
+                            </td>
                             <td className="num amt">
                               {row.pmCommission.toLocaleString('fr-FR')} {currency}
                             </td>
@@ -1137,7 +1299,9 @@ export function FinancesReportDetailPage() {
               {(report.snapshot.listingBilans?.length || 0) > 0 && (
                 <div className="card">
                   <div className="card-h">
-                    <span className="ct">Bilan par bien (marge PM)</span>
+                    <span className="ct">
+                      Bilan par bien {isSousLocation ? '(sous-location)' : '(marge PM)'}
+                    </span>
                     <span className="sub">
                       classé du plus rentable · top : {report.snapshot.topListing?.listingName || '—'} (
                       {Number(report.snapshot.topListing?.netPmContribution || 0).toLocaleString('fr-FR')}{' '}
@@ -1156,11 +1320,15 @@ export function FinancesReportDetailPage() {
                           <th>Propriétaire</th>
                           <th className="num">Résas</th>
                           <th className="num">Nuits</th>
+                          <th className="num">Loyer total</th>
+                          <th className="num">Extras</th>
+                          {isSousLocation ? <th className="num">Loyer dû</th> : null}
+                          {isSousLocation ? <th className="num">Salaires</th> : null}
                           <th className="num">Héberg./jour</th>
-                          <th className="num">Comm. PM</th>
+                          {!isSousLocation ? <th className="num">Comm. PM</th> : null}
                           <th className="num">Ménage OTA</th>
                           <th className="num">Taxe séjour</th>
-                          <th className="num">FdM / charges</th>
+                          {!isSousLocation ? <th className="num">FdM / charges</th> : null}
                           <th className="num">Marge PM</th>
                         </tr>
                       </thead>
@@ -1175,23 +1343,48 @@ export function FinancesReportDetailPage() {
                             <td className="num">{row.reservations}</td>
                             <td className="num">{row.nights}</td>
                             <td className="num">
+                              {Number(row.accommodationTotal || 0).toLocaleString('fr-FR')} {currency}
+                            </td>
+                            <td className="num">
+                              {Number(row.extrasTotal || 0).toLocaleString('fr-FR')} {currency}
+                            </td>
+                            {isSousLocation ? (
+                              <td className="num">
+                                {(
+                                  Number(row.fixedRent || 0) +
+                                  Number(row.fixedWifi || 0) +
+                                  Number(row.fixedElectricity || 0)
+                                ).toLocaleString('fr-FR')}{' '}
+                                {currency}
+                              </td>
+                            ) : null}
+                            {isSousLocation ? (
+                              <td className="num">
+                                {Number(row.staffSalaryShare || 0).toLocaleString('fr-FR')} {currency}
+                              </td>
+                            ) : null}
+                            <td className="num">
                               {row.avgAccommodationPerNight != null
                                 ? `${row.avgAccommodationPerNight.toLocaleString('fr-FR')} ${currency}`
                                 : '—'}
                             </td>
-                            <td className="num amt">
-                              {row.pmCommission.toLocaleString('fr-FR')} {currency}
-                            </td>
+                            {!isSousLocation ? (
+                              <td className="num amt">
+                                {row.pmCommission.toLocaleString('fr-FR')} {currency}
+                              </td>
+                            ) : null}
                             <td className="num">
                               {row.cleaningRetained.toLocaleString('fr-FR')} {currency}
                             </td>
                             <td className="num">
                               {row.cityTaxCollected.toLocaleString('fr-FR')} {currency}
                             </td>
-                            <td className="num">
-                              {(row.checkoutCleaningCost + row.otherPmExpenses).toLocaleString('fr-FR')}{' '}
-                              {currency}
-                            </td>
+                            {!isSousLocation ? (
+                              <td className="num">
+                                {(row.checkoutCleaningCost + row.otherPmExpenses).toLocaleString('fr-FR')}{' '}
+                                {currency}
+                              </td>
+                            ) : null}
                             <td className="num amt">
                               {row.netPmContribution.toLocaleString('fr-FR')} {currency}
                             </td>

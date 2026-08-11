@@ -76,6 +76,7 @@ export function useDashboardChrome() {
       const tab = new URLSearchParams(location.search).get('tab') || 'whatsapp';
       const section = new URLSearchParams(location.search).get('section');
       if (tab === 'resas') return 'planning';
+      if (tab === 'owner-booking') return 'comms/owner-inbox';
       if (section === 'staff' || tab === 'staff' || tab === 'admin' || tab === 'booking') {
         if (tab === 'admin') return 'comms/admin';
         if (tab === 'booking') return 'comms/booking';
@@ -87,6 +88,7 @@ export function useDashboardChrome() {
         ota: 'comms/ota',
         leads: 'comms/leads',
         reviews: 'comms/reviews',
+        'owner-booking': 'comms/owner-inbox',
       };
       return commTabToNav[tab] || 'comms/guests';
     }
@@ -239,6 +241,10 @@ export function useDashboardChrome() {
 
     if (path.startsWith('/orchestration/cockpit')) {
       return 'orch/cockpit';
+    }
+
+    if (path === '/ops-board' || path.startsWith('/ops-board/')) {
+      return 'ops-board';
     }
 
     if (

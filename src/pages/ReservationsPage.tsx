@@ -219,7 +219,7 @@ function quickFiltersFromUrlFilter(filter: ReservationFilter | null): QuickFilte
 }
 
 function statusesFromUrl(statusParam: string | null): string[] {
-  if (!statusParam) return ['Pending', 'Confirmed'];
+  if (!statusParam) return ['Pending', 'Confirmed', 'Started'];
   const raw = statusParam.trim().toLowerCase();
   if (raw === 'cancelled' || raw.includes('cancel')) {
     return [...CANCELLED_STATUS_VALUES];
@@ -258,6 +258,7 @@ const formatTime = (timeInput: any): string | null => {
 const statusMeta = (status: string): { bg: string; color: string; label: string } => {
   const n = status.toLowerCase();
   if (n === 'confirmed')    return { bg: 'rgba(10,143,94,0.12)',  color: T.success, label: 'Confirmé' };
+  if (n === 'started')      return { bg: 'rgba(31,112,194,0.12)', color: T.info,    label: 'Started' };
   if (n === 'pending')      return { bg: 'rgba(196,101,6,0.12)',  color: T.warning, label: 'En attente' };
   if (n.includes('cancel')) return { bg: 'rgba(200,30,30,0.10)',  color: T.error,   label: 'Annulé' };
   if (n === 'completed')    return { bg: 'rgba(6,115,179,0.10)',  color: T.info,    label: 'Terminé' };
@@ -805,7 +806,7 @@ export function ReservationsPage() {
   };
   const handleReset = () => {
     setGlobalFilter('');
-    setSelectedStatuses(['Pending', 'Confirmed']);
+    setSelectedStatuses(['Pending', 'Confirmed', 'Started']);
     setSelectedChannels([]);
     setSelectedListings([]);
     setQuickFilters({ ...EMPTY_QUICK_FILTERS });
@@ -1025,6 +1026,7 @@ export function ReservationsPage() {
               {[
                 { val: 'Pending', label: '📋 En attente' },
                 { val: 'Confirmed', label: '✅ Confirmé' },
+                { val: 'Started', label: '🏠 En séjour (Started)' },
                 { val: 'Completed', label: '🎉 Complété' },
                 { val: 'Rejected', label: '❌ Rejeté' },
                 { val: 'Cancelled', label: '📵 Annulé (RU / canal)' },
@@ -1100,10 +1102,10 @@ export function ReservationsPage() {
               value={kpis.present}
               accent={T.success}
               onClick={() => {
-                if (selectedStatuses.length === 1 && selectedStatuses[0] === 'Confirmed') {
-                  setSelectedStatuses(['Pending', 'Confirmed']);
+                if (selectedStatuses.length === 2 && selectedStatuses.includes('Confirmed') && selectedStatuses.includes('Started')) {
+                  setSelectedStatuses(['Pending', 'Confirmed', 'Started']);
                 } else {
-                  setSelectedStatuses(['Confirmed']);
+                  setSelectedStatuses(['Confirmed', 'Started']);
                 }
                 setQuickFilters({ ...EMPTY_QUICK_FILTERS });
                 setSearchParams((prev) => {
@@ -1119,7 +1121,7 @@ export function ReservationsPage() {
               accent={T.text2}
               onClick={() => {
                 if (selectedStatuses.length === 1 && selectedStatuses[0] === 'Pending') {
-                  setSelectedStatuses(['Pending', 'Confirmed']);
+                  setSelectedStatuses(['Pending', 'Confirmed', 'Started']);
                 } else {
                   setSelectedStatuses(['Pending']);
                 }

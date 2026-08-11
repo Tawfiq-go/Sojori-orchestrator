@@ -113,6 +113,7 @@ export function formatInboxDaySeparator(timestamp?: string): string {
 
 export function normalizeBookingSource(channelName?: string): string {
   const ch = (channelName || '').toLowerCase();
+  if (ch.includes('whatsapp') || ch === 'wa') return 'WhatsApp';
   if (ch.includes('airbnb') || ch === 'ab') return 'Airbnb';
   if (ch.includes('booking') || ch === 'bk') return 'Booking.com';
   if (ch.includes('vrbo')) return 'Vrbo';

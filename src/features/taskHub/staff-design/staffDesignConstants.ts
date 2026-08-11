@@ -34,7 +34,7 @@ const STAFF_PILL_LABEL_OVERRIDES: Partial<Record<FulltaskTaskTypeId, string>> = 
   cleaning_paid: 'Ménage payant',
   receive_arrival: 'Accueil client (check-in)',
   receive_departure: 'Départ client (check-out)',
-  checkout_cleaning: 'Ménage Sojori',
+  checkout_cleaning: 'Ménage checkout',
 };
 
 export const STAFF_TASK_PILLS = STAFF_ASSIGNABLE_TASK_TYPES.map((key) => ({

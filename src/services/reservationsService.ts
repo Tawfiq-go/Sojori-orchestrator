@@ -128,7 +128,7 @@ class ReservationsService {
     limit?: number;
     status?: string; // Ex: 'Confirmed,Pending' ou 'CancelledByAdmin,cancelled'
     /** Fenêtre calendrier explicite (prioritaire sur filter) */
-    dateType?: 'arrival' | 'departure' | 'arrival_or_departure' | 'creation';
+    dateType?: 'arrival' | 'departure' | 'arrival_or_departure' | 'overlap' | 'creation';
     startDate?: string;
     endDate?: string;
     reservationNumber?: string;

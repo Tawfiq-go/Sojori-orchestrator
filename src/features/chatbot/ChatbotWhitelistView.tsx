@@ -128,6 +128,7 @@ function statusMeta(status?: string) {
   const s = String(status ?? '').toLowerCase();
   if (s.includes('cancel')) return { label: 'Annulé', bg: 'rgba(200,30,30,0.10)', color: T.error };
   if (s === 'confirmed') return { label: 'Confirmé', bg: 'rgba(10,143,94,0.12)', color: T.success };
+  if (s === 'started') return { label: 'Started', bg: 'rgba(31,112,194,0.12)', color: T.info };
   return { label: status || '—', bg: 'rgba(20,17,10,0.05)', color: T.text3 };
 }
 

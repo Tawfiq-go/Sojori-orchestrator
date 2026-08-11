@@ -14,7 +14,13 @@ import { T } from './_tokens';
 export type { CommsHubTab, CommsSection } from '../communications/commsHubConfig';
 
 export function isWaDesignTab(tab: string): boolean {
-  return tab === 'whatsapp' || tab === 'booking' || tab === 'staff' || tab === 'admin';
+  return (
+    tab === 'whatsapp' ||
+    tab === 'owner-booking' ||
+    tab === 'booking' ||
+    tab === 'staff' ||
+    tab === 'admin'
+  );
 }
 
 export function isOtaDesignTab(tab: string): boolean {

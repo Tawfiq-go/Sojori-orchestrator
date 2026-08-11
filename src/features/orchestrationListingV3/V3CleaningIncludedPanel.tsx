@@ -30,6 +30,8 @@ type Props = {
   gestion: Record<string, unknown>;
   listingValues?: Record<string, unknown>;
   onSave: (gestion: Record<string, unknown>) => Promise<void>;
+  /** Cache les extras legacy (serviettes/draps) — remplacés par menageOps.options */
+  hideExtras?: boolean;
 };
 
 const PREVIEW_NIGHTS = [5, 10, 21];
@@ -56,7 +58,12 @@ const sectionSx = {
 const TIER_COLS = 'minmax(88px, 120px) minmax(88px, 120px) minmax(88px, 120px) 36px';
 const SLOT_COLS = 'minmax(100px, 130px) minmax(100px, 130px) 64px 36px';
 
-export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, onSave }: Props) {
+export default function V3CleaningIncludedPanel({
+  gestion,
+  listingValues = {},
+  onSave,
+  hideExtras = false,
+}: Props) {
   const [state, setState] = useState<CleaningIncludedGestion>(() =>
     parseCleaningIncludedGestion(gestion, listingValues),
   );
@@ -395,6 +402,7 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
         </Box>
       </Box>
 
+      {!hideExtras && (
       <Box sx={{ ...sectionSx, mt: 2.5 }}>
         <Box
           sx={{
@@ -459,7 +467,9 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
             ))}
         </Stack>
       </Box>
+      )}
 
+      {!hideExtras && (
       <AddIncludedExtraDialog
         open={extraDialogOpen}
         onClose={() => setExtraDialogOpen(false)}
@@ -471,9 +481,10 @@ export default function V3CleaningIncludedPanel({ gestion, listingValues = {}, o
           }))
         }
       />
+      )}
 
       <V3BlockSaveBar
-        label="Ménage inclus · gestion owner_orchestrations"
+        label="Ménage inclus · paliers & créneaux"
         dirty={dirty}
         saving={saving === 'saving'}
         onSave={() => void persist()}

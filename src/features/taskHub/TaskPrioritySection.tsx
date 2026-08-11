@@ -14,7 +14,8 @@ type Preset = 'strict' | 'normal' | 'souple';
 /** Types staff visibles + preset par défaut (miroir backend DEFAULT_PRESET_BY_TYPE). */
 const TYPES: Array<{ type: string; label: string; icon: string; defaultPreset: Preset }> = [
   { type: 'transport', label: 'Navette / transport', icon: '🚐', defaultPreset: 'strict' },
-  { type: 'checkout_cleaning', label: 'Ménage Sojori', icon: '🧹', defaultPreset: 'souple' },
+  { type: 'checkout_cleaning', label: 'Ménage checkout', icon: '🧼', defaultPreset: 'souple' },
+  { type: 'cleaning_free', label: 'Ménage gratuit', icon: '🧹', defaultPreset: 'souple' },
   { type: 'cleaning_paid', label: 'Ménage payant', icon: '🧽', defaultPreset: 'souple' },
   { type: 'receive_arrival', label: 'Accueil client (check-in)', icon: '🛎️', defaultPreset: 'normal' },
   { type: 'receive_departure', label: 'Départ client (check-out)', icon: '🛎️', defaultPreset: 'normal' },

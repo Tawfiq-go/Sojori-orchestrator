@@ -1,7 +1,6 @@
 import listingsService from './listingsService';
 import * as fulltaskApi from './fulltaskApi';
 import reservationsService from './reservationsService';
-import { labelForTaskTypeId } from '../features/taskHub/staff-design/fulltaskTaskTypes';
 import { LEGACY_TO_FULLTASK_STATUS, fullTaskToListItem } from '../utils/fulltaskMappers';
 import type { ReservationMetaLike } from '../utils/fulltaskMappers';
 import type { TaskFulltaskUpdatePayload, TaskListItem, TasksSearchParams } from '../types/tasks.types';
@@ -91,6 +90,36 @@ class FulltaskTasksService {
     return this.mapRawTaskToListItem(raw, caches);
   }
 
+  /** Legacy UI statuses → statuts Mongo srv-fulltask (filtre search). */
+  private legacyStatusesToFulltask(statuses?: string[]): string[] | undefined {
+    if (!statuses?.length) return undefined;
+    const set = new Set<string>();
+    for (const s of statuses) {
+      if (s === 'CREATED') {
+        set.add('new');
+        set.add('waiting_guest');
+        set.add('pending_partner');
+      } else if (s === 'ASSIGNED') {
+        set.add('pending_partner');
+        set.add('new');
+        set.add('confirmed');
+      } else if (s === 'ACCEPTED') {
+        set.add('confirmed');
+      } else if (s === 'IN_PROGRESS') {
+        set.add('doing');
+      } else if (s === 'COMPLETED') {
+        set.add('done');
+      } else if (s === 'CANCELLED_ADMIN' || s === 'CANCELLED_CUSTOMER') {
+        set.add('cancelled');
+        set.add('rejected');
+      } else {
+        const mapped = LEGACY_TO_FULLTASK_STATUS[s];
+        if (mapped) set.add(mapped);
+      }
+    }
+    return [...set];
+  }
+
   async getTasks(params: TasksSearchParams) {
     const startTime = performance.now();
 
@@ -106,12 +135,28 @@ class FulltaskTasksService {
       params.listingByIdCache && Object.keys(params.listingByIdCache).length,
     );
 
-    const tasksPromise = fulltaskApi.listTasks({
+    const page = params.page ?? 0;
+    const limit = params.limit ?? 100;
+    const sortField = params.sortField || 'updatedAt';
+    const sortDirection = params.sortDirection || 'desc';
+    const ftStatuses = this.legacyStatusesToFulltask(params.statuses);
+
+    // Tri + pagination Mongo via /tasks/search (pas de tri limité à la page client).
+    const tasksPromise = fulltaskApi.searchTasks({
       ownerId: params.ownerId,
       audience: params.audience ?? 'STAFF',
-      listingId: params.listingIds?.length === 1 ? params.listingIds[0] : undefined,
-      type: params.subTypes?.length === 1 ? params.subTypes[0] : undefined,
+      page,
+      limit,
+      listingIds: params.listingIds?.length ? params.listingIds.join(',') : undefined,
+      itemTypes: params.subTypes?.length ? params.subTypes.join(',') : undefined,
+      statuses: ftStatuses?.length ? ftStatuses.join(',') : undefined,
+      searchTerm: params.searchTerm?.trim() || undefined,
+      sortField,
+      sortDirection,
       isArchived: isArchivedParam,
+      dateType: params.dateType,
+      dateStart: params.dateStart,
+      dateEnd: params.dateEnd,
     });
 
     // Staff / listings : 1 seul fetch (page ne doit plus les rappeler en parallèle).
@@ -151,11 +196,28 @@ class FulltaskTasksService {
       listingById = Object.fromEntries(listingOptions.map((l) => [String(l._id), l.name]));
     }
 
-    const rawTasks = (tasksRes?.data || []) as Record<string, unknown>[];
+    const searchPayload = (tasksRes?.data || tasksRes || {}) as {
+      tasks?: Record<string, unknown>[];
+      pagination?: { page: number; limit: number; total: number; totalPages: number };
+    };
+    const rawTasks = (searchPayload.tasks || []) as Record<string, unknown>[];
+
+    // Enrichit staffById depuis populate search (_assignedStaff).
+    for (const t of rawTasks) {
+      const pop = t._assignedStaff as { _id?: string; name?: string; phone?: string } | undefined;
+      if (pop?._id && !staffById[String(pop._id)]) {
+        staffById[String(pop._id)] = {
+          _id: pop._id,
+          name: pop.name,
+          phone: pop.phone,
+        };
+      }
+    }
+
     const reservationMetaById = await this.loadReservationMetaForTasks(rawTasks);
     if (import.meta.env.DEV) {
       console.debug(
-        `[getTasks] ${rawTasks.length} tasks, ${Object.keys(listingById).length} listings, ${(performance.now() - startTime).toFixed(0)}ms`,
+        `[getTasks] search page=${page} n=${rawTasks.length}/${searchPayload.pagination?.total ?? '?'} sort=${sortField}:${sortDirection}, ${(performance.now() - startTime).toFixed(0)}ms`,
       );
     }
 
@@ -174,17 +236,7 @@ class FulltaskTasksService {
       return fullTaskToListItem(t, staffById, listingById, reservationMeta);
     });
 
-    if (params.ownerId) {
-      rows = rows.filter((t) => !t.ownerId || String(t.ownerId) === String(params.ownerId));
-    }
-    if (params.listingIds?.length) {
-      const set = new Set(params.listingIds.map(String));
-      rows = rows.filter((t) => set.has(String(t.listingId)));
-    }
-    if (params.subTypes?.length) {
-      const set = new Set(params.subTypes);
-      rows = rows.filter((t) => set.has(t.subType));
-    }
+    // Affinage legacy CREATED vs ASSIGNED (mapping Mongo large) — sur la page seulement.
     if (params.statuses?.length) {
       const set = new Set(params.statuses);
       rows = rows.filter((t) => set.has(t.taskStatus));
@@ -202,61 +254,27 @@ class FulltaskTasksService {
         return want.has(norm) || want.has(raw);
       });
     }
-    if (params.searchTerm?.trim()) {
-      const q = params.searchTerm.trim().toLowerCase();
-      rows = rows.filter((t) => {
-        const typeLabel = t.subType ? labelForTaskTypeId(String(t.subType)).toLowerCase() : '';
-        return (
-          String(t.itemNumber || '').toLowerCase().includes(q) ||
-          String(t.guestName || '').toLowerCase().includes(q) ||
-          String(t.listingName || '').toLowerCase().includes(q) ||
-          String(t.guestPhone || '').toLowerCase().includes(q) ||
-          String(t.staffName || '').toLowerCase().includes(q) ||
-          String(t.reservationNumber || '').toLowerCase().includes(q) ||
-          typeLabel.includes(q)
-        );
-      });
+    if (params.staffCodes?.length) {
+      const set = new Set(params.staffCodes.map(String));
+      rows = rows.filter(
+        (t) =>
+          (t.staffId && set.has(String(t.staffId))) ||
+          (t.staffCode && set.has(String(t.staffCode))),
+      );
     }
 
-    if (isArchivedParam === true) {
-      rows = rows.filter((t) => t.isArchived === true);
-    } else if (isArchivedParam !== 'all') {
-      rows = rows.filter((t) => t.isArchived !== true);
-    }
-
-    const sortField = params.sortField || 'createdAt';
-    const dir = params.sortDirection === 'desc' ? -1 : 1;
-    rows.sort((a, b) => {
-      const rowA = a as Record<string, unknown>;
-      const rowB = b as Record<string, unknown>;
-      if (sortField === 'createdAt' || sortField === 'startDate') {
-        const at = rowA[sortField] ? new Date(String(rowA[sortField])).getTime() : 0;
-        const bt = rowB[sortField] ? new Date(String(rowB[sortField])).getTime() : 0;
-        if (at !== bt) return (at < bt ? -1 : 1) * dir;
-        return 0;
-      }
-      const av = String(rowA[sortField] ?? '').toLowerCase();
-      const bv = String(rowB[sortField] ?? '').toLowerCase();
-      if (av < bv) return -1 * dir;
-      if (av > bv) return 1 * dir;
-      return 0;
-    });
-
-    const page = params.page ?? 0;
-    const limit = params.limit ?? 100;
-    const start = page * limit;
-    const slice = rows.slice(start, start + limit);
+    const pagination = searchPayload.pagination || {
+      page,
+      limit,
+      total: rows.length,
+      totalPages: Math.max(1, Math.ceil(rows.length / Math.max(limit, 1))),
+    };
 
     return {
       success: true,
-      tasks: slice,
-      data: slice,
-      pagination: {
-        page,
-        limit,
-        total: rows.length,
-        totalPages: Math.max(1, Math.ceil(rows.length / limit)),
-      },
+      tasks: rows,
+      data: rows,
+      pagination,
       ...(!hasStaffCache
         ? {
             staff: staffRows.slice(0, 200).map((s) => ({

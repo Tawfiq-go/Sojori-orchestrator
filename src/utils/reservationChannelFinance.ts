@@ -184,7 +184,13 @@ function isAirbnbChannel(r: Record<string, unknown>): boolean {
 }
 
 function isBookingChannel(r: Record<string, unknown>): boolean {
-  return /booking/i.test(String(r.channelName || r.source || ''));
+  const s = String(r.channelName || r.source || '');
+  // Prolongations / créations WhatsApp : jamais le chemin EUR Booking
+  // (ancien bug: channelName "Direct Booking" matchait /booking/i).
+  if (/whatsapp|sojori|prolong/i.test(s)) return false;
+  const tags = Array.isArray(r.tags) ? r.tags.map(String) : [];
+  if (tags.some((t) => /whatsapp|prolongation/i.test(t))) return false;
+  return /booking/i.test(s);
 }
 
 /** Guest Fee + TVA voyageur depuis ChannelBreakdown (≠ host fee / Moroccan TVA). */

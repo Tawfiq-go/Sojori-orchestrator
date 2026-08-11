@@ -137,7 +137,7 @@ export function ReservationsPlanningPage() {
     const { apiStart, apiEnd } = windowRange();
     const reservationsResponse = await reservationsService.getList({
       limit: 100,
-      status: 'Confirmed,Pending,Inside',
+      status: 'Confirmed,Pending,Started,Inside',
       dateType: 'arrival_or_departure',
       startDate: apiStart,
       endDate: apiEnd,

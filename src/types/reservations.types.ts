@@ -79,6 +79,8 @@ export interface Reservation {
   actualArrivalTime?: Date | string | null;
   actualDepartureTime?: Date | string | null;
   customerStatus?: 'expected' | 'arrived' | 'on_site' | 'departed' | string;
+  /** État brut Mews (Confirmed / Started / Processed…) — Multi in-house. */
+  mewsState?: string;
   nights?: number;
 
   // Guests

@@ -1747,6 +1747,64 @@ function ListingRowComp({
           />
           )}
           <Stack sx={{ minWidth: 0, gap: compactListing || dayCountSummary ? 0 : 0.5, pt: 0 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
+              {isRoomRow && listing.housekeepingState ? (
+                <Box
+                  component="span"
+                  title={String(listing.housekeepingState)}
+                  sx={{
+                    flexShrink: 0,
+                    fontSize: compactListing ? 7.5 : 8.5,
+                    fontWeight: 800,
+                    letterSpacing: '0.02em',
+                    px: '4px',
+                    py: '1px',
+                    borderRadius: '4px',
+                    lineHeight: 1.2,
+                    bgcolor: (() => {
+                      const s = String(listing.housekeepingState);
+                      if (s === 'Clean') return '#ecfdf5';
+                      if (s === 'Dirty') return '#fff7ed';
+                      if (s === 'Inspected') return '#eff6ff';
+                      if (s === 'OutOfOrder') return '#fef2f2';
+                      if (s === 'OutOfService') return '#f3f4f6';
+                      return '#f8fafc';
+                    })(),
+                    color: (() => {
+                      const s = String(listing.housekeepingState);
+                      if (s === 'Clean') return '#047857';
+                      if (s === 'Dirty') return '#c2410c';
+                      if (s === 'Inspected') return '#1d4ed8';
+                      if (s === 'OutOfOrder') return '#b91c1c';
+                      if (s === 'OutOfService') return '#4b5563';
+                      return '#475569';
+                    })(),
+                    border: '1px solid',
+                    borderColor: (() => {
+                      const s = String(listing.housekeepingState);
+                      if (s === 'Clean') return '#a7f3d0';
+                      if (s === 'Dirty') return '#fed7aa';
+                      if (s === 'Inspected') return '#bfdbfe';
+                      if (s === 'OutOfOrder') return '#fecaca';
+                      if (s === 'OutOfService') return '#d1d5db';
+                      return '#e2e8f0';
+                    })(),
+                  }}
+                >
+                  {listing.housekeepingState === 'OutOfOrder'
+                    ? 'OOO'
+                    : listing.housekeepingState === 'OutOfService'
+                      ? 'OOS'
+                      : String(listing.housekeepingState).slice(0, 9)}
+                </Box>
+              ) : null}
             <Typography
               sx={{
                 fontSize: isRoomRow
@@ -1763,11 +1821,17 @@ function ListingRowComp({
                 whiteSpace: 'nowrap',
                 display: 'block',
                 color: isRoomRow ? T.text2 : undefined,
+                minWidth: 0,
               }}
-              title={listingCtx.listingName}
+              title={
+                listing.housekeepingState
+                  ? `${listingCtx.listingName} · ${listing.housekeepingState}`
+                  : listingCtx.listingName
+              }
             >
               {listing.listingName}
             </Typography>
+            </Box>
             {/* Multi agrégé : pas de badge CLEAN (ligne basse). */}
             {!compactListing && !dayCountSummary && !isRoomTypeRow && !isRoomRow && (
             <CleanlinessBadgeInteractive

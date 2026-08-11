@@ -15,6 +15,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "deploy:vercel": "./scripts/deploy-vercel-prod.sh",
     "test": "npx tsx --test src/utils/cleanlinessDisplay.test.ts src/components/communications/reviewMappers.test.ts src/components/unified-inbox/inboxTaskMappers.test.ts"
   },
   "dependencies": {

@@ -9,6 +9,8 @@ export const NAV_TO_ROUTE: Record<string, string> = {
 
   // Planning ops unifié (résas · tasks · messages) — deep-links /reservations|tasks/planning gardés
   planning: '/planning',
+  /** Ops Board Nommos — suivi HK / arrivées (design Claude). */
+  'ops-board': '/ops-board',
 
   // Opérations
   reservations: '/reservations',
@@ -73,7 +75,9 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   comms: '/communications?section=guest&tab=whatsapp',
   'comms/inbox': '/communications?section=guest&tab=whatsapp',
   'comms/guests': '/communications?section=guest&tab=whatsapp',
+  'comms/owner-inbox': '/communications?section=guest&tab=owner-booking',
   'comms/booking': '/communications?section=staff&tab=booking',
+  'comms/owner-booking': '/communications/owner-booking',
   'comms/conversations': '/communications?section=staff&tab=conversations',
   'comms/staff': '/communications?section=staff&tab=staff',
   'comms/admin': '/communications?section=staff&tab=admin',

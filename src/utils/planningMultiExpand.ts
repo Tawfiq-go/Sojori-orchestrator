@@ -130,7 +130,7 @@ export function expandPlanningListingRows(
     if (rtOpen) {
       for (const room of rooms) {
         const roomResas = rtResas.filter((r) => reservationMatchesRoom(r, room));
-        if (roomResas.length === 0) continue;
+        // Inclure toutes les rooms (ops ménage), même sans résa sur la période
         roomRows.push({
           listingId: `${listing.listingId}:${rt.id}:room:${room.id}`,
           listingName: room.name,
@@ -146,6 +146,7 @@ export function expandPlanningListingRows(
           parentRoomTypeName: rt.name,
           roomTypeId: rt.id,
           roomId: room.id,
+          housekeepingState: room.housekeepingState || null,
           roomTypeCount: 0,
           reservations: roomResas,
         });

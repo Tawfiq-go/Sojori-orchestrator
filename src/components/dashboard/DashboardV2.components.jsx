@@ -1236,6 +1236,12 @@ export function DataTable({
   bodyScrollRef: bodyScrollRefProp,
   /** Ref du header (sync H externe). */
   headerScrollRef: headerScrollRefProp,
+  /** Champ de tri actif (clé API / sortKey colonne). */
+  sortField,
+  /** Direction de tri active. */
+  sortDirection,
+  /** Clic en-tête sortable → (sortKey) => void */
+  onSortClick,
 }) {
   const toggleRow = (id) => {
     const next = selectedIds.includes(id)
@@ -1324,10 +1330,22 @@ export function DataTable({
   const headerRow = (
     <Box component="tr">
       {selectable && <Box component="th" sx={thSx} style={{ width: 36 }}><Checkbox /></Box>}
-      {columns.map((col, colIndex) => (
+      {columns.map((col, colIndex) => {
+        const colSortKey = col.sortKey || col.key;
+        const isActiveSort = Boolean(col.sortable && sortField && sortField === colSortKey);
+        const sortMark = !col.sortable
+          ? null
+          : isActiveSort
+            ? (sortDirection === 'asc' ? '↑' : '↓')
+            : '↕';
+        return (
         <Box
           component="th"
           key={col.key}
+          onClick={col.sortable && onSortClick ? (e) => {
+            e.stopPropagation();
+            onSortClick(colSortKey);
+          } : undefined}
           sx={{
             ...thSx,
             ...(ultraCompact ? ultraCompactThSx : compact ? compactThSx : null),
@@ -1336,6 +1354,9 @@ export function DataTable({
             maxWidth: col.width,
             textTransform: col.headerTextTransform ?? headerTextTransform,
             bgcolor: t.bg2,
+            cursor: col.sortable && onSortClick ? 'pointer' : undefined,
+            userSelect: col.sortable ? 'none' : undefined,
+            '&:hover': col.sortable && onSortClick ? { color: t.primary || t.text } : undefined,
             // stickyHeader legacy : sticky sur chaque th (pas thead — plus fiable)
             ...((stickyHeader && !freezePanes) ? {
               position: 'sticky', top: 0, zIndex: pinActive && colIndex === 0 ? 5 : 4,
@@ -1348,9 +1369,14 @@ export function DataTable({
             } : {}),
           }}
         >
-          {col.label} {col.sortable && <Box component="span" sx={{ opacity: 0.4, ml: 0.5, fontSize: 9 }}>↕</Box>}
+          {col.label}{sortMark ? (
+            <Box component="span" sx={{ opacity: isActiveSort ? 0.9 : 0.4, ml: 0.5, fontSize: 9 }}>
+              {sortMark}
+            </Box>
+          ) : null}
         </Box>
-      ))}
+        );
+      })}
       {!hideRowActions && <Box component="th" sx={thSx} style={{ width: 60 }} />}
     </Box>
   );

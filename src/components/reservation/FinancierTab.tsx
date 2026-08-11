@@ -299,8 +299,12 @@ export function FinancierTab({
         : null;
 
   const alreadyPaid = num(r.alreadyPaid) || guestPaidMad;
-  const isBooking = /booking/i.test(String(r.channelName || r.source || ''));
-  const isAirbnb = /airbnb/i.test(String(r.channelName || r.source || ''));
+  const channelBlob = String(r.channelName || r.source || '');
+  const tagBlob = Array.isArray(r.tags) ? r.tags.map(String).join(' ') : '';
+  const isWhatsAppDirect =
+    /whatsapp|sojori|prolong/i.test(channelBlob) || /whatsapp|prolongation/i.test(tagBlob);
+  const isBooking = !isWhatsAppDirect && /booking/i.test(channelBlob);
+  const isAirbnb = /airbnb/i.test(channelBlob);
   const channelAmountsAlreadyMad =
     channelFinance.source === 'airbnb-comments' ||
     String(channelClient?.currency || breakdown?.totalPaidByCustomer?.currency || '').toUpperCase() ===
