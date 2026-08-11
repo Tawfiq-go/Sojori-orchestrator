@@ -98,6 +98,12 @@ function friendlyError(err: unknown): string {
   if (/timeout of \d+ms exceeded/i.test(text)) {
     return 'Loki a mis trop longtemps à répondre. Raccourcis la période ou filtre un service.';
   }
+  if (/ECONNREFUSED|connect ECONNREFUSED/i.test(text)) {
+    return 'Loki est injoignable dans le cluster (connexion refusée sur :3100). Redémarre le pod Loki dans le namespace monitoring.';
+  }
+  if (/Loki query failed/i.test(text) && /502|ECONNREFUSED|ENOTFOUND|ECONNRESET/i.test(text)) {
+    return 'srv-logs-proxy ne peut pas interroger Loki. Vérifie que Loki tourne dans monitoring (port 3100).';
+  }
   if (/Invalid timeRange|Custom range requires/i.test(text)) {
     return 'La période personnalisée n’est pas encore supportée par l’API déployée (srv-logs-proxy). Utilise 1 h / 6 h / 24 h en attendant le déploiement.';
   }
