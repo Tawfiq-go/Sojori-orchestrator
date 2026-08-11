@@ -136,9 +136,7 @@
 .ops-board .rc .num{font-size:19px;font-weight:800;letter-spacing:-.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .ops-board .mode-single .rc .num{font-size:15px;letter-spacing:-.02em}
 
-.ops-board .
-/* kanban */
-.kan{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;min-height:0}
+/* kanban columns */
 .ops-board .col{display:grid;grid-template-rows:auto 1fr;gap:9px;min-height:0}
 .ops-board .col>.ch{display:flex;align-items:baseline;gap:8px;padding:0 3px}
 .ops-board .col>.ch b{font-size:12px;font-weight:750;letter-spacing:.07em;text-transform:uppercase}
