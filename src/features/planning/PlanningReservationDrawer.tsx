@@ -330,7 +330,11 @@ export default function PlanningReservationDrawer({
 
           <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, mt: 1.5 }}>
             <MetaChip>
-              {reservation.status === 'confirmed' ? 'Confirmée' : 'En attente'}
+              {reservation.status === 'confirmed'
+                ? 'Confirmée'
+                : reservation.status === 'started'
+                  ? 'Started'
+                  : 'En attente'}
             </MetaChip>
             {nights != null && <MetaChip>{nights} nuit{nights > 1 ? 's' : ''}</MetaChip>}
             {reservation.numberOfGuests != null && (

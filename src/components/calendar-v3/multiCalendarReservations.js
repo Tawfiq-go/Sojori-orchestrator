@@ -141,6 +141,7 @@ export function normalizeCatalogRooms(rt) {
         id,
         name: String(name),
         number: rm?.roomNumber != null ? Number(rm.roomNumber) : undefined,
+        housekeepingState: rm?.housekeepingState || null,
       };
     })
     .filter(Boolean);

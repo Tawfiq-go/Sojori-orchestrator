@@ -17,7 +17,12 @@ pnpm install
 pnpm dev          # dev (voir port dans vite.config.ts)
 pnpm exec vite build   # bundle prod (sans tsc si besoin)
 pnpm run build    # tsc + vite build
+npm run deploy:vercel  # prod Vercel (évite BLOCKED git author)
 ```
+
+> **Vercel** : ne pas lancer `vercel --prod` avec `.git` si l’auteur du commit est un email
+> `noreply.github.com` hors équipe Sojori — utiliser `npm run deploy:vercel`
+> (`scripts/deploy-vercel-prod.sh`).
 
 ## Orchestration (réservations + timeline)
 

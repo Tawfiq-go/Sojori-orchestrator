@@ -261,9 +261,13 @@ function pickClock(...vals: unknown[]): string {
 
 function channelMeta(channel: string) {
   const c = (channel || '').toLowerCase();
+  if (c.includes('whatsapp') || c === 'wa') return { label: 'WhatsApp', bg: '#25D366' };
   if (c.includes('airbnb')) return { label: 'Airbnb', bg: '#FF5A5F' };
   if (c.includes('booking')) return { label: 'Booking', bg: '#003580' };
-  return { label: 'Direct', bg: T.primary };
+  if (c.includes('sojori') || c.includes('direct') || c.includes('manual')) {
+    return { label: 'Direct', bg: T.primary };
+  }
+  return { label: channel || 'Direct', bg: T.primary };
 }
 
 /**

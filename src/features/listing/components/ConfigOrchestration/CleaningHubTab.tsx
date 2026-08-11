@@ -1,15 +1,17 @@
-// Hub ménage : inclus · payant · Sojori · checklist globale
+// Hub ménage : tarifs v2 + paliers inclus + déclenchement checkout + checklist
 import React, { useState } from 'react';
 import { Box, Stack } from '@mui/material';
 import { SOJORI_TOKENS as T } from './types';
 import CleaningConfigTab from './CleaningConfigTab';
 import CleaningSojoriConfigTab from './CleaningSojoriConfigTab';
 import CleaningChecklistPanel from './CleaningChecklistPanel';
+import MenageOpsPanel from './MenageOpsPanel';
 
 const HUB_TABS = [
-  { id: 'included', label: 'Ménage inclus', icon: '🎁' },
-  { id: 'paid', label: 'Ménage payant', icon: '💰' },
-  { id: 'sojori', label: 'Ménage Sojori', icon: '🧼' },
+  { id: 'levels', label: 'Tous les tarifs', icon: '💶' },
+  { id: 'included', label: 'Inclus (paliers)', icon: '🎁' },
+  { id: 'paid', label: 'Payant', icon: '💰' },
+  { id: 'sojori', label: 'Checkout', icon: '🧼' },
   { id: 'checklist', label: 'Checklist', icon: '📋' },
 ] as const;
 
@@ -30,7 +32,7 @@ export default function CleaningHubTab({
   onListingPatch,
   templateMode = false,
 }: Props) {
-  const [hubTab, setHubTab] = useState<HubTab>('included');
+  const [hubTab, setHubTab] = useState<HubTab>('levels');
 
   const common = { listingId, ownerId, listingValues, onListingPatch, templateMode };
 
@@ -66,18 +68,38 @@ export default function CleaningHubTab({
         ))}
       </Stack>
 
+      {hubTab === 'levels' && (
+        <MenageOpsPanel
+          listingId={listingId}
+          listingValues={listingValues}
+          gestion={listingValues}
+          onListingPatch={onListingPatch}
+          templateMode={templateMode}
+          focusTrack="all"
+        />
+      )}
       {hubTab === 'included' && (
-        <CleaningConfigTab {...common} forcedSub="included" hideSubNav />
+        <Stack spacing={2}>
+          <MenageOpsPanel
+            {...common}
+            gestion={listingValues}
+            focusTrack="included"/>
+          <CleaningConfigTab {...common} forcedSub="included" hideSubNav />
+        </Stack>
       )}
       {hubTab === 'paid' && (
-        <CleaningConfigTab {...common} forcedSub="paid" hideSubNav />
+        <MenageOpsPanel
+          {...common}
+          gestion={listingValues}
+          focusTrack="paid"/>
       )}
       {hubTab === 'sojori' && (
-        <CleaningSojoriConfigTab {...common} showChecklist={false} />
+        <Stack spacing={2}>
+          <MenageOpsPanel {...common} gestion={listingValues} focusTrack="checkout" />
+          <CleaningSojoriConfigTab {...common} showChecklist={false} />
+        </Stack>
       )}
-      {hubTab === 'checklist' && (
-        <CleaningChecklistPanel {...common} />
-      )}
+      {hubTab === 'checklist' && <CleaningChecklistPanel {...common} />}
     </Box>
   );
 }

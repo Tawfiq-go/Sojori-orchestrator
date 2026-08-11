@@ -113,7 +113,7 @@ export function getInventoryDayPrice(day: InventoryDayRow): number {
 export function mapInventoryDayToStatus(day: InventoryDayRow): DayStatus {
   const reservations = day.reservations ?? [];
   const activeResa = reservations.filter(
-    r => r.status === 'Confirmed' || r.status === 'Pending',
+    r => r.status === 'Confirmed' || r.status === 'Pending' || r.status === 'Started',
   );
 
   if (day.stopSell === true || day.available === false) return 'closed';

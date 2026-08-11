@@ -1,64 +1,65 @@
-export type CommsSection = 'guest' | 'staff';
+export type CommsSection = 'guest' | 'staff'
 
-export type CommsGuestTab = 'whatsapp' | 'ota' | 'leads' | 'reviews';
+export type CommsGuestTab = 'whatsapp' | 'ota' | 'leads' | 'reviews' | 'owner-booking'
 /** @deprecated déplacé vers /planning — gardé pour redirect legacy */
-export type CommsLegacyResasTab = 'resas';
+export type CommsLegacyResasTab = 'resas'
 /** Inbox Resa = ligne booking sans owner → onglet côté staff/admin plateforme.
  *  conversations = vue unifiée web + WhatsApp des demandes de réservation. */
-export type CommsStaffTab = 'staff' | 'admin' | 'booking' | 'conversations';
-export type CommsHubTab = CommsGuestTab | CommsStaffTab;
+export type CommsStaffTab = 'staff' | 'admin' | 'booking' | 'conversations'
+export type CommsHubTab = CommsGuestTab | CommsStaffTab
 
 export const GUEST_HUB_TABS: {
-  id: CommsGuestTab;
-  label: string;
-  emoji: string;
+  id: CommsGuestTab
+  label: string
+  emoji: string
 }[] = [
   { id: 'whatsapp', label: 'WhatsApp', emoji: '💬' },
+  { id: 'owner-booking', label: 'Resa Proprio', emoji: '🔑' },
   { id: 'ota', label: 'Messages OTA', emoji: '🏨' },
   { id: 'leads', label: 'Demande', emoji: '🎯' },
   { id: 'reviews', label: 'Avis', emoji: '⭐' },
-];
+]
 
 export const STAFF_HUB_TABS: {
-  id: CommsStaffTab;
-  label: string;
-  emoji: string;
+  id: CommsStaffTab
+  label: string
+  emoji: string
 }[] = [
   { id: 'staff', label: 'Staff WhatsApp', emoji: '👷' },
   { id: 'admin', label: 'Admin WhatsApp', emoji: '🛡️' },
   { id: 'booking', label: 'Inbox Resa', emoji: '🧾' },
   { id: 'conversations', label: 'Conversations Résa', emoji: '💬' },
-];
+]
 
-const GUEST_TAB_SET = new Set<string>(GUEST_HUB_TABS.map((t) => t.id));
-const STAFF_TAB_SET = new Set<string>(STAFF_HUB_TABS.map((t) => t.id));
+const GUEST_TAB_SET = new Set<string>(GUEST_HUB_TABS.map((t) => t.id))
+const STAFF_TAB_SET = new Set<string>(STAFF_HUB_TABS.map((t) => t.id))
 
 export function resolveCommsSection(
   sectionParam: string | null,
   tabParam: string | null,
 ): CommsSection {
-  if (sectionParam === 'staff' || sectionParam === 'guest') return sectionParam;
+  if (sectionParam === 'staff' || sectionParam === 'guest') return sectionParam
   if (
     tabParam === 'staff' ||
     tabParam === 'admin' ||
     tabParam === 'booking' ||
     tabParam === 'conversations'
   )
-    return 'staff';
-  return 'guest';
+    return 'staff'
+  return 'guest'
 }
 
 export function defaultTabForSection(section: CommsSection): CommsHubTab {
-  return section === 'staff' ? 'staff' : 'whatsapp';
+  return section === 'staff' ? 'staff' : 'whatsapp'
 }
 
 export function tabBelongsToSection(tab: string, section: CommsSection): boolean {
-  if (section === 'staff') return STAFF_TAB_SET.has(tab);
-  return GUEST_TAB_SET.has(tab);
+  if (section === 'staff') return STAFF_TAB_SET.has(tab)
+  return GUEST_TAB_SET.has(tab)
 }
 
 export function normalizeCommsTab(tab: string | null, section: CommsSection): CommsHubTab {
-  const fallback = defaultTabForSection(section);
-  if (!tab || tab === 'templates') return fallback;
-  return tabBelongsToSection(tab, section) ? (tab as CommsHubTab) : fallback;
+  const fallback = defaultTabForSection(section)
+  if (!tab || tab === 'templates') return fallback
+  return tabBelongsToSection(tab, section) ? (tab as CommsHubTab) : fallback
 }

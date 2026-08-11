@@ -19,6 +19,7 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   if (path === '/ma-journee' || path.startsWith('/ma-journee/')) return 'ma-journee';
   if (path === '/tasks' || path === '/tasks/list') return 'tasks/list';
   if (path === '/planning' || path.startsWith('/planning/')) return 'planning';
+  if (path === '/ops-board' || path.startsWith('/ops-board/')) return 'ops-board';
   // Deep-links planning → highlight l’entrée unique « Planning »
   if (path.startsWith('/tasks/planning')) return 'planning';
   if (path.startsWith('/tasks/team')) return 'tasks/team';
@@ -35,10 +36,13 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   if (path.startsWith('/clients/contacts')) return 'clients';
   if (path.startsWith('/reviews')) return 'reviews';
 
+  if (path.startsWith('/communications/owner-booking')) return 'comms/owner-booking';
+
   if (path.startsWith('/communications')) {
     const tab = new URLSearchParams(search).get('tab') || 'whatsapp';
     const section = new URLSearchParams(search).get('section');
     if (tab === 'resas') return 'planning';
+    if (tab === 'owner-booking') return 'comms/owner-inbox';
     if (section === 'staff' || tab === 'staff' || tab === 'admin' || tab === 'booking') {
       if (tab === 'admin') return 'comms/admin';
       if (tab === 'booking') return 'comms/booking';

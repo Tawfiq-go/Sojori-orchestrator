@@ -89,7 +89,7 @@ function findCurrentReservationForListing(
 }
 
 async function fetchReservationsWindow(): Promise<ApiReservation[]> {
-  const status = 'Confirmed,Pending,Checked_in,Accepted';
+  const status = 'Confirmed,Pending,Started,Checked_in,Accepted';
   const [checkIn, checkOut] = await Promise.all([
     reservationsService.getList({ filter: 'CHECKIN_7DAYS', limit: 400, status }),
     reservationsService.getList({ filter: 'CHECKOUT_7DAYS', limit: 400, status }),
@@ -140,7 +140,7 @@ export async function fetchTaskReservations(
     const status = (res.status || '').toLowerCase();
     const isValidStatus =
       !status ||
-      ['pending', 'confirmed', 'checked_in', 'accepted'].includes(status);
+      ['pending', 'confirmed', 'started', 'checked_in', 'accepted'].includes(status);
     return isCorrectListing && isValidStatus;
   });
 }

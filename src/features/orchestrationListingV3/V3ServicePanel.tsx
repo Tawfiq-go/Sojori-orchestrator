@@ -16,6 +16,7 @@ import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
 import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
 import V3InformSyndicPanel from './V3InformSyndicPanel';
 import V3TaskBehaviorPanel from './V3TaskBehaviorPanel';
+import MenageOpsPanel from '../listing/components/ConfigOrchestration/MenageOpsPanel';
 import { V3 } from './theme';
 import { V3Badge, V3DecisionPill } from './V3Primitives';
 import { logV3Orch } from './v3OrchestrationDebugLog';
@@ -194,22 +195,70 @@ export default function V3ServicePanel({
     switch (activePanel) {
       case 'gestion':
         if (def.key === 'cleaning_free') {
+          const freeGestion = (orchestrationDoc.capabilities?.cleaning_free?.gestion ??
+            {}) as Record<string, unknown>;
+          const saveGestion = async (nextGestion: Record<string, unknown>) => {
+            if (ownerTemplateMode) {
+              await saveOwnerGestion({
+                ownerKey,
+                capabilityKey: 'cleaning_free',
+                gestion: nextGestion,
+                doc: orchestrationDoc as OwnerOrchestrationDoc,
+              });
+            } else {
+              await saveListingGestion({
+                listingId,
+                capabilityKey: 'cleaning_free',
+                gestion: nextGestion,
+                doc: orchestrationDoc as ListingOrchestrationDoc,
+              });
+            }
+            onReload();
+          };
           return (
-            <V3CleaningIncludedPanel
-              gestion={(orchestrationDoc.capabilities?.cleaning_free?.gestion ?? {}) as Record<string, unknown>}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <MenageOpsPanel
+                listingId={listingId}
+                listingValues={listingValues}
+                gestion={freeGestion}
+                focusTrack="included"templateMode={Boolean(ownerTemplateMode)}
+                onListingPatch={async patch => {
+                  await saveGestion({ ...freeGestion, ...patch });
+                }}
+              />
+              <V3CleaningIncludedPanel
+                gestion={freeGestion}
+                listingValues={listingValues}
+                hideExtras
+                onSave={async nextGestion => {
+                  await saveGestion({ ...freeGestion, ...nextGestion });
+                }}
+              />
+            </Box>
+          );
+        }
+        if (def.key === 'cleaning_paid') {
+          const paidGestion = (orchestrationDoc.capabilities?.cleaning_paid?.gestion ??
+            {}) as Record<string, unknown>;
+          return (
+            <MenageOpsPanel
+              listingId={listingId}
               listingValues={listingValues}
-              onSave={async nextGestion => {
+              gestion={paidGestion}
+              focusTrack="paid"templateMode={Boolean(ownerTemplateMode)}
+              onListingPatch={async patch => {
+                const nextGestion = { ...paidGestion, ...patch };
                 if (ownerTemplateMode) {
                   await saveOwnerGestion({
                     ownerKey,
-                    capabilityKey: 'cleaning_free',
+                    capabilityKey: 'cleaning_paid',
                     gestion: nextGestion,
                     doc: orchestrationDoc as OwnerOrchestrationDoc,
                   });
                 } else {
                   await saveListingGestion({
                     listingId,
-                    capabilityKey: 'cleaning_free',
+                    capabilityKey: 'cleaning_paid',
                     gestion: nextGestion,
                     doc: orchestrationDoc as ListingOrchestrationDoc,
                   });
@@ -217,6 +266,51 @@ export default function V3ServicePanel({
                 onReload();
               }}
             />
+          );
+        }
+        if (def.key === 'cleaning_sojori') {
+          const sojoriGestion = (orchestrationDoc.capabilities?.cleaning_sojori?.gestion ??
+            {}) as Record<string, unknown>;
+          const saveSojori = async (nextGestion: Record<string, unknown>) => {
+            if (ownerTemplateMode) {
+              await saveOwnerGestion({
+                ownerKey,
+                capabilityKey: 'cleaning_sojori',
+                gestion: nextGestion,
+                doc: orchestrationDoc as OwnerOrchestrationDoc,
+              });
+            } else {
+              await saveListingGestion({
+                listingId,
+                capabilityKey: 'cleaning_sojori',
+                gestion: nextGestion,
+                doc: orchestrationDoc as ListingOrchestrationDoc,
+              });
+            }
+            onReload();
+          };
+          return (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <MenageOpsPanel
+                listingId={listingId}
+                listingValues={listingValues}
+                gestion={sojoriGestion}
+                focusTrack="checkout"templateMode={Boolean(ownerTemplateMode)}
+                onListingPatch={async patch => {
+                  await saveSojori({ ...sojoriGestion, ...patch });
+                }}
+              />
+              <CapabilityGestionPanel
+                def={def}
+                scope={matrixScope}
+                ownerKey={ownerKey}
+                listingId={ownerTemplateMode ? undefined : listingId}
+                listingValues={gestionValues}
+                onListingPatch={async patch => {
+                  await saveSojori({ ...sojoriGestion, ...patch });
+                }}
+              />
+            </Box>
           );
         }
         if (def.key === 'receive_arrival' || def.key === 'receive_departure') {

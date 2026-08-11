@@ -282,6 +282,7 @@ async function enrichAuditIssues(issues: SyncIssue[]): Promise<SyncIssue[]> {
 function statusMeta(status?: string): { bg: string; color: string; label: string } {
   const n = String(status ?? '').toLowerCase();
   if (n === 'confirmed') return { bg: 'rgba(10,143,94,0.12)', color: T.success, label: 'Confirmé' };
+  if (n === 'started') return { bg: 'rgba(31,112,194,0.12)', color: T.info, label: 'Started' };
   if (n === 'pending') return { bg: 'rgba(196,101,6,0.12)', color: T.warning, label: 'En attente' };
   if (n.includes('cancel')) return { bg: 'rgba(200,30,30,0.10)', color: T.error, label: 'Annulé' };
   if (n === 'completed') return { bg: 'rgba(6,115,179,0.10)', color: T.info, label: 'Terminé' };

@@ -42,6 +42,10 @@ export interface TaskListItem {
   subType?: string | null;
   createdAt?: string;
   startDate?: string;
+  /** Échéance / fin planifiée (dueAt). */
+  dueAt?: string;
+  /** Date de clôture réelle (done). */
+  completedAt?: string;
   taskStatus: TaskStatus | string;
   status: TaskStatus | string;
   isClientRequest?: boolean;
@@ -135,12 +139,16 @@ export interface TaskListItem {
     required?: boolean;
     photoRequired?: boolean;
   }>;
-  /** Note affichable (requestNote / executionNote / payload.notes) — distinct de la checklist */
+  /** Note affichable (requestNote / executionNote / payload.notes / staffFinishNote) — distinct de la checklist */
   notesText?: string;
-  /** Photos guest (Aide) — URLs GCS documents, affichage via proxy listing-media. */
+  /** Photos guest ou FdM (Aide / ménage finish) — URLs GCS, affichage via proxy listing-media. */
   photoUrls?: string[];
   /** True si le guest a joint / signalé une photo (même sans URL encore). */
   hasGuestPhoto?: boolean;
+  /** Déclarations ménage Flow X (payload.staffDeclareKinds) — distinct de l’enregistrement invités. */
+  cleaningDeclarations?: Array<{ id: string; label: string }>;
+  /** Dernière MAJ (statut, assignation, checklist…) — tri « récemment mis à jour ». */
+  updatedAt?: string;
   ownerId?: string;
 }
 
@@ -170,7 +178,20 @@ export interface TasksSearchParams {
   dateStart?: string;
   dateEnd?: string;
   searchTerm?: string;
-  sortField?: 'createdAt' | 'startDate' | 'reservationNumber';
+  sortField?:
+    | 'updatedAt'
+    | 'createdAt'
+    | 'startDate'
+    | 'endDate'
+    | 'reservationNumber'
+    | 'itemNumber'
+    | 'type'
+    | 'status'
+    | 'guestName'
+    | 'listingName'
+    | 'priority'
+    | 'source'
+    | 'staffName';
   sortDirection?: 'asc' | 'desc';
   /** Aligné TasksNew : `false` exclut archivés ; `true` uniquement archivés ; `'all'` les deux. */
   isArchived?: boolean | 'all';

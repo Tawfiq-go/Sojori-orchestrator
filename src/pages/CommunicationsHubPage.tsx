@@ -5,6 +5,7 @@ import { DashboardWrapper } from '../components/DashboardWrapper';
 import { DASHBOARD_PAGE_FILL_SX } from '../constants/dashboardLayout';
 import WhatsAppTabV2 from '../components/communications/WhatsAppTabV2';
 import BookingWhatsAppTabV2 from '../components/communications/BookingWhatsAppTabV2';
+import OwnerBookingInboxTab from '../components/communications/OwnerBookingInboxTab';
 import ConversationsResaTabV2 from '../components/communications/ConversationsResaTabV2';
 import StaffWhatsAppTabV2 from '../components/communications/StaffWhatsAppTabV2';
 import MessagesOTATabV2 from '../components/communications/MessagesOTATabV2';
@@ -259,6 +260,7 @@ export default function CommunicationsHubPage() {
           {/* Hauteur restante → liste + conversation (filtres WA déjà dans la barre hub). */}
           <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {activeTab === 'whatsapp' && <WhatsAppTabV2 />}
+            {activeTab === 'owner-booking' && <OwnerBookingInboxTab />}
             {activeTab === 'booking' && isPlatformAdmin && <BookingWhatsAppTabV2 />}
             {activeTab === 'conversations' && isPlatformAdmin && <ConversationsResaTabV2 />}
             {activeTab === 'staff' && <StaffWhatsAppTabV2 inboxParty="staff" />}

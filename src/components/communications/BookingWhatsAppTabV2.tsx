@@ -71,7 +71,14 @@ function enrichBookingMessages(
   });
 }
 
-export default function BookingWhatsAppTabV2() {
+export default function BookingWhatsAppTabV2(props?: {
+  /** Si fourni : ne garde que ces numéros (Resa Proprio allowlist). */
+  phoneAllowlist?: string[];
+  /** Libellé contextuel (vide = Inbox Resa générique). */
+  emptyHint?: string;
+}) {
+  const phoneAllowlist = props?.phoneAllowlist;
+  const emptyHint = props?.emptyHint;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,16 +103,26 @@ export default function BookingWhatsAppTabV2() {
     try {
       setLoading(true);
       const res = await getBookingInboxThreads({
-        limit: 50,
+        limit: 80,
         search: searchTerm || undefined,
       });
-      setConversations(res.data.conversations || []);
+      let list = res.data.conversations || [];
+      if (phoneAllowlist && phoneAllowlist.length) {
+        const set = new Set(
+          phoneAllowlist.map((p) => String(p || '').replace(/\D/g, '').replace(/^00/, '')),
+        );
+        list = list.filter((c) => {
+          const digits = String(c.phone || '').replace(/\D/g, '').replace(/^00/, '');
+          return set.has(digits);
+        });
+      }
+      setConversations(list);
     } catch {
       setConversations([]);
     } finally {
       setLoading(false);
     }
-  }, [searchTerm]);
+  }, [searchTerm, phoneAllowlist]);
 
   useEffect(() => {
     void loadThreads();
@@ -337,9 +354,12 @@ export default function BookingWhatsAppTabV2() {
           }}
         >
           <Typography sx={{ fontSize: 48 }}>🧾</Typography>
-          <Typography sx={{ fontSize: 15, fontWeight: 600 }}>Aucune conversation résa</Typography>
+          <Typography sx={{ fontSize: 15, fontWeight: 600 }}>
+            {emptyHint ? 'Aucun échange' : 'Aucune conversation résa'}
+          </Typography>
           <Typography sx={{ fontSize: 13, color: t.text3 }}>
-            Les messages du numéro booking apparaîtront ici (Admin — sans owner).
+            {emptyHint ||
+              'Les messages du numéro booking apparaîtront ici (Admin — sans owner).'}
           </Typography>
         </Box>
       </InboxLayout>

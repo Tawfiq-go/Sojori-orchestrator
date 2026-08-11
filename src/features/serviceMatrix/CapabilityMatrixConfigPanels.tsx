@@ -22,6 +22,7 @@ import AccessConfigTab from '../listing/components/ConfigOrchestration/AccessCon
 import ArrivalDepartureConfigTab from '../listing/components/ConfigOrchestration/ArrivalDepartureConfigTab';
 import CleaningConfigTab from '../listing/components/ConfigOrchestration/CleaningConfigTab';
 import CleaningSojoriConfigTab from '../listing/components/ConfigOrchestration/CleaningSojoriConfigTab';
+import MenageOpsPanel from '../listing/components/ConfigOrchestration/MenageOpsPanel';
 import GroceryConfigTab from '../listing/components/ConfigOrchestration/GroceryConfigTab';
 import PropertyWifiConfigTab from '../listing/components/ConfigOrchestration/PropertyWifiConfigTab';
 import RulesConfigTab from '../listing/components/ConfigOrchestration/RulesConfigTab';
@@ -89,21 +90,36 @@ export function CapabilityGestionPanel({
   if (key === 'cleaning_free') {
     return (
       <Box sx={embeddedSx}>
-        <CleaningConfigTab {...commonListing} forcedSub="included" hideSubNav />
+        <MenageOpsPanel
+          {...commonListing}
+          gestion={listingValues}
+          focusTrack="included"/>
+        <Box sx={{ mt: 2 }}>
+          <CleaningConfigTab {...commonListing} forcedSub="included" hideSubNav />
+        </Box>
       </Box>
     );
   }
   if (key === 'cleaning_paid') {
     return (
       <Box sx={embeddedSx}>
-        <CleaningConfigTab {...commonListing} forcedSub="paid" hideSubNav />
+        <MenageOpsPanel
+          {...commonListing}
+          gestion={listingValues}
+          focusTrack="paid"/>
       </Box>
     );
   }
   if (key === 'cleaning_sojori') {
     return (
       <Box sx={embeddedSx}>
-        <CleaningSojoriConfigTab {...commonListing} showChecklist={false} />
+        <MenageOpsPanel
+          {...commonListing}
+          gestion={listingValues}
+          focusTrack="checkout"/>
+        <Box sx={{ mt: 2 }}>
+          <CleaningSojoriConfigTab {...commonListing} showChecklist={false} />
+        </Box>
       </Box>
     );
   }

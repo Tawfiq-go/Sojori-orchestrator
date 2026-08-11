@@ -412,13 +412,16 @@ export function cleaningLabelFr(kindOrItem?: string | TimelineItem | TaskItem | 
           .trim()
       : resolveCleaningKindKey(kindOrItem);
   if (!k) return 'Ménage';
-  if (
-    k === 'sojori' ||
-    k === 'cleaning_sojori' ||
-    k === 'checkout_cleaning' ||
-    k.includes('sojori')
-  ) {
+  if (k === 'cleaning_sojori' || (k === 'sojori' && !k.includes('checkout')) || (k.includes('sojori') && !k.includes('checkout'))) {
     return 'Ménage Sojori';
+  }
+  if (
+    k === 'checkout_cleaning' ||
+    k === 'checkout' ||
+    (k.includes('checkout') && k.includes('clean')) ||
+    k.includes('checkout')
+  ) {
+    return 'Ménage checkout';
   }
   if (k === 'paid' || k === 'cleaning_paid' || k.includes('payant') || k.includes('paid')) {
     return 'Ménage payant';
@@ -430,12 +433,8 @@ export function cleaningLabelFr(kindOrItem?: string | TimelineItem | TaskItem | 
     k.includes('gratuit') ||
     k.includes('free')
   ) {
-    return 'Ménage inclus';
+    return 'Ménage gratuit';
   }
-  if (k === 'checkout' || (k.includes('checkout') && k.includes('clean'))) {
-    return 'Ménage checkout';
-  }
-  if (k.includes('checkout')) return 'Ménage checkout';
   return 'Ménage';
 }
 
@@ -444,7 +443,7 @@ export function cleaningChipLabelFr(kindOrItem?: string | TimelineItem | TaskIte
   const full = cleaningLabelFr(kindOrItem);
   if (full === 'Ménage Sojori') return 'Sojori';
   if (full === 'Ménage payant') return 'Payant';
-  if (full === 'Ménage inclus') return 'Inclus';
+  if (full === 'Ménage gratuit' || full === 'Ménage inclus') return 'Gratuit';
   if (full === 'Ménage checkout') return 'Checkout';
   return 'Ménage';
 }
@@ -494,7 +493,13 @@ export interface ReservationRow {
   blockAuthor?: string;
 }
 
-export type PlanningRoomRef = { id: string; name: string; number?: number };
+export type PlanningRoomRef = {
+  id: string;
+  name: string;
+  number?: number;
+  /** Mews Resource.State — Clean | Dirty | Inspected | OutOfOrder | OutOfService */
+  housekeepingState?: string | null;
+};
 
 export type PlanningRoomTypeRef = {
   id: string;
@@ -546,6 +551,8 @@ export interface ListingRow {
   parentRoomTypeName?: string;
   roomTypeId?: string;
   roomId?: string;
+  /** Mews Resource.State sur ligne room (Multi). */
+  housekeepingState?: string | null;
   /** Sur ligne roomType : nb de rooms ; sur hôtel : nb de roomTypes. */
   roomTypeCount?: number;
   rooms?: PlanningRoomRef[];

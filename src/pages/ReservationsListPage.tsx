@@ -83,6 +83,9 @@ function getStatusColor(status: string) {
   if (normalized === 'confirmed') {
     return { bg: t.success + '22', color: t.success, label: 'Confirmé' };
   }
+  if (normalized === 'started') {
+    return { bg: t.info + '22', color: t.info, label: 'Started' };
+  }
   if (normalized === 'pending') {
     return { bg: t.warning + '22', color: t.warning, label: 'En attente' };
   }

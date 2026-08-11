@@ -203,7 +203,7 @@ export async function fetchTaskNewPlanning(params: {
        résas hors page → une requête unitaire par résa manquante (cf. batch plus bas).
        Le backend ne plafonne pas (paginate._limit = parseInt brut). */
     limit: RESERVATIONS_WINDOW_LIMIT,
-    status: 'Confirmed,Pending,Inside',
+    status: 'Confirmed,Pending,Started,Inside',
     dateType: 'arrival_or_departure',
     startDate: params.startDate,
     endDate: params.endDate,

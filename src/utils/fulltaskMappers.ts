@@ -155,6 +155,69 @@ function buildConciergeDetailLine(
   return note
 }
 
+/** Libellés FR des déclarations ménage Flow X (ids staffDeclareKinds). */
+const CLEANING_DECLARE_LABELS: Record<string, string> = {
+  broken: 'Truc cassé / incident',
+  broken_missing: 'Objet cassé ou manquant',
+  found_object: 'Objet trouvé',
+  missing: 'Manque / stock',
+  dirty_extra: 'Sale exceptionnel',
+  keys: 'Clés / accès',
+  other: 'Autre',
+  degraded: 'Appartement dégradé',
+  stain_sofa: 'Tache canapé / fauteuil',
+  stain_bed: 'Tache lit / matelas / linge',
+  linen_missing: 'Linge/serviette manquant',
+  ac_issue: 'Problème climatisation',
+  water_leak: 'Fuite eau / plomberie',
+  equipment: 'Équipement en panne',
+  glass_damage: 'Vitre/miroir abîmé',
+  guest_left: 'Objet client oublié',
+  extra_clean: 'Nettoyage exceptionnel',
+}
+
+/** Déclarations FdM ménage — ids + labels (declareOptions listing ou défauts). */
+function extractCleaningDeclarations(
+  payload: Record<string, unknown>,
+): Array<{ id: string; label: string }> {
+  const raw =
+    payload.staffDeclareKinds ??
+    payload.staffDeclareKind ??
+    payload.declareKinds
+  const ids: string[] = []
+  if (Array.isArray(raw)) {
+    for (const x of raw) {
+      const id = String(x || '')
+        .trim()
+        .slice(0, 40)
+      if (id && id !== 'none') ids.push(id)
+    }
+  } else {
+    const id = String(raw || '')
+      .trim()
+      .slice(0, 40)
+    if (id && id !== 'none') ids.push(id)
+  }
+  if (!ids.length) return []
+
+  const labelById = new Map<string, string>()
+  const opts = payload.declareOptions
+  if (Array.isArray(opts)) {
+    for (const row of opts) {
+      if (!row || typeof row !== 'object') continue
+      const o = row as Record<string, unknown>
+      const id = String(o.id || '').trim()
+      const title = String(o.title || o.label || '').trim()
+      if (id && title) labelById.set(id, title)
+    }
+  }
+
+  return ids.map((id) => ({
+    id,
+    label: labelById.get(id) || CLEANING_DECLARE_LABELS[id] || id,
+  }))
+}
+
 /** Checklist tâche (flat ou catégories) + checklistDone staff — pour icône /tasks. */
 function extractChecklistItems(payload: Record<string, unknown>): Array<{
   id?: string
@@ -304,9 +367,14 @@ export function fullTaskToListItem(
   const roomTypeName = roomFromMeta || roomFromPayload;
   const listingDisplayName = formatHotelRoomLabel(hotelName, roomTypeName);
   const startIso = inferTaskPlannedIso(task, reservationMeta);
-  const endIso = task.dueAt
+  const dueIso = task.dueAt
     ? new Date(String(task.dueAt)).toISOString()
-    : startIso;
+    : undefined;
+  const completedIso = task.completedAt
+    ? new Date(String(task.completedAt)).toISOString()
+    : undefined;
+  /** Fin d’exécution affichable : dueAt, sinon start (créneau Heure tâche). */
+  const endIso = dueIso || startIso;
   const taskType = String(task.type || '');
   const regCounts =
     taskType === 'registration'
@@ -381,11 +449,19 @@ export function fullTaskToListItem(
   const notesText = [
     task.requestNote ? String(task.requestNote).trim() : '',
     task.executionNote ? String(task.executionNote).trim() : '',
-    String(payload.notes ?? payload.staffNotes ?? payload.notesStaff ?? '').trim(),
+    String(
+      payload.staffFinishNote ??
+        payload.notes ??
+        payload.staffNotes ??
+        payload.notesStaff ??
+        '',
+    ).trim(),
   ]
     .filter(Boolean)
     .filter((v, i, arr) => arr.indexOf(v) === i)
     .join('\n\n')
+
+  const cleaningDeclarations = extractCleaningDeclarations(payload)
 
   const derivedPriority =
     task.priority &&
@@ -414,8 +490,16 @@ export function fullTaskToListItem(
         : task.updatedAt != null
           ? String(task.updatedAt)
           : undefined,
+    updatedAt:
+      task.updatedAt != null
+        ? String(task.updatedAt)
+        : task.createdAt != null
+          ? String(task.createdAt)
+          : undefined,
     startDate: startIso,
     endDate: endIso,
+    dueAt: dueIso,
+    completedAt: completedIso,
     taskStatus: legacyStatus,
     status: legacyStatus,
     emergency: fullTaskPriorityToEmergency(legacyPriorityStr),
@@ -467,6 +551,9 @@ export function fullTaskToListItem(
     conciergeGroupingKey,
     checklistItems: checklistItems.length ? checklistItems : undefined,
     notesText: notesText || undefined,
+    cleaningDeclarations: cleaningDeclarations.length
+      ? cleaningDeclarations
+      : undefined,
     supportCategoryLabel:
       taskType === 'support'
         ? String(payload.categoryLabel ?? payload.categoryTitle ?? '').trim() || undefined
@@ -477,14 +564,22 @@ export function fullTaskToListItem(
       const fromArr = Array.isArray(payload.photos)
         ? payload.photos.map((u) => String(u || '').trim()).filter(Boolean)
         : []
+      const fromFinish = Array.isArray(payload.staffFinishPhotoUrls)
+        ? payload.staffFinishPhotoUrls.map((u) => String(u || '').trim()).filter(Boolean)
+        : []
       const single = String(payload.photoUrl || payload.photo || '').trim()
       const all = [...fromArr]
+      for (const u of fromFinish) {
+        if (!all.includes(u)) all.push(u)
+      }
       if (single && !all.includes(single)) all.unshift(single)
       return all.length ? all : undefined
     })(),
     hasGuestPhoto:
       (Array.isArray(payload.photos) &&
         payload.photos.some((u) => Boolean(String(u || '').trim()))) ||
+      (Array.isArray(payload.staffFinishPhotoUrls) &&
+        payload.staffFinishPhotoUrls.some((u) => Boolean(String(u || '').trim()))) ||
       Boolean(String(payload.photoUrl || payload.photo || '').trim()) ||
       payload.hasPhoto === true,
     comment: task.executionNote ? String(task.executionNote) : '',

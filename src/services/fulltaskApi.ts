@@ -17,6 +17,12 @@ export async function listTasks(params: Record<string, unknown> = {}) {
   return data;
 }
 
+/** Liste paginée + tri Mongo (bypass tri limité à la page client). */
+export async function searchTasks(params: Record<string, unknown> = {}) {
+  const { data } = await apiClient.get(`${BASE}/tasks/search`, { params });
+  return data;
+}
+
 export type TaskOperationalSummary = {
   open: number;
   unassigned: number;
@@ -213,6 +219,27 @@ export async function updateWhatsappAdmin(id: string, body: Record<string, unkno
 
 export async function deleteWhatsappAdmin(id: string) {
   const { data } = await apiClient.delete(`${BASE}/whatsapp-admins/${id}`);
+  return data;
+}
+
+/** Allowlist Resa Proprio (whatsapp_owner_bookers) */
+export async function listOwnerBookers(params: Record<string, unknown> = {}) {
+  const { data } = await apiClient.get(`${BASE}/owner-bookers`, { params });
+  return data;
+}
+
+export async function createOwnerBooker(body: Record<string, unknown>) {
+  const { data } = await apiClient.post(`${BASE}/owner-bookers`, body);
+  return data;
+}
+
+export async function updateOwnerBooker(id: string, body: Record<string, unknown>) {
+  const { data } = await apiClient.put(`${BASE}/owner-bookers/${id}`, body);
+  return data;
+}
+
+export async function deleteOwnerBooker(id: string) {
+  const { data } = await apiClient.delete(`${BASE}/owner-bookers/${id}`);
   return data;
 }
 

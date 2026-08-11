@@ -120,12 +120,20 @@ export type ProfitListingBilan = {
   reservations: number;
   nights: number;
   grossRevenue: number;
+  /** Somme loyers (hébergement) */
+  accommodationTotal?: number;
+  /** Somme extras Sojori */
+  extrasTotal?: number;
   otaCommission: number;
   cleaningRetained: number;
   cityTaxCollected: number;
   pmCommission: number;
   checkoutCleaningCost: number;
   otherPmExpenses: number;
+  fixedRent?: number;
+  fixedWifi?: number;
+  fixedElectricity?: number;
+  staffSalaryShare?: number;
   netPmContribution: number;
   avgAccommodationPerNight: number | null;
 };
@@ -137,6 +145,8 @@ export type ProfitLandlordBilan = {
   reservations: number;
   nights: number;
   grossRevenue: number;
+  accommodationTotal?: number;
+  extrasTotal?: number;
   otaCommission: number;
   cleaningRetained: number;
   cityTaxCollected: number;
@@ -170,6 +180,7 @@ export type ProfitReport = {
     };
     header?: ProfitReportHeader;
     reportKind?: 'pm_business' | 'landlord';
+    businessModel?: 'gestion' | 'sous_location';
     /** État (période) vs Projection — le cash flow « réel » arrivera plus tard. */
     periodNature?: 'etat' | 'projection';
     listingBilans?: ProfitListingBilan[];

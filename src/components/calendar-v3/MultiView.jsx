@@ -35,6 +35,7 @@ function reservationChannelKind(channelName, status) {
   if (st.includes('pend')) return 'pending';
   const n = String(channelName || '').toLowerCase();
   if (n.includes('airbnb') || n.includes('air bnb')) return 'airbnb';
+  if (n.includes('whatsapp') || n === 'wa') return 'sojori';
   if (n.includes('booking')) return 'booking';
   if (n.includes('vrbo') || n.includes('homeaway')) return 'vrbo';
   if (n.includes('expedia')) return 'expedia';
@@ -1091,6 +1092,7 @@ export default function MultiView({
                                   roomTypeId: rt.id,
                                   roomTypeName: rt.name,
                                   roomId: room.id,
+                                  housekeepingState: room.housekeepingState || null,
                                   propertyUnit: 'Single',
                                   _isRoomTypeRow: false,
                                   _isRoomRow: true,
@@ -1291,12 +1293,75 @@ const ListingLabel = memo(function ListingLabel({
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              display: 'block',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
               color: T.text2,
+              minWidth: 0,
             }}
-            title={listing.name}
+            title={
+              listing.housekeepingState
+                ? `${listing.name} · ${listing.housekeepingState}`
+                : listing.name
+            }
           >
-            {listing.name}
+            {listing.housekeepingState ? (
+              <span
+                style={{
+                  flexShrink: 0,
+                  fontSize: 8.5,
+                  fontWeight: 800,
+                  letterSpacing: '0.02em',
+                  padding: '1px 4px',
+                  borderRadius: 4,
+                  lineHeight: 1.2,
+                  background:
+                    listing.housekeepingState === 'Clean'
+                      ? '#ecfdf5'
+                      : listing.housekeepingState === 'Dirty'
+                        ? '#fff7ed'
+                        : listing.housekeepingState === 'Inspected'
+                          ? '#eff6ff'
+                          : listing.housekeepingState === 'OutOfOrder'
+                            ? '#fef2f2'
+                            : listing.housekeepingState === 'OutOfService'
+                              ? '#f3f4f6'
+                              : '#f8fafc',
+                  color:
+                    listing.housekeepingState === 'Clean'
+                      ? '#047857'
+                      : listing.housekeepingState === 'Dirty'
+                        ? '#c2410c'
+                        : listing.housekeepingState === 'Inspected'
+                          ? '#1d4ed8'
+                          : listing.housekeepingState === 'OutOfOrder'
+                            ? '#b91c1c'
+                            : listing.housekeepingState === 'OutOfService'
+                              ? '#4b5563'
+                              : '#475569',
+                  border: '1px solid',
+                  borderColor:
+                    listing.housekeepingState === 'Clean'
+                      ? '#a7f3d0'
+                      : listing.housekeepingState === 'Dirty'
+                        ? '#fed7aa'
+                        : listing.housekeepingState === 'Inspected'
+                          ? '#bfdbfe'
+                          : listing.housekeepingState === 'OutOfOrder'
+                            ? '#fecaca'
+                            : listing.housekeepingState === 'OutOfService'
+                              ? '#d1d5db'
+                              : '#e2e8f0',
+                }}
+              >
+                {listing.housekeepingState === 'OutOfOrder'
+                  ? 'OOO'
+                  : listing.housekeepingState === 'OutOfService'
+                    ? 'OOS'
+                    : String(listing.housekeepingState).slice(0, 9)}
+              </span>
+            ) : null}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{listing.name}</span>
           </span>
         ) : (
         <Link

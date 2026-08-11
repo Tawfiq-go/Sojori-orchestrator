@@ -69,6 +69,7 @@ import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
 import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
 import V3InformSyndicPanel from './V3InformSyndicPanel';
 import CleaningChecklistPanel from '../listing/components/ConfigOrchestration/CleaningChecklistPanel';
+import MenageOpsPanel from '../listing/components/ConfigOrchestration/MenageOpsPanel';
 import OrchestrationGlobalSwitch from './OrchestrationGlobalSwitch';
 import CapabilityAuditStrip from './CapabilityAuditStrip';
 import { V3Section } from './V3Primitives';
@@ -467,18 +468,47 @@ function configHints(cap: CapDoc, key: string): string[] {
   const hints: string[] = [];
 
   if (key === 'cleaning_free' || key === 'cleaning_paid' || key === 'cleaning_sojori') {
+    const ops = (g.menageOps ?? {}) as {
+      included?: { normal?: { price?: number }; grand?: { price?: number } };
+      paid?: { normal?: { price?: number }; grand?: { price?: number } };
+      checkout?: {
+        normal?: { price?: number };
+        grand?: { price?: number };
+        pricingMode?: string;
+        monthlyForfaitAmount?: number;
+      };
+    };
+    if (key === 'cleaning_free' && ops.included) {
+      const n = ops.included.normal?.price;
+      const gr = ops.included.grand?.price;
+      if (n != null || gr != null) hints.push(`N ${n ?? 0} / G ${gr ?? 0} MAD`);
+    }
+    if (key === 'cleaning_paid' && ops.paid) {
+      const n = ops.paid.normal?.price;
+      const gr = ops.paid.grand?.price;
+      if (n != null || gr != null) hints.push(`N ${n ?? 0} / G ${gr ?? 0} MAD`);
+    }
+    if (key === 'cleaning_sojori' && ops.checkout) {
+      if (ops.checkout.pricingMode === 'monthly_forfait') {
+        hints.push(`forfait ${ops.checkout.monthlyForfaitAmount ?? 0} MAD/mois`);
+      } else {
+        const n = ops.checkout.normal?.price;
+        const gr = ops.checkout.grand?.price;
+        if (n != null || gr != null) hints.push(`N ${n ?? 0} / G ${gr ?? 0} MAD`);
+      }
+    }
     const freq = Array.isArray(g.frequency) ? g.frequency : [];
     const slots = Array.isArray(g.timeSlots)
       ? g.timeSlots
       : Array.isArray(g.TS_CLEAN)
         ? g.TS_CLEAN
         : [];
-    const extras = Array.isArray(g.extras)
-      ? (g.extras as Array<{ enabled?: boolean }>).filter((e) => e.enabled !== false)
-      : [];
-    if (freq.length) hints.push(`${freq.length} palier${freq.length > 1 ? 's' : ''}`);
-    if (slots.length) hints.push(`${slots.length} créneau${slots.length > 1 ? 'x' : ''}`);
-    if (extras.length) hints.push(`${extras.length} option${extras.length > 1 ? 's' : ''}`);
+    if (key === 'cleaning_free' && freq.length) {
+      hints.push(`${freq.length} palier${freq.length > 1 ? 's' : ''}`);
+    }
+    if (key === 'cleaning_free' && slots.length) {
+      hints.push(`${slots.length} créneau${slots.length > 1 ? 'x' : ''}`);
+    }
   }
 
   if (key === 'transport') {
@@ -501,12 +531,6 @@ function configHints(cap: CapDoc, key: string): string[] {
           ? g.products
           : [];
     if (items.length) hints.push(`${items.length} article${items.length > 1 ? 's' : ''}`);
-  }
-
-  if (key === 'cleaning_paid') {
-    const paid = g.paidCleaningConfig as { services?: unknown[] } | null | undefined;
-    const services = Array.isArray(paid?.services) ? paid.services : Array.isArray(g.services) ? g.services : [];
-    if (services.length) hints.push(`${services.length} offre${services.length > 1 ? 's' : ''} payante${services.length > 1 ? 's' : ''}`);
   }
 
   const codes = cap.whatsapp?.menuCodes;
@@ -2483,9 +2507,11 @@ export default function OrchestrationOverviewPanel({
           ? 'Éditez mode d’accueil, parking, immeuble et appartement (codes + descriptions) — puis Enregistrer.'
           : 'Template owner : mode d’accueil seulement. Codes parking / immeuble / appartement → chaque fiche annonce.';
       case 'cleaning_free':
+        return 'Tarifs Normal/Grand + paliers (nombre de ménages selon la durée) et créneaux — puis Enregistrer.';
       case 'cleaning_paid':
+        return 'Tarifs Normal/Grand + options serviettes/draps — puis Enregistrer.';
       case 'cleaning_sojori':
-        return 'Éditez les paliers de durée, créneaux horaires et options — puis Enregistrer.';
+        return 'Tarifs Normal/Grand (ou forfait mensuel) + déclenchement après checkout — puis Enregistrer.';
       case 'transport':
         return 'Ajoutez des trajets et fixez le prix de chaque course — puis Enregistrer.';
       case 'concierge':
@@ -3336,27 +3362,72 @@ export default function OrchestrationOverviewPanel({
               </IconButton>
             </DialogTitle>
             <DialogContent dividers sx={{ pt: 1.5 }}>
-              <Tabs
-                value={configModal.tab}
-                onChange={(_, v) => setConfigModal({ ...configModal, tab: v })}
-                sx={{ mb: 2, minHeight: 36 }}
-              >
-                <Tab value="gestion" label="Éditer la config" sx={{ textTransform: 'none', minHeight: 36, fontWeight: 700 }} />
-                {configDef.menuCodes.length > 0 && (
-                  <Tab value="wa" label="WhatsApp voyageur" sx={{ textTransform: 'none', minHeight: 36 }} />
-                )}
-              </Tabs>
-
-              {configModal.tab === 'gestion' && (
-                <Box key={`gestion-${configDef.key}-${listingId ?? ownerKey}`}>
+              <Box key={`gestion-${configDef.key}-${listingId ?? ownerKey}`}>
                   {configDef.key === 'cleaning_free' ? (
-                    <V3CleaningIncludedPanel
-                      gestion={configGestionValues}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <MenageOpsPanel
+                        listingId={listingId || ''}
+                        listingValues={listingValues}
+                        gestion={configGestionValues}
+                        focusTrack="included"templateMode={!isListingScope}
+                        onListingPatch={async (patch) => {
+                          await onGestionPatch(configDef.key, {
+                            ...configGestionValues,
+                            ...patch,
+                          });
+                        }}
+                      />
+                      <V3CleaningIncludedPanel
+                        gestion={configGestionValues}
+                        listingValues={listingValues}
+                        hideExtras
+                        onSave={async (nextGestion) => {
+                          await onGestionPatch(configDef.key, {
+                            ...configGestionValues,
+                            ...nextGestion,
+                          });
+                        }}
+                      />
+                    </Box>
+                  ) : configDef.key === 'cleaning_paid' ? (
+                    <MenageOpsPanel
+                      listingId={listingId || ''}
                       listingValues={listingValues}
-                      onSave={async (nextGestion) => {
-                        await onGestionPatch(configDef.key, nextGestion);
+                      gestion={configGestionValues}
+                      focusTrack="paid"templateMode={!isListingScope}
+                      onListingPatch={async (patch) => {
+                        await onGestionPatch(configDef.key, {
+                          ...configGestionValues,
+                          ...patch,
+                        });
                       }}
                     />
+                  ) : configDef.key === 'cleaning_sojori' ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <MenageOpsPanel
+                        listingId={listingId || ''}
+                        listingValues={listingValues}
+                        gestion={configGestionValues}
+                        focusTrack="checkout"templateMode={!isListingScope}
+                        onListingPatch={async (patch) => {
+                          await onGestionPatch(configDef.key, {
+                            ...configGestionValues,
+                            ...patch,
+                          });
+                        }}
+                      />
+                      <CapabilityGestionPanel
+                        def={configDef}
+                        scope={isListingScope ? 'listing' : 'owner'}
+                        ownerKey={ownerKey}
+                        listingId={listingId}
+                        listingValues={configGestionValues}
+                        onListingPatch={async (patch) => {
+                          await onGestionPatch(configDef.key, patch);
+                        }}
+                        manualSaveMode
+                      />
+                    </Box>
                   ) : configDef.key === 'receive_arrival' ||
                     configDef.key === 'receive_departure' ? (
                     <V3ReceiveChecklistPanel
@@ -3392,29 +3463,7 @@ export default function OrchestrationOverviewPanel({
                       manualSaveMode
                     />
                   )}
-                </Box>
-              )}
-
-              {configModal.tab === 'wa' && (
-                <Box key={`wa-${configDef.key}-${listingId ?? ownerKey}`}>
-                  <CapabilityWhatsAppPanel
-                    def={configDef}
-                    scope={isListingScope ? 'listing' : 'owner'}
-                    ownerKey={ownerKey}
-                    listingId={listingId}
-                    orchestrationDoc={isListingScope ? (doc as ListingOrchestrationDoc) : undefined}
-                    ownerOrchestrationDoc={
-                      isListingScope ? undefined : (doc as OwnerOrchestrationDoc)
-                    }
-                    onOrchestrationSaved={() => {
-                      void reload();
-                    }}
-                    onWhatsappPatch={() => {
-                      void reload();
-                    }}
-                  />
-                </Box>
-              )}
+              </Box>
             </DialogContent>
           </>
         )}

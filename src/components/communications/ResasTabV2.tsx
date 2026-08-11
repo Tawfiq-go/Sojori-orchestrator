@@ -69,7 +69,7 @@ const WA_TEMPLATE_ID = 'welcome_sojori_v2';
 
 function mapReservationStatus(status?: string): 'confirmed' | 'pending' {
   const s = (status || '').toLowerCase();
-  if (s.includes('confirm')) return 'confirmed';
+  if (s.includes('confirm') || s === 'started') return 'confirmed';
   return 'pending';
 }
 
@@ -213,7 +213,7 @@ export default function ResasTabV2() {
     const { apiStart, apiEnd } = windowRange();
     const reservationsResponse = await reservationsService.getList({
       limit: 100,
-      status: 'Confirmed,Pending,Inside',
+      status: 'Confirmed,Pending,Started,Inside',
       dateType: 'arrival_or_departure',
       startDate: apiStart,
       endDate: apiEnd,
@@ -467,6 +467,9 @@ export default function ResasTabV2() {
                       id: String(rm.id),
                       name: String(rm.name),
                       ...(rm.number != null ? { number: Number(rm.number) } : {}),
+                      ...(rm.housekeepingState
+                        ? { housekeepingState: String(rm.housekeepingState) }
+                        : {}),
                     })),
                   }
                 : {}),
@@ -566,10 +569,16 @@ export default function ResasTabV2() {
           const arrivalChosen = Boolean(r.arrival_time_chosen || r.confirmedCheckInTime);
           const departureChosen = Boolean(r.departure_time_chosen || r.confirmedCheckOutTime);
           const customerStatus = String(r.customerStatus || '').toLowerCase();
+          const mewsState = String(
+            (r as { mewsState?: string }).mewsState || '',
+          ).toLowerCase();
+          // Multi Mews: Started → en maison via customerStatus/mewsState (Confirmed intact).
+          // Single: actualArrivalTime / déclarer arrivée.
           const arrived = Boolean(
             r.actualArrivalTime ||
               customerStatus === 'arrived' ||
-              customerStatus === 'on_site',
+              customerStatus === 'on_site' ||
+              mewsState === 'started',
           );
           const arrivalTime =
             r.arrival_time || r.checkInTime || r.confirmedCheckInTime || '15:00';

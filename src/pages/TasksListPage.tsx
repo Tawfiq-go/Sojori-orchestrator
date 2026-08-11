@@ -33,13 +33,10 @@ import {
   FormControl,
   IconButton,
   InputAdornment,
-  List,
-  ListItem,
   ListItemText,
   Menu,
   MenuItem,
   Paper,
-  Popover,
   Select,
   Stack,
   TablePagination,
@@ -114,11 +111,12 @@ const COLUMN_WIDTHS = {
   listing: '112px',
   voyageur: '116px',
   executionDate: '96px',
+  endDate: '92px',
   urgence: '58px',
   source: '56px',
   status: '96px',
   assignedStaff: '96px',
-  extras: '64px',
+  extras: '128px',
   description: '120px',
   createdAt: '92px',
 } as const;
@@ -131,12 +129,35 @@ const toolbarFieldSx = {
 } as const;
 
 const SORT_FIELD_LABELS: Record<string, string> = {
+  updatedAt: 'Dernière MAJ',
   createdAt: 'Date création',
-  startDate: 'Date prévue',
+  startDate: 'Date prévu',
+  endDate: 'Date fin',
   reservationNumber: 'Réservation',
+  itemNumber: 'Code',
+  type: 'Type',
+  status: 'Statut',
+  guestName: 'Invité',
+  listingName: 'Logement',
+  priority: 'Priorité',
+  source: 'Origine',
+  staffName: 'Staff',
 };
 
-export type TaskListSortField = 'createdAt' | 'startDate' | 'reservationNumber';
+export type TaskListSortField =
+  | 'updatedAt'
+  | 'createdAt'
+  | 'startDate'
+  | 'endDate'
+  | 'reservationNumber'
+  | 'itemNumber'
+  | 'type'
+  | 'status'
+  | 'guestName'
+  | 'listingName'
+  | 'priority'
+  | 'source'
+  | 'staffName';
 
 function urgencyShortLabel(em: string): string {
   if (em === 'Critical') return 'Crit.';
@@ -244,6 +265,7 @@ const T = {
   primaryDeep: '#876119',
   primarySoft: '#e6c46a',
   primaryTint: 'rgba(184,133,26,0.10)',
+  primaryTint2: 'rgba(184,133,26,0.18)',
   bg0: '#f6f5f1',
   bg1: '#ffffff',
   bg2: '#fafaf7',
@@ -265,7 +287,7 @@ const TABLE_VIEWPORT_HEIGHT = {
   md: 'calc(100dvh - 88px)',
 } as const;
 
-const TASKS_TABLE_MIN_WIDTH = 1280;
+const TASKS_TABLE_MIN_WIDTH = 1370;
 
 type QuickFilterKey = 'none' | 'dueToday' | 'dueTomorrow' | 'due7d' | 'red' | 'orange' | 'green';
 
@@ -408,6 +430,9 @@ type TasksTableColumn = {
   label: string;
   width?: string;
   align?: string;
+  sortable?: boolean;
+  /** Clé API de tri (si différente de `key`). */
+  sortKey?: TaskListSortField;
   render?: (row: TaskListItem) => ReactNode;
 };
 
@@ -417,6 +442,9 @@ function TasksScrollTable({
   onRowClick,
   ultraCompact = false,
   fillViewport = false,
+  sortField,
+  sortDirection,
+  onSortClick,
 }: {
   columns: TasksTableColumn[];
   rows: TaskListItem[];
@@ -424,6 +452,9 @@ function TasksScrollTable({
   ultraCompact?: boolean;
   /** Remplit la hauteur parent — freeze panes calendrier multi (header hors scroll V) */
   fillViewport?: boolean;
+  sortField?: TaskListSortField;
+  sortDirection?: 'asc' | 'desc';
+  onSortClick?: (field: TaskListSortField) => void;
 }) {
   const headerRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -475,6 +506,9 @@ function TasksScrollTable({
         pinScrolled={hScrolled}
         headerScrollRef={headerRef}
         bodyScrollRef={bodyRef}
+        sortField={sortField}
+        sortDirection={sortDirection}
+        onSortClick={onSortClick}
         onRowClick={(row) => onRowClick(row as TaskListItem)}
       />
     </Paper>
@@ -652,25 +686,65 @@ function taskNotesText(task: TaskListItem): string {
   return firstDescriptionLine(task);
 }
 
-/** Icônes Checklist / Note / Photo — clic → popover (uniquement si contenu). */
-function TaskExtrasIcons({ task }: { task: TaskListItem }) {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const [kind, setKind] = useState<'checklist' | 'notes' | 'photos' | null>(null);
+function taskDeclarationSummary(task: TaskListItem): {
+  hasContent: boolean;
+  done: number;
+  total: number;
+  members: Array<Record<string, unknown>>;
+  tip: string;
+  cleaningItems: Array<{ id: string; label: string }>;
+} {
+  const cleaningItems = Array.isArray(task.cleaningDeclarations)
+    ? task.cleaningDeclarations
+    : [];
+  const members = Array.isArray(task.guestRegistration?.members)
+    ? task.guestRegistration!.members!
+    : [];
+  const total = Number(task.adults ?? task.guestRegistration?.nbre_guest_to_register ?? 0) || 0;
+  const done =
+    Number(task.nbreGuestValidated ?? task.guestRegistration?.nbre_guest_registered ?? 0) || 0;
+  const typ = String(task.type || task.name || '').toLowerCase();
+  const isReg = typ === 'registration' || members.length > 0 || total > 0 || done > 0;
+  const tip =
+    cleaningItems.length > 0
+      ? `${cleaningItems.length} déclaration(s) ménage`
+      : total > 0 || done > 0
+        ? `${done}/${total || '—'} enregistrés · Brouillons: ${task.nbreGuestDraft ?? 0} · Reste: ${task.nbreGuestNotRegistered ?? 0}`
+        : members.length
+          ? `${members.length} fiche(s) invité`
+          : '';
+  return {
+    hasContent: Boolean(
+      cleaningItems.length > 0 ||
+        (isReg && (total > 0 || done > 0 || members.length > 0)),
+    ),
+    done,
+    total,
+    members,
+    tip,
+    cleaningItems,
+  };
+}
+
+/** Bouton Infos → modal design (note, checklist, déclaration, images). */
+function TaskInfosCell({ task }: { task: TaskListItem }) {
+  const [open, setOpen] = useState(false);
   const [photoSrcs, setPhotoSrcs] = useState<string[]>([]);
-  const [thumbSrc, setThumbSrc] = useState<string>('');
   const checklist = task.checklistItems || [];
   const notes = taskNotesText(task);
   const photos = (task.photoUrls || []).filter(Boolean);
+  const declaration = taskDeclarationSummary(task);
   const hasChecklist = checklist.length > 0;
   const hasNotes = Boolean(notes);
   const hasPhotos = photos.length > 0 || task.hasGuestPhoto === true;
+  const hasAnything = hasChecklist || hasNotes || hasPhotos || declaration.hasContent;
   const photosKey = photos.join('|');
+  const doneN = checklist.filter((c) => c.done).length;
+  const totalN = checklist.length;
 
-  // Vignette Infos + aperçu popover — URLs GCS signées si besoin.
   useEffect(() => {
-    if (!photos.length) {
-      setThumbSrc('');
-      setPhotoSrcs([]);
+    if (!open || !photos.length) {
+      if (!open) setPhotoSrcs([]);
       return;
     }
     let cancelled = false;
@@ -690,276 +764,381 @@ function TaskExtrasIcons({ task }: { task: TaskListItem }) {
           }
         }),
       );
-      if (cancelled) return;
-      const ok = resolved.filter(Boolean);
-      setThumbSrc(ok[0] || '');
-      setPhotoSrcs(ok);
+      if (!cancelled) setPhotoSrcs(resolved.filter(Boolean));
     })();
     return () => {
       cancelled = true;
       for (const u of objectUrls) URL.revokeObjectURL(u);
     };
-  }, [photosKey]);
+  }, [open, photosKey]);
 
-  if (!hasChecklist && !hasNotes && !hasPhotos) {
+  if (!hasAnything) {
     return <Typography sx={{ fontSize: 11, color: T.text4, textAlign: 'center' }}>—</Typography>;
   }
 
-  const open = (e: MouseEvent<HTMLElement>, k: 'checklist' | 'notes' | 'photos') => {
-    e.stopPropagation();
-    setAnchor(e.currentTarget);
-    setKind(k);
-  };
-  const close = () => {
-    setAnchor(null);
-    setKind(null);
-  };
+  const photoCount = photos.length;
+  const declareCount = declaration.cleaningItems.length
+    ? declaration.cleaningItems.length
+    : declaration.hasContent
+      ? declaration.done || declaration.members.length || 1
+      : 0;
+  const tipParts = [
+    hasPhotos ? `${photoCount || '·'} image${photoCount > 1 ? 's' : ''}` : null,
+    hasChecklist ? `checklist ${doneN}/${totalN}` : null,
+    declaration.hasContent
+      ? declaration.cleaningItems.length
+        ? `${declareCount} déclaration${declareCount > 1 ? 's' : ''}`
+        : `${declaration.done}/${declaration.total || '—'} enregistrés`
+      : null,
+    hasNotes ? 'note' : null,
+  ].filter(Boolean);
 
-  const doneN = checklist.filter((c) => c.done).length;
-  const totalN = checklist.length;
-  const checklistEmpty = totalN === 0 || doneN === 0;
+  const badgeSx = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 0.25,
+    px: 0.45,
+    py: 0.1,
+    borderRadius: 999,
+    bgcolor: T.bg1,
+    border: `1px solid ${T.border}`,
+    fontSize: 10,
+    fontWeight: 800,
+    fontFamily: '"Geist Mono", monospace',
+    color: T.text,
+    lineHeight: 1.2,
+  } as const;
 
   return (
     <>
-      <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'center', alignItems: 'center' }}>
-        {hasChecklist ? (
-          <Tooltip
-            title={
-              checklistEmpty
-                ? `Checklist · 0/${totalN} (rien coché par le staff)`
-                : `Checklist · ${doneN}/${totalN} faits`
-            }
-            arrow
-          >
-            <IconButton
-              size="small"
-              aria-label="Voir checklist"
-              onClick={(e) => open(e, 'checklist')}
-              sx={{
-                color: doneN > 0 ? T.success : T.primaryDeep,
-                p: 0.35,
-                borderRadius: 1,
-                gap: 0.25,
-              }}
-            >
-              <ChecklistRtlIcon sx={{ fontSize: 17 }} />
-              <Typography
-                component="span"
-                sx={{
-                  fontSize: 10,
-                  fontWeight: 800,
-                  lineHeight: 1,
-                  color: doneN > 0 ? T.success : T.text3,
-                  minWidth: 28,
-                }}
-              >
+      <Tooltip title={tipParts.length ? tipParts.join(' · ') : 'Dossier tâche'} arrow>
+        <Button
+          size="small"
+          variant="text"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+          sx={{
+            minWidth: 0,
+            px: 0.35,
+            py: 0.15,
+            textTransform: 'none',
+            color: T.primaryDeep,
+            borderRadius: 1.25,
+            '&:hover': { bgcolor: T.primaryTint },
+          }}
+        >
+          <Stack direction="row" spacing={0.4} sx={{ alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+            {hasPhotos ? (
+              <Box component="span" sx={badgeSx} title="Images">
+                <ImageOutlinedIcon sx={{ fontSize: 13, color: T.primaryDeep }} />
+                {photoCount || '·'}
+              </Box>
+            ) : null}
+            {hasChecklist ? (
+              <Box component="span" sx={badgeSx} title="Checklist">
+                <ChecklistRtlIcon sx={{ fontSize: 13, color: doneN > 0 ? T.success : T.primaryDeep }} />
                 {doneN}/{totalN}
-              </Typography>
-            </IconButton>
-          </Tooltip>
-        ) : null}
-        {hasNotes ? (
-          <Tooltip title="Voir la note" arrow>
-            <IconButton
-              size="small"
-              aria-label="Voir note"
-              onClick={(e) => open(e, 'notes')}
-              sx={{ color: T.text2, p: 0.35 }}
-            >
-              <NotesIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-        ) : null}
-        {hasPhotos ? (
-          <Tooltip
-            title={
-              photos.length
-                ? `Photo guest · ${photos.length} — cliquer pour voir`
-                : 'Photo signalée (lien indisponible)'
-            }
-            arrow
-          >
-            <IconButton
-              size="small"
-              aria-label="Voir photo guest"
-              onClick={(e) => open(e, 'photos')}
-              sx={{
-                color: photos.length ? T.primaryDeep : T.text3,
-                p: 0.2,
-                borderRadius: 1,
-                border: photos.length ? `1px solid ${T.border}` : 'none',
-                overflow: 'hidden',
-              }}
-            >
-              {thumbSrc ? (
-                <Box
-                  component="img"
-                  src={thumbSrc}
-                  alt=""
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    const sib = e.currentTarget.nextElementSibling as HTMLElement | null;
-                    if (sib) sib.style.display = 'block';
-                  }}
-                  sx={{ width: 28, height: 28, objectFit: 'cover', display: 'block' }}
-                />
-              ) : null}
-              <ImageOutlinedIcon
-                sx={{
-                  fontSize: 18,
-                  display: thumbSrc ? 'none' : 'block',
-                }}
-              />
-            </IconButton>
-          </Tooltip>
-        ) : null}
-      </Stack>
-      <Popover
-        open={Boolean(anchor) && kind != null}
-        anchorEl={anchor}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+              </Box>
+            ) : null}
+            {declaration.hasContent ? (
+              <Box component="span" sx={badgeSx} title="Déclaration">
+                <InboxIcon sx={{ fontSize: 13, color: T.info }} />
+                {declaration.cleaningItems.length
+                  ? declareCount
+                  : `${declaration.done}/${declaration.total || '—'}`}
+              </Box>
+            ) : null}
+            {hasNotes ? (
+              <Box component="span" sx={{ ...badgeSx, px: 0.35 }} title="Note">
+                <NotesIcon sx={{ fontSize: 13, color: T.primaryDeep }} />
+              </Box>
+            ) : null}
+          </Stack>
+        </Button>
+      </Tooltip>
+
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        maxWidth="md"
+        fullWidth
         onClick={(e) => e.stopPropagation()}
-        slotProps={{
-          paper: {
-            sx: {
-              maxWidth: 380,
-              maxHeight: 420,
-              p: 1.25,
-              border: `1px solid ${T.border}`,
-              borderRadius: 1.5,
-            },
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            overflow: 'hidden',
+            border: `1px solid ${T.border}`,
+            boxShadow: '0 24px 64px rgba(20,17,10,0.18)',
+            bgcolor: T.bg0,
           },
         }}
       >
-        {kind === 'checklist' ? (
-          <Box>
-            <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.text, mb: 0.5 }}>
-              Checklist ménage · {doneN}/{totalN}
-            </Typography>
-            <Typography sx={{ fontSize: 10, color: T.text3, mb: 0.75 }}>
-              ✅ vert = coché par le staff · ❌ rouge = pas fait (≠ note)
-            </Typography>
-            <List dense disablePadding sx={{ maxHeight: 340, overflow: 'auto' }}>
-              {checklist.map((item, i) => {
-                const prevCat = i > 0 ? checklist[i - 1]?.categoryLabel : undefined
-                const showCat =
-                  Boolean(item.categoryLabel) && item.categoryLabel !== prevCat
-                const done = item.done === true
-                return (
-                  <Box key={item.id || `${item.label}-${i}`}>
-                    {showCat ? (
-                      <Typography
+        <Box
+          sx={{
+            px: 2.5,
+            py: 2,
+            background: `linear-gradient(135deg, ${T.primaryTint2} 0%, ${T.bg1} 55%, ${T.bg0} 100%)`,
+            borderBottom: `1px solid ${T.border}`,
+          }}
+        >
+          <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.primaryDeep, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Dossier tâche
+          </Typography>
+          <Typography sx={{ fontSize: 18, fontWeight: 800, color: T.text, mt: 0.35, letterSpacing: '-0.02em' }}>
+            {task.itemNumber || 'Tâche'}
+          </Typography>
+          <Typography sx={{ fontSize: 12.5, color: T.text2, mt: 0.35 }}>
+            {[categoryLabel(task), task.listingName, task.guestName].filter(Boolean).join(' · ')}
+          </Typography>
+          <Stack direction="row" spacing={0.75} sx={{ mt: 1.25, flexWrap: 'wrap', gap: 0.75 }}>
+            {hasPhotos ? (
+              <Chip
+                size="small"
+                icon={<ImageOutlinedIcon sx={{ fontSize: '14px !important' }} />}
+                label={String(photoCount || '·')}
+                sx={{ height: 22, fontWeight: 800, bgcolor: T.bg1 }}
+              />
+            ) : null}
+            {hasChecklist ? (
+              <Chip
+                size="small"
+                icon={<ChecklistRtlIcon sx={{ fontSize: '14px !important' }} />}
+                label={`${doneN}/${totalN}`}
+                sx={{ height: 22, fontWeight: 800, bgcolor: T.bg1 }}
+              />
+            ) : null}
+            {declaration.hasContent ? (
+              <Chip
+                size="small"
+                icon={<InboxIcon sx={{ fontSize: '14px !important' }} />}
+                label={
+                  declaration.cleaningItems.length
+                    ? String(declareCount)
+                    : `${declaration.done}/${declaration.total || '—'}`
+                }
+                sx={{ height: 22, fontWeight: 800, bgcolor: T.bg1 }}
+              />
+            ) : null}
+            {hasNotes ? (
+              <Chip
+                size="small"
+                icon={<NotesIcon sx={{ fontSize: '14px !important' }} />}
+                label="Note"
+                sx={{ height: 22, fontWeight: 800, bgcolor: T.bg1 }}
+              />
+            ) : null}
+          </Stack>
+        </Box>
+
+        <DialogContent sx={{ p: 2.25, display: 'grid', gap: 1.5 }}>
+          {hasNotes ? (
+            <Paper elevation={0} sx={{ p: 1.75, borderRadius: 2, border: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+                <NotesIcon sx={{ fontSize: 18, color: T.primaryDeep }} />
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text }}>Note</Typography>
+              </Stack>
+              <Typography sx={{ fontSize: 13.5, color: T.text2, whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+                {notes}
+              </Typography>
+            </Paper>
+          ) : null}
+
+          {hasChecklist ? (
+            <Paper elevation={0} sx={{ p: 1.75, borderRadius: 2, border: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+                <ChecklistRtlIcon sx={{ fontSize: 18, color: doneN > 0 ? T.success : T.primaryDeep }} />
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text }}>
+                  Checklist · {doneN}/{totalN}
+                </Typography>
+              </Stack>
+              <Typography sx={{ fontSize: 10.5, color: T.text3, mb: 1 }}>
+                Vert = fait par le staff · Rouge = à faire
+              </Typography>
+              <Stack spacing={0.65}>
+                {checklist.map((item, i) => {
+                  const prevCat = i > 0 ? checklist[i - 1]?.categoryLabel : undefined;
+                  const showCat = Boolean(item.categoryLabel) && item.categoryLabel !== prevCat;
+                  const done = item.done === true;
+                  return (
+                    <Box key={item.id || `${item.label}-${i}`}>
+                      {showCat ? (
+                        <Typography sx={{ fontSize: 10.5, fontWeight: 800, color: T.primaryDeep, mt: i ? 0.75 : 0, mb: 0.35 }}>
+                          {item.categoryLabel}
+                        </Typography>
+                      ) : null}
+                      <Box
                         sx={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: T.primaryDeep,
-                          mt: i === 0 ? 0 : 0.75,
-                          mb: 0.25,
+                          display: 'flex',
+                          gap: 1,
+                          alignItems: 'flex-start',
+                          px: 1,
+                          py: 0.65,
+                          borderRadius: 1.25,
+                          bgcolor: done ? 'rgba(10,143,94,0.08)' : 'rgba(200,30,30,0.06)',
+                          border: `1px solid ${done ? 'rgba(10,143,94,0.2)' : 'rgba(200,30,30,0.15)'}`,
                         }}
                       >
-                        {item.categoryLabel}
-                      </Typography>
-                    ) : null}
-                    <ListItem disableGutters sx={{ py: 0.3, alignItems: 'flex-start' }}>
-                      <Typography
-                        sx={{
-                          fontSize: 12,
-                          color: done ? '#15803d' : '#b91c1c',
-                          lineHeight: 1.35,
-                          fontWeight: done ? 700 : 500,
-                        }}
-                      >
-                        {done ? '✅' : '❌'} {item.label}
-                        {item.labelDa && item.labelDa !== item.label ? (
-                          <Typography
-                            component="span"
-                            sx={{
-                              display: 'block',
-                              fontSize: 10.5,
-                              color: done ? '#166534' : '#991b1b',
-                              opacity: 0.85,
-                              dir: 'rtl',
-                            }}
-                          >
-                            {item.labelDa}
+                        <Typography sx={{ fontSize: 13, lineHeight: 1.2 }}>{done ? '✅' : '❌'}</Typography>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ fontSize: 12.5, fontWeight: done ? 700 : 500, color: done ? '#15803d' : '#b91c1c' }}>
+                            {item.label}
+                            {item.photoRequired ? ' · 📷' : ''}
                           </Typography>
-                        ) : null}
-                        {item.photoRequired ? ' · 📷' : ''}
-                      </Typography>
-                    </ListItem>
-                  </Box>
-                )
-              })}
-            </List>
-          </Box>
-        ) : null}
-        {kind === 'notes' ? (
-          <Box>
-            <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.text, mb: 0.75 }}>
-              🗒️ Note
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: 12.5,
-                color: T.text2,
-                whiteSpace: 'pre-wrap',
-                lineHeight: 1.45,
-                maxHeight: 340,
-                overflow: 'auto',
-              }}
-            >
-              {notes}
-            </Typography>
-          </Box>
-        ) : null}
-        {kind === 'photos' ? (
-          <Box>
-            <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.text, mb: 0.75 }}>
-              📷 Photo guest
-            </Typography>
-            {photos.length > 0 ? (
-              photoSrcs.length > 0 ? (
-                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ maxWidth: 340 }}>
-                  {photoSrcs.map((src, i) => (
+                          {item.labelDa && item.labelDa !== item.label ? (
+                            <Typography sx={{ fontSize: 11, color: T.text3, dir: 'rtl' }}>{item.labelDa}</Typography>
+                          ) : null}
+                        </Box>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Stack>
+            </Paper>
+          ) : null}
+
+          {declaration.hasContent ? (
+            <Paper elevation={0} sx={{ p: 1.75, borderRadius: 2, border: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+                <InboxIcon sx={{ fontSize: 18, color: T.info }} />
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text }}>
+                  {declaration.cleaningItems.length
+                    ? 'Déclaration ménage'
+                    : 'Déclaration / enregistrement'}
+                </Typography>
+              </Stack>
+              {declaration.cleaningItems.length > 0 ? (
+                <Stack spacing={0.65}>
+                  {declaration.cleaningItems.map((item) => (
                     <Box
-                      key={`${src}-${i}`}
-                      component="a"
-                      href={src}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      key={item.id}
                       sx={{
-                        width: 140,
-                        height: 140,
+                        display: 'flex',
+                        gap: 1,
+                        alignItems: 'flex-start',
+                        px: 1,
+                        py: 0.65,
                         borderRadius: 1.25,
-                        overflow: 'hidden',
-                        border: `1px solid ${T.border}`,
-                        display: 'block',
-                        bgcolor: T.bg2,
+                        bgcolor: 'rgba(37,99,235,0.06)',
+                        border: '1px solid rgba(37,99,235,0.18)',
                       }}
                     >
-                      <Box
-                        component="img"
-                        src={src}
-                        alt={`Photo guest ${i + 1}`}
-                        sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                      />
+                      <Typography sx={{ fontSize: 13, lineHeight: 1.2 }}>📢</Typography>
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text }}>
+                        {item.label}
+                      </Typography>
                     </Box>
                   ))}
                 </Stack>
               ) : (
-                <Typography sx={{ fontSize: 12, color: T.text3 }}>Chargement…</Typography>
-              )
-            ) : (
-              <Typography sx={{ fontSize: 12.5, color: T.text3, lineHeight: 1.45 }}>
-                Photo signalée par le client, mais le fichier n’a pas été enregistré (lien
-                indisponible).
-              </Typography>
-            )}
-          </Box>
-        ) : null}
-      </Popover>
+                <>
+                  <Typography sx={{ fontSize: 13, color: T.text2, mb: declaration.members.length ? 1.25 : 0 }}>
+                    <Box component="span" sx={{ color: T.success, fontWeight: 800 }}>{declaration.done}</Box>
+                    <Box component="span" sx={{ color: T.text4 }}> / </Box>
+                    <Box component="span" sx={{ fontWeight: 700 }}>{declaration.total || '—'}</Box>
+                    {' '}invités enregistrés
+                    {declaration.tip ? (
+                      <Typography component="span" sx={{ display: 'block', fontSize: 11.5, color: T.text3, mt: 0.35 }}>
+                        {declaration.tip}
+                      </Typography>
+                    ) : null}
+                  </Typography>
+                  {declaration.members.length > 0 ? (
+                    <Stack spacing={0.75}>
+                      {declaration.members.slice(0, 12).map((m, i) => {
+                        const name = String(
+                          m.fullName || m.name || [m.firstName, m.lastName].filter(Boolean).join(' ') || `Invité ${i + 1}`,
+                        );
+                        const status = String(m.status || m.registrationStatus || '').trim();
+                        return (
+                          <Box
+                            key={String(m._id || m.id || i)}
+                            sx={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              gap: 1,
+                              px: 1.1,
+                              py: 0.7,
+                              borderRadius: 1.25,
+                              bgcolor: T.bg2,
+                              border: `1px solid ${T.border}`,
+                            }}
+                          >
+                            <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text }}>{name}</Typography>
+                            {status ? (
+                              <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3 }}>{status}</Typography>
+                            ) : null}
+                          </Box>
+                        );
+                      })}
+                    </Stack>
+                  ) : null}
+                </>
+              )}
+            </Paper>
+          ) : null}
+
+          {hasPhotos ? (
+            <Paper elevation={0} sx={{ p: 1.75, borderRadius: 2, border: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+                <ImageOutlinedIcon sx={{ fontSize: 18, color: T.primaryDeep }} />
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: T.text }}>
+                  Images {photos.length ? `· ${photos.length}` : ''}
+                </Typography>
+              </Stack>
+              {photos.length > 0 ? (
+                photoSrcs.length > 0 ? (
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                      gap: 1,
+                    }}
+                  >
+                    {photoSrcs.map((src, i) => (
+                      <Box
+                        key={`${src}-${i}`}
+                        component="a"
+                        href={src}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{
+                          aspectRatio: '1',
+                          borderRadius: 2,
+                          overflow: 'hidden',
+                          border: `1px solid ${T.border}`,
+                          display: 'block',
+                          bgcolor: T.bg2,
+                          boxShadow: '0 2px 8px rgba(20,17,10,0.06)',
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src={src}
+                          alt={`Photo ${i + 1}`}
+                          sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        />
+                      </Box>
+                    ))}
+                  </Box>
+                ) : (
+                  <Typography sx={{ fontSize: 12, color: T.text3 }}>Chargement des images…</Typography>
+                )
+              ) : (
+                <Typography sx={{ fontSize: 12.5, color: T.text3, lineHeight: 1.45 }}>
+                  Photo signalée par le client, mais le fichier n’a pas été enregistré (lien indisponible).
+                </Typography>
+              )}
+            </Paper>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 2.25, py: 1.5, borderTop: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
+          <Button onClick={() => setOpen(false)} sx={{ fontWeight: 700 }}>
+            Fermer
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }
@@ -1155,6 +1334,25 @@ function formatCreatedAtParts(value?: string | null): { date: string; time: stri
   };
 }
 
+/** Fin réelle (completedAt) ou échéance (dueAt) — pas le fallback startDate. */
+function formatEndParts(task: TaskListItem): { date: string; time?: string; kind: 'done' | 'due' } | null {
+  const iso = task.completedAt || task.dueAt;
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const date = d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' });
+  const kind: 'done' | 'due' = task.completedAt ? 'done' : 'due';
+  // Minuit UTC → date seule (pas d’heure fictive)
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && !task.completedAt) {
+    return { date, kind };
+  }
+  return {
+    date,
+    time: d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    kind,
+  };
+}
+
 function paymentChipMeta(status?: string): { bg: string; color: string } {
   const s = status || 'NOT_PAID';
   if (s === 'PAID') return { bg: 'rgba(10,143,94,0.14)', color: T.success };
@@ -1171,8 +1369,14 @@ function emergencyChipMeta(em: string | undefined): { bg: string; color: string 
 }
 
 /** Aligné `TasksNew.jsx` — statuts par défaut de la liste admin. */
-/** Actives seulement — Terminée / Archivée hors liste par défaut (filtre explicite). */
-const DEFAULT_TASK_STATUSES: string[] = ['CREATED', 'ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'];
+/** Actives + terminées — Archivée reste un filtre explicite (mécanisme archive). */
+const DEFAULT_TASK_STATUSES: string[] = [
+  'CREATED',
+  'ASSIGNED',
+  'ACCEPTED',
+  'IN_PROGRESS',
+  'COMPLETED',
+];
 
 const STATUS_MULTI_OPTIONS: { id: string; label: string }[] = [
   { id: 'CREATED', label: 'Créé' },
@@ -1371,7 +1575,7 @@ export function TasksListPage() {
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
-  const [sortField, setSortField] = useState<TaskListSortField>('createdAt');
+  const [sortField, setSortField] = useState<TaskListSortField>('updatedAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const [listFilters, setListFilters] = useState({
@@ -1393,7 +1597,7 @@ export function TasksListPage() {
 
   const [filtersModalOpen, setFiltersModalOpen] = useState(false);
   const [tempListFilters, setTempListFilters] = useState(listFilters);
-  const [tempSortField, setTempSortField] = useState<TaskListSortField>('createdAt');
+  const [tempSortField, setTempSortField] = useState<TaskListSortField>('updatedAt');
   const [tempSortDirection, setTempSortDirection] = useState<'asc' | 'desc'>('desc');
   const [quickFilterKey, setQuickFilterKey] = useState<QuickFilterKey>(() => {
     const due = new URLSearchParams(window.location.search).get('due');
@@ -1656,24 +1860,49 @@ export function TasksListPage() {
     } else if (listFilters.origin === 'client') {
       list = list.filter((task) => task.itemType !== 'Task' || task.isClientRequest === true);
     }
-    /* Priorité 3 couleurs (dérivée backend) : filtre + tri rouge → heure. */
-    if (quickFilterKey === 'red' || quickFilterKey === 'orange' || quickFilterKey === 'green') {
+    const priorityMode =
+      quickFilterKey === 'red' || quickFilterKey === 'orange' || quickFilterKey === 'green';
+    if (priorityMode) {
       list = list.filter((task) => (task.priority?.urgency ?? 'green') === quickFilterKey);
+      const urgencyRank = (task: TaskListItem) =>
+        task.priority?.urgency === 'red' ? 0 : task.priority?.urgency === 'orange' ? 1 : 2;
+      const timeMs = (task: TaskListItem) => {
+        const due = task.priority?.dueAt || task.startDate;
+        if (!due) return Number.POSITIVE_INFINITY;
+        const t = new Date(due).getTime();
+        return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
+      };
+      /* Filtre priorité : rouge → orange → vert, puis échéance (local). */
+      return [...list].sort((a, b) => {
+        const byUrgency = urgencyRank(a) - urgencyRank(b);
+        if (byUrgency !== 0) return byUrgency;
+        return timeMs(a) - timeMs(b);
+      });
     }
-    const urgencyRank = (task: TaskListItem) =>
-      task.priority?.urgency === 'red' ? 0 : task.priority?.urgency === 'orange' ? 1 : 2;
-    const timeMs = (task: TaskListItem) => {
-      const due = task.priority?.dueAt || task.startDate;
-      if (!due) return Number.POSITIVE_INFINITY;
-      const t = new Date(due).getTime();
-      return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
-    };
-    return [...list].sort((a, b) => {
-      const byUrgency = urgencyRank(a) - urgencyRank(b);
-      if (byUrgency !== 0) return byUrgency;
-      return timeMs(a) - timeMs(b);
-    });
+    /* Ordre déjà trié côté Mongo (/tasks/search) — ne pas re-trier la page. */
+    return list;
   }, [tasks, listFilters.origin, quickFilterKey]);
+
+  const handleColumnSort = useCallback(
+    (field: string) => {
+      const next = field as TaskListSortField;
+      if (sortField === next) {
+        setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+      } else {
+        setSortField(next);
+        setSortDirection(
+          next === 'createdAt' ||
+            next === 'startDate' ||
+            next === 'endDate' ||
+            next === 'updatedAt'
+            ? 'desc'
+            : 'asc',
+        );
+      }
+      setPage(0);
+    },
+    [sortField],
+  );
 
   const filterCounts = useMemo(() => {
     const today = moment();
@@ -1794,7 +2023,7 @@ export function TasksListPage() {
     setTempPayment('all');
     setTempHasAssociation('all');
     setTempSources([]);
-    setTempSortField('createdAt');
+    setTempSortField('updatedAt');
     setTempSortDirection('desc');
   };
 
@@ -1965,6 +2194,8 @@ export function TasksListPage() {
       key: 'name',
       label: 'Code',
       width: COLUMN_WIDTHS.itemNumber,
+      sortable: true,
+      sortKey: 'itemNumber' as const,
       render: (row: TaskRow) => (
         <Typography
           component="button"
@@ -1999,6 +2230,8 @@ export function TasksListPage() {
       label: 'Date création',
       width: COLUMN_WIDTHS.createdAt,
       align: 'center' as const,
+      sortable: true,
+      sortKey: 'createdAt' as const,
       render: (row: TaskRow) => {
         const parts = formatCreatedAtParts(row.createdAt);
         if (!parts) {
@@ -2028,6 +2261,8 @@ export function TasksListPage() {
       key: 'category',
       label: 'Type',
       width: COLUMN_WIDTHS.category,
+      sortable: true,
+      sortKey: 'type' as const,
       render: (row: TaskRow) => {
         const label = categoryLabel(row);
         return (
@@ -2057,6 +2292,8 @@ export function TasksListPage() {
       label: 'Résa',
       width: COLUMN_WIDTHS.reservation,
       align: 'left' as const,
+      sortable: true,
+      sortKey: 'reservationNumber' as const,
       render: (row: TaskRow) => {
         const code = reservationDisplayCode(row);
         const raw = String(row.reservationNumber || '').trim();
@@ -2091,10 +2328,42 @@ export function TasksListPage() {
       },
     },
     {
+      key: 'status',
+      label: 'Statut',
+      width: COLUMN_WIDTHS.status,
+      align: 'center' as const,
+      sortable: true,
+      sortKey: 'status' as const,
+      render: (row: TaskRow) => {
+        const status = normalizeTaskStatus(row.taskStatus);
+        const waitingGuest = row.isClientRequest && status === 'CREATED';
+        const statusLabel = waitingGuest ? 'Attente invité' : TASK_STATUS_LABELS[status];
+        const statusVariant = waitingGuest ? 'warning' : TASK_STATUS_VARIANTS[status];
+        return (
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
+            <Badge variant={statusVariant}>{statusLabel}</Badge>
+            <IconButton
+              size="small"
+              disabled={statusUpdating === row._id}
+              aria-label="Actions tâche"
+              onClick={(event) => {
+                event.stopPropagation();
+                setActionsMenu({ anchor: event.currentTarget, task: row });
+              }}
+            >
+              <MoreHorizIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+        );
+      },
+    },
+    {
       key: 'listingName',
       label: 'Logement',
       width: COLUMN_WIDTHS.listing,
       align: 'left' as const,
+      sortable: true,
+      sortKey: 'listingName' as const,
       render: (row: TaskRow) => {
         const full = String(row.listingName || '').trim();
         const sep = full.indexOf(' · ');
@@ -2115,10 +2384,23 @@ export function TasksListPage() {
       },
     },
     {
+      key: 'extras',
+      label: 'Infos',
+      width: COLUMN_WIDTHS.extras,
+      align: 'center' as const,
+      render: (row: TaskRow) => (
+        <Box onClick={(e) => e.stopPropagation()}>
+          <TaskInfosCell task={row} />
+        </Box>
+      ),
+    },
+    {
       key: 'voyageur',
       label: 'Invité',
       width: COLUMN_WIDTHS.voyageur,
       align: 'left' as const,
+      sortable: true,
+      sortKey: 'guestName' as const,
       render: (row: TaskRow) => {
         if (!row.guestName && !row.channelName && !row.guestCountry) {
           return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
@@ -2159,6 +2441,8 @@ export function TasksListPage() {
       label: 'Prévu',
       width: COLUMN_WIDTHS.executionDate,
       align: 'center' as const,
+      sortable: true,
+      sortKey: 'startDate' as const,
       render: (row: TaskRow) => (
         <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'flex', justifyContent: 'center' }}>
           <TaskPlannedCell
@@ -2173,10 +2457,48 @@ export function TasksListPage() {
       ),
     },
     {
+      key: 'endDate',
+      label: 'Fin',
+      width: COLUMN_WIDTHS.endDate,
+      align: 'center' as const,
+      sortable: true,
+      sortKey: 'endDate' as const,
+      render: (row: TaskRow) => {
+        const parts = formatEndParts(row);
+        if (!parts) {
+          return <Typography sx={{ fontSize: 11, color: T.text3, textAlign: 'center' }}>—</Typography>;
+        }
+        const tip =
+          parts.kind === 'done'
+            ? `Terminée le ${parts.date}${parts.time ? ` à ${parts.time}` : ''}`
+            : `Échéance ${parts.date}${parts.time ? ` · ${parts.time}` : ''}`;
+        return (
+          <Tooltip title={tip} arrow placement="top">
+            <Stack spacing={0.25} sx={{ alignItems: 'center' }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 600 }}>{parts.date}</Typography>
+              {parts.time ? (
+                <Typography
+                  sx={{
+                    fontSize: 10,
+                    color: parts.kind === 'done' ? T.success : T.text3,
+                    fontWeight: parts.kind === 'done' ? 700 : 400,
+                  }}
+                >
+                  {parts.time}
+                </Typography>
+              ) : null}
+            </Stack>
+          </Tooltip>
+        );
+      },
+    },
+    {
       key: 'urgence',
       label: 'Priorité',
       width: COLUMN_WIDTHS.urgence,
       align: 'center' as const,
+      sortable: true,
+      sortKey: 'priority' as const,
       render: (row: TaskRow) => {
         /* Priorité 3 couleurs dérivée (heure vs statut, seuils par type) —
            « vert je continue, orange je regarde, rouge j'agis ». */
@@ -2233,6 +2555,8 @@ export function TasksListPage() {
       label: 'Origine',
       width: COLUMN_WIDTHS.source,
       align: 'center' as const,
+      sortable: true,
+      sortKey: 'source' as const,
       render: (row: TaskRow) => {
         const meta = sourceChipMeta(row.source);
         return (
@@ -2252,45 +2576,12 @@ export function TasksListPage() {
       },
     },
     {
-      key: 'status',
-      label: 'Statut',
-      width: COLUMN_WIDTHS.status,
-      align: 'center' as const,
-      render: (row: TaskRow) => {
-        const status = normalizeTaskStatus(row.taskStatus);
-        const waitingGuest = row.isClientRequest && status === 'CREATED';
-        const statusLabel = waitingGuest ? 'Attente invité' : TASK_STATUS_LABELS[status];
-        const statusVariant = waitingGuest ? 'warning' : TASK_STATUS_VARIANTS[status];
-        return (
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
-            <Badge variant={statusVariant}>{statusLabel}</Badge>
-            <IconButton
-              size="small"
-              disabled={statusUpdating === row._id}
-              aria-label="Actions tâche"
-              onClick={(event) => {
-                event.stopPropagation();
-                setActionsMenu({ anchor: event.currentTarget, task: row });
-              }}
-            >
-              <MoreHorizIcon fontSize="small" />
-            </IconButton>
-          </Stack>
-        );
-      },
-    },
-    {
       key: 'staffName',
       label: 'Staff',
       width: COLUMN_WIDTHS.assignedStaff,
+      sortable: true,
+      sortKey: 'staffName' as const,
       render: (row: TaskRow) => <StaffAssignCell task={row} onAssign={openAssignStaff} />,
-    },
-    {
-      key: 'extras',
-      label: 'Infos',
-      width: COLUMN_WIDTHS.extras,
-      align: 'center' as const,
-      render: (row: TaskRow) => <TaskExtrasIcons task={row} />,
     },
   ];
 
@@ -2304,6 +2595,9 @@ export function TasksListPage() {
         onRowClick={openTaskDetail}
         ultraCompact={isMobile}
         fillViewport
+        sortField={sortField}
+        sortDirection={sortDirection}
+        onSortClick={handleColumnSort}
       />
     ) : null;
 
@@ -2445,6 +2739,45 @@ export function TasksListPage() {
             >
               Filtres{activeFiltersCount > 0 ? ` · ${activeFiltersCount}` : ''}
             </Button>
+            <FormControl size="small" sx={{ minWidth: 132, flexShrink: 0 }}>
+              <Select
+                value={sortField}
+                onChange={(e) => {
+                  setSortField(e.target.value as TaskListSortField);
+                  setPage(0);
+                }}
+                sx={{
+                  height: 28,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  bgcolor: T.bg1,
+                  '& .MuiSelect-select': { py: 0.5, pr: 3 },
+                }}
+                renderValue={(v) => SORT_FIELD_LABELS[String(v)] || 'Tri'}
+              >
+                <MenuItem value="updatedAt">Dernière MAJ</MenuItem>
+                <MenuItem value="createdAt">Date création</MenuItem>
+                <MenuItem value="startDate">Date prévu</MenuItem>
+                <MenuItem value="endDate">Date fin</MenuItem>
+                <MenuItem value="reservationNumber">Réservation</MenuItem>
+              </Select>
+            </FormControl>
+            <Tooltip title={sortDirection === 'asc' ? 'Croissant' : 'Décroissant'}>
+              <IconButton
+                size="small"
+                onClick={() => {
+                  setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+                  setPage(0);
+                }}
+                sx={{ width: 28, height: 28, flexShrink: 0, border: `1px solid ${T.border}`, borderRadius: 1 }}
+              >
+                {sortDirection === 'asc' ? (
+                  <ArrowUpwardIcon sx={{ fontSize: 16 }} />
+                ) : (
+                  <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+                )}
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Colonnes optionnelles">
               <IconButton
                 size="small"
@@ -2651,6 +2984,35 @@ export function TasksListPage() {
             >
               Avancé{activeFiltersCount > 0 ? ` · ${activeFiltersCount}` : ''}
             </Button>
+            <FormControl size="small" sx={{ minWidth: 148 }}>
+              <Select
+                value={sortField}
+                onChange={(e) => {
+                  setSortField(e.target.value as TaskListSortField);
+                  setPage(0);
+                }}
+                sx={{ height: 36, fontSize: 12.5, fontWeight: 700, bgcolor: T.bg1 }}
+                renderValue={(v) => `Tri · ${SORT_FIELD_LABELS[String(v)] || ''}`}
+              >
+                <MenuItem value="updatedAt">Dernière MAJ</MenuItem>
+                <MenuItem value="createdAt">Date création</MenuItem>
+                <MenuItem value="startDate">Date prévu</MenuItem>
+                <MenuItem value="endDate">Date fin</MenuItem>
+                <MenuItem value="reservationNumber">Réservation</MenuItem>
+              </Select>
+            </FormControl>
+            <Tooltip title={sortDirection === 'asc' ? 'Croissant' : 'Décroissant'}>
+              <IconButton
+                size="small"
+                onClick={() => {
+                  setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+                  setPage(0);
+                }}
+                sx={{ border: `1px solid ${T.border}`, borderRadius: 1 }}
+              >
+                {sortDirection === 'asc' ? <ArrowUpwardIcon sx={{ fontSize: 18 }} /> : <ArrowDownwardIcon sx={{ fontSize: 18 }} />}
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Colonnes optionnelles">
               <IconButton size="small" onClick={(e) => setColumnMenuAnchor(e.currentTarget)}>
                 <ViewColumnIcon sx={{ fontSize: 18, color: optionalColumnsOn > 0 ? T.primary : T.text3 }} />
@@ -3037,8 +3399,10 @@ export function TasksListPage() {
                         onChange={(e) => setTempSortField(e.target.value as TaskListSortField)}
                         renderValue={(v) => SORT_FIELD_LABELS[String(v)] || 'Date prévue'}
                       >
+                        <MenuItem value="updatedAt">Dernière MAJ</MenuItem>
                         <MenuItem value="createdAt">Date création</MenuItem>
-                        <MenuItem value="startDate">Date prévue</MenuItem>
+                        <MenuItem value="startDate">Date prévu</MenuItem>
+                        <MenuItem value="endDate">Date fin</MenuItem>
                         <MenuItem value="reservationNumber">Réservation</MenuItem>
                       </Select>
                     </FormControl>
@@ -3222,12 +3586,12 @@ export function TasksListPage() {
             Colonnes
           </Typography>
           <Typography sx={{ fontSize: 10, color: T.text3, mt: 0.5 }}>
-            Infos = icônes Checklist / Note (clic pour ouvrir) quand présentes sur la tâche.
+            Infos (après Logement) ouvre le dossier : note, checklist, déclaration, images.
           </Typography>
         </Box>
         <Box sx={{ px: 2, py: 1.5 }}>
           <Typography sx={{ fontSize: 12, color: T.text2 }}>
-            Checklist ✓ · Note 🗒️ — visibles uniquement s’il y a du contenu.
+            Tri par défaut = dernière MAJ (création ou changement de statut).
           </Typography>
         </Box>
         <Box sx={{ px: 2, py: 1.5, borderTop: `1px solid ${T.border}`, bgcolor: T.bg2 }}>

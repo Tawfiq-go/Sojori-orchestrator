@@ -22,7 +22,8 @@ type QuickType = { type: string; label: string; icon: string; defaultTime?: stri
 
 /** Catalogue court — les types qu'un PM crée à la main depuis le planning. */
 const QUICK_TYPES: QuickType[] = [
-  { type: 'checkout_cleaning', label: 'Ménage', icon: '🧹', defaultTime: '11:00' },
+  { type: 'checkout_cleaning', label: 'Ménage checkout', icon: '🧼', defaultTime: '11:00' },
+  { type: 'cleaning_free', label: 'Ménage gratuit', icon: '🧹', defaultTime: '11:00' },
   { type: 'cleaning_paid', label: 'Ménage payant', icon: '🧽', defaultTime: '11:00' },
   { type: 'receive_arrival', label: 'Accueil client (check-in)', icon: '🛎️', defaultTime: '15:00' },
   { type: 'receive_departure', label: 'Départ client (check-out)', icon: '🛎️', defaultTime: '11:00' },
@@ -34,10 +35,10 @@ const QUICK_TYPES: QuickType[] = [
 
 /** Types mis en avant selon le jour cliqué — la position suggère l'intention. */
 function suggestedFor(ctx: PlanningCreateContext): string[] {
-  if (ctx.isDepartureDay) return ['checkout_cleaning', 'receive_departure', 'transport'];
+  if (ctx.isDepartureDay) return ['checkout_cleaning', 'cleaning_free', 'receive_departure', 'transport'];
   if (ctx.isArrivalDay) return ['receive_arrival', 'transport', 'groceries'];
-  if (ctx.reservationId) return ['support', 'concierge', 'cleaning_paid'];
-  return ['checkout_cleaning', 'support'];
+  if (ctx.reservationId) return ['cleaning_free', 'cleaning_paid', 'support', 'concierge'];
+  return ['checkout_cleaning', 'cleaning_free', 'support'];
 }
 
 export default function PlanningQuickTaskMenu({

@@ -37,7 +37,7 @@ export function getTasks(params = {}) {
     selectedTaskTypes = [],
     selectedFrenchTasks = [],
     selectedDarijaTasks = [],
-    selectedStatuses = ['Pending', 'Confirmed']
+    selectedStatuses = ['Pending', 'Confirmed', 'Started']
   } = params;
   if (!startDate || !endDate) {
     throw new Error('startDate and endDate are required parameters');

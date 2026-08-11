@@ -191,7 +191,7 @@ export default function CalendarInventoryPage({
       try {
         const res = await reservationsService.getList({
           limit: 500,
-          status: 'Confirmed,Pending,Inside',
+          status: 'Confirmed,Pending,Started,Inside',
           dateType: 'arrival_or_departure',
           startDate: from,
           endDate: to,

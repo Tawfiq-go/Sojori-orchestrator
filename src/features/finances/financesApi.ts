@@ -302,6 +302,47 @@ export async function fetchDefaultPmReportHeader(scope?: OwnerScope) {
   return data.data ?? null;
 }
 
+export type PmBusinessListingCost = {
+  listingId: string;
+  listingName: string;
+  rent: number;
+  wifi: number;
+  electricity: number;
+  currency: string;
+};
+
+export type PmBusinessConfig = {
+  ownerId: string;
+  businessModel: 'gestion' | 'sous_location';
+  listings: PmBusinessListingCost[];
+  totals: { rent: number; wifi: number; electricity: number };
+};
+
+export async function fetchPmBusinessConfig(scope?: OwnerScope) {
+  const { data } = await apiClient.get<ApiList<PmBusinessConfig>>(
+    `${BASE}/profit-reports/pm-business-config`,
+    { params: withOwnerParams({}, scope) },
+  );
+  if (!data.success) throw new Error(data.error || 'Chargement config PM impossible');
+  return data.data!;
+}
+
+export async function savePmBusinessConfig(
+  body: {
+    businessModel?: 'gestion' | 'sous_location';
+    listings?: Array<{ listingId: string; rent?: number; wifi?: number; electricity?: number }>;
+  },
+  scope?: OwnerScope,
+) {
+  const { data } = await apiClient.put<ApiList<PmBusinessConfig>>(
+    `${BASE}/profit-reports/pm-business-config`,
+    body,
+    { params: withOwnerParams({}, scope) },
+  );
+  if (!data.success) throw new Error(data.error || 'Enregistrement config PM impossible');
+  return data.data!;
+}
+
 export async function patchProfitReportHeader(
   id: string,
   header: Partial<ProfitReportHeader>,
