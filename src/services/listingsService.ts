@@ -406,11 +406,13 @@ function normalizeListingSummary(source: unknown): ListingSummary {
               if (!rid || !rname) return null;
               const number = asNumber(r.roomNumber);
               const housekeepingState = pickFirstString(r, ['housekeepingState']) || undefined;
+              const enabled = typeof r.enabled === 'boolean' ? r.enabled : undefined;
               return {
                 id: rid,
                 name: rname,
                 ...(number != null ? { number } : {}),
                 ...(housekeepingState ? { housekeepingState } : {}),
+                ...(enabled !== undefined ? { enabled } : {}),
               };
             })
             .filter(Boolean) as Array<{
@@ -418,6 +420,7 @@ function normalizeListingSummary(source: unknown): ListingSummary {
             name: string;
             number?: number;
             housekeepingState?: string;
+            enabled?: boolean;
           }>;
           return {
             id,
@@ -428,7 +431,13 @@ function normalizeListingSummary(source: unknown): ListingSummary {
         .filter(Boolean) as Array<{
         id: string;
         name: string;
-        rooms?: Array<{ id: string; name: string; number?: number; housekeepingState?: string }>;
+        rooms?: Array<{
+          id: string;
+          name: string;
+          number?: number;
+          housekeepingState?: string;
+          enabled?: boolean;
+        }>;
       }>;
       return mapped.length > 0 ? mapped : undefined;
     })(),
@@ -992,6 +1001,105 @@ export const listingsService = {
       };
     } catch {
       return null;
+    }
+  },
+
+  /**
+   * Verrous push Mews (listing) — admin JWT.
+   * GET/PUT /listings/:listingId/mews-push-flags
+   */
+  async getListingMewsPushFlags(listingId: string): Promise<{
+    data: { mewsResaPushEnabled: boolean; mewsCalendarPushEnabled: boolean } | null;
+    error?: string;
+  }> {
+    try {
+      const response = await apiClient.get(
+        `${LISTING_API_BASE_URL}/listings/${listingId}/mews-push-flags`,
+      );
+      const payload = asRecord(response.data);
+      const data = asRecord(payload.data);
+      return {
+        data: {
+          mewsResaPushEnabled: data.mewsResaPushEnabled === true,
+          mewsCalendarPushEnabled: data.mewsCalendarPushEnabled === true,
+        },
+      };
+    } catch (error) {
+      return { data: null, error: buildServiceError(error) };
+    }
+  },
+
+  async putListingMewsPushFlags(
+    listingId: string,
+    body: { resaPush?: boolean; calendarPush?: boolean },
+  ): Promise<{ data: Record<string, unknown> | null; error?: string }> {
+    try {
+      const response = await apiClient.put(
+        `${LISTING_API_BASE_URL}/listings/${listingId}/mews-push-flags`,
+        body,
+      );
+      const payload = asRecord(response.data);
+      return { data: asRecord(payload.data) };
+    } catch (error) {
+      return { data: null, error: buildServiceError(error) };
+    }
+  },
+
+  /**
+   * Verrous push Mews (roomType) + effective (global AND type).
+   * GET/PUT /listings/room-types/:roomTypeId/mews-push-flags
+   */
+  async getRoomTypeMewsPushFlags(roomTypeId: string): Promise<{
+    data: {
+      roomType: { mewsResaPushEnabled: boolean; mewsCalendarPushEnabled: boolean };
+      listing: { mewsResaPushEnabled: boolean; mewsCalendarPushEnabled: boolean };
+      effective: { resaPush: boolean; calendarPush: boolean };
+    } | null;
+    error?: string;
+  }> {
+    try {
+      const response = await apiClient.get(
+        `${LISTING_API_BASE_URL}/listings/room-types/${roomTypeId}/mews-push-flags`,
+      );
+      const payload = asRecord(response.data);
+      const data = asRecord(payload.data);
+      const roomType = asRecord(data.roomType);
+      const listing = asRecord(data.listing);
+      const effective = asRecord(data.effective);
+      return {
+        data: {
+          roomType: {
+            mewsResaPushEnabled: roomType.mewsResaPushEnabled === true,
+            mewsCalendarPushEnabled: roomType.mewsCalendarPushEnabled === true,
+          },
+          listing: {
+            mewsResaPushEnabled: listing.mewsResaPushEnabled === true,
+            mewsCalendarPushEnabled: listing.mewsCalendarPushEnabled === true,
+          },
+          effective: {
+            resaPush: effective.resaPush === true,
+            calendarPush: effective.calendarPush === true,
+          },
+        },
+      };
+    } catch (error) {
+      return { data: null, error: buildServiceError(error) };
+    }
+  },
+
+  async putRoomTypeMewsPushFlags(
+    roomTypeId: string,
+    body: { resaPush?: boolean; calendarPush?: boolean },
+  ): Promise<{ data: Record<string, unknown> | null; error?: string }> {
+    try {
+      const response = await apiClient.put(
+        `${LISTING_API_BASE_URL}/listings/room-types/${roomTypeId}/mews-push-flags`,
+        body,
+      );
+      const payload = asRecord(response.data);
+      return { data: asRecord(payload.data) };
+    } catch (error) {
+      return { data: null, error: buildServiceError(error) };
     }
   },
 
