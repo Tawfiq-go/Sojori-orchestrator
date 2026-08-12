@@ -26,9 +26,17 @@ const CHANNEL_COLORS = {
 
 const CELL_BG = {
   available: '#ffffff',                   // neutre = vendable (comme Airbnb)
+  // teinte douce = chambre occupée ce jour (même sans barre Gantt)
+  reserved: 'rgba(13, 148, 136, 0.14)',
   // hachures grises = bloqué (code visuel Airbnb pour indisponible)
   blocked: 'repeating-linear-gradient(-45deg, rgba(136,135,128,0.22), rgba(136,135,128,0.22) 3px, transparent 3px, transparent 6px)',
 };
+
+function isRoomHousekeepingBlocked(housekeepingState, enabled) {
+  if (enabled === false) return true;
+  const hk = String(housekeepingState || '');
+  return hk === 'OutOfOrder' || hk === 'OutOfService';
+}
 
 function reservationChannelKind(channelName, status) {
   const st = String(status || '').toLowerCase();
@@ -66,31 +74,30 @@ function dayHasRoomResa(reservations, iso) {
 }
 
 /**
- * Fond cellule inventaire (dispo / bloqué).
- * Les résas ne teintent plus la cellule : pastilles / barres Gantt (comme /planning).
+ * Fond cellule inventaire (dispo / réservé / bloqué).
  *
- * Lignes room : on hérite du statut inventaire du roomType (pool / stopSell).
- * - occupée (barre) → blanc (la barre porte l’info)
- * - type fermé (0 / stopSell) → hachuré — pas « faux disponible »
- * - type ouvert + pas de barre → blanc = libre / réservable
- * (aligné mental model Mews : resource free | occupied | blocked)
+ * Lignes room (toujours visibles en Multi) :
+ * - OOO / OOS / enabled=false → bloqué (Mews Resource.State)
+ * - type fermé (0 / stopSell) → bloqué (stock catégorie Mews)
+ * - résa ce jour → réservé (déduit Sojori, pas grille Mews room×jour)
+ * - sinon → disponible
  */
 function inventoryStatusBackground(state, inv, opts = {}) {
-  const { roomRow = false, roomOccupied = false } = opts;
+  const { roomRow = false, roomOccupied = false, roomBlocked = false } = opts;
   if (state === 'out_of_window') return OUT_OF_WINDOW_CELL_BG;
   if (state === 'archive') return ARCHIVE_CELL_BG;
   if (state === 'missing' || !hasInventoryData(inv)) return T.bg2;
   if (roomRow) {
-    if (roomOccupied) return CELL_BG.available;
+    if (roomBlocked) return CELL_BG.blocked;
     const isStop = inv?.stopSell === true;
     const ar = inv?.availableRoom;
     const isZero = ar != null && Number(ar) <= 0;
     const isClosed = inv?.available === false;
     if (isStop || isZero || isClosed) return CELL_BG.blocked;
+    if (roomOccupied) return CELL_BG.reserved;
     return CELL_BG.available;
   }
-  // Jour avec résa → fond neutre (la barre / pastille porte la couleur OTA)
-  if ((inv?.reservations?.length ?? 0) > 0) return CELL_BG.available;
+  // Fond = bloqué / pas bloqué (stock). Les résas s’affichent par-dessus (barres / pastilles).
   const isStop = inv?.stopSell === true;
   const ar = inv?.availableRoom;
   const isZero = ar != null && Number(ar) <= 0;
@@ -479,9 +486,8 @@ export default function MultiView({
     return map;
   }, [listings, inventoryData, reservationsByListing]);
 
-  /* Filtre Rés. : ouvrir tous les Multi pour voir types + rooms */
+  /* Multi : ouvrir les listings hôtel pour voir types (+ rooms sous chaque type). */
   useEffect(() => {
-    if (!showResaFilter) return;
     setExpanded((prev) => {
       const next = { ...prev };
       let changed = false;
@@ -496,7 +502,30 @@ export default function MultiView({
       });
       return changed ? next : prev;
     });
-  }, [showResaFilter, listings, roomTypesByListing]);
+  }, [listings, roomTypesByListing]);
+
+  /* Multi : ouvrir les roomTypes qui ont des rooms catalogue (rooms toujours visibles). */
+  useEffect(() => {
+    setRtExpanded((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      listings.forEach((listing) => {
+        const rts = roomTypesByListing[listing._id] || [];
+        const isMulti =
+          String(listing.propertyUnit || '') === 'Multi' && rts.length > 1;
+        if (!isMulti || !expanded[listing._id]) return;
+        rts.forEach((rt) => {
+          const rooms = Array.isArray(rt.rooms) ? rt.rooms : [];
+          const key = `${listing._id}:${rt.id}`;
+          if (rooms.length > 0 && !next[key]) {
+            next[key] = true;
+            changed = true;
+          }
+        });
+      });
+      return changed ? next : prev;
+    });
+  }, [listings, roomTypesByListing, expanded]);
 
   /* ─── Sélection Excel vs clic détail tarif ─── */
   const [isDragging, setIsDragging] = useState(false);
@@ -939,13 +968,12 @@ export default function MultiView({
             const isMultiHotel =
               String(listing.propertyUnit || '') === 'Multi' && roomTypes.length > 1;
             const isOpen = !!expanded[listing._id];
-            const listingResas = showResaFilter
-              ? (reservationsByListing.get(String(listing._id))
-                || reservationsByListing.get(String(listing.id))
-                || [])
-              : [];
+            const listingResas =
+              reservationsByListing.get(String(listing._id))
+              || reservationsByListing.get(String(listing.id))
+              || [];
             const buildingInventories = inventoriesByListing[listing._id] || {};
-            /* Single / monotype : barres résa sur la ligne unité si filtre Rés. (pas de drill rooms). */
+            /* Single / monotype : barres résa sur la ligne unité si filtre Rés. */
             const singleUnitResas =
               !isMultiHotel && showResaFilter ? listingResas : null;
             return (
@@ -958,6 +986,7 @@ export default function MultiView({
                   dpEnabled={dpEnabledByListing[String(listing._id)] !== false}
                   inventories={buildingInventories}
                   overlayLineReservations={singleUnitResas}
+                  showResaBars={showResaFilter}
                   days={days}
                   leftW={LEFT_W}
                   cellW={CELL_W}
@@ -985,9 +1014,7 @@ export default function MultiView({
                       const rtKey = `${listing._id}:${rt.id}`;
                       const rtOpen = !!rtExpanded[rtKey];
                       const rooms = Array.isArray(rt.rooms) ? rt.rooms : [];
-                      const rtResas = showResaFilter
-                        ? filterReservationsForRoomType(listingResas, rt.id, rt.name)
-                        : [];
+                      const rtResas = filterReservationsForRoomType(listingResas, rt.id, rt.name);
                       return (
                       <React.Fragment key={`${listing._id}-${rt.id}`}>
                       <ListingRow
@@ -1000,17 +1027,18 @@ export default function MultiView({
                           propertyUnit: 'Single',
                           _isRoomTypeRow: true,
                           _roomCount: rooms.length,
-                          _showResaRooms: showResaFilter && rooms.length > 0,
+                          _showResaRooms: rooms.length > 0,
                         }}
                         dpEnabled={dpEnabledByListing[String(listing._id)] !== false}
                         inventories={rt.availability || {}}
                         overlayLineReservations={null}
+                        showResaBars={showResaFilter}
                         days={days}
                         leftW={LEFT_W}
                         cellW={CELL_W}
                         expanded={rtOpen}
                         onToggle={() => toggleRoomType(rtKey)}
-                        forceChevron={!showResaFilter || rooms.length === 0}
+                        forceChevron={rooms.length > 0}
                         hideDetailCollapse={false}
                         selectedColumns={selectedColumns}
                         isSelected={isSelected}
@@ -1023,8 +1051,9 @@ export default function MultiView({
                           isCalendarImportReviewActive(listing) ? undefined : onToggleDynamicPrice
                         }
                       />
-                      {/* Filtre Rés. : rooms sous le type — barres résa uniquement ici */}
-                      {showResaFilter && rooms.length === 0 ? (
+                      {/* Rooms toujours visibles sous le type (statut dispo/réservé/bloqué).
+                          Filtre Rés. = barres Gantt uniquement. */}
+                      {rtOpen && rooms.length === 0 ? (
                         <ListingRow
                           key={`${listing._id}-${rt.id}-no-rooms`}
                           listing={{
@@ -1040,6 +1069,7 @@ export default function MultiView({
                           dpEnabled={false}
                           inventories={rt.availability || {}}
                           overlayLineReservations={rtResas}
+                          showResaBars={showResaFilter}
                           days={days}
                           leftW={LEFT_W}
                           cellW={CELL_W}
@@ -1056,7 +1086,7 @@ export default function MultiView({
                           activeTip={activeTip}
                         />
                       ) : null}
-                      {showResaFilter
+                      {rtOpen
                         ? (() => {
                             const claimed = new Set();
                             const roomRows = rooms.map((room) => {
@@ -1093,6 +1123,7 @@ export default function MultiView({
                                   roomTypeName: rt.name,
                                   roomId: room.id,
                                   housekeepingState: room.housekeepingState || null,
+                                  enabled: room.enabled,
                                   propertyUnit: 'Single',
                                   _isRoomTypeRow: false,
                                   _isRoomRow: true,
@@ -1100,6 +1131,7 @@ export default function MultiView({
                                 dpEnabled={false}
                                 inventories={rt.availability || {}}
                                 overlayLineReservations={roomResas}
+                                showResaBars={showResaFilter}
                                 days={days}
                                 leftW={LEFT_W}
                                 cellW={CELL_W}
@@ -1548,7 +1580,7 @@ const ListingLabel = memo(function ListingLabel({
 
 /* ─── Ligne d'un listing (prix + dispo sur une ligne, détail en collapse) ─── */
 function ListingRow({
-  listing, inventories, overlayLineReservations = null, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onPriceClick, onReservationClick, activeTip,
+  listing, inventories, overlayLineReservations = null, showResaBars = true, days, leftW: LEFT_W, cellW: CELL_W, expanded, onToggle, selectedColumns, isSelected, onMouseDown, onMouseEnter, onPriceClick, onReservationClick, activeTip,
   onToggleDynamicPrice, dpEnabled = true, forceChevron = false, hideDetailCollapse = false,
   onCalendarImportReviewFinished,
   onCalendarImportReviewActivated,
@@ -1683,15 +1715,18 @@ function ListingRow({
 
   /**
    * Calendrier Multi = dispo (building / roomType).
-   * Rooms : héritent inventaire du type pour hachures ; barres = occupation réelle.
+   * Rooms : toujours listées ; fond = dispo/réservé/bloqué ; barres = filtre Rés. only.
    */
   const isMultiHotelParent = hideDetailCollapse && !isRoomTypeRow && !isRoomRow;
-  // Jamais de barres sur building / roomType. Rooms (ou Single + filtre Rés.) via overlay prop.
-  const lineReservations = useMemo(() => {
+  const statusReservations = useMemo(() => {
     if (isMultiHotelParent || isRoomTypeRow) return [];
     return Array.isArray(overlayLineReservations) ? overlayLineReservations : [];
   }, [overlayLineReservations, isMultiHotelParent, isRoomTypeRow]);
-  // Rooms : toujours assez haut pour barres éventuelles + fond bloqué lisible
+  const lineReservations = showResaBars ? statusReservations : [];
+  const roomHkBlocked =
+    isRoomRow &&
+    isRoomHousekeepingBlocked(listing.housekeepingState, listing.enabled);
+  // Rooms : toujours assez haut pour barres éventuelles + fond statut lisible
   const resaOverlayMode =
     isRoomRow || lineReservations.length > 0 ? (lineReservations.length > 0 ? 'bars' : 'none') : 'none';
   const primaryRowH = isRoomRow || resaOverlayMode === 'bars' ? 48 : 32;
@@ -1745,7 +1780,7 @@ function ListingRow({
               futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS,
             });
             const draggable = !isRoomRow && cellState === 'data';
-            const roomOccupied = isRoomRow && dayHasRoomResa(lineReservations, d.iso);
+            const roomOccupied = isRoomRow && dayHasRoomResa(statusReservations, d.iso);
             return (
               <PrimaryInventoryCell
                 key={d.iso}
@@ -1764,6 +1799,7 @@ function ListingRow({
                 draggable={draggable}
                 dpEnabled={dpEnabled}
                 roomOccupied={roomOccupied}
+                roomBlocked={roomHkBlocked}
                 tipOpen={
                   activeTip?.listingId === listing._id &&
                   activeTip?.dateStr === d.iso &&
@@ -2037,6 +2073,7 @@ function PrimaryInventoryCell({
   isSelected, onMouseDown, onMouseEnter, onPriceClick,
   listingId, roomTypeId, draggable, tipOpen, dpEnabled = true,
   roomOccupied = false,
+  roomBlocked = false,
 }) {
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
@@ -2068,6 +2105,7 @@ function PrimaryInventoryCell({
   const background = inventoryStatusBackground(state, inv, {
     roomRow: isRoomRow,
     roomOccupied: Boolean(roomOccupied),
+    roomBlocked: Boolean(roomBlocked),
   });
   const accentShadow = channelAccentShadow(state, inv);
   // Inventaire en haut, place libre en bas (barres roomType OU pastilles building)

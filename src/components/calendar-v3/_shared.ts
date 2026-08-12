@@ -275,7 +275,7 @@ export const ALL_COLUMNS: ColumnDef[] = [
   },
   {
     id: 'reservations',
-    label: 'Réservations (rooms Multi)',
+    label: 'Réservations (barres Multi)',
     short: 'Rés.',
     excelSelectable: false,
   },
@@ -319,10 +319,11 @@ export const ALL_COLUMNS: ColumnDef[] = [
  */
 export const CALENDAR_PRIMARY_ROW_COLUMNS = ['rate', 'availableRoom'] as const;
 
-/** Sélection colonnes par défaut (vue multi) — Dispo sur la ligne ; Min stay / dyn en collapse. */
+/** Sélection colonnes par défaut (vue multi) — Dispo + Rés. ; Min stay / dyn en collapse. */
 export const CALENDAR_DEFAULT_COLUMNS = [
   'rate',
   'availableRoom',
+  'reservations',
   'minStay',
   'dynamicPrice',
 ] as const;

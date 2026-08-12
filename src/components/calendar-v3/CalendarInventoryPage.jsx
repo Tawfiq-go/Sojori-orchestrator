@@ -150,6 +150,7 @@ export default function CalendarInventoryPage({
   const [selectedColumns, setSelectedColumns] = useState([
     'rate',
     'availableRoom',
+    'reservations',
     'minStay',
     'dynamicPrice',
   ]);
@@ -171,13 +172,13 @@ export default function CalendarInventoryPage({
   const windowStart = useMemo(() => startOfDay(pivotDate), [pivotDate]);
 
   /**
-   * Multi only — fetch résas uniquement si filtre « Rés. » (affichage sur rooms).
-   * Calendrier = dispo ; résas = option filtre, pas la vue inventaire.
+   * Multi — toujours fetch résas pour statut room (dispo/réservé).
+   * Filtre « Rés. » = barres Gantt uniquement (pas l’affichage des rooms).
    */
   const [multiOverlayReservations, setMultiOverlayReservations] = useState([]);
   const resaFilterOn = view === 'multi' && selectedColumns.includes('reservations');
   useEffect(() => {
-    if (!resaFilterOn) {
+    if (view !== 'multi') {
       setMultiOverlayReservations([]);
       return undefined;
     }
@@ -205,7 +206,7 @@ export default function CalendarInventoryPage({
     return () => {
       cancelled = true;
     };
-  }, [resaFilterOn, windowStart]);
+  }, [view, windowStart]);
 
   useEffect(() => {
     setPivotDate(clampPivotDate(startDate));
@@ -528,7 +529,7 @@ export default function CalendarInventoryPage({
         {view === 'multi' && (
           <button
             type="button"
-            title="Affiche les chambres physiques sous chaque type, avec les barres de réservation"
+            title="Affiche uniquement les barres de réservation sur les chambres (les rooms restent toujours visibles)"
             onClick={() => {
               setSelectedColumns((prev) =>
                 prev.includes('reservations')
@@ -552,7 +553,7 @@ export default function CalendarInventoryPage({
               flexShrink: 0,
             }}
           >
-            {resaFilterOn ? 'Rooms + résas ✓' : 'Rooms + résas'}
+            {resaFilterOn ? 'Réservations ✓' : 'Réservations'}
           </button>
         )}
 
