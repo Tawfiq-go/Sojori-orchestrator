@@ -910,7 +910,7 @@ export function designStaffToApi(
 
   const body: Record<string, unknown> = {
     name: staff.fullName,
-    phone: staff.whatsappE164 || staff.phoneE164,
+    phone: String(staff.whatsappE164 || staff.phoneE164 || '').trim(),
     email: staff.email ? String(staff.email).trim() : '',
     lang: staff.lang || 'fr',
     // Défaut salarié (UI) — freelance seulement si choisi explicitement.
