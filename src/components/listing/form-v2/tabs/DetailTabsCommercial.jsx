@@ -32,6 +32,7 @@ import {
 } from '../../../../utils/listingRuFeesDisplay';
 import { CANCELLATION_POLICY_PRESET_LABELS } from '../../../../utils/listingCancellationPolicyPresets';
 import { T, sxInput, Field, Card, SectionH, ToggleRow, Counter, ChipsRow, NumberInput, MoneyInput, SelectField, RuFormLegend } from './_shared';
+import { MewsPushGlobalCard, MewsPushRoomTypeControls } from './MewsPushFlagsSection';
 import {
   InfoSectionField,
   LocalizedRowsField,
@@ -417,6 +418,8 @@ export function PricingTab({
             </Button>
           </Stack>
 
+          {listingId ? <MewsPushGlobalCard listingId={String(listingId)} /> : null}
+
           <Box
             sx={{
               display: { xs: 'none', md: 'grid' },
@@ -523,7 +526,7 @@ export function PricingTab({
                       {rt.active === false ? ' · désactivé' : ''}
                     </Typography>
                   </Stack>
-                  <Stack direction="row" alignItems="center" gap={0.75} sx={{ flexShrink: 0 }}>
+                  <Stack direction="row" alignItems="center" gap={0.75} sx={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     <Stack direction="row" alignItems="center" gap={0.5}>
                       <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: T.text2, whiteSpace: 'nowrap' }}>
                         {rt.active === false ? 'Off' : 'Actif'}
@@ -541,6 +544,12 @@ export function PricingTab({
                         }}
                       />
                     </Stack>
+                    {listingId ? (
+                      <MewsPushRoomTypeControls
+                        listingId={String(listingId)}
+                        roomTypeId={String(rt._id || '')}
+                      />
+                    ) : null}
                     <Typography
                       sx={{
                         fontSize: 11,
