@@ -1,6 +1,12 @@
+import type { ReactNode } from 'react';
 import sojoriLogo from '../../assets/images/sojori-logo.png';
 import airbnbLogo from '../../assets/images/airbnb.png';
 import bookingLogo from '../../assets/images/booking.png';
+import {
+  createdViaLabel,
+  isSojoriCommercialSource,
+  resolveCreatedVia,
+} from '../../utils/reservationCreatedVia';
 
 const SOJORI_ORANGE = '#b8851a';
 const NOMMOS_TEAL = '#0d7377';
@@ -19,6 +25,8 @@ export type ReservationSourceKind =
 export interface ReservationSourceInput {
   source?: string | null;
   channelName?: string | null;
+  /** Méthode de création Sojori (admin / WA / site). */
+  createdVia?: string | null;
   byRentals?: boolean;
   /** Notes backend (souvent `channelNumber:… | origin:…` pour Mews). */
   notes?: string | null;
@@ -45,9 +53,8 @@ function resolveOtaFromChannelNumber(channelNumber: string): 'airbnb' | 'booking
 
 /**
  * Résout le canal d'origine à partir de source + channelName (+ notes / listing).
- * - Dashboard / admin → badge « A »
- * - sojori-vente → logo Sojori
- * - Direct Mews (hôtel) → badge Nommos (listing Nommos)
+ * - Sojori (+ createdVia) → logo Sojori (méthode affichée à part sous l’icône)
+ * - Direct Mews (hôtel) → badge Nommos
  * - OTA Mews → Booking.com / Airbnb (pas Sojori)
  */
 export function resolveReservationSourceKind(
@@ -58,6 +65,9 @@ export function resolveReservationSourceKind(
   const notes = String(reservation?.notes || '');
   const listing = String(reservation?.listingName || '').toLowerCase();
   const blob = `${source} ${channel} ${notes}`.toLowerCase();
+
+  // Toutes les créations Sojori (admin / WA / site) → même logo ; sous-titre = createdVia
+  if (isSojoriCommercialSource(reservation)) return 'vente';
 
   if (source === 'dashboard') return 'admin';
   if (source === 'whatsapp-booking' || channel.includes('whatsapp')) return 'whatsapp';
@@ -110,14 +120,16 @@ export function resolveReservationSourceKind(
   return 'vente';
 }
 
-function getReservationSourceTitle(kind: ReservationSourceKind): string {
+function getReservationSourceTitle(
+  kind: ReservationSourceKind,
+  reservation?: ReservationSourceInput,
+): string {
+  if (kind === 'vente' || kind === 'admin' || kind === 'whatsapp') {
+    const via = resolveCreatedVia(reservation || {});
+    const method = createdViaLabel(via);
+    return method ? `Sojori · ${method}` : 'Sojori';
+  }
   switch (kind) {
-    case 'admin':
-      return 'Admin (dashboard)';
-    case 'whatsapp':
-      return 'WhatsApp Booking';
-    case 'vente':
-      return 'Sojori (site / direct)';
     case 'nommos':
       return 'Nommos (direct)';
     case 'airbnb':
@@ -133,6 +145,13 @@ function getReservationSourceTitle(kind: ReservationSourceKind): string {
     default:
       return 'Sojori';
   }
+}
+
+/** Libellé méthode sous le logo Sojori (Admin, WhatsApp staff, …). */
+export function getReservationCreatedViaLabel(
+  reservation: ReservationSourceInput,
+): string | null {
+  return createdViaLabel(resolveCreatedVia(reservation));
 }
 
 function WhatsAppIcon({ size = 20 }: { size?: number }) {
@@ -222,31 +241,35 @@ function NommosBadge({ size = 22 }: { size?: number }) {
 export function ReservationSourceIcon({
   reservation,
   size = 22,
+  showMethod = false,
 }: {
   reservation: ReservationSourceInput;
   size?: number;
+  /** Affiche le libellé createdVia sous le logo Sojori. */
+  showMethod?: boolean;
 }) {
   const kind = resolveReservationSourceKind(reservation);
-  const title = getReservationSourceTitle(kind);
+  const title = getReservationSourceTitle(kind, reservation);
+  const method =
+    showMethod && (kind === 'vente' || kind === 'admin' || kind === 'whatsapp')
+      ? getReservationCreatedViaLabel(reservation)
+      : null;
 
+  let icon: ReactNode;
   if (kind === 'admin') {
-    return <AdminBadge size={size} />;
-  }
-  if (kind === 'whatsapp') {
-    return (
+    icon = <AdminBadge size={size} />;
+  } else if (kind === 'whatsapp') {
+    icon = (
       <span title={title} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
         <WhatsAppIcon size={size - 2} />
       </span>
     );
-  }
-  if (kind === 'nommos') {
-    return <NommosBadge size={size} />;
-  }
-  if (kind === 'rentals') {
-    return <RentalsBadge size={size} />;
-  }
-  if (kind === 'airbnb') {
-    return (
+  } else if (kind === 'nommos') {
+    icon = <NommosBadge size={size} />;
+  } else if (kind === 'rentals') {
+    icon = <RentalsBadge size={size} />;
+  } else if (kind === 'airbnb') {
+    icon = (
       <img
         src={airbnbLogo}
         alt={title}
@@ -254,9 +277,8 @@ export function ReservationSourceIcon({
         style={{ height: size - 4, width: 'auto', objectFit: 'contain' }}
       />
     );
-  }
-  if (kind === 'booking') {
-    return (
+  } else if (kind === 'booking') {
+    icon = (
       <img
         src={bookingLogo}
         alt={title}
@@ -264,14 +286,46 @@ export function ReservationSourceIcon({
         style={{ height: size - 4, width: 'auto', objectFit: 'contain' }}
       />
     );
+  } else {
+    icon = (
+      <img
+        src={sojoriLogo}
+        alt={title}
+        title={title}
+        style={{ height: size - 4, width: 'auto', objectFit: 'contain' }}
+      />
+    );
   }
 
+  if (!method) return <>{icon}</>;
+
   return (
-    <img
-      src={sojoriLogo}
-      alt={title}
+    <span
       title={title}
-      style={{ height: size - 4, width: 'auto', objectFit: 'contain' }}
-    />
+      style={{
+        display: 'inline-flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 2,
+        lineHeight: 1.1,
+      }}
+    >
+      {icon}
+      <span
+        style={{
+          fontSize: 9,
+          fontWeight: 700,
+          color: '#6B6358',
+          letterSpacing: '0.02em',
+          whiteSpace: 'nowrap',
+          maxWidth: 72,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {method}
+      </span>
+    </span>
   );
 }

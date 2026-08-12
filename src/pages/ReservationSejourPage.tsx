@@ -212,10 +212,14 @@ export function ReservationSejourPage() {
   };
 
   const statusBadge = reservationDetails?.status === 'Confirmed'
-    ? { bg: 'rgba(10,143,94,0.12)', color: T.success, label: 'Confirmé' }
+    ? { bg: 'rgba(10,143,94,0.14)', color: '#0A8F5E', label: 'Confirmé' }
     : reservationDetails?.status === 'Started'
-      ? { bg: 'rgba(31,112,194,0.12)', color: T.info, label: 'Started' }
-      : { bg: 'rgba(196,101,6,0.12)', color: T.warning, label: reservationDetails?.status || 'En attente' };
+      ? { bg: 'rgba(79,70,229,0.14)', color: '#4338CA', label: 'Séjour' }
+      : String(reservationDetails?.status || '').toLowerCase().includes('cancel')
+        ? { bg: 'rgba(200,30,30,0.12)', color: '#C81E1E', label: 'Annulé' }
+        : String(reservationDetails?.status || '').toLowerCase() === 'completed'
+          ? { bg: 'rgba(71,85,105,0.14)', color: '#475569', label: 'Terminé' }
+          : { bg: 'rgba(196,101,6,0.14)', color: '#C46506', label: reservationDetails?.status || 'En attente' };
 
   const tabContent = useMemo(() => {
     if (!reservationDetails) return null;

@@ -669,23 +669,31 @@ export default function ConversationThread({
                   sx={{
                     ...stayChipSx,
                     bgcolor:
-                      presenceLabel === 'Présent' || presenceLabel === 'En cours'
-                        ? 'rgba(10,143,94,0.12)'
-                        : presenceLabel === 'Attendu' || presenceLabel === "Aujourd'hui"
-                          ? 'rgba(6,115,179,0.12)'
-                          : presenceLabel === 'Départ auj.'
-                            ? 'rgba(196,101,6,0.12)'
-                            : 'rgba(20,17,10,0.06)',
+                      presenceLabel === 'Séjour'
+                        ? 'rgba(79,70,229,0.14)'
+                        : presenceLabel === 'Confirmé'
+                          ? 'rgba(10,143,94,0.14)'
+                          : presenceLabel === 'En attente'
+                            ? 'rgba(196,101,6,0.14)'
+                            : presenceLabel === 'Annulé'
+                              ? 'rgba(200,30,30,0.12)'
+                              : presenceLabel === 'Complété' || presenceLabel === 'Terminé'
+                                ? 'rgba(71,85,105,0.14)'
+                                : 'rgba(20,17,10,0.06)',
                     color:
-                      presenceLabel === 'Présent' || presenceLabel === 'En cours'
-                        ? T.success
-                        : presenceLabel === 'Attendu' || presenceLabel === "Aujourd'hui"
-                          ? T.info
-                          : presenceLabel === 'Départ auj.'
-                            ? T.warning
-                            : T.text2,
+                      presenceLabel === 'Séjour'
+                        ? '#4338CA'
+                        : presenceLabel === 'Confirmé'
+                          ? '#0A8F5E'
+                          : presenceLabel === 'En attente'
+                            ? '#C46506'
+                            : presenceLabel === 'Annulé'
+                              ? '#C81E1E'
+                              : presenceLabel === 'Complété' || presenceLabel === 'Terminé'
+                                ? '#475569'
+                                : T.text2,
                   }}
-                  title="Présence séjour"
+                  title="Statut réservation"
                 >
                   {presenceLabel}
                 </Box>

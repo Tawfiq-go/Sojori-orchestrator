@@ -281,12 +281,12 @@ async function enrichAuditIssues(issues: SyncIssue[]): Promise<SyncIssue[]> {
 
 function statusMeta(status?: string): { bg: string; color: string; label: string } {
   const n = String(status ?? '').toLowerCase();
-  if (n === 'confirmed') return { bg: 'rgba(10,143,94,0.12)', color: T.success, label: 'Confirmé' };
-  if (n === 'started') return { bg: 'rgba(31,112,194,0.12)', color: T.info, label: 'Started' };
-  if (n === 'pending') return { bg: 'rgba(196,101,6,0.12)', color: T.warning, label: 'En attente' };
-  if (n.includes('cancel')) return { bg: 'rgba(200,30,30,0.10)', color: T.error, label: 'Annulé' };
-  if (n === 'completed') return { bg: 'rgba(6,115,179,0.10)', color: T.info, label: 'Terminé' };
-  return { bg: 'rgba(20,17,10,0.05)', color: T.text3, label: status || '—' };
+  if (n === 'confirmed') return { bg: 'rgba(10,143,94,0.14)', color: '#0A8F5E', label: 'Confirmé' };
+  if (n === 'started') return { bg: 'rgba(79,70,229,0.14)', color: '#4338CA', label: 'Séjour' };
+  if (n === 'pending') return { bg: 'rgba(196,101,6,0.14)', color: '#C46506', label: 'En attente' };
+  if (n.includes('cancel')) return { bg: 'rgba(200,30,30,0.12)', color: '#C81E1E', label: 'Annulé' };
+  if (n === 'completed') return { bg: 'rgba(71,85,105,0.14)', color: '#475569', label: 'Terminé' };
+  return { bg: 'rgba(20,17,10,0.06)', color: T.text3, label: status || '—' };
 }
 
 function fmtDate(d?: string): string {
