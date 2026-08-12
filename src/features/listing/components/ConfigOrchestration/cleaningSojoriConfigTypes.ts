@@ -402,14 +402,10 @@ function normalizeCategory(row: unknown, i: number): CleaningChecklistCategory |
   };
 }
 
-/** Migre flat checklist legacy → 1 catégorie « Général ». */
+/** Migre flat checklist legacy → 1 catégorie « Général » (sans seed DEFAULT). */
 function categoriesFromFlat(flat: unknown): CleaningChecklistCategory[] {
   if (!Array.isArray(flat) || flat.length === 0) {
-    return DEFAULT_CLEANING_CHECKLIST_CATEGORIES.map((c, i) => ({
-      ...c,
-      order: i,
-      items: c.items.map((it, j) => ({ ...it, order: j })),
-    }));
+    return [];
   }
   const items = flat
     .map((it, i) => normalizeItem(it, i))
@@ -458,7 +454,7 @@ export const DEFAULT_CLEANING_DECLARE_OPTIONS: CleaningDeclareOption[] = [
 
 export function normalizeDeclareOptions(raw: unknown): CleaningDeclareOption[] {
   if (!Array.isArray(raw) || raw.length === 0) {
-    return DEFAULT_CLEANING_DECLARE_OPTIONS.map((o, i) => ({ ...o, order: i }));
+    return [];
   }
   const out: CleaningDeclareOption[] = [];
   for (let i = 0; i < raw.length; i++) {
@@ -479,7 +475,7 @@ export function normalizeDeclareOptions(raw: unknown): CleaningDeclareOption[] {
   }
   return out.length
     ? out.sort((a, b) => a.order - b.order).map((o, i) => ({ ...o, order: i }))
-    : DEFAULT_CLEANING_DECLARE_OPTIONS.map((o, i) => ({ ...o, order: i }));
+    : [];
 }
 
 export function mapListingToCleaningSojoriConfig(raw: Record<string, unknown>): CleaningSojoriConfig {

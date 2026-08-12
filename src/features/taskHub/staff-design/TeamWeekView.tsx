@@ -16,11 +16,17 @@ import {
 } from '../../../services/planningFulltaskMerge';
 import * as fulltaskApi from '../../../services/fulltaskApi';
 import { normalizeOwnerId } from '../../../utils/fulltaskMappers';
+import {
+  PLANNING_FORWARD_DAYS,
+  PLANNING_LOOKBACK_DAYS,
+  getPlanningDefaultStartDate,
+} from '../../../utils/planningViewDates';
 import type { Staff } from './types';
 import { labelForTaskTypeId } from './fulltaskTaskTypes';
 import './teamWeekView.css';
 
-const WINDOW_DAYS = 15;
+/** Aligné /planning (lookback + forward) — sinon les checkouts « OCCUPÉ / Started » hors 15j disparaissaient. */
+const WINDOW_DAYS = PLANNING_LOOKBACK_DAYS + PLANNING_FORWARD_DAYS;
 
 const CANCELLED_STATUSES = new Set(['CANCELLED_ADMIN', 'CANCELLED_CUSTOMER', 'ARCHIVED']);
 const MAX_CHIPS_COLLAPSED = 3;
@@ -306,7 +312,7 @@ export default function TeamWeekView({
   onOpenStaff,
 }: Props) {
   const navigate = useNavigate();
-  const [startDate, setStartDate] = useState<Date>(() => startOfDay(new Date()));
+  const [startDate, setStartDate] = useState<Date>(() => getPlanningDefaultStartDate());
   const [tasks, setTasks] = useState<TeamTask[]>([]);
   const [loading, setLoading] = useState(true);
   /** Refresh partiel — ne masque pas la grille (assign / accept / nav). */
@@ -990,24 +996,10 @@ export default function TeamWeekView({
     const cellKey = `${row.key}|${dayKey}`;
     const expanded = expandedCells.has(cellKey);
 
-    // À assigner : compact = nombre du jour ; clic = ouvrir chips (glisser / choisir)
-    if (row.unassigned && !expanded) {
-      return (
-        <button
-          type="button"
-          className="twv-day-count"
-          onClick={() => toggleCell(cellKey)}
-          title={`${list.length} tâche${list.length > 1 ? 's' : ''} — clic pour afficher et assigner`}
-        >
-          {list.length}
-        </button>
-      );
-    }
-
     // 3 colonnes kanban DANS la cellule (À démarrer / En cours / Terminé).
     // Chaque colonne est une zone de dépôt large — glisser une tâche d'une
-    // colonne à la suivante change son statut. La ligne « À assigner » garde
-    // l'affichage compact (pas de statut staff à piloter).
+    // colonne à la suivante change son statut.
+    // Ligne « À assigner » : chips visibles (sinon on ne voyait qu’un chiffre).
     if (!row.unassigned) {
       const COLS = [
         { to: 'waiting_start' as const, emoji: '▶️', label: 'À démarrer', cls: 'waiting-start' },
@@ -1315,7 +1307,7 @@ export default function TeamWeekView({
         </div>
         <div className="twv-toolbar-nav">
           <button type="button" onClick={() => setStartDate((d) => addDays(d, -7))} aria-label="7 jours précédents">‹</button>
-          <button type="button" onClick={() => setStartDate(startOfDay(new Date()))}>Aujourd'hui</button>
+          <button type="button" onClick={() => setStartDate(getPlanningDefaultStartDate())}>Aujourd'hui</button>
           <button type="button" onClick={() => setStartDate((d) => addDays(d, 7))} aria-label="7 jours suivants">›</button>
         </div>
       </div>
@@ -1408,7 +1400,9 @@ export default function TeamWeekView({
                   <td colSpan={WINDOW_DAYS + 1} className="twv-empty">
                     {listingFilterId || cityFilterId
                       ? 'Aucun staff autorisé ni tâche pour ce filtre sur la période.'
-                      : "Aucun staff — créez votre équipe dans l'onglet Annuaire."}
+                      : eligibleStaff.length === 0
+                        ? "Aucun staff — créez votre équipe dans l'onglet Annuaire."
+                        : 'Aucune tâche sur la période (y compris résas Started / OCCUPÉ).'}
                   </td>
                 </tr>
               )}

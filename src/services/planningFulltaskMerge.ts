@@ -109,8 +109,9 @@ function reservationOverlapsWindow(
 
 function mapReservationStatus(status?: string): string {
   const s = (status || '').toLowerCase();
-  if (s.includes('confirm')) return 'confirmed';
   if (s.includes('pending')) return 'pending';
+  if (s.includes('start') || s === 'inside' || s === 'arrived') return 'started';
+  if (s.includes('confirm')) return 'confirmed';
   return 'confirmed';
 }
 
@@ -213,10 +214,20 @@ export async function fetchTaskNewPlanning(params: {
     return res;
   });
 
-  const tasksPromise = fulltaskApi.listTasks({ audience: 'STAFF' }).then(res => {
-    console.log(`✅ [fetchTaskNewPlanning] listTasks completed in ${(performance.now() - startTime).toFixed(0)}ms - ${res?.data?.length || 0} items`);
-    return res;
-  });
+  /* ownerId côté API : évite la troncature globale à 500 tâches (autres PM)
+     qui faisait disparaître les tâches Majorelle sur /tasks/team. */
+  const tasksPromise = fulltaskApi
+    .listTasks({
+      audience: 'STAFF',
+      ...(params.ownerId ? { ownerId: params.ownerId } : {}),
+      limit: 2000,
+    })
+    .then((res) => {
+      console.log(
+        `✅ [fetchTaskNewPlanning] listTasks completed in ${(performance.now() - startTime).toFixed(0)}ms - ${res?.data?.length || 0} items`,
+      );
+      return res;
+    });
 
   const staffPromise = fulltaskApi.listStaff().then(res => {
     console.log(`✅ [fetchTaskNewPlanning] listStaff completed in ${(performance.now() - startTime).toFixed(0)}ms - ${res?.data?.length || 0} items`);

@@ -877,16 +877,25 @@ function taskStatusLabelFr(raw: string | null | undefined): string {
   return TASK_STATUS_LABELS[normalizeTaskStatus(s)];
 }
 
-function taskFutureStatusLabelFr(raw: string | null | undefined): string {
+function taskFutureStatusLabelFr(
+  raw: string | null | undefined,
+  opts?: { hasStaff?: boolean },
+): string {
+  const cur = normalizeTaskStatus(raw);
+  /* Créée sans staff → prochaine action métier = assigner (pas « Assignée »). */
+  if (cur === 'CREATED' && !opts?.hasStaff) return '→ Assigner';
   const next = getNextTaskStatus(raw);
   if (!next) {
-    const cur = normalizeTaskStatus(raw);
     if (cur === 'COMPLETED') return '— (terminée)';
     if (cur === 'CANCELLED_ADMIN' || cur === 'CANCELLED_CUSTOMER' || cur === 'ARCHIVED') {
       return '— (annulée)';
     }
     return '—';
   }
+  if (next === 'ASSIGNED') return '→ Assigner';
+  if (next === 'ACCEPTED') return '→ Accepter';
+  if (next === 'IN_PROGRESS') return '→ Commencer';
+  if (next === 'COMPLETED') return '→ Terminer';
   return TASK_STATUS_LABELS[next];
 }
 
@@ -956,10 +965,12 @@ export function TaskHoverContent({ item }: { item: TimelineItem | TaskItem }) {
   const richLabel = isCleaning
     ? cleaningLabelFr(item)
     : TASK_CHIP_LABELS_RICH[type] || s.label;
-  const staff =
+  const staffRaw =
     ('staffName' in item ? item.staffName : null) ||
     ('staffCode' in item ? item.staffCode : null) ||
-    'Non assigné';
+    null;
+  const staff = staffRaw ? String(staffRaw) : 'Non assigné';
+  const hasStaff = Boolean(staffRaw);
   const status = String(('taskStatus' in item ? item.taskStatus : item.status) || '—');
   const when = String(('scheduledFor' in item ? item.scheduledFor : '') || '');
   const data = ('data' in item ? item.data : undefined) as Record<string, unknown> | undefined;
@@ -968,6 +979,11 @@ export function TaskHoverContent({ item }: { item: TimelineItem | TaskItem }) {
   const guest = String(data?.guestName || '').trim();
   const urgInfo = resolveTaskUrgencyInfo(item);
   const urg = urgInfo?.urgency ?? 'green';
+  /* Hover : ne pas dire « pas encore acceptée » si personne n’est assigné. */
+  const urgReason =
+    urgInfo?.reason === 'pas encore acceptée' && !hasStaff
+      ? 'non assignée'
+      : urgInfo?.reason;
   const urgLabel =
     urg === 'red' ? '🔴 Agir' : urg === 'orange' ? '🟠 Surveiller' : '🟢 OK';
 
@@ -983,20 +999,22 @@ export function TaskHoverContent({ item }: { item: TimelineItem | TaskItem }) {
         {isCleaning ? <HoverLine label="Type" value={cleaningLabelFr(item)} /> : null}
         <HoverLine
           label="Priorité"
-          value={urgInfo?.reason ? `${urgLabel} · ${urgInfo.reason}` : urgLabel}
+          value={urgReason ? `${urgLabel} · ${urgReason}` : urgLabel}
           accent={urg === 'red' ? '#C4483A' : urg === 'orange' ? '#C46506' : undefined}
         />
         <HoverLine label="Actuel" value={taskStatusLabelFr(status)} />
         <HoverLine
           label="Futur"
-          value={taskFutureStatusLabelFr(status)}
+          value={taskFutureStatusLabelFr(status, { hasStaff })}
           accent={
-            getNextTaskStatus(status) ? '#5CBF8F' : undefined
+            getNextTaskStatus(status) || (normalizeTaskStatus(status) === 'CREATED' && !hasStaff)
+              ? '#5CBF8F'
+              : undefined
           }
         />
         <HoverLine
           label="Staff"
-          value={String(staff)}
+          value={staff}
           accent={staff === 'Non assigné' ? '#C4483A' : undefined}
         />
         {note ? <HoverLine label="Note" value={note.slice(0, 180)} /> : null}

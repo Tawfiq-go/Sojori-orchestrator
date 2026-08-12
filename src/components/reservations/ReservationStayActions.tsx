@@ -50,6 +50,8 @@ export type StayFieldPatch = {
   confirmedCheckOutTime?: boolean;
   actualArrivalTime?: string | null;
   actualDepartureTime?: string | null;
+  /** Cycle séjour : Started après declare arrivée, Completed après declare départ. */
+  status?: string;
 };
 
 export type StayActionMode = 'both' | 'choose' | 'declare';
@@ -190,8 +192,8 @@ export function ReservationStayActions({
       const fromCtx = stayPatchFromGuestContext(res?.data);
       const patch = {
         ...(isArrival
-          ? { actualArrivalTime: hourToApi(pickDeclareHour) }
-          : { actualDepartureTime: hourToApi(pickDeclareHour) }),
+          ? { actualArrivalTime: hourToApi(pickDeclareHour), status: 'Started' }
+          : { actualDepartureTime: hourToApi(pickDeclareHour), status: 'Completed' }),
         ...fromCtx,
       };
       logResaGuest('ui:declare patch ligne', {
