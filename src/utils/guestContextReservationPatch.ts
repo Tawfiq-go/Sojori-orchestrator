@@ -32,9 +32,11 @@ export function stayPatchFromGuestContext(ctx: unknown): StayFieldPatch {
   }
   if (c.arrival?.declare?.yes) {
     patch.actualArrivalTime = c.arrival.declare.time ?? c.arrival.choose?.time ?? null;
+    patch.status = 'Started';
   }
   if (c.departure?.declare?.yes) {
     patch.actualDepartureTime = c.departure.declare.time ?? c.departure.choose?.time ?? null;
+    patch.status = 'Completed';
   }
 
   logResaGuest('patchFromGuestContext', {
