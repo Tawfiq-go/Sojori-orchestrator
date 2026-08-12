@@ -81,22 +81,22 @@ const FILTER_CONFIGS: {
 function getStatusColor(status: string) {
   const normalized = status.toLowerCase();
   if (normalized === 'confirmed') {
-    return { bg: t.success + '22', color: t.success, label: 'Confirmé' };
+    return { bg: 'rgba(10,143,94,0.14)', color: '#0A8F5E', label: 'Confirmé' };
   }
   if (normalized === 'started') {
-    return { bg: t.info + '22', color: t.info, label: 'Started' };
+    return { bg: 'rgba(79,70,229,0.14)', color: '#4338CA', label: 'Séjour' };
   }
   if (normalized === 'pending') {
-    return { bg: t.warning + '22', color: t.warning, label: 'En attente' };
+    return { bg: 'rgba(196,101,6,0.14)', color: '#C46506', label: 'En attente' };
   }
   if (
     normalized.includes('cancelled') ||
     normalized.includes('canceled')
   ) {
-    return { bg: t.error + '22', color: t.error, label: 'Annulé' };
+    return { bg: 'rgba(200,30,30,0.12)', color: '#C81E1E', label: 'Annulé' };
   }
   if (normalized === 'completed') {
-    return { bg: t.info + '22', color: t.info, label: 'Terminé' };
+    return { bg: 'rgba(71,85,105,0.14)', color: '#475569', label: 'Terminé' };
   }
   return { bg: t.text3 + '22', color: t.text3, label: status };
 }
@@ -397,7 +397,8 @@ export default function ReservationsListPage() {
                           size="small"
                           sx={{
                             bgcolor: statusStyle.bg,
-                            color: statusStyle.color,
+                            color: `${statusStyle.color} !important`,
+                            '& .MuiChip-label': { color: `${statusStyle.color} !important`, fontWeight: 700 },
                             fontWeight: 600,
                           }}
                         />

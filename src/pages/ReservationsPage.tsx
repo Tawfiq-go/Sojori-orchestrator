@@ -57,10 +57,6 @@ import { useAdminOwnerApiScope } from '../hooks/useAdminOwnerApiScope';
 import { useSocketIO } from '../hooks/useSocketIO';
 import { SOCKET_EVENTS, DEFAULT_ROOMS } from '../constants/socketEvents';
 import { PostImportListingIndicator } from '../components/reservations/PostImportListingIndicator';
-import {
-  presenceMetaFromReservation,
-  presenceStyles,
-} from '../utils/reservationPresence';
 
 moment.locale('fr');
 
@@ -71,6 +67,7 @@ interface Reservation {
   rentalsReservationId?: string;
   channelName: string;
   source?: string;
+  createdVia?: string;
   byRentals?: boolean;
   notes?: string | null;
   listing: {
@@ -255,21 +252,42 @@ const formatTime = (timeInput: any): string | null => {
   } catch { return null; }
 };
 
+/**
+ * Labels statut — Started = « Séjour » uniquement si `status === Started`.
+ * Couleurs bien séparées (Confirmé vert ≠ Séjour indigo ≠ Terminé slate ≠ Annulé rouge).
+ */
+const STATUS_COLORS = {
+  confirmed: { bg: 'rgba(10,143,94,0.14)', color: '#0A8F5E' },
+  started: { bg: 'rgba(79,70,229,0.14)', color: '#4338CA' },
+  pending: { bg: 'rgba(196,101,6,0.14)', color: '#C46506' },
+  cancelled: { bg: 'rgba(200,30,30,0.12)', color: '#C81E1E' },
+  completed: { bg: 'rgba(71,85,105,0.14)', color: '#475569' },
+  fallback: { bg: 'rgba(20,17,10,0.06)', color: T.text3 },
+} as const;
+
 const statusMeta = (status: string): { bg: string; color: string; label: string } => {
-  const n = status.toLowerCase();
-  if (n === 'confirmed')    return { bg: 'rgba(10,143,94,0.12)',  color: T.success, label: 'Confirmé' };
-  if (n === 'started')      return { bg: 'rgba(31,112,194,0.12)', color: T.info,    label: 'Started' };
-  if (n === 'pending')      return { bg: 'rgba(196,101,6,0.12)',  color: T.warning, label: 'En attente' };
-  if (n.includes('cancel')) return { bg: 'rgba(200,30,30,0.10)',  color: T.error,   label: 'Annulé' };
-  if (n === 'completed')    return { bg: 'rgba(6,115,179,0.10)',  color: T.info,    label: 'Terminé' };
-  return { bg: 'rgba(20,17,10,0.05)', color: T.text3, label: status };
+  const n = String(status || '').toLowerCase();
+  if (n === 'confirmed') return { ...STATUS_COLORS.confirmed, label: 'Confirmé' };
+  if (n === 'started') return { ...STATUS_COLORS.started, label: 'Séjour' };
+  if (n === 'pending') return { ...STATUS_COLORS.pending, label: 'En attente' };
+  if (n.includes('cancel')) return { ...STATUS_COLORS.cancelled, label: 'Annulé' };
+  if (n === 'completed') return { ...STATUS_COLORS.completed, label: 'Terminé' };
+  return { ...STATUS_COLORS.fallback, label: status || '—' };
 };
 
-const presenceMeta = (r: Reservation): { label: string; bg: string; color: string } => {
-  const meta = presenceMetaFromReservation(r as never);
-  const styles = presenceStyles(meta.tone);
-  return { label: meta.label, ...styles };
-};
+/** MUI Chip écrase souvent `color` sur le label — forcer le contraste. */
+const statusChipSx = (s: { bg: string; color: string }, fontSize = 11, height = 22) => ({
+  bgcolor: s.bg,
+  color: `${s.color} !important`,
+  fontWeight: 700,
+  fontSize,
+  height,
+  '& .MuiChip-label': {
+    color: `${s.color} !important`,
+    px: 0.875,
+    fontWeight: 700,
+  },
+});
 
 const GuestCountryCell = ({
   guestCountry,
@@ -729,6 +747,7 @@ export function ReservationsPage() {
         const kind = resolveReservationSourceKind({
           source: r.source,
           channelName: r.channelName,
+          createdVia: r.createdVia,
           byRentals: r.byRentals,
           notes: r.notes,
           listingName: r.listing?.name,
@@ -759,17 +778,16 @@ export function ReservationsPage() {
     return f;
   }, [reservations, globalFilter, selectedChannels, selectedListings, quickFilters, urlFilter]);
 
-  // ─── KPIs / pills — totaux backend ; Présents/Pending restent sur la page courante
+  // ─── KPIs — Arr/Dép backend ; Séjour = status Started (page courante)
   const kpis = useMemo(() => {
-    const present = reservations.filter((r) => {
-      const p = presenceMetaFromReservation(r as never);
-      return p.label === 'Arrivé' || (p.label === 'Séjour' && p.declared);
-    }).length;
+    const started = reservations.filter(
+      (r) => String(r.status || '').toLowerCase() === 'started',
+    ).length;
     const pending = reservations.filter((r) => r.status === 'Pending').length;
     return {
       arrToday: backendCounts.arrToday,
       depToday: backendCounts.depToday,
-      present,
+      started,
       pending,
     };
   }, [reservations, backendCounts.arrToday, backendCounts.depToday]);
@@ -1026,7 +1044,7 @@ export function ReservationsPage() {
               {[
                 { val: 'Pending', label: '📋 En attente' },
                 { val: 'Confirmed', label: '✅ Confirmé' },
-                { val: 'Started', label: '🏠 En séjour (Started)' },
+                { val: 'Started', label: '🏠 Séjour' },
                 { val: 'Completed', label: '🎉 Complété' },
                 { val: 'Rejected', label: '❌ Rejeté' },
                 { val: 'Cancelled', label: '📵 Annulé (RU / canal)' },
@@ -1098,14 +1116,14 @@ export function ReservationsPage() {
               onClick={() => toggleQuick('depToday')}
             />
             <KpiCompact
-              label="Présents"
-              value={kpis.present}
-              accent={T.success}
+              label="Séjour"
+              value={kpis.started}
+              accent={T.info}
               onClick={() => {
-                if (selectedStatuses.length === 2 && selectedStatuses.includes('Confirmed') && selectedStatuses.includes('Started')) {
+                if (selectedStatuses.length === 1 && selectedStatuses[0] === 'Started') {
                   setSelectedStatuses(['Pending', 'Confirmed', 'Started']);
                 } else {
-                  setSelectedStatuses(['Confirmed', 'Started']);
+                  setSelectedStatuses(['Started']);
                 }
                 setQuickFilters({ ...EMPTY_QUICK_FILTERS });
                 setSearchParams((prev) => {
@@ -1322,9 +1340,9 @@ const Pill = ({ label, count, active, onClick, color }: { label: string; count: 
 /** Largeurs fixes — header + body partagent le même colgroup (freeze panes). */
 const RESA_HEADERS = [
   'Voyageur', 'Source', 'Propriété', 'Pays', 'Créé', 'Check-in', 'Check-out',
-  'Nuits', 'Présence', 'Statut', 'Payé', 'Voyageurs', 'Paiement', 'Actions',
+  'Nuits', 'Statut', 'Payé', 'Voyageurs', 'Paiement', 'Actions',
 ] as const;
-const RESA_COL_WIDTHS = [185, 56, 200, 88, 96, 118, 118, 56, 168, 108, 72, 148, 96, 88] as const;
+const RESA_COL_WIDTHS = [185, 78, 200, 88, 96, 118, 118, 56, 108, 72, 148, 96, 88] as const;
 const RESA_TABLE_MIN_WIDTH = RESA_COL_WIDTHS.reduce((a, b) => a + b, 0);
 
 const resaTableSx = {
@@ -1454,7 +1472,7 @@ function DesktopTable({
                     key={h}
                     onClick={sortKey ? () => onSortChange(sortKey) : undefined}
                     sx={{
-                      textAlign: h === 'Nuits' || h === 'Présence' || h === 'Voyageurs' || h === 'Actions' ? 'center' : 'left',
+                      textAlign: h === 'Nuits' || h === 'Voyageurs' || h === 'Actions' ? 'center' : 'left',
                       px: 1.5, py: 1.25,
                       fontSize: 10.75, fontWeight: 700,
                       letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -1519,7 +1537,6 @@ function DesktopTable({
           <Box component="tbody">
             {rows.map((r) => {
               const s = statusMeta(r.status);
-              const p = presenceMeta(r);
               const isCancelled = isReservationCancelled(r.status);
               const unacknowledged = isCancelled && r.cancellationAcknowledged !== true;
 
@@ -1566,9 +1583,11 @@ function DesktopTable({
                   </Box>
                   <Box component="td" sx={{ textAlign: 'center' }}>
                     <ReservationSourceIcon
+                      showMethod
                       reservation={{
                         source: r.source,
                         channelName: r.channelName,
+                        createdVia: r.createdVia,
                         byRentals: r.byRentals,
                         notes: r.notes,
                         listingName: r.listing?.name,
@@ -1660,34 +1679,18 @@ function DesktopTable({
                       fontSize: 11.5, fontWeight: 700, fontFamily: '"Geist Mono", monospace',
                     }}>{r.nights || 0}</Box>
                   </Box>
-                  <Box component="td" sx={{ textAlign: 'center' }}>
-                    <Chip
-                      label={p.label}
-                      size="small"
-                      title={
-                        p.label === 'Arrivé'
-                          ? 'Arrivée déclarée (WhatsApp)'
-                          : p.label === 'Parti'
-                            ? 'Départ déclaré (WhatsApp)'
-                            : p.label === 'Attendu'
-                              ? 'Check-in aujourd’hui — pas encore déclaré'
-                              : p.label === 'Départ'
-                                ? 'Check-out aujourd’hui — avant 11h, pas encore déclaré'
-                                : p.label === 'Retard'
-                                  ? 'Check-out aujourd’hui — après 11h, départ non déclaré'
-                                  : p.label === 'Séjour'
-                                    ? 'Ni check-in ni check-out aujourd’hui'
-                                    : undefined
-                      }
-                      sx={{
-                      bgcolor: p.bg, color: p.color, fontWeight: 600, fontSize: 11, height: 22,
-                    }} />
-                  </Box>
                   <Box component="td">
                     <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                      <Chip label={s.label} size="small" sx={{
-                        bgcolor: s.bg, color: s.color, fontWeight: 600, fontSize: 11, height: 22,
-                      }} />
+                      <Chip
+                        label={s.label}
+                        size="small"
+                        title={
+                          String(r.status || '').toLowerCase() === 'started'
+                            ? 'Statut Started — affiché « Séjour »'
+                            : undefined
+                        }
+                        sx={statusChipSx(s)}
+                      />
                       {unacknowledged && (
                         <Chip label="Non acquitté" size="small" sx={{
                           bgcolor: 'rgba(245, 158, 11, 0.12)',
@@ -1791,7 +1794,6 @@ function DesktopTable({
 // ─── Mobile card ───────────────────────────────────────────────────
 function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpdate }: { r: Reservation; onClick: () => void; onAcknowledge?: (r: Reservation) => void; onStayUpdate?: (reservationId: string, patch: StayFieldPatch) => void; onRegistrationUpdate?: (reservationId: string, patch: RegistrationFieldPatch) => void }) {
   const s = statusMeta(r.status);
-  const p = presenceMeta(r);
 
   const isCancelled = isReservationCancelled(r.status);
   const unacknowledged = isCancelled && r.cancellationAcknowledged !== true;
@@ -1809,9 +1811,11 @@ function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpd
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
           <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
             <ReservationSourceIcon
+              showMethod
               reservation={{
                 source: r.source,
                 channelName: r.channelName,
+                createdVia: r.createdVia,
                 byRentals: r.byRentals,
                 notes: r.notes,
                 listingName: r.listing?.name,
@@ -1822,7 +1826,7 @@ function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpd
               {r.reservationNumber}
             </Typography>
           </Stack>
-          <Chip label={s.label} size="small" sx={{ bgcolor: s.bg, color: s.color, fontWeight: 600, fontSize: 10.5, height: 20 }} />
+          <Chip label={s.label} size="small" sx={statusChipSx(s, 10.5, 20)} />
         </Stack>
 
         {/* Annulation info + bouton acquitter */}
@@ -1932,7 +1936,6 @@ function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpd
         </Stack>
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 1.25 }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
-            <Chip label={p.label} size="small" sx={{ bgcolor: p.bg, color: p.color, fontWeight: 600, fontSize: 10.5, height: 20 }} />
             <ReservationRegistrationActions
               reservationId={r._id}
               registered={r.guestRegistration?.nbre_guest_registered}

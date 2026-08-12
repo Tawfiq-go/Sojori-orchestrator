@@ -46,6 +46,11 @@ export interface Reservation {
   // Identification
   channelId?: string;
   channelName?: string;
+  /**
+   * Méthode de création Sojori (sous le logo source) :
+   * admin | whatsapp_staff | whatsapp_resa | site_sojori | whatsapp_owner
+   */
+  createdVia?: 'admin' | 'whatsapp_staff' | 'whatsapp_resa' | 'site_sojori' | 'whatsapp_owner' | string;
   channelReservationId?: string;
   channexId?: string;
   reservationNumber?: string;

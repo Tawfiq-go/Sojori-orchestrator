@@ -60,7 +60,7 @@ export interface InboxReservationData {
   reviewRating?: number;
   reviewReplied?: boolean;
   reviewResponse?: string;
-  /** Présence séjour (Attendu / En cours / Présent / …) — aligné liste réservations */
+  /** Statut séjour UI — Started → « Séjour » (aligné /reservations) */
   presenceLabel?: string;
   /** Enregistrement police : inscrits / à enregistrer */
   registrationRegistered?: number;

@@ -58,7 +58,7 @@ export interface Thread {
   checkInBadge?: string;
   taskCount?: number;
   stayBadge?: string;
-  /** Présence séjour (Attendu / En cours / …) — bandeau chat */
+  /** Statut séjour (Séjour / Confirmé / …) — bandeau chat */
   presenceLabel?: string;
   registrationRegistered?: number;
   registrationTotal?: number;

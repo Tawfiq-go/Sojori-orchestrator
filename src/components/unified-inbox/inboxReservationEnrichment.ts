@@ -53,32 +53,15 @@ function startOfLocalDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-/** Aligné liste réservations (Présence) — Attendu / En cours / Présent / … */
+/** Badge séjour inbox — aligné liste /reservations : Started → Séjour (pas d’heuristique présence). */
 function presenceLabelFromReservation(r: Reservation): string {
   const status = String(r.status || '').toLowerCase();
   if (status.includes('cancel')) return 'Annulé';
   if (status === 'completed') return 'Complété';
-  const arr = r.arrivalDate ? startOfLocalDay(new Date(r.arrivalDate)) : null;
-  const dep = r.departureDate ? startOfLocalDay(new Date(r.departureDate)) : null;
-  const today = startOfLocalDay(new Date());
-  const cs = String(r.customerStatus || '').toLowerCase();
-  if (arr && today < arr) return 'Attendu';
-  if (arr && today.getTime() === arr.getTime() && !r.actualArrivalTime) return "Aujourd'hui";
-  if (r.actualArrivalTime && !r.actualDepartureTime && dep && today < dep) return 'Présent';
-  if (
-    r.actualArrivalTime &&
-    dep &&
-    today.getTime() === dep.getTime() &&
-    !r.actualDepartureTime
-  ) {
-    return 'Départ auj.';
-  }
-  if (r.actualDepartureTime || (dep && today > dep)) return 'Parti';
-  if (cs === 'arrived' || cs === 'on_site') return 'Présent';
-  if (cs === 'expected') return 'Attendu';
-  if (cs === 'departed') return 'Parti';
-  if (arr && dep && today >= arr && today <= dep) return 'En cours';
-  return 'Attendu';
+  if (status === 'started') return 'Séjour';
+  if (status === 'pending') return 'En attente';
+  if (status === 'confirmed') return 'Confirmé';
+  return status ? String(r.status) : '—';
 }
 
 function formatHourLabel(time?: string | boolean | null): string | undefined {
