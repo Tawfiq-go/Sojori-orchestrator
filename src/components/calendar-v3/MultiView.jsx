@@ -374,6 +374,129 @@ function MultiResaOverlay({
     </div>
   );
 }
+
+/**
+ * Barres Gantt des CalendarBlocks à l’unité (roomId) — lignes chambre Multi.
+ * Wording Sojori uniquement ; blocs PMS = non cliquables (gérés par le PMS).
+ */
+function MultiRoomBlockOverlay({ days, blocks, rowHeight }) {
+  if (!Array.isArray(blocks) || blocks.length === 0 || !days?.length) return null;
+
+  const segments = [];
+  blocks.forEach((b) => {
+    const from = blockIsoDay(b.dateFrom);
+    const toExclusive = blockExclusiveEndIso(b.dateTo);
+    if (!from || !toExclusive) return;
+    const arrIdx = isoOffsetInWindow(from, days);
+    const depIdx = isoOffsetInWindow(toExclusive, days);
+    if (arrIdx == null || depIdx == null) return;
+    if (depIdx < 0 || arrIdx > days.length - 1) return;
+    segments.push({
+      b,
+      startIdx: Math.max(0, arrIdx),
+      endIdx: Math.min(days.length - 1, depIdx),
+      clippedStart: arrIdx < 0,
+      clippedEnd: depIdx > days.length - 1,
+    });
+  });
+  if (segments.length === 0) return null;
+
+  const rh = rowHeight || 48;
+  const barGapTop = Math.max(8, Math.round(rh * 0.25));
+  const barGapBottom = 2;
+  const barH = Math.max(16, rh - barGapTop - barGapBottom);
+  const barTop = barGapTop;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        zIndex: 4,
+      }}
+    >
+      {segments.map(({ b, startIdx, endIdx, clippedStart, clippedEnd }) => {
+        const { leftPct, widthPct } = computeReservationBarLayout(
+          startIdx,
+          endIdx,
+          days.length,
+          { clippedStart, clippedEnd },
+        );
+        const title = String(b.title || 'Blocage').trim() || 'Blocage';
+        const cat = inferRoomBlockCategory(title);
+        const visual = roomBlockCategoryVisual(cat);
+        const tip = roomBlockTooltip(b);
+        const pms = isPmsSyncedRoomBlock(b);
+        const startsHere = !clippedStart;
+        const endsHere = !clippedEnd;
+        const pillR = Math.round(barH / 2);
+        const showLabel = startsHere || startIdx === 0;
+        return (
+          <div
+            key={String(b._id)}
+            title={tip}
+            role="img"
+            aria-label={tip}
+            style={{
+              position: 'absolute',
+              top: barTop,
+              left: `${leftPct}%`,
+              width: `${widthPct}%`,
+              height: barH,
+              boxSizing: 'border-box',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: showLabel ? '0 8px 0 4px' : '0 4px',
+              borderRadius: `${startsHere ? pillR : 2}px ${endsHere ? pillR : 2}px ${endsHere ? pillR : 2}px ${startsHere ? pillR : 2}px`,
+              border: `1px solid ${visual.accent}66`,
+              borderLeft: startsHere ? `3px solid ${visual.accent}` : `1px solid ${visual.accent}40`,
+              borderRight: endsHere ? `3px solid ${visual.accent}` : `1px solid ${visual.accent}40`,
+              background: visual.wash,
+              color: visual.text,
+              fontSize: 11,
+              fontWeight: 700,
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              cursor: pms ? 'default' : 'default',
+              pointerEvents: 'auto',
+              boxShadow: `0 1px 3px ${visual.accent}28`,
+              fontFamily: 'inherit',
+              textAlign: 'left',
+            }}
+          >
+            {showLabel ? (
+              <span
+                aria-hidden
+                style={{
+                  width: Math.max(18, barH - 8),
+                  height: Math.max(18, barH - 8),
+                  borderRadius: '50%',
+                  flexShrink: 0,
+                  background: visual.accent,
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                }}
+              >
+                ⊗
+              </span>
+            ) : null}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, color: visual.text }}>
+              {showLabel ? title : ''}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
 import PopoverReservations from './PopoverReservations';
@@ -400,6 +523,16 @@ import {
   resolveRoomsForRoomType,
   toIsoDay,
 } from './multiCalendarReservations';
+import {
+  blockExclusiveEndIso,
+  blockIsoDay,
+  dayHasRoomBlock,
+  filterBlocksForRoom,
+  inferRoomBlockCategory,
+  isPmsSyncedRoomBlock,
+  roomBlockCategoryVisual,
+  roomBlockTooltip,
+} from './roomBlockDisplay';
 
 /** Métadonnées CalendarBlock par blockId — contexte pour éviter le prop drilling jusqu'aux cellules. */
 const CalendarBlocksContext = React.createContext({});
@@ -1204,11 +1337,14 @@ export default function MultiView({
             : null;
         const inv = rtDay || inventoriesByListing[activeTip.listingId]?.[activeTip.dateStr];
         if (!inv || !hasInventoryData(inv)) return null;
-        /* Résa gagne vs Import initial : tooltip ne montre le blocage que s’il n’y a pas de résa. */
-        const dayBlock =
+        /* Résa gagne vs Import initial : tooltip ne montre le blocage que s’il n’y a pas de résa.
+         * Bloc à roomId → affiché sur la ligne chambre, pas ici. */
+        const dayBlockRaw =
           (inv?.reservations?.length ?? 0) > 0
             ? null
             : (inv?.blockId ? calendarBlocksById[String(inv.blockId)] : null);
+        const dayBlock =
+          dayBlockRaw && String(dayBlockRaw.roomId || '').trim() ? null : dayBlockRaw;
         return (
           <TooltipBreakdown
             open
@@ -1759,6 +1895,11 @@ function ListingRow({
   const roomHkBlocked =
     isRoomRow &&
     isRoomHousekeepingBlocked(listing.housekeepingState, listing.enabled);
+  const blocksByIdForRow = useContext(CalendarBlocksContext);
+  const roomBlocks = useMemo(() => {
+    if (!isRoomRow || !listing.roomId) return [];
+    return filterBlocksForRoom(blocksByIdForRow, listing.roomId);
+  }, [isRoomRow, listing.roomId, blocksByIdForRow]);
   // Rooms : barre résa quasi pleine hauteur
   const resaOverlayMode =
     isRoomRow || lineReservations.length > 0 ? (lineReservations.length > 0 ? 'bars' : 'none') : 'none';
@@ -1814,6 +1955,8 @@ function ListingRow({
             });
             const draggable = !isRoomRow && cellState === 'data';
             const roomOccupied = isRoomRow && dayHasRoomResa(statusReservations, d.iso);
+            const roomDayBlocked =
+              roomHkBlocked || (isRoomRow && dayHasRoomBlock(roomBlocks, d.iso));
             return (
               <PrimaryInventoryCell
                 key={d.iso}
@@ -1832,7 +1975,7 @@ function ListingRow({
                 draggable={draggable}
                 dpEnabled={dpEnabled}
                 roomOccupied={roomOccupied}
-                roomBlocked={roomHkBlocked}
+                roomBlocked={roomDayBlocked}
                 tipOpen={
                   activeTip?.listingId === listing._id &&
                   activeTip?.dateStr === d.iso &&
@@ -1854,6 +1997,13 @@ function ListingRow({
             zIndex: 5,
           }}
         >
+          {roomBlocks.length > 0 ? (
+            <MultiRoomBlockOverlay
+              days={days}
+              blocks={roomBlocks}
+              rowHeight={primaryRowH}
+            />
+          ) : null}
           {resaOverlayMode === 'bars' ? (
             <MultiResaOverlay
               mode="bars"
@@ -2132,8 +2282,11 @@ function PrimaryInventoryCell({
   const canPriceClick = canInteract && effectiveShowRate && hasInventoryData(inv) && !noData;
 
   const blocksById = useContext(CalendarBlocksContext);
-  const dayBlock = inv?.blockId ? blocksById[String(inv.blockId)] : null;
+  const dayBlockRaw = inv?.blockId ? blocksById[String(inv.blockId)] : null;
   // Room : pas de tooltip « bloqué canal » du type (évite bruit) ; fond suffit.
+  // Bloc à l’unité → barre chambre uniquement (pas le bandeau roomType).
+  const dayBlock =
+    dayBlockRaw && String(dayBlockRaw.roomId || '').trim() ? null : dayBlockRaw;
   const blockInfo = !isRoomRow && state === 'data' ? blockedNoResaInfo(inv, dayBlock) : null;
   const background = inventoryStatusBackground(state, inv, {
     roomRow: isRoomRow,
@@ -2301,7 +2454,9 @@ function PrimaryInventoryCell({
 /* ─── Collapse cell — tarif : + Excel · prix clic ; autres : cellule Excel ─── */
 function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown, onMouseEnter, onReservationClick, tipOpen, onPriceClick, onToggleDynamicPrice, dpEnabled = true }) {
   const blocksById = useContext(CalendarBlocksContext);
-  const dayBlock = inv?.blockId ? blocksById[String(inv.blockId)] : null;
+  const dayBlockRaw = inv?.blockId ? blocksById[String(inv.blockId)] : null;
+  const dayBlock =
+    dayBlockRaw && String(dayBlockRaw.roomId || '').trim() ? null : dayBlockRaw;
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
 

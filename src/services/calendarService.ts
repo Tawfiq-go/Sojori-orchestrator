@@ -536,12 +536,23 @@ export interface CalendarBlockDto {
   _id: string;
   listingId: string;
   roomTypeId: string;
+  /** Unité précise (Villa 01…) — blocs PMS / room_block. */
+  roomId?: string | null;
   dateFrom: string;
   dateTo: string;
   title: string;
   note: string;
-  type: 'manual' | 'import_airbnb' | 'import_booking' | 'import_ru' | 'cancelled_reservation';
+  type:
+    | 'manual'
+    | 'import_airbnb'
+    | 'import_booking'
+    | 'import_ru'
+    | 'cancelled_reservation'
+    | 'mews_block'
+    | 'room_block';
   status: 'active' | 'released';
+  /** Présent si synchronisé depuis le PMS — ne pas afficher tel quel. */
+  mewsBlockId?: string | null;
   createdBy: { userId?: string; name: string; email?: string };
   releasedDays: string[];
   releasedBy?: { userId?: string; name: string; releasedAt: string };
