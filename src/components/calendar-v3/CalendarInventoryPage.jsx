@@ -191,57 +191,35 @@ export default function CalendarInventoryPage({
   const handleCellsSelected = useCallback(
     (cells) => {
       if (!Array.isArray(cells) || cells.length === 0) return;
-      if (cells[0]?.column === 'roomBlock') {
-        if (!canBlockRooms) return;
-        const isos = cells.map((c) => c.dateStr).filter(Boolean).sort();
-        const dateFrom = isos[0];
-        const dateTo = isos[isos.length - 1];
-        const roomId = String(cells[0].roomId || '');
-        const roomName = cells[0].roomName || 'Chambre';
-        const roomBlocks = filterBlocksForRoom(calendarBlocksById, roomId);
-        const roomResas = filterReservationsForRoom(
-          multiOverlayReservations,
-          roomId,
-          roomName,
-        );
-        const overlapMessage = roomRangeOverlapMessage({
-          reservations: roomResas,
-          blocks: roomBlocks,
-          dateFrom,
-          dateTo,
-        });
-        setBlockRoomDraft({
-          roomId,
-          roomName,
-          dateFrom,
-          dateTo,
-          overlapMessage,
-        });
-        return;
-      }
-      if (cells[0]?.column === 'roomUnblock') {
-        if (!canBlockRooms) return;
-        const isos = cells.map((c) => c.dateStr).filter(Boolean).sort();
-        const dateFrom = isos[0];
-        const dateTo = isos[isos.length - 1];
-        const roomId = String(cells[0].roomId || '');
-        const roomName = cells[0].roomName || 'Chambre';
-        const roomBlocks = filterBlocksForRoom(calendarBlocksById, roomId);
-        const covering = roomBlocks.filter((b) => {
-          const bf = String(b.dateFrom || '').slice(0, 10);
-          const bt = String(b.dateTo || '').slice(0, 10);
-          return bf && bt && bf <= dateTo && dateFrom <= bt;
-        });
-        if (covering.length === 0) return;
-        setReleaseBlockTarget({
-          block: covering[0],
-          roomName,
-        });
-        return;
-      }
       if (canWrite) setModalCells(cells);
     },
-    [canBlockRooms, canWrite, calendarBlocksById, multiOverlayReservations],
+    [canWrite],
+  );
+
+  const handleRoomFreeClick = useCallback(
+    ({ roomId, roomName, dateStr }) => {
+      if (!canBlockRooms || !roomId || !dateStr) return;
+      const roomBlocks = filterBlocksForRoom(calendarBlocksById, roomId);
+      const roomResas = filterReservationsForRoom(
+        multiOverlayReservations,
+        roomId,
+        roomName,
+      );
+      const overlapMessage = roomRangeOverlapMessage({
+        reservations: roomResas,
+        blocks: roomBlocks,
+        dateFrom: dateStr,
+        dateTo: dateStr,
+      });
+      setBlockRoomDraft({
+        roomId,
+        roomName: roomName || 'Chambre',
+        dateFrom: dateStr,
+        dateTo: dateStr,
+        overlapMessage,
+      });
+    },
+    [canBlockRooms, calendarBlocksById, multiOverlayReservations],
   );
 
   const refreshBlocks = useCallback(async () => {
@@ -846,8 +824,9 @@ export default function CalendarInventoryPage({
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
           fillViewport
-          onCellsSelected={canWrite || canBlockRooms ? handleCellsSelected : undefined}
+          onCellsSelected={canWrite ? handleCellsSelected : undefined}
           canBlockRooms={canBlockRooms}
+          onRoomFreeClick={canBlockRooms ? handleRoomFreeClick : undefined}
           onRoomBlockClick={
             canBlockRooms
               ? (block, meta) =>

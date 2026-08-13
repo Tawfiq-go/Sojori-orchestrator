@@ -581,9 +581,10 @@ export default function MultiView({
   canActivateCalendarImport = false,
   /** Plein écran : grille occupe presque tout le viewport. */
   fillViewport = false,
-  /** Admin/SuperAdmin : drag sur ligne chambre → bloquer. */
+  /** Owner / Admin : clic villa libre → bloquer ; clic barre ⊗ → libérer. */
   canBlockRooms = false,
   onRoomBlockClick,
+  onRoomFreeClick,
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsLegacy || [];
   const { isMobile } = useCalendarBreakpoint();
@@ -720,18 +721,6 @@ export default function MultiView({
   }, []);
 
   const onMouseDown = (cell, e) => {
-    // Blocage / libération chambre (ligne villa) : pas le gate inventaire building.
-    if (cell?.column === 'roomBlock' || cell?.column === 'roomUnblock') {
-      setActiveTip(null);
-      dragMovedRef.current = false;
-      dragStartPosRef.current = e ? { x: e.clientX, y: e.clientY } : null;
-      if (e?.currentTarget) tipAnchorElRef.current = e.currentTarget;
-      setIsDragging(true);
-      setDragStart(cell);
-      setCurrentHoverCell(cell);
-      setSelectedCells([cell]);
-      return;
-    }
     const inv = inventoriesByListing[cell.listingId]?.[cell.dateStr];
     const st = resolveInventoryCellState(cell.dateStr, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
     // Prix dyn. : sélection Excel aussi sur jours passés (archive)
@@ -750,12 +739,6 @@ export default function MultiView({
     if (dragStart.listingId !== cell.listingId ||
         dragStart.roomTypeId !== cell.roomTypeId ||
         dragStart.column !== cell.column) return;
-    if (
-      (dragStart.column === 'roomBlock' || dragStart.column === 'roomUnblock') &&
-      String(dragStart.roomId || '') !== String(cell.roomId || '')
-    ) {
-      return;
-    }
     if (cell.dateStr !== dragStart.dateStr) dragMovedRef.current = true;
     setCurrentHoverCell(cell);
     const allIso = days.map(d => d.iso);
@@ -1083,8 +1066,8 @@ export default function MultiView({
           <Legend dot="#fff" dotBorder label="Disponible (room vide = libre)" />
           {canBlockRooms ? (
             <Legend
-              dot="rgba(184,133,26,0.35)"
-              label="⊗ + sur villa = sélection Excel → bloquer / libérer"
+              dot="#b8851a"
+              label="Clic sur villa libre → bloquer · clic barre ⊗ → libérer"
             />
           ) : null}
           <Legend dot="#b91c1c" label="Import calendrier à finir" />
@@ -1342,6 +1325,7 @@ export default function MultiView({
                                 activeTip={activeTip}
                                 canBlockRooms={canBlockRooms}
                                 onRoomBlockClick={onRoomBlockClick}
+                                onRoomFreeClick={onRoomFreeClick}
                               />
                             ));
                           })()
@@ -1786,6 +1770,7 @@ function ListingRow({
   canActivateCalendarImport = false,
   canBlockRooms = false,
   onRoomBlockClick,
+  onRoomFreeClick,
 }) {
   const primaryCols = calendarPrimaryColumns(selectedColumns);
   const collapseColumns = calendarCollapseColumns(selectedColumns).filter((colId) => {
@@ -1987,7 +1972,7 @@ function ListingRow({
             });
             const hasResa = isRoomRow && dayHasRoomResa(statusReservations, d.iso);
             const hasUnitBlock = isRoomRow && dayHasRoomBlock(roomBlocks, d.iso);
-            const roomBlockSelectable =
+            const canClickBlock =
               canBlockRooms &&
               isRoomRow &&
               Boolean(listing.roomId) &&
@@ -1995,38 +1980,9 @@ function ListingRow({
               !roomHkBlocked &&
               !hasResa &&
               !hasUnitBlock;
-            const roomUnblockSelectable =
-              canBlockRooms &&
-              isRoomRow &&
-              Boolean(listing.roomId) &&
-              !String(listing.roomId).includes(':') &&
-              !hasResa &&
-              hasUnitBlock;
-            const draggable = isRoomRow
-              ? roomBlockSelectable || roomUnblockSelectable
-              : cellState === 'data';
+            const draggable = !isRoomRow && cellState === 'data';
             const roomOccupied = hasResa;
-            const roomDayBlocked =
-              roomHkBlocked || hasUnitBlock;
-            const roomBlockMeta = roomBlockSelectable
-              ? {
-                  listingId: listing._id,
-                  roomTypeId,
-                  dateStr: d.iso,
-                  column: 'roomBlock',
-                  roomId: listing.roomId,
-                  roomName: listing.name,
-                }
-              : roomUnblockSelectable
-                ? {
-                    listingId: listing._id,
-                    roomTypeId,
-                    dateStr: d.iso,
-                    column: 'roomUnblock',
-                    roomId: listing.roomId,
-                    roomName: listing.name,
-                  }
-                : null;
+            const roomDayBlocked = roomHkBlocked || hasUnitBlock;
             return (
               <PrimaryInventoryCell
                 key={d.iso}
@@ -2046,7 +2002,16 @@ function ListingRow({
                 dpEnabled={dpEnabled}
                 roomOccupied={roomOccupied}
                 roomBlocked={roomDayBlocked}
-                roomBlockMeta={roomBlockMeta}
+                onRoomFreeClick={
+                  canClickBlock
+                    ? () =>
+                        onRoomFreeClick?.({
+                          roomId: listing.roomId,
+                          roomName: listing.name,
+                          dateStr: d.iso,
+                        })
+                    : undefined
+                }
                 tipOpen={
                   activeTip?.listingId === listing._id &&
                   activeTip?.dateStr === d.iso &&
@@ -2333,7 +2298,7 @@ function PrimaryInventoryCell({
   listingId, roomTypeId, draggable, tipOpen, dpEnabled = true,
   roomOccupied = false,
   roomBlocked = false,
-  roomBlockMeta = null,
+  onRoomFreeClick,
 }) {
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
@@ -2382,121 +2347,47 @@ function PrimaryInventoryCell({
   const dispoMeta = { listingId, roomTypeId, dateStr: day.iso, column: 'availableRoom' };
   const excelMeta = effectiveShowRate ? rateMeta : dispoMeta;
   const excelSelected = isSelected?.(excelMeta);
-  const roomBlockSelected = roomBlockMeta ? isSelected?.(roomBlockMeta) : false;
   const anySelected = excelSelected
-    || isSelected?.(effectiveShowRate ? dispoMeta : rateMeta)
-    || roomBlockSelected;
+    || isSelected?.(effectiveShowRate ? dispoMeta : rateMeta);
 
   const bindExcel = (meta) => ({
     onMouseDown: canInteract ? (e) => { e.stopPropagation(); onMouseDown?.(meta, e); } : undefined,
     onMouseEnter: canInteract ? () => onMouseEnter?.(meta) : undefined,
   });
 
-  const roomBlockBind =
-    isRoomRow && roomBlockMeta && canInteract
-      ? {
-          onMouseDown: (e) => {
-            e.stopPropagation();
-            onMouseDown?.(roomBlockMeta, e);
-          },
-          onMouseEnter: () => onMouseEnter?.(roomBlockMeta),
-          title:
-            roomBlockMeta.column === 'roomUnblock'
-              ? 'Sélection Excel (+) — libérer le blocage'
-              : 'Sélection Excel (+) — bloquer la chambre',
-        }
-      : {};
-
   const hasExcelZone = effectiveShowRate || showDispoNumber;
   const hasPriceZone = effectiveShowRate;
-  const showRoomExcelHandle = Boolean(roomBlockMeta);
 
   return (
     <div
       ref={ref}
+      onClick={
+        onRoomFreeClick
+          ? (e) => {
+              e.stopPropagation();
+              onRoomFreeClick();
+            }
+          : undefined
+      }
+      title={onRoomFreeClick ? 'Cliquer pour bloquer la chambre' : undefined}
       style={{
         borderRight: `1px solid ${T.border}`,
         display: 'flex',
-        flexDirection: 'row',
+        flexDirection: stackForBars ? 'column' : 'row',
         alignItems: 'stretch',
-        justifyContent: 'stretch',
+        justifyContent: stackForBars ? 'flex-start' : 'stretch',
         padding: stackForBars ? '1px 2px 0' : '2px 2px',
         minHeight: rowHeight,
         height: '100%',
         position: 'relative',
         fontFamily: '"Geist Mono", monospace',
-        background: anySelected
-          ? T.primaryTint3
-          : roomBlockMeta?.column === 'roomBlock'
-            ? 'rgba(184,133,26,0.08)'
-            : background,
-        boxShadow: anySelected
-          ? `inset 0 0 0 2px ${T.primary}`
-          : roomBlockMeta?.column === 'roomBlock'
-            ? `inset 0 0 0 1.5px rgba(184,133,26,0.55)`
-            : accentShadow,
+        background: anySelected ? T.primaryTint3 : background,
+        boxShadow: anySelected ? undefined : accentShadow,
         userSelect: 'none',
-        gap: 0,
+        cursor: onRoomFreeClick ? 'pointer' : undefined,
+        gap: stackForBars ? 0 : 2,
       }}
     >
-      {showRoomExcelHandle ? (
-        <div
-          {...roomBlockBind}
-          title={roomBlockBind.title}
-          aria-label={roomBlockBind.title}
-          style={{
-            flex: '0 0 16px',
-            alignSelf: 'stretch',
-            borderRadius: '4px 0 0 4px',
-            cursor: 'cell',
-            boxShadow: roomBlockSelected ? `inset 0 0 0 2px ${T.primary}` : 'none',
-            background: roomBlockSelected ? T.primaryTint3 : 'rgba(184,133,26,0.22)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: roomBlockSelected ? T.primaryDeep : '#92400e',
-            fontSize: 12,
-            fontWeight: 800,
-            lineHeight: 1,
-            zIndex: 2,
-          }}
-        >
-          +
-        </div>
-      ) : null}
-      <div
-        {...(showRoomExcelHandle ? roomBlockBind : {})}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          position: 'relative',
-          display: 'flex',
-          flexDirection: stackForBars ? 'column' : 'row',
-          alignItems: 'stretch',
-          cursor: showRoomExcelHandle ? 'cell' : undefined,
-          gap: stackForBars ? 0 : 2,
-        }}
-      >
-      {roomBlockMeta?.column === 'roomBlock' && !anySelected ? (
-        <span
-          aria-hidden
-          style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 14,
-            fontWeight: 800,
-            color: 'rgba(184,133,26,0.45)',
-            pointerEvents: 'none',
-            zIndex: 1,
-          }}
-        >
-          ⊗
-        </span>
-      ) : null}
-
       {hasExcelZone && hasPriceZone && (
         <div
           {...bindExcel(excelMeta)}
@@ -2607,7 +2498,6 @@ function PrimaryInventoryCell({
 
       {/* Place réservée aux barres Gantt (overlay) */}
       {stackForBars ? <div style={{ flex: 1, minHeight: 22 }} /> : null}
-      </div>
     </div>
   );
 }
