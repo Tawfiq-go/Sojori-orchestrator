@@ -55,12 +55,18 @@ const OwnerSelectorV2 = ({
           Choisir un owner…
         </option>
         {owners.map((owner) => {
+          const id = String(owner._id ?? owner.id ?? '');
           const ruEmail = resolveRuEmailDisplay(owner);
+          const ruId = owner.ruOwnerId ? String(owner.ruOwnerId).trim() : '';
+          const name = `${owner.firstName || ''} ${owner.lastName || ''}`.trim() || 'Owner';
+          // Deux PM peuvent avoir le même nom (ex. Nommos) → email + RU# obligatoires.
+          const parts = [name];
+          if (owner.email) parts.push(String(owner.email));
+          if (ruEmail && ruEmail !== owner.email) parts.push(`RU ${ruEmail}`);
+          if (ruId) parts.push(`#${ruId}`);
           return (
-            <option key={owner._id} value={owner._id}>
-              {owner.firstName} {owner.lastName}
-              {owner.email ? ` — dashboard: ${owner.email}` : ''}
-              {ruEmail && ruEmail !== owner.email ? ` · RU: ${ruEmail}` : ''}
+            <option key={id} value={id}>
+              {parts.join(' · ')}
             </option>
           );
         })}

@@ -13,7 +13,7 @@ import {
   reservationMatchesRoom,
   reservationMatchesRoomType,
 } from '../../utils/planningMultiExpand';
-import { normalizeCalendarReservation } from './reservationCalendarUtils';
+import { normalizeCalendarReservation, isReservationVisibleOnCalendar } from './reservationCalendarUtils';
 
 /** YYYY-MM-DD fiable (string ISO, Date, ou objet). */
 export function toIsoDay(v) {
@@ -47,6 +47,9 @@ function mapListingSummaries(listings) {
 export function normalizeMultiOverlayReservation(res) {
   const shell = normalizeCalendarReservation(res);
   if (!shell) return null;
+  if (!isReservationVisibleOnCalendar(shell) && !isReservationVisibleOnCalendar(res)) {
+    return null;
+  }
   const arrivalDate = toIsoDay(shell.arrivalDate || res.arrivalDate);
   const departureDate = toIsoDay(shell.departureDate || res.departureDate);
   if (!arrivalDate || !departureDate) return null;
@@ -142,6 +145,7 @@ export function normalizeCatalogRooms(rt) {
         name: String(name),
         number: rm?.roomNumber != null ? Number(rm.roomNumber) : undefined,
         housekeepingState: rm?.housekeepingState || null,
+        enabled: typeof rm?.enabled === 'boolean' ? rm.enabled : undefined,
       };
     })
     .filter(Boolean);
@@ -207,11 +211,22 @@ export function resolveRoomsForRoomType({
  */
 export function mergeReservationsIntoDayInventories(inventories, reservations) {
   const base = inventories || {};
-  if (!reservations?.length) return base;
+  const visible = (reservations || []).filter(isReservationVisibleOnCalendar);
+  if (!visible.length) {
+    // Même sans overlay : retirer les annulées déjà collées sur les jours inventaire.
+    const scrubbed = {};
+    for (const [iso, day] of Object.entries(base)) {
+      const existing = Array.isArray(day?.reservations) ? day.reservations : [];
+      const kept = existing.filter(isReservationVisibleOnCalendar);
+      scrubbed[iso] =
+        kept.length === existing.length ? day : { ...day, reservations: kept };
+    }
+    return scrubbed;
+  }
   const out = { ...base };
   const dates = new Set([
     ...Object.keys(base),
-    ...reservations.flatMap((r) => {
+    ...visible.flatMap((r) => {
       const arr = toIsoDay(r.arrivalDate);
       const dep = toIsoDay(r.departureDate);
       if (!arr || !dep) return [];
@@ -226,14 +241,18 @@ export function mergeReservationsIntoDayInventories(inventories, reservations) {
     }),
   ]);
   for (const iso of dates) {
-    const dayResas = reservations.filter((r) => {
+    const dayResas = visible.filter((r) => {
       const arr = toIsoDay(r.arrivalDate);
       const dep = toIsoDay(r.departureDate);
       return arr && dep && arr <= iso && iso < dep;
     });
-    if (dayResas.length === 0) continue;
     const prev = out[iso] || {};
-    const existing = Array.isArray(prev.reservations) ? prev.reservations : [];
+    const existing = Array.isArray(prev.reservations)
+      ? prev.reservations.filter(isReservationVisibleOnCalendar)
+      : [];
+    if (dayResas.length === 0 && existing.length === (prev.reservations || []).length) {
+      continue;
+    }
     const seen = new Set(existing.map((r) => String(r._id || r.reservationId || '')));
     const merged = [...existing];
     dayResas.forEach((r) => {
