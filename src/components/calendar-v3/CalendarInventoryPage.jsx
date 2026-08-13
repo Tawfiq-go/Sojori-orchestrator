@@ -67,6 +67,7 @@ export default function CalendarInventoryPage({
   // ── Prix dynamique par listing : pilote OFF → éléments DP masqués partout ──
   const { user: authUser } = useAuth();
   const isPlatformAdmin = ['admin', 'superadmin'].includes(String(authUser?.role || '').toLowerCase());
+  /** Blocage chambre : Admin / SuperAdmin uniquement (même gate que le proxy JWT). */
   const canBlockRooms = isPlatformAdmin;
   const [dpEnabledByListing, setDpEnabledByListing] = useState({});
   const listingIdsKey = listings.map((l) => String(l._id)).join(',');
