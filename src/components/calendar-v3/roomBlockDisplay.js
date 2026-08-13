@@ -138,6 +138,35 @@ export function roomBlockTooltip(block) {
   const from = blockIsoDay(block?.dateFrom)
   const to = blockIsoDay(block?.dateTo)
   const dates = from && to ? `${from} → ${to}` : ''
-  const pms = isPmsSyncedRoomBlock(block) ? ' · géré par le PMS' : ''
-  return [title, dates, catLabel].filter(Boolean).join(' · ') + pms
+  return [title, dates, catLabel, 'cliquer pour libérer'].filter(Boolean).join(' · ')
+}
+
+/**
+ * Chevauchement plage [from,to] inclusive avec résas (départ exclusif) ou blocs existants.
+ * @param {{ reservations?: any[], blocks?: any[], dateFrom: string, dateTo: string }} args
+ */
+export function roomRangeOverlapMessage({ reservations = [], blocks = [], dateFrom, dateTo }) {
+  const from = blockIsoDay(dateFrom)
+  const to = blockIsoDay(dateTo)
+  if (!from || !to || to < from) return 'Plage de dates invalide.'
+  for (const r of reservations || []) {
+    const arr = blockIsoDay(r.arrivalDate)
+    const dep = blockIsoDay(r.departureDate)
+    if (!arr || !dep) continue
+    // chevauchement nuits : [arr, dep) ∩ [from, to] non vide
+    if (arr <= to && from < dep) {
+      const guest = r.guestName || r.guestFirstName || 'Réservation'
+      return `Impossible : chevauche une réservation (${guest}, ${arr} → ${dep}).`
+    }
+  }
+  for (const b of blocks || []) {
+    const bf = blockIsoDay(b.dateFrom)
+    const bt = blockIsoDay(b.dateTo)
+    if (!bf || !bt) continue
+    if (bf <= to && from <= bt) {
+      const t = String(b.title || 'blocage').trim()
+      return `Impossible : chevauche un blocage existant (« ${t} », ${bf} → ${bt}).`
+    }
+  }
+  return null
 }

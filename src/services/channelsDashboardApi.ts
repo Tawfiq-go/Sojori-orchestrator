@@ -633,3 +633,70 @@ export function postMewsPocPullAvailability(body: Record<string, unknown> = {}) 
     timeout: 180000,
   });
 }
+
+/** Remplace tout wording « Mews » avant affichage admin. */
+export function sanitizePmsErrorMessage(raw: unknown): string {
+  return String(raw || 'Erreur inconnue')
+    .replace(/\bMews\b/gi, 'PMS')
+    .replace(/\bMEWS\b/g, 'PMS');
+}
+
+export type RoomBlockCategoryApi = 'travaux' | 'interne' | 'non_pret' | 'autre';
+
+/**
+ * Bloquer une chambre (relais JWT → channels /poc/room-block).
+ * dateTo INCLUSE.
+ */
+export async function postRoomBlock(body: {
+  roomId: string;
+  dateFrom: string;
+  dateTo: string;
+  category: RoomBlockCategoryApi;
+  title: string;
+  dryRun?: boolean;
+}): Promise<Record<string, unknown>> {
+  try {
+    const res = await apiClient.post(`${CHANNELS_DASHBOARD}/mews/poc/room-block`, body, {
+      ...channelsDashboardAxiosConfig(),
+      timeout: 180000,
+    });
+    const data = (res.data || {}) as Record<string, unknown>;
+    if (data.success === false) {
+      throw new Error(sanitizePmsErrorMessage(data.error || data.message || 'Échec du blocage'));
+    }
+    return data;
+  } catch (err: unknown) {
+    const ax = err as {
+      message?: string;
+      response?: { data?: { error?: string; message?: string } };
+    };
+    const upstream = ax.response?.data?.error || ax.response?.data?.message || ax.message;
+    throw new Error(sanitizePmsErrorMessage(upstream));
+  }
+}
+
+/** Libérer un blocage chambre (relais JWT → channels /poc/room-block-release). */
+export async function postRoomBlockRelease(body: {
+  mewsBlockId: string;
+  dryRun?: boolean;
+}): Promise<Record<string, unknown>> {
+  try {
+    const res = await apiClient.post(`${CHANNELS_DASHBOARD}/mews/poc/room-block-release`, body, {
+      ...channelsDashboardAxiosConfig(),
+      timeout: 180000,
+    });
+    const data = (res.data || {}) as Record<string, unknown>;
+    if (data.success === false) {
+      throw new Error(sanitizePmsErrorMessage(data.error || data.message || 'Échec de la libération'));
+    }
+    return data;
+  } catch (err: unknown) {
+    const ax = err as {
+      message?: string;
+      response?: { data?: { error?: string; message?: string } };
+    };
+    const upstream = ax.response?.data?.error || ax.response?.data?.message || ax.message;
+    throw new Error(sanitizePmsErrorMessage(upstream));
+  }
+}
+

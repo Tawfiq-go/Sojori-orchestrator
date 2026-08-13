@@ -8,6 +8,8 @@ import MultiView from './MultiView';
 import SimpleView from './SimpleView';
 import ColumnFilters from './ColumnFilters';
 import UpdateInventoryModal from './UpdateInventoryModal';
+import BlockRoomModal from './BlockRoomModal';
+import ReleaseRoomBlockPanel from './ReleaseRoomBlockPanel';
 import CalendarDatePicker from './CalendarDatePicker';
 import DpSyncAuditStrip from './DpSyncAuditStrip';
 import CalendarLandscapeHint from './CalendarLandscapeHint';
@@ -26,7 +28,8 @@ import {
   formatHorizonEndLabel,
   getCalendarWindowBounds,
 } from './inventoryCalendarConstants';
-import { toIsoDay } from './multiCalendarReservations';
+import { toIsoDay, filterReservationsForRoom } from './multiCalendarReservations';
+import { filterBlocksForRoom, roomRangeOverlapMessage } from './roomBlockDisplay';
 import { useWriteAccess } from '../../hooks/useWriteAccess';
 import { useAuth } from '../../hooks/useAuth';
 import { fetchPilotConfig } from '../../services/dynamicPricingApi';
@@ -57,12 +60,14 @@ export default function CalendarInventoryPage({
   listingNameById = {},
   onCalendarImportReviewFinished,
   onCalendarImportReviewActivated,
+  onRefreshCalendarBlocks,
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsProp || [];
 
   // ── Prix dynamique par listing : pilote OFF → éléments DP masqués partout ──
   const { user: authUser } = useAuth();
   const isPlatformAdmin = ['admin', 'superadmin'].includes(String(authUser?.role || '').toLowerCase());
+  const canBlockRooms = isPlatformAdmin;
   const [dpEnabledByListing, setDpEnabledByListing] = useState({});
   const listingIdsKey = listings.map((l) => String(l._id)).join(',');
   useEffect(() => {
@@ -156,6 +161,8 @@ export default function CalendarInventoryPage({
   ]);
   const [pivotDate, setPivotDate] = useState(() => startOfDay(startDate));
   const [modalCells, setModalCells] = useState(null);
+  const [blockRoomDraft, setBlockRoomDraft] = useState(null);
+  const [releaseBlockTarget, setReleaseBlockTarget] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerAnchor, setPickerAnchor] = useState(null);
   const [limitHint, setLimitHint] = useState(null);
@@ -177,6 +184,47 @@ export default function CalendarInventoryPage({
    */
   const [multiOverlayReservations, setMultiOverlayReservations] = useState([]);
   const resaFilterOn = view === 'multi' && selectedColumns.includes('reservations');
+
+  const handleCellsSelected = useCallback(
+    (cells) => {
+      if (!Array.isArray(cells) || cells.length === 0) return;
+      if (cells[0]?.column === 'roomBlock') {
+        if (!canBlockRooms) return;
+        const isos = cells.map((c) => c.dateStr).filter(Boolean).sort();
+        const dateFrom = isos[0];
+        const dateTo = isos[isos.length - 1];
+        const roomId = String(cells[0].roomId || '');
+        const roomName = cells[0].roomName || 'Chambre';
+        const roomBlocks = filterBlocksForRoom(calendarBlocksById, roomId);
+        const roomResas = filterReservationsForRoom(
+          multiOverlayReservations,
+          roomId,
+          roomName,
+        );
+        const overlapMessage = roomRangeOverlapMessage({
+          reservations: roomResas,
+          blocks: roomBlocks,
+          dateFrom,
+          dateTo,
+        });
+        setBlockRoomDraft({
+          roomId,
+          roomName,
+          dateFrom,
+          dateTo,
+          overlapMessage,
+        });
+        return;
+      }
+      if (canWrite) setModalCells(cells);
+    },
+    [canBlockRooms, canWrite, calendarBlocksById, multiOverlayReservations],
+  );
+
+  const refreshBlocks = useCallback(async () => {
+    await onRefreshCalendarBlocks?.();
+  }, [onRefreshCalendarBlocks]);
+
   useEffect(() => {
     if (view !== 'multi') {
       setMultiOverlayReservations([]);
@@ -775,7 +823,17 @@ export default function CalendarInventoryPage({
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
           fillViewport
-          onCellsSelected={canWrite ? setModalCells : undefined}
+          onCellsSelected={canWrite || canBlockRooms ? handleCellsSelected : undefined}
+          canBlockRooms={canBlockRooms}
+          onRoomBlockClick={
+            canBlockRooms
+              ? (block, meta) =>
+                  setReleaseBlockTarget({
+                    block,
+                    roomName: meta?.roomName || '',
+                  })
+              : undefined
+          }
           onOpenReservation={openReservationDrawer}
           onCalendarImportReviewFinished={onCalendarImportReviewFinished}
           onCalendarImportReviewActivated={onCalendarImportReviewActivated}
@@ -888,6 +946,26 @@ export default function CalendarInventoryPage({
           setModalCells(null);
         }}
       />
+
+      <BlockRoomModal
+        open={!!blockRoomDraft}
+        roomId={blockRoomDraft?.roomId}
+        roomName={blockRoomDraft?.roomName}
+        dateFrom={blockRoomDraft?.dateFrom}
+        dateTo={blockRoomDraft?.dateTo}
+        overlapMessage={blockRoomDraft?.overlapMessage}
+        onClose={() => setBlockRoomDraft(null)}
+        onSuccess={refreshBlocks}
+      />
+
+      {releaseBlockTarget ? (
+        <ReleaseRoomBlockPanel
+          block={releaseBlockTarget.block}
+          roomName={releaseBlockTarget.roomName}
+          onClose={() => setReleaseBlockTarget(null)}
+          onReleased={refreshBlocks}
+        />
+      ) : null}
 
       {drawerReservation && (
         <ReservationCalendarDrawer

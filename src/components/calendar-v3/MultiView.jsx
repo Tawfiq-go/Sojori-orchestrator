@@ -379,7 +379,7 @@ function MultiResaOverlay({
  * Barres Gantt des CalendarBlocks à l’unité (roomId) — lignes chambre Multi.
  * Wording Sojori uniquement ; blocs PMS = non cliquables (gérés par le PMS).
  */
-function MultiRoomBlockOverlay({ days, blocks, rowHeight }) {
+function MultiRoomBlockOverlay({ days, blocks, rowHeight, onBlockClick }) {
   if (!Array.isArray(blocks) || blocks.length === 0 || !days?.length) return null;
 
   const segments = [];
@@ -427,17 +427,20 @@ function MultiRoomBlockOverlay({ days, blocks, rowHeight }) {
         const cat = inferRoomBlockCategory(title);
         const visual = roomBlockCategoryVisual(cat);
         const tip = roomBlockTooltip(b);
-        const pms = isPmsSyncedRoomBlock(b);
         const startsHere = !clippedStart;
         const endsHere = !clippedEnd;
         const pillR = Math.round(barH / 2);
         const showLabel = startsHere || startIdx === 0;
         return (
-          <div
+          <button
             key={String(b._id)}
+            type="button"
             title={tip}
-            role="img"
             aria-label={tip}
+            onClick={(e) => {
+              e.stopPropagation();
+              onBlockClick?.(b, e.currentTarget.getBoundingClientRect());
+            }}
             style={{
               position: 'absolute',
               top: barTop,
@@ -459,7 +462,7 @@ function MultiRoomBlockOverlay({ days, blocks, rowHeight }) {
               fontWeight: 700,
               overflow: 'hidden',
               whiteSpace: 'nowrap',
-              cursor: pms ? 'default' : 'default',
+              cursor: onBlockClick ? 'pointer' : 'default',
               pointerEvents: 'auto',
               boxShadow: `0 1px 3px ${visual.accent}28`,
               fontFamily: 'inherit',
@@ -490,7 +493,7 @@ function MultiRoomBlockOverlay({ days, blocks, rowHeight }) {
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, color: visual.text }}>
               {showLabel ? title : ''}
             </span>
-          </div>
+          </button>
         );
       })}
     </div>
@@ -529,7 +532,6 @@ import {
   dayHasRoomBlock,
   filterBlocksForRoom,
   inferRoomBlockCategory,
-  isPmsSyncedRoomBlock,
   roomBlockCategoryVisual,
   roomBlockTooltip,
 } from './roomBlockDisplay';
@@ -579,6 +581,9 @@ export default function MultiView({
   canActivateCalendarImport = false,
   /** Plein écran : grille occupe presque tout le viewport. */
   fillViewport = false,
+  /** Admin/SuperAdmin : drag sur ligne chambre → bloquer. */
+  canBlockRooms = false,
+  onRoomBlockClick,
 }) {
   const listings = listingCatalog.length > 0 ? listingCatalog : listingsLegacy || [];
   const { isMobile } = useCalendarBreakpoint();
@@ -733,6 +738,12 @@ export default function MultiView({
     if (dragStart.listingId !== cell.listingId ||
         dragStart.roomTypeId !== cell.roomTypeId ||
         dragStart.column !== cell.column) return;
+    if (
+      dragStart.column === 'roomBlock' &&
+      String(dragStart.roomId || '') !== String(cell.roomId || '')
+    ) {
+      return;
+    }
     if (cell.dateStr !== dragStart.dateStr) dragMovedRef.current = true;
     setCurrentHoverCell(cell);
     const allIso = days.map(d => d.iso);
@@ -1312,6 +1323,8 @@ export default function MultiView({
                                 onPriceClick={onPriceClick}
                                 onReservationClick={handleReservationDayClick}
                                 activeTip={activeTip}
+                                canBlockRooms={canBlockRooms}
+                                onRoomBlockClick={onRoomBlockClick}
                               />
                             ));
                           })()
@@ -1754,6 +1767,8 @@ function ListingRow({
   onCalendarImportReviewFinished,
   onCalendarImportReviewActivated,
   canActivateCalendarImport = false,
+  canBlockRooms = false,
+  onRoomBlockClick,
 }) {
   const primaryCols = calendarPrimaryColumns(selectedColumns);
   const collapseColumns = calendarCollapseColumns(selectedColumns).filter((colId) => {
@@ -1953,10 +1968,34 @@ function ListingRow({
             const cellState = resolveInventoryCellState(d.iso, inv, {
               futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS,
             });
-            const draggable = !isRoomRow && cellState === 'data';
+            const roomDayBusy =
+              isRoomRow &&
+              (dayHasRoomResa(statusReservations, d.iso) ||
+                dayHasRoomBlock(roomBlocks, d.iso) ||
+                roomHkBlocked);
+            const roomBlockSelectable =
+              canBlockRooms &&
+              isRoomRow &&
+              Boolean(listing.roomId) &&
+              !String(listing.roomId).includes(':') &&
+              !roomDayBusy &&
+              cellState === 'data';
+            const draggable = isRoomRow
+              ? roomBlockSelectable
+              : cellState === 'data';
             const roomOccupied = isRoomRow && dayHasRoomResa(statusReservations, d.iso);
             const roomDayBlocked =
               roomHkBlocked || (isRoomRow && dayHasRoomBlock(roomBlocks, d.iso));
+            const roomBlockMeta = roomBlockSelectable
+              ? {
+                  listingId: listing._id,
+                  roomTypeId,
+                  dateStr: d.iso,
+                  column: 'roomBlock',
+                  roomId: listing.roomId,
+                  roomName: listing.name,
+                }
+              : null;
             return (
               <PrimaryInventoryCell
                 key={d.iso}
@@ -1976,6 +2015,7 @@ function ListingRow({
                 dpEnabled={dpEnabled}
                 roomOccupied={roomOccupied}
                 roomBlocked={roomDayBlocked}
+                roomBlockMeta={roomBlockMeta}
                 tipOpen={
                   activeTip?.listingId === listing._id &&
                   activeTip?.dateStr === d.iso &&
@@ -2002,6 +2042,11 @@ function ListingRow({
               days={days}
               blocks={roomBlocks}
               rowHeight={primaryRowH}
+              onBlockClick={
+                canBlockRooms
+                  ? (b) => onRoomBlockClick?.(b, { roomId: listing.roomId, roomName: listing.name })
+                  : undefined
+              }
             />
           ) : null}
           {resaOverlayMode === 'bars' ? (
@@ -2257,6 +2302,7 @@ function PrimaryInventoryCell({
   listingId, roomTypeId, draggable, tipOpen, dpEnabled = true,
   roomOccupied = false,
   roomBlocked = false,
+  roomBlockMeta = null,
 }) {
   const ref = useRef(null);
   const currency = listing.currencyCode || listing.currency || 'MAD';
@@ -2305,13 +2351,27 @@ function PrimaryInventoryCell({
   const dispoMeta = { listingId, roomTypeId, dateStr: day.iso, column: 'availableRoom' };
   const excelMeta = effectiveShowRate ? rateMeta : dispoMeta;
   const excelSelected = isSelected?.(excelMeta);
+  const roomBlockSelected = roomBlockMeta ? isSelected?.(roomBlockMeta) : false;
   const anySelected = excelSelected
-    || isSelected?.(effectiveShowRate ? dispoMeta : rateMeta);
+    || isSelected?.(effectiveShowRate ? dispoMeta : rateMeta)
+    || roomBlockSelected;
 
   const bindExcel = (meta) => ({
     onMouseDown: canInteract ? (e) => { e.stopPropagation(); onMouseDown?.(meta, e); } : undefined,
     onMouseEnter: canInteract ? () => onMouseEnter?.(meta) : undefined,
   });
+
+  const roomBlockBind =
+    isRoomRow && roomBlockMeta && canInteract
+      ? {
+          onMouseDown: (e) => {
+            e.stopPropagation();
+            onMouseDown?.(roomBlockMeta, e);
+          },
+          onMouseEnter: () => onMouseEnter?.(roomBlockMeta),
+          title: 'Glisser pour bloquer la chambre',
+        }
+      : {};
 
   const hasExcelZone = effectiveShowRate || showDispoNumber;
   const hasPriceZone = effectiveShowRate;
@@ -2319,6 +2379,7 @@ function PrimaryInventoryCell({
   return (
     <div
       ref={ref}
+      {...roomBlockBind}
       style={{
         borderRight: `1px solid ${T.border}`,
         display: 'flex',
@@ -2331,8 +2392,11 @@ function PrimaryInventoryCell({
         position: 'relative',
         fontFamily: '"Geist Mono", monospace',
         background: anySelected ? T.primaryTint3 : background,
-        boxShadow: anySelected ? undefined : accentShadow,
+        boxShadow: anySelected
+          ? `inset 0 0 0 2px ${T.primary}`
+          : accentShadow,
         userSelect: 'none',
+        cursor: roomBlockBind.title ? 'cell' : undefined,
         gap: stackForBars ? 0 : 2,
       }}
     >
