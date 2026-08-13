@@ -720,8 +720,8 @@ export default function MultiView({
   }, []);
 
   const onMouseDown = (cell, e) => {
-    // Blocage chambre (ligne villa) : pas le gate inventaire building / Excel.
-    if (cell?.column === 'roomBlock') {
+    // Blocage / libération chambre (ligne villa) : pas le gate inventaire building.
+    if (cell?.column === 'roomBlock' || cell?.column === 'roomUnblock') {
       setActiveTip(null);
       dragMovedRef.current = false;
       dragStartPosRef.current = e ? { x: e.clientX, y: e.clientY } : null;
@@ -751,7 +751,7 @@ export default function MultiView({
         dragStart.roomTypeId !== cell.roomTypeId ||
         dragStart.column !== cell.column) return;
     if (
-      dragStart.column === 'roomBlock' &&
+      (dragStart.column === 'roomBlock' || dragStart.column === 'roomUnblock') &&
       String(dragStart.roomId || '') !== String(cell.roomId || '')
     ) {
       return;
@@ -1084,7 +1084,7 @@ export default function MultiView({
           {canBlockRooms ? (
             <Legend
               dot="rgba(184,133,26,0.35)"
-              label="⊗ case villa = glisser pour bloquer la chambre"
+              label="⊗ + sur villa = sélection Excel → bloquer / libérer"
             />
           ) : null}
           <Legend dot="#b91c1c" label="Import calendrier à finir" />
@@ -1985,23 +1985,29 @@ function ListingRow({
             const cellState = resolveInventoryCellState(d.iso, inv, {
               futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS,
             });
-            const roomDayBusy =
-              isRoomRow &&
-              (dayHasRoomResa(statusReservations, d.iso) ||
-                dayHasRoomBlock(roomBlocks, d.iso) ||
-                roomHkBlocked);
+            const hasResa = isRoomRow && dayHasRoomResa(statusReservations, d.iso);
+            const hasUnitBlock = isRoomRow && dayHasRoomBlock(roomBlocks, d.iso);
             const roomBlockSelectable =
               canBlockRooms &&
               isRoomRow &&
               Boolean(listing.roomId) &&
               !String(listing.roomId).includes(':') &&
-              !roomDayBusy;
+              !roomHkBlocked &&
+              !hasResa &&
+              !hasUnitBlock;
+            const roomUnblockSelectable =
+              canBlockRooms &&
+              isRoomRow &&
+              Boolean(listing.roomId) &&
+              !String(listing.roomId).includes(':') &&
+              !hasResa &&
+              hasUnitBlock;
             const draggable = isRoomRow
-              ? roomBlockSelectable
+              ? roomBlockSelectable || roomUnblockSelectable
               : cellState === 'data';
-            const roomOccupied = isRoomRow && dayHasRoomResa(statusReservations, d.iso);
+            const roomOccupied = hasResa;
             const roomDayBlocked =
-              roomHkBlocked || (isRoomRow && dayHasRoomBlock(roomBlocks, d.iso));
+              roomHkBlocked || hasUnitBlock;
             const roomBlockMeta = roomBlockSelectable
               ? {
                   listingId: listing._id,
@@ -2011,7 +2017,16 @@ function ListingRow({
                   roomId: listing.roomId,
                   roomName: listing.name,
                 }
-              : null;
+              : roomUnblockSelectable
+                ? {
+                    listingId: listing._id,
+                    roomTypeId,
+                    dateStr: d.iso,
+                    column: 'roomUnblock',
+                    roomId: listing.roomId,
+                    roomName: listing.name,
+                  }
+                : null;
             return (
               <PrimaryInventoryCell
                 key={d.iso}
@@ -2385,23 +2400,26 @@ function PrimaryInventoryCell({
             onMouseDown?.(roomBlockMeta, e);
           },
           onMouseEnter: () => onMouseEnter?.(roomBlockMeta),
-          title: 'Glisser (ou cliquer) pour bloquer cette chambre',
+          title:
+            roomBlockMeta.column === 'roomUnblock'
+              ? 'Sélection Excel (+) — libérer le blocage'
+              : 'Sélection Excel (+) — bloquer la chambre',
         }
       : {};
 
   const hasExcelZone = effectiveShowRate || showDispoNumber;
   const hasPriceZone = effectiveShowRate;
+  const showRoomExcelHandle = Boolean(roomBlockMeta);
 
   return (
     <div
       ref={ref}
-      {...roomBlockBind}
       style={{
         borderRight: `1px solid ${T.border}`,
         display: 'flex',
-        flexDirection: stackForBars ? 'column' : 'row',
+        flexDirection: 'row',
         alignItems: 'stretch',
-        justifyContent: stackForBars ? 'flex-start' : 'stretch',
+        justifyContent: 'stretch',
         padding: stackForBars ? '1px 2px 0' : '2px 2px',
         minHeight: rowHeight,
         height: '100%',
@@ -2409,20 +2427,57 @@ function PrimaryInventoryCell({
         fontFamily: '"Geist Mono", monospace',
         background: anySelected
           ? T.primaryTint3
-          : roomBlockMeta
+          : roomBlockMeta?.column === 'roomBlock'
             ? 'rgba(184,133,26,0.08)'
             : background,
         boxShadow: anySelected
           ? `inset 0 0 0 2px ${T.primary}`
-          : roomBlockMeta
+          : roomBlockMeta?.column === 'roomBlock'
             ? `inset 0 0 0 1.5px rgba(184,133,26,0.55)`
             : accentShadow,
         userSelect: 'none',
-        cursor: roomBlockBind.title ? 'cell' : undefined,
-        gap: stackForBars ? 0 : 2,
+        gap: 0,
       }}
     >
-      {roomBlockMeta && !anySelected ? (
+      {showRoomExcelHandle ? (
+        <div
+          {...roomBlockBind}
+          title={roomBlockBind.title}
+          aria-label={roomBlockBind.title}
+          style={{
+            flex: '0 0 16px',
+            alignSelf: 'stretch',
+            borderRadius: '4px 0 0 4px',
+            cursor: 'cell',
+            boxShadow: roomBlockSelected ? `inset 0 0 0 2px ${T.primary}` : 'none',
+            background: roomBlockSelected ? T.primaryTint3 : 'rgba(184,133,26,0.22)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: roomBlockSelected ? T.primaryDeep : '#92400e',
+            fontSize: 12,
+            fontWeight: 800,
+            lineHeight: 1,
+            zIndex: 2,
+          }}
+        >
+          +
+        </div>
+      ) : null}
+      <div
+        {...(showRoomExcelHandle ? roomBlockBind : {})}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          position: 'relative',
+          display: 'flex',
+          flexDirection: stackForBars ? 'column' : 'row',
+          alignItems: 'stretch',
+          cursor: showRoomExcelHandle ? 'cell' : undefined,
+          gap: stackForBars ? 0 : 2,
+        }}
+      >
+      {roomBlockMeta?.column === 'roomBlock' && !anySelected ? (
         <span
           aria-hidden
           style={{
@@ -2552,6 +2607,7 @@ function PrimaryInventoryCell({
 
       {/* Place réservée aux barres Gantt (overlay) */}
       {stackForBars ? <div style={{ flex: 1, minHeight: 22 }} /> : null}
+      </div>
     </div>
   );
 }

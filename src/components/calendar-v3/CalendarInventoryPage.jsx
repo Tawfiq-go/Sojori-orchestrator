@@ -66,9 +66,11 @@ export default function CalendarInventoryPage({
 
   // ── Prix dynamique par listing : pilote OFF → éléments DP masqués partout ──
   const { user: authUser } = useAuth();
-  const isPlatformAdmin = ['admin', 'superadmin'].includes(String(authUser?.role || '').toLowerCase());
-  /** Blocage chambre : Admin / SuperAdmin uniquement (même gate que le proxy JWT). */
-  const canBlockRooms = isPlatformAdmin;
+  const roleLc = String(authUser?.role || '').toLowerCase();
+  const isPlatformAdmin = roleLc === 'admin' || roleLc === 'superadmin';
+  /** Blocage / libération chambre : Owner + Admin + SuperAdmin (modal dédié, pas inventaire). */
+  const canBlockRooms =
+    isPlatformAdmin || roleLc === 'owner';
   const [dpEnabledByListing, setDpEnabledByListing] = useState({});
   const listingIdsKey = listings.map((l) => String(l._id)).join(',');
   useEffect(() => {
@@ -214,6 +216,26 @@ export default function CalendarInventoryPage({
           dateFrom,
           dateTo,
           overlapMessage,
+        });
+        return;
+      }
+      if (cells[0]?.column === 'roomUnblock') {
+        if (!canBlockRooms) return;
+        const isos = cells.map((c) => c.dateStr).filter(Boolean).sort();
+        const dateFrom = isos[0];
+        const dateTo = isos[isos.length - 1];
+        const roomId = String(cells[0].roomId || '');
+        const roomName = cells[0].roomName || 'Chambre';
+        const roomBlocks = filterBlocksForRoom(calendarBlocksById, roomId);
+        const covering = roomBlocks.filter((b) => {
+          const bf = String(b.dateFrom || '').slice(0, 10);
+          const bt = String(b.dateTo || '').slice(0, 10);
+          return bf && bt && bf <= dateTo && dateFrom <= bt;
+        });
+        if (covering.length === 0) return;
+        setReleaseBlockTarget({
+          block: covering[0],
+          roomName,
         });
         return;
       }
