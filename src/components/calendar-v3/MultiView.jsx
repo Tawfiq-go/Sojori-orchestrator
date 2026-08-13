@@ -25,10 +25,8 @@ const CHANNEL_COLORS = {
 };
 
 const CELL_BG = {
-  available: '#ffffff',                   // neutre = vendable (comme Airbnb)
-  // teinte douce = chambre occupée ce jour (même sans barre Gantt)
-  reserved: 'rgba(13, 148, 136, 0.14)',
-  // hachures grises = bloqué (code visuel Airbnb pour indisponible)
+  available: '#ffffff', // ouvert / vendable
+  // hachures = bloqué (stopSell / dispo 0 / OOO)
   blocked: 'repeating-linear-gradient(-45deg, rgba(136,135,128,0.22), rgba(136,135,128,0.22) 3px, transparent 3px, transparent 6px)',
 };
 
@@ -74,13 +72,10 @@ function dayHasRoomResa(reservations, iso) {
 }
 
 /**
- * Fond cellule inventaire (dispo / réservé / bloqué).
- *
- * Lignes room (toujours visibles en Multi) :
- * - OOO / OOS / enabled=false → bloqué (Mews Resource.State)
- * - type fermé (0 / stopSell) → bloqué (stock catégorie Mews)
- * - résa ce jour → réservé (déduit Sojori, pas grille Mews room×jour)
- * - sinon → disponible
+ * Fond cellule = blanc (ouvert) ou hachures (bloqué).
+ * - roomType / building : stock catégorie (availableRoom 0 / stopSell)
+ * - room : OOO ou résa sur CETTE unité (pas le stock du type — sinon régression
+ *   « plus d’indispo visible » après suppression du fond vert réservé)
  */
 function inventoryStatusBackground(state, inv, opts = {}) {
   const { roomRow = false, roomOccupied = false, roomBlocked = false } = opts;
@@ -88,16 +83,9 @@ function inventoryStatusBackground(state, inv, opts = {}) {
   if (state === 'archive') return ARCHIVE_CELL_BG;
   if (state === 'missing' || !hasInventoryData(inv)) return T.bg2;
   if (roomRow) {
-    if (roomBlocked) return CELL_BG.blocked;
-    const isStop = inv?.stopSell === true;
-    const ar = inv?.availableRoom;
-    const isZero = ar != null && Number(ar) <= 0;
-    const isClosed = inv?.available === false;
-    if (isStop || isZero || isClosed) return CELL_BG.blocked;
-    if (roomOccupied) return CELL_BG.reserved;
+    if (roomBlocked || roomOccupied) return CELL_BG.blocked;
     return CELL_BG.available;
   }
-  // Fond = bloqué / pas bloqué (stock). Les résas s’affichent par-dessus (barres / pastilles).
   const isStop = inv?.stopSell === true;
   const ar = inv?.availableRoom;
   const isZero = ar != null && Number(ar) <= 0;
@@ -252,9 +240,12 @@ function MultiResaOverlay({
     });
   });
 
-  // Ligne haute : tarif en haut, barre en bas (comme planning / SimpleView)
-  const barH = Math.min(24, Math.max(18, rowHeight - 16));
-  const barTop = Math.max(12, rowHeight - barH - 3);
+  // ~25 % d’air en haut (10 % + 15 %) pour alléger la barre vs le rectangle cellule
+  const rh = rowHeight || 48;
+  const barGapTop = Math.max(8, Math.round(rh * 0.25));
+  const barGapBottom = 2;
+  const barH = Math.max(16, rh - barGapTop - barGapBottom);
+  const barTop = barGapTop;
 
   return (
     <div
@@ -282,11 +273,16 @@ function MultiResaOverlay({
           return Math.round((b - a) / 86400000);
         })();
         const pending = String(r.status || '').toLowerCase().includes('pend');
+        // Arrivée / départ réels dans la fenêtre (pas juste clip scroll)
+        const startsHere = !clippedStart;
+        const endsHere = !clippedEnd;
+        const pillR = Math.round(barH / 2);
+        const showLabel = startsHere || startIdx === 0;
         return (
           <button
             key={String(r._id || r.reservationId)}
             type="button"
-            title={`${name} · ${isoDay(r.arrivalDate)} → ${isoDay(r.departureDate)}${r.channelName ? ` · ${r.channelName}` : ''}`}
+            title={`${name} · ${isoDay(r.arrivalDate)} → ${isoDay(r.departureDate)}${r.channelName ? ` · ${r.channelName}` : ''} · arrivée / départ`}
             onClick={(e) => {
               e.stopPropagation();
               onReservationClick?.(e.currentTarget.getBoundingClientRect(), isoDay(r.arrivalDate), [r]);
@@ -300,12 +296,14 @@ function MultiResaOverlay({
               boxSizing: 'border-box',
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
-              padding: '0 6px 0 5px',
-              borderRadius: 6,
-              border: `1px solid ${ch.color}55`,
-              borderLeft: `4px solid ${ch.color}`,
-              background: `linear-gradient(90deg, ${ch.color}22 0%, ${ch.wash} 28%, ${ch.wash} 100%)`,
+              gap: 5,
+              padding: showLabel ? '0 8px 0 4px' : '0 4px',
+              // Pilule : arrondi fort au check-in / check-out (comme SimpleView / Airbnb)
+              borderRadius: `${startsHere ? pillR : 2}px ${endsHere ? pillR : 2}px ${endsHere ? pillR : 2}px ${startsHere ? pillR : 2}px`,
+              border: `1px solid ${ch.color}66`,
+              borderLeft: startsHere ? `3px solid ${ch.color}` : `1px solid ${ch.color}40`,
+              borderRight: endsHere ? `3px solid ${ch.color}` : `1px solid ${ch.color}40`,
+              background: ch.wash,
               color: T.text,
               fontSize: 11,
               fontWeight: 700,
@@ -313,15 +311,36 @@ function MultiResaOverlay({
               whiteSpace: 'nowrap',
               cursor: 'pointer',
               pointerEvents: 'auto',
-              boxShadow: `0 1px 2px ${ch.color}18`,
+              boxShadow: `0 1px 3px ${ch.color}28`,
               fontFamily: 'inherit',
               textAlign: 'left',
             }}
           >
+            {showLabel ? (
+              <span
+                title="Arrivée"
+                style={{
+                  width: Math.max(18, barH - 8),
+                  height: Math.max(18, barH - 8),
+                  borderRadius: '50%',
+                  flexShrink: 0,
+                  background: ch.color,
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: 0,
+                }}
+              >
+                {(name || '?').charAt(0).toUpperCase()}
+              </span>
+            ) : null}
             {pending ? <span style={{ fontSize: 9, color: T.warning, flexShrink: 0 }}>⏳</span> : null}
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
-              {name}
-              {nights != null && nights > 0 ? (
+              {showLabel ? name : ''}
+              {showLabel && nights != null && nights > 0 ? (
                 <span
                   style={{
                     fontFamily: '"Geist Mono", monospace',
@@ -335,6 +354,20 @@ function MultiResaOverlay({
                 </span>
               ) : null}
             </span>
+            {endsHere ? (
+              <span
+                title="Départ"
+                style={{
+                  flexShrink: 0,
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  background: ch.color,
+                  boxShadow: `0 0 0 2px ${ch.wash}`,
+                  marginLeft: 2,
+                }}
+              />
+            ) : null}
           </button>
         );
       })}
@@ -371,8 +404,8 @@ import {
 /** Métadonnées CalendarBlock par blockId — contexte pour éviter le prop drilling jusqu'aux cellules. */
 const CalendarBlocksContext = React.createContext({});
 
-const CELL_W_DESKTOP = 90;
-const CELL_W_MOBILE = 76;
+const CELL_W_DESKTOP = 117; // 90 + 30%
+const CELL_W_MOBILE = 99;   // 76 + 30%
 const LEFT_W_DESKTOP = 268;
 const LEFT_W_MOBILE = 168;
 
@@ -1726,7 +1759,7 @@ function ListingRow({
   const roomHkBlocked =
     isRoomRow &&
     isRoomHousekeepingBlocked(listing.housekeepingState, listing.enabled);
-  // Rooms : toujours assez haut pour barres éventuelles + fond statut lisible
+  // Rooms : barre résa quasi pleine hauteur
   const resaOverlayMode =
     isRoomRow || lineReservations.length > 0 ? (lineReservations.length > 0 ? 'bars' : 'none') : 'none';
   const primaryRowH = isRoomRow || resaOverlayMode === 'bars' ? 48 : 32;

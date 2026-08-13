@@ -7,6 +7,7 @@ import { getOwners } from '../../staff/services/serverApi.task';
 import { hasAdminAccess } from '../../../utils/rbac.utils';
 import { useAuth } from '../../../hooks/useAuth';
 import { toLegacyAuthUser } from '../../../utils/legacyAuthUser';
+import { useAdminOwnerFilter } from '../../../context/AdminOwnerFilterContext';
 import OwnerSelectorV2 from './OwnerSelectorV2';
 import RentalUnitedContainerV2 from './RentalUnitedContainerV2';
 import RentalUnitedErrorBoundary from './RentalUnitedErrorBoundary';
@@ -21,6 +22,10 @@ const RentalUnitedWhiteLabelV2 = () => {
     [reduxUser, authUser],
   );
   const isAdmin = Boolean(user?.role && hasAdminAccess(user.role));
+  const {
+    selectedOwnerId: adminSelectedOwnerId,
+    setSelectedOwnerId: setAdminSelectedOwnerId,
+  } = useAdminOwnerFilter();
   const {
     i18n
   } = useTranslation();
@@ -96,11 +101,25 @@ const RentalUnitedWhiteLabelV2 = () => {
         })),
       });
       if (ruOwners.length > 0) {
+        const adminSel = String(adminSelectedOwnerId || '').trim();
+        const fromAdmin = adminSel
+          ? ruOwners.find((o) => String(o._id ?? o.id) === adminSel)
+          : null;
+        // Admin : priorité au filtre PM header. Sinon premier owner avec ruOwnerId.
         const preferred =
-          ruOwners.find((o) => o.ruOwnerId) || ruOwners[0];
+          fromAdmin || ruOwners.find((o) => o.ruOwnerId) || ruOwners[0];
         setSelectedOwnerId((prev) => {
-          const next = prev || String(preferred._id ?? preferred.id ?? '');
-          console.info('[RU-widget] selectedOwnerId', { prev: prev || null, next, preferredName: `${preferred.firstName || ''} ${preferred.lastName || ''}`.trim() });
+          const next = fromAdmin
+            ? String(fromAdmin._id ?? fromAdmin.id ?? '')
+            : prev || String(preferred._id ?? preferred.id ?? '');
+          console.info('[RU-widget] selectedOwnerId', {
+            prev: prev || null,
+            next,
+            fromAdmin: Boolean(fromAdmin),
+            preferredName: `${preferred.firstName || ''} ${preferred.lastName || ''}`.trim(),
+            preferredEmail: preferred.email || null,
+            preferredRuOwnerId: preferred.ruOwnerId || null,
+          });
           return next;
         });
       }
@@ -163,11 +182,19 @@ const RentalUnitedWhiteLabelV2 = () => {
           console.info('[RU-widget] getUserToken ←', {
             success: response?.success,
             hasScriptUrl: !!response?.scriptUrl,
+            cached: response?.cached === true,
             scriptUrlHead: response?.scriptUrl ? String(response.scriptUrl).slice(0, 120) : null,
             ruLoginEmail: response?.ruLoginEmail || null,
+            ruOwnerId: response?.ruOwnerId || null,
             dashboardEmail: response?.dashboardEmail || null,
+            ownerId: currentOwnerId,
             message: response?.message || response?.error || null,
           });
+          if (response?.cached) {
+            console.warn(
+              '[RU-widget] ⚠️ token CACHÉ — si tu viens de changer de RU, force refresh (force=1) ou purge rentalsusertokens',
+            );
+          }
           if (response.success && response.scriptUrl) {
             setTokenData(response);
             setScriptUrl((prev) => (prev === response.scriptUrl ? prev : response.scriptUrl));
@@ -218,11 +245,28 @@ const RentalUnitedWhiteLabelV2 = () => {
     const newOwnerId = event.target.value;
     console.info('[RU-widget] owner change', { from: selectedOwnerId, to: newOwnerId });
     setSelectedOwnerId(newOwnerId);
+    if (isAdmin && newOwnerId) {
+      setAdminSelectedOwnerId(newOwnerId);
+    }
     setScriptUrl(null);
     setTokenData(null);
     setError(null);
     loadedOwnerRef.current = null;
   };
+  // Admin : si le filtre PM header change, resynchroniser le widget RU.
+  useEffect(() => {
+    if (!isAdmin || !ownersLoaded || owners.length === 0) return;
+    const adminSel = String(adminSelectedOwnerId || '').trim();
+    if (!adminSel || adminSel === selectedOwnerId) return;
+    const match = owners.find((o) => String(o._id ?? o.id) === adminSel);
+    if (!match) return;
+    console.info('[RU-widget] sync from admin filter', { to: adminSel, email: match.email });
+    setSelectedOwnerId(adminSel);
+    setScriptUrl(null);
+    setTokenData(null);
+    setError(null);
+    loadedOwnerRef.current = null;
+  }, [isAdmin, adminSelectedOwnerId, ownersLoaded, owners, selectedOwnerId]);
   useEffect(() => {
     if (isAdmin) {
       setOwnersLoaded(false);
@@ -231,7 +275,7 @@ const RentalUnitedWhiteLabelV2 = () => {
       setOwners([]);
       setOwnersLoaded(true);
     }
-  }, [isAdmin, user?._id]);
+  }, [isAdmin, user?._id, adminSelectedOwnerId]);
   useEffect(() => {
     let cancelled = false;
     const loadRentalUnitedScript = async () => {

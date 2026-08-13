@@ -192,7 +192,8 @@ export default function CalendarInventoryPage({
       try {
         const res = await reservationsService.getList({
           limit: 500,
-          status: 'Confirmed,Pending,Started,Inside',
+          // Calendrier : actifs seulement. Annulées (même non ack) → pages /resa, pas ici.
+          status: 'Confirmed,Started,Pending,Inside',
           dateType: 'arrival_or_departure',
           startDate: from,
           endDate: to,
