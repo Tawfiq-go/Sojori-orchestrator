@@ -515,8 +515,8 @@ export default function UpdateInventoryModal({
               {selectionMeta.listingsCount > 1 && <Chip>{selectionMeta.listingsCount} listings</Chip>}
             </div>
             <div style={{ marginTop: 8, fontSize: 11.5, color: T.text3, lineHeight: 1.4, maxWidth: 420 }}>
-              Prix / dispo / stop-sell du <strong>type</strong>. Pour bloquer une villa précise :
-              glisser sur la ligne chambre (Villa 01…), pas ici.
+              Prix / dispo / stop-sell du <strong>type</strong>. Pour bloquer une villa :
+              clic simple sur une case libre de la ligne chambre.
             </div>
           </div>
           <button onClick={onClose} style={{
