@@ -433,7 +433,7 @@ function MultiRoomBlockOverlay({ days, blocks, rowHeight, onBlockClick }) {
           { clippedStart, clippedEnd },
         );
         const title = String(b.title || 'Blocage').trim() || 'Blocage';
-        const cat = inferRoomBlockCategory(title);
+        const cat = inferRoomBlockCategory(title, { note: b.note });
         const visual = roomBlockCategoryVisual(cat);
         const tip = roomBlockTooltip(b, { canRelease: Boolean(onBlockClick) });
         const startsHere = !clippedStart;

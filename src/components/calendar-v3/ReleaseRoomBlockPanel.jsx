@@ -26,7 +26,7 @@ export default function ReleaseRoomBlockPanel({ block, roomName, onClose, onRele
   if (!block) return null;
 
   const title = String(block.title || 'Blocage').trim() || 'Blocage';
-  const cat = inferRoomBlockCategory(title);
+  const cat = inferRoomBlockCategory(title, { note: block.note });
   const from = blockIsoDay(block.dateFrom);
   const to = blockIsoDay(block.dateTo);
   const mewsBlockId = String(block.mewsBlockId || '').trim();
