@@ -720,6 +720,18 @@ export default function MultiView({
   }, []);
 
   const onMouseDown = (cell, e) => {
+    // Blocage chambre (ligne villa) : pas le gate inventaire building / Excel.
+    if (cell?.column === 'roomBlock') {
+      setActiveTip(null);
+      dragMovedRef.current = false;
+      dragStartPosRef.current = e ? { x: e.clientX, y: e.clientY } : null;
+      if (e?.currentTarget) tipAnchorElRef.current = e.currentTarget;
+      setIsDragging(true);
+      setDragStart(cell);
+      setCurrentHoverCell(cell);
+      setSelectedCells([cell]);
+      return;
+    }
     const inv = inventoriesByListing[cell.listingId]?.[cell.dateStr];
     const st = resolveInventoryCellState(cell.dateStr, inv, { futureHorizonDays: INVENTORY_FUTURE_HORIZON_DAYS });
     // Prix dyn. : sélection Excel aussi sur jours passés (archive)
@@ -1228,9 +1240,9 @@ export default function MultiView({
                           isCalendarImportReviewActive(listing) ? undefined : onToggleDynamicPrice
                         }
                       />
-                      {/* Rooms toujours visibles sous le type (statut dispo/réservé/bloqué).
-                          Filtre Rés. = barres Gantt uniquement. */}
-                      {rtOpen && rooms.length === 0 ? (
+                      {/* Rooms toujours visibles sous le type (blocage / barres).
+                          Chevron rtOpen = détail inventaire (min stay…), pas les villas. */}
+                      {rooms.length === 0 ? (
                         <ListingRow
                           key={`${listing._id}-${rt.id}-no-rooms`}
                           listing={{
@@ -1262,9 +1274,8 @@ export default function MultiView({
                           onReservationClick={handleReservationDayClick}
                           activeTip={activeTip}
                         />
-                      ) : null}
-                      {rtOpen
-                        ? (() => {
+                      ) : (
+                        (() => {
                             const claimed = new Set();
                             const roomRows = rooms.map((room) => {
                               const roomResas = filterReservationsForRoom(
@@ -1328,7 +1339,7 @@ export default function MultiView({
                               />
                             ));
                           })()
-                        : null}
+                      )}
                       </React.Fragment>
                     );
                     })
@@ -1978,8 +1989,7 @@ function ListingRow({
               isRoomRow &&
               Boolean(listing.roomId) &&
               !String(listing.roomId).includes(':') &&
-              !roomDayBusy &&
-              cellState === 'data';
+              !roomDayBusy;
             const draggable = isRoomRow
               ? roomBlockSelectable
               : cellState === 'data';
@@ -2394,7 +2404,9 @@ function PrimaryInventoryCell({
         background: anySelected ? T.primaryTint3 : background,
         boxShadow: anySelected
           ? `inset 0 0 0 2px ${T.primary}`
-          : accentShadow,
+          : roomBlockMeta && !anySelected
+            ? `inset 0 0 0 1px rgba(184,133,26,0.35)`
+            : accentShadow,
         userSelect: 'none',
         cursor: roomBlockBind.title ? 'cell' : undefined,
         gap: stackForBars ? 0 : 2,
