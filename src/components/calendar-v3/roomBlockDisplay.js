@@ -6,11 +6,28 @@
 /** @typedef {'interne' | 'non_pret' | 'travaux'} RoomBlockCategory */
 
 /**
- * Catégorie visuelle déduite du title (heuristique Phase A).
+ * Catégorie visuelle — priorité au TYPE PMS (note sync / champs),
+ * puis heuristique sur le libellé.
  * @param {string | null | undefined} title
+ * @param {{ pmsType?: string | null, note?: string | null, mewsType?: string | null } | string | null} [optsOrNote]
  * @returns {RoomBlockCategory}
  */
-export function inferRoomBlockCategory(title) {
+export function inferRoomBlockCategory(title, optsOrNote) {
+  const opts =
+    optsOrNote && typeof optsOrNote === 'object' && !Array.isArray(optsOrNote)
+      ? optsOrNote
+      : { note: typeof optsOrNote === 'string' ? optsOrNote : null }
+
+  const rawType = String(opts.pmsType || opts.mewsType || '').trim()
+  const note = String(opts.note || '')
+  // note sync : « source: mews-block · type: InternalUse · … »
+  const noteType =
+    rawType ||
+    (/type:\s*(InternalUse|OutOfOrder|OutOfService)/i.exec(note)?.[1] || '')
+
+  const pms = noteType.toLowerCase()
+  if (pms === 'internaluse') return 'interne'
+
   const t = String(title || '').toLowerCase()
   if (
     t.includes('invit') ||
@@ -20,9 +37,16 @@ export function inferRoomBlockCategory(title) {
   ) {
     return 'interne'
   }
-  if (t.includes('pas prêt') || t.includes('pas pret') || t.includes('not ready') || t.includes('non prêt') || t.includes('non pret')) {
+  if (
+    t.includes('pas prêt') ||
+    t.includes('pas pret') ||
+    t.includes('not ready') ||
+    t.includes('non prêt') ||
+    t.includes('non pret')
+  ) {
     return 'non_pret'
   }
+  if (pms === 'outoforder' || pms === 'outofservice') return 'travaux'
   return 'travaux'
 }
 
@@ -133,7 +157,7 @@ export function dayHasRoomBlock(blocks, iso) {
  */
 export function roomBlockTooltip(block, { canRelease = false } = {}) {
   const title = String(block?.title || 'Blocage').trim() || 'Blocage'
-  const cat = inferRoomBlockCategory(title)
+  const cat = inferRoomBlockCategory(title, { note: block?.note })
   const catLabel = roomBlockCategoryLabel(cat)
   const from = blockIsoDay(block?.dateFrom)
   const to = blockIsoDay(block?.dateTo)
