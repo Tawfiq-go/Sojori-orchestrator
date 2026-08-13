@@ -1081,6 +1081,12 @@ export default function MultiView({
           <Legend dot={CHANNEL_COLORS.other.accent} label="Autre canal" />
           <Legend dot="repeating-linear-gradient(-45deg, rgba(136,135,128,0.6), rgba(136,135,128,0.6) 2px, transparent 2px, transparent 4px)" label="Bloqué (type fermé / stop sell)" />
           <Legend dot="#fff" dotBorder label="Disponible (room vide = libre)" />
+          {canBlockRooms ? (
+            <Legend
+              dot="rgba(184,133,26,0.35)"
+              label="⊗ case villa = glisser pour bloquer la chambre"
+            />
+          ) : null}
           <Legend dot="#b91c1c" label="Import calendrier à finir" />
           <span style={{ color: T.text3, fontWeight: 600 }}>Lettres : M = manuel · D = dynamique</span>
           <Legend dot={ARCHIVE_CELL_BG} label="Historique (lecture seule)" />
@@ -2379,7 +2385,7 @@ function PrimaryInventoryCell({
             onMouseDown?.(roomBlockMeta, e);
           },
           onMouseEnter: () => onMouseEnter?.(roomBlockMeta),
-          title: 'Glisser pour bloquer la chambre',
+          title: 'Glisser (ou cliquer) pour bloquer cette chambre',
         }
       : {};
 
@@ -2401,17 +2407,40 @@ function PrimaryInventoryCell({
         height: '100%',
         position: 'relative',
         fontFamily: '"Geist Mono", monospace',
-        background: anySelected ? T.primaryTint3 : background,
+        background: anySelected
+          ? T.primaryTint3
+          : roomBlockMeta
+            ? 'rgba(184,133,26,0.08)'
+            : background,
         boxShadow: anySelected
           ? `inset 0 0 0 2px ${T.primary}`
-          : roomBlockMeta && !anySelected
-            ? `inset 0 0 0 1px rgba(184,133,26,0.35)`
+          : roomBlockMeta
+            ? `inset 0 0 0 1.5px rgba(184,133,26,0.55)`
             : accentShadow,
         userSelect: 'none',
         cursor: roomBlockBind.title ? 'cell' : undefined,
         gap: stackForBars ? 0 : 2,
       }}
     >
+      {roomBlockMeta && !anySelected ? (
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 14,
+            fontWeight: 800,
+            color: 'rgba(184,133,26,0.45)',
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        >
+          ⊗
+        </span>
+      ) : null}
 
       {hasExcelZone && hasPriceZone && (
         <div
