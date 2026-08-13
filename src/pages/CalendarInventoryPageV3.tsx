@@ -623,6 +623,9 @@ export function CalendarInventoryPageV3() {
             ),
           );
         }}
+        onRefreshCalendarBlocks={() => {
+          setBlocksRefreshKey((k) => k + 1);
+        }}
       />
       </Box>
     </DashboardWrapper>
