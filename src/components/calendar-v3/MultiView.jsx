@@ -26,7 +26,7 @@ const CHANNEL_COLORS = {
 
 const CELL_BG = {
   available: '#ffffff', // ouvert / vendable
-  // hachures = bloqué (stopSell / dispo 0 / OOO)
+  // hachures = bloqué (stopSell / dispo 0 / OOO HK sur ligne chambre)
   blocked: 'repeating-linear-gradient(-45deg, rgba(136,135,128,0.22), rgba(136,135,128,0.22) 3px, transparent 3px, transparent 6px)',
 };
 
@@ -71,19 +71,28 @@ function dayHasRoomResa(reservations, iso) {
   });
 }
 
+/** Résas d’une ligne villa qui couvrent ce jour. */
+function roomResasOnDay(reservations, iso) {
+  if (!Array.isArray(reservations) || !iso) return [];
+  return reservations.filter((r) => {
+    const arr = isoDay(r.arrivalDate);
+    const dep = isoDay(r.departureDate);
+    return Boolean(arr && dep && arr <= iso && iso < dep);
+  });
+}
+
 /**
  * Fond cellule = blanc (ouvert) ou hachures (bloqué).
  * - roomType / building : stock catégorie (availableRoom 0 / stopSell)
- * - room : OOO ou résa sur CETTE unité (pas le stock du type — sinon régression
- *   « plus d’indispo visible » après suppression du fond vert réservé)
+ * - room : OOO HK seulement — résas et CalendarBlocks = barres overlay (pas de hatch cellule)
  */
 function inventoryStatusBackground(state, inv, opts = {}) {
-  const { roomRow = false, roomOccupied = false, roomBlocked = false } = opts;
+  const { roomRow = false, roomBlocked = false } = opts;
   if (state === 'out_of_window') return OUT_OF_WINDOW_CELL_BG;
   if (state === 'archive') return ARCHIVE_CELL_BG;
   if (state === 'missing' || !hasInventoryData(inv)) return T.bg2;
   if (roomRow) {
-    if (roomBlocked || roomOccupied) return CELL_BG.blocked;
+    if (roomBlocked) return CELL_BG.blocked;
     return CELL_BG.available;
   }
   const isStop = inv?.stopSell === true;
@@ -1981,8 +1990,8 @@ function ListingRow({
               !hasResa &&
               !hasUnitBlock;
             const draggable = !isRoomRow && cellState === 'data';
-            const roomOccupied = hasResa;
-            const roomDayBlocked = roomHkBlocked || hasUnitBlock;
+            // Hatch cellule villa = OOO HK seulement. Résa / unit block → barres (pas de double rendu).
+            const roomDayBlocked = roomHkBlocked;
             return (
               <PrimaryInventoryCell
                 key={d.iso}
@@ -2000,8 +2009,17 @@ function ListingRow({
                 roomTypeId={roomTypeId}
                 draggable={draggable}
                 dpEnabled={dpEnabled}
-                roomOccupied={roomOccupied}
                 roomBlocked={roomDayBlocked}
+                onRoomResaClick={
+                  hasResa && onReservationClick
+                    ? (rect) =>
+                        onReservationClick(
+                          rect,
+                          d.iso,
+                          roomResasOnDay(statusReservations, d.iso),
+                        )
+                    : undefined
+                }
                 onRoomFreeClick={
                   canClickBlock
                     ? () =>
@@ -2296,8 +2314,8 @@ function PrimaryInventoryCell({
   day, inv, listing, showRate, showDispo, rowHeight = 32,
   isSelected, onMouseDown, onMouseEnter, onPriceClick,
   listingId, roomTypeId, draggable, tipOpen, dpEnabled = true,
-  roomOccupied = false,
   roomBlocked = false,
+  onRoomResaClick,
   onRoomFreeClick,
 }) {
   const ref = useRef(null);
@@ -2332,7 +2350,6 @@ function PrimaryInventoryCell({
   const blockInfo = !isRoomRow && state === 'data' ? blockedNoResaInfo(inv, dayBlock) : null;
   const background = inventoryStatusBackground(state, inv, {
     roomRow: isRoomRow,
-    roomOccupied: Boolean(roomOccupied),
     roomBlocked: Boolean(roomBlocked),
   });
   const accentShadow = channelAccentShadow(state, inv);
@@ -2357,19 +2374,29 @@ function PrimaryInventoryCell({
 
   const hasExcelZone = effectiveShowRate || showDispoNumber;
   const hasPriceZone = effectiveShowRate;
+  const roomClickTitle = onRoomResaClick
+    ? 'Voir la réservation'
+    : onRoomFreeClick
+      ? 'Cliquer pour bloquer la chambre'
+      : undefined;
 
   return (
     <div
       ref={ref}
       onClick={
-        onRoomFreeClick
+        onRoomResaClick || onRoomFreeClick
           ? (e) => {
               e.stopPropagation();
-              onRoomFreeClick();
+              // Résa prioritaire : jamais ouvrir le blocage sur un jour occupé.
+              if (onRoomResaClick) {
+                onRoomResaClick(e.currentTarget.getBoundingClientRect());
+                return;
+              }
+              onRoomFreeClick?.();
             }
           : undefined
       }
-      title={onRoomFreeClick ? 'Cliquer pour bloquer la chambre' : undefined}
+      title={roomClickTitle}
       style={{
         borderRight: `1px solid ${T.border}`,
         display: 'flex',
@@ -2384,7 +2411,7 @@ function PrimaryInventoryCell({
         background: anySelected ? T.primaryTint3 : background,
         boxShadow: anySelected ? undefined : accentShadow,
         userSelect: 'none',
-        cursor: onRoomFreeClick ? 'pointer' : undefined,
+        cursor: onRoomResaClick || onRoomFreeClick ? 'pointer' : undefined,
         gap: stackForBars ? 0 : 2,
       }}
     >

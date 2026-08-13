@@ -211,12 +211,14 @@ export default function CalendarInventoryPage({
         dateFrom: dateStr,
         dateTo: dateStr,
       });
+      // Jour déjà réservé / bloqué → pas de modal blocage (le clic cellule ouvre la résa).
+      if (overlapMessage) return;
       setBlockRoomDraft({
         roomId,
         roomName: roomName || 'Chambre',
         dateFrom: dateStr,
         dateTo: dateStr,
-        overlapMessage,
+        overlapMessage: null,
       });
     },
     [canBlockRooms, calendarBlocksById, multiOverlayReservations],
