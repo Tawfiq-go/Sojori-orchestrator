@@ -131,14 +131,16 @@ export function dayHasRoomBlock(blocks, iso) {
  * Tooltip Sojori (pas de type technique).
  * @param {any} block
  */
-export function roomBlockTooltip(block) {
+export function roomBlockTooltip(block, { canRelease = false } = {}) {
   const title = String(block?.title || 'Blocage').trim() || 'Blocage'
   const cat = inferRoomBlockCategory(title)
   const catLabel = roomBlockCategoryLabel(cat)
   const from = blockIsoDay(block?.dateFrom)
   const to = blockIsoDay(block?.dateTo)
   const dates = from && to ? `${from} → ${to}` : ''
-  return [title, dates, catLabel, 'cliquer pour libérer'].filter(Boolean).join(' · ')
+  const parts = [title, dates, catLabel]
+  if (canRelease) parts.push('cliquer pour libérer')
+  return parts.filter(Boolean).join(' · ')
 }
 
 /**
