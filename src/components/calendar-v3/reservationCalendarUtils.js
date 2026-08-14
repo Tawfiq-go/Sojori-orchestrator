@@ -7,10 +7,30 @@ const CALENDAR_VISIBLE_STATUSES = new Set([
   'checkedin',
 ]);
 
+/** Mews : Optional / Requested / Canceled / Processed n’occupent pas la chambre. */
+const MEWS_NON_OCCUPYING = new Set([
+  'optional',
+  'inquired',
+  'enquired',
+  'requested',
+  'canceled',
+  'cancelled',
+  'processed',
+]);
+
+function isMewsOccupyingOnCalendar(res) {
+  const mews = String(res?.mewsState || '')
+    .trim()
+    .toLowerCase();
+  if (!mews) return true;
+  if (mews.includes('cancel')) return false;
+  return !MEWS_NON_OCCUPYING.has(mews);
+}
+
 /**
  * Calendrier : Confirmed / Started / Pending / Inside uniquement.
  * Jamais les annulées — même Cancelled* non acknowledged (cancellationAcknowledged=false).
- * Les pages résas gardent les annulées ; ce filtre est UI calendrier seulement.
+ * Mews Optional / waitlist / no-show (Canceled+NoShow) / Processed : pas de barre.
  */
 export function isReservationVisibleOnCalendar(res) {
   if (!res || typeof res === 'string') return false;
@@ -20,6 +40,7 @@ export function isReservationVisibleOnCalendar(res) {
   if (res.cancellationDate != null && String(res.cancellationDate).trim() !== '') {
     return false;
   }
+  if (!isMewsOccupyingOnCalendar(res)) return false;
   return CALENDAR_VISIBLE_STATUSES.has(status.toLowerCase());
 }
 
