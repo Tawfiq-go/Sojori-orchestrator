@@ -62,9 +62,17 @@ const Row = ({ label, value, bold, mono, accent }: { label: string; value: any; 
 const RESERVATION_STATUS_OPTIONS = [
   { value: 'Pending', label: 'En attente' },
   { value: 'Confirmed', label: 'Confirmée' },
+  { value: 'Started', label: 'Séjour' },
   { value: 'Completed', label: 'Terminée' },
-  { value: 'CancelledByAdmin', label: 'Annulée (Admin)' },
-  { value: 'CancelledByCustomer', label: 'Annulée (Client)' },
+  { value: 'Cancelled', label: 'Annulée' },
+];
+
+const CANCELLATION_REASON_OPTIONS = [
+  { value: 'NoShow', label: 'No-show' },
+  { value: 'RequestedByGuest', label: 'Demandé par le guest' },
+  { value: 'RequestedByBooker', label: 'Demandé par le booker' },
+  { value: 'InvalidPayment', label: 'Paiement invalide' },
+  { value: 'Other', label: 'Autre' },
 ];
 
 const PAYMENT_STATUS_OPTIONS = [
@@ -753,6 +761,16 @@ export function GuestInfoTab({
 
           <SectionCard title="Statuts">
             <EditableRow label="Réservation" field="status" value={r.status} type="select" options={RESERVATION_STATUS_OPTIONS} {...rowProps} />
+            {String(rowProps.editedData?.status || r.status || '').toLowerCase().includes('cancel') ? (
+              <EditableRow
+                label="Raison d'annulation"
+                field="cancellationReason"
+                value={r.cancellationReason || r.mewsCancellationReason || ''}
+                type="select"
+                options={CANCELLATION_REASON_OPTIONS}
+                {...rowProps}
+              />
+            ) : null}
             <EditableRow label="Paiement" field="paymentStatus" value={r.paymentStatus} type="select" options={PAYMENT_STATUS_OPTIONS} {...rowProps} />
             <Row label="Mode d'encaissement" value={r.paymentMethod} />
             <Row label="Créé le" value={formatDate(r.createdAt || r.reservationDate)} />

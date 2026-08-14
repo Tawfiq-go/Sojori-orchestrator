@@ -618,7 +618,8 @@ class ReservationsService {
   ): Promise<{ success: boolean; data?: unknown; message?: string }> {
     try {
       const payload = {
-        status: 'CancelledByAdmin',
+        status: 'Cancelled',
+        cancellationReason: 'Other',
         ...data,
       };
 

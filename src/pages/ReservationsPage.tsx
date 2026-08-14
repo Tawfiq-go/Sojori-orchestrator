@@ -47,6 +47,7 @@ import {
 import { blurActiveElement } from '../utils/domFocus';
 import { logResaGuest, reservationStaySummary } from '../utils/resaGuestActionDebug';
 import { formatGuestCountryDisplay } from '../utils/guestCountryDisplay';
+import { isMewsOrigin } from '../utils/reservationCreatedVia';
 import { ReservationStayActions, type StayFieldPatch } from '../components/reservations/ReservationStayActions';
 import { useWriteAccess } from '../hooks/useWriteAccess';
 import {
@@ -1046,14 +1047,7 @@ export function ReservationsPage() {
                 { val: 'Confirmed', label: '✅ Confirmé' },
                 { val: 'Started', label: '🏠 Séjour' },
                 { val: 'Completed', label: '🎉 Complété' },
-                { val: 'Rejected', label: '❌ Rejeté' },
-                { val: 'Cancelled', label: '📵 Annulé (RU / canal)' },
-                { val: 'CancelledByHost', label: '🏠 Annulé par hôte' },
-                { val: 'CancelledByCustomer', label: '🚫 Annulé par client' },
-                { val: 'CancelledByAdmin', label: '⛔ Annulé par admin' },
-                { val: 'CancelledByOTA', label: '🔴 Annulé par OTA' },
-                { val: 'CancelledPaymentFailed', label: '💳 Annulé - paiement échoué' },
-                { val: 'OtherCancellation', label: '⭕ Autre annulation' },
+                { val: 'Cancelled', label: '📵 Annulé' },
               ].map((st) => (
                 <MenuItem key={st.val} value={st.val}>
                   <Checkbox checked={selectedStatuses.indexOf(st.val) > -1} size="small" />
@@ -1472,7 +1466,7 @@ function DesktopTable({
                     key={h}
                     onClick={sortKey ? () => onSortChange(sortKey) : undefined}
                     sx={{
-                      textAlign: h === 'Nuits' || h === 'Voyageurs' || h === 'Actions' ? 'center' : 'left',
+                      textAlign: h === 'Nuits' || h === 'Voyageurs' || h === 'Actions' || h === 'Source' ? 'center' : 'left',
                       px: 1.5, py: 1.25,
                       fontSize: 10.75, fontWeight: 700,
                       letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -1539,6 +1533,13 @@ function DesktopTable({
               const s = statusMeta(r.status);
               const isCancelled = isReservationCancelled(r.status);
               const unacknowledged = isCancelled && r.cancellationAcknowledged !== true;
+              // Origine Mews (hôtel) vs Sojori — bordure gauche discrète, ne
+              // rentre pas en collision avec le highlight jaune "non acquitté".
+              const mewsOrigin = isMewsOrigin({
+                createdVia: r.createdVia,
+                source: r.source,
+                channelName: r.channelName,
+              });
 
               return (
                 <Box component="tr" key={r._id}
@@ -1553,6 +1554,7 @@ function DesktopTable({
                       position: 'sticky', left: 0, zIndex: 2,
                       bgcolor: unacknowledged ? '#fdf3d0' : T.bg1,
                       boxShadow: pinnedShadow,
+                      borderLeft: mewsOrigin ? '3px solid #b45309' : '3px solid transparent',
                       transition: 'box-shadow 0.15s ease',
                     },
                     '&:hover > td:first-of-type': {
@@ -1797,10 +1799,16 @@ function MobileCard({ r, onClick, onAcknowledge, onStayUpdate, onRegistrationUpd
 
   const isCancelled = isReservationCancelled(r.status);
   const unacknowledged = isCancelled && r.cancellationAcknowledged !== true;
+  const mewsOrigin = isMewsOrigin({
+    createdVia: r.createdVia,
+    source: r.source,
+    channelName: r.channelName,
+  });
 
   return (
     <Card onClick={onClick} sx={{
       border: `1px solid ${unacknowledged ? 'rgba(245, 158, 11, 0.28)' : T.border}`,
+      borderLeft: mewsOrigin ? '3px solid #b45309' : undefined,
       bgcolor: unacknowledged ? 'rgba(250, 204, 21, 0.12)' : T.bg1,
       borderRadius: 1.5,
       cursor: 'pointer',

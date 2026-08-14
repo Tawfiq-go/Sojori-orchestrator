@@ -115,6 +115,9 @@ export interface Reservation {
   cancellationDate?: Date | string | null;
   cancellationAcknowledged?: boolean;
   cancelledBy?: string | null;
+  /** Raison Mews (NoShow, RequestedByGuest, InvalidPayment, Other…). */
+  cancellationReason?: string;
+  mewsCancellationReason?: string;
 
   // Listing & Room
   sojoriId?: string; // Listing ID
@@ -327,13 +330,15 @@ export interface ReservationsByListingRequest {
  * Status possibles pour une réservation
  */
 export type ReservationStatus =
-  | 'confirmed'
-  | 'pending'
+  | 'Pending'
+  | 'Confirmed'
+  | 'Started'
+  | 'Completed'
+  | 'Cancelled'
   | 'cancelled'
   | 'CancelledByHost'
   | 'CancelledByCustomer'
-  | 'CancelledByAdmin'
-  | 'completed';
+  | 'CancelledByAdmin';
 
 /**
  * Status de paiement possibles
