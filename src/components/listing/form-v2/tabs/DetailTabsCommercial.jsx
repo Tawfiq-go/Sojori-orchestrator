@@ -21,6 +21,7 @@ import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import { hourNumberToTimeInput } from '../../../../utils/listingTimeHelpers';
 import { createEmptyRoomType } from '../../multi/multiTypes';
+import { PhysicalRoomsPanel } from '../../multi/PhysicalRoomsPanel';
 import { multiRoomTypeRuOptions } from '../utils/multiRoomRuPropertyTypes';
 import { RU_OTA_OBJECT_TYPES } from '../utils/ruOtaObjectTypes';
 import { useSojoriAmenitiesData } from '../../amenities/useSojoriAmenitiesData';
@@ -535,7 +536,9 @@ export function PricingTab({
                         size="small"
                         checked={rt.active !== false}
                         onChange={(e) => patchRoomType(i, { active: e.target.checked })}
-                        inputProps={{ 'aria-label': 'Activer le room type (calendrier / planning)' }}
+                        slotProps={{
+                          input: { 'aria-label': 'Activer le room type (calendrier / planning)' },
+                        }}
                         sx={{
                           '& .MuiSwitch-switchBase.Mui-checked': { color: T.primary },
                           '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
@@ -802,6 +805,13 @@ export function PricingTab({
             )}
           </Box>
         </Card>
+
+        {/* Les CHAMBRES PHYSIQUES sous leurs types — « Villa 05 », son état de
+            ménage, son activation. Elles existent en base (import Mews) mais
+            n'étaient affichées nulle part : le front s'arrêtait au compteur du
+            type, qui ment (14 déclarées ≠ 7 vendables sur NOMMOS).
+            Ne rend rien si le listing n'a aucune chambre en base. */}
+        {listingId ? <PhysicalRoomsPanel listingId={listingId} /> : null}
 
         <Card title="Remises">
           <Field label="Long séjour" ruField="longStayDiscounts" fullWidth>

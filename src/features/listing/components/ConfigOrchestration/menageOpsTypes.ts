@@ -58,6 +58,8 @@ export type MenageOpsConfig = {
   paid: MenageTrackWithOptions;
   checkout: MenageCheckoutConfig;
   flexibility: MenageFlexibility;
+  /** 1 = aujourd’hui · 2 = aujourd’hui + demain. Commencer = jour J seulement. */
+  fdmVisibleDays: number;
 };
 
 function prices(price = 0, durationMinutes = 120): CleaningLevelPrices {
@@ -101,6 +103,7 @@ export function defaultMenageOps(): MenageOpsConfig {
       imagesMax: 10,
       supervisorOrAdminValidates: true,
     },
+    fdmVisibleDays: 7,
   };
 }
 
@@ -180,6 +183,7 @@ export function normalizeMenageOps(raw: unknown): MenageOpsConfig {
       imagesMax: Math.min(10, Math.max(1, num(flex.imagesMax, 10))),
       supervisorOrAdminValidates: bool(flex.supervisorOrAdminValidates, true),
     },
+    fdmVisibleDays: Math.min(7, Math.max(1, Math.round(num(o.fdmVisibleDays, 7)))),
   };
 }
 

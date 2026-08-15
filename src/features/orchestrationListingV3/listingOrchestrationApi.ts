@@ -44,6 +44,7 @@ export interface ListingOrchestrationDoc {
   scheduledMessages: unknown[];
   version: number;
   source?: string;
+  cleaningRules?: Record<string, unknown>;
 }
 
 export interface ListingOrchestrationEffective extends ListingOrchestrationDoc {

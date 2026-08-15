@@ -25,6 +25,8 @@ import { FinancierTab } from '../components/reservation/FinancierTab';
 import { MessagesTab } from '../components/reservation/MessagesTab';
 import { RegistrationTab } from '../components/reservation/RegistrationTab';
 import { useWriteAccess } from '../hooks/useWriteAccess';
+import { isMewsOrigin } from '../utils/reservationCreatedVia';
+import { Roles } from '../constants/roles';
 
 const T = {
   primary: '#b8851a', primaryDeep: '#876119', primarySoft: '#e6c46a',
@@ -52,7 +54,7 @@ export function ReservationSejourPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { canWrite, readOnly } = useWriteAccess('reservations');
+  const { canWrite, readOnly, user } = useWriteAccess('reservations');
 
   // Initialize tab from URL (?tab=guest-info legacy → séjour)
   const rawTab = searchParams.get('tab') || 'sejour';
@@ -284,6 +286,18 @@ export function ReservationSejourPage() {
     </Tabs>
   );
 
+  // Résa née côté Mews (hôtel) : PM ne peut pas l'annuler depuis Sojori —
+  // seul SuperAdmin (compte unique, tawfiq.gouach@sojori.com) le peut,
+  // le temps que le push villa précise (AssignedResourceId) soit câblé côté
+  // Mews. Cf. docs/mews/URGENT_ASSIGNED_RESOURCE_GAP.md.
+  const mewsOrigin = isMewsOrigin({
+    createdVia: reservationDetails?.createdVia,
+    source: reservationDetails?.source,
+    channelName: reservationDetails?.channelName,
+  });
+  const isSuperAdmin = user?.role === Roles.SuperAdmin;
+  const cancelBlockedByMewsOrigin = mewsOrigin && !isSuperAdmin;
+
   const actionButtons = readOnly ? null : isEditMode ? (
     <Stack direction="row" sx={{ gap: 0.5, flexShrink: 0 }}>
       <Button
@@ -313,13 +327,18 @@ export function ReservationSejourPage() {
     </Stack>
   ) : (
     <Stack direction="row" sx={{ gap: 0.5, flexShrink: 0, display: { xs: 'none', md: 'flex' } }}>
-      <Button
-        size="small"
-        onClick={() => setShowCancelModal(true)}
-        sx={{ textTransform: 'none', fontWeight: 600, color: T.error, minHeight: 28, fontSize: 11.5, px: 1, '&:hover': { bgcolor: 'rgba(200,30,30,0.06)' } }}
-      >
-        Annuler
-      </Button>
+      <Tooltip title={cancelBlockedByMewsOrigin ? 'Résa gérée depuis Mews — seul un super admin peut annuler ici' : ''}>
+        <span>
+          <Button
+            size="small"
+            onClick={() => setShowCancelModal(true)}
+            disabled={cancelBlockedByMewsOrigin}
+            sx={{ textTransform: 'none', fontWeight: 600, color: T.error, minHeight: 28, fontSize: 11.5, px: 1, '&:hover': { bgcolor: 'rgba(200,30,30,0.06)' } }}
+          >
+            Annuler
+          </Button>
+        </span>
+      </Tooltip>
       <Button size="small" variant="outlined" sx={{ textTransform: 'none', fontWeight: 600, borderColor: T.border, color: T.text2, minHeight: 28, fontSize: 11.5, px: 1 }}>Rejeter</Button>
       <Button size="small" variant="contained" sx={{
         textTransform: 'none', fontWeight: 600, minHeight: 28, fontSize: 11.5, px: 1,

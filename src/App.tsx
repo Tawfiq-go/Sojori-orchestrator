@@ -109,6 +109,16 @@ const TasksPlanningPageV2 = lazyWithReload(() =>
 const TasksStaffFulltaskPage = lazyWithReload(() =>
   import('./pages/TasksStaffFulltaskPage').then((module) => ({ default: module.default }))
 );
+const TasksExtrasConfigPage = lazyWithReload(() =>
+  import('./features/extras/TasksExtrasConfigPage').then((module) => ({
+    default: module.TasksExtrasConfigPage,
+  }))
+);
+const TasksExtrasListPage = lazyWithReload(() =>
+  import('./features/extras/TasksExtrasListPage').then((module) => ({
+    default: module.TasksExtrasListPage,
+  }))
+);
 const CustomersPage = lazyWithReload(() =>
   import('./pages/CustomersPage').then((module) => ({ default: module.default }))
 );
@@ -117,6 +127,12 @@ const TasksOrchestrationFulltaskPage = lazyWithReload(() =>
 );
 const OwnerOrchestrationModelPage = lazyWithReload(() =>
   import('./pages/OwnerOrchestrationModelPage').then((module) => ({
+    default: module.default,
+  }))
+);
+/** Configuration d'établissement — refonte 6 sections (module greenfield). */
+const EtablissementPage = lazyWithReload(() =>
+  import('./features/etablissement/EtablissementPage').then((module) => ({
     default: module.default,
   }))
 );
@@ -393,6 +409,9 @@ function App() {
 
               {/* Claude Design V2 - Remplace les anciennes vues */}
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
+              <Route path="/tasks/extras/configuration" element={<LazyRoute><TasksExtrasConfigPage /></LazyRoute>} />
+              <Route path="/tasks/extras/list" element={<LazyRoute><TasksExtrasListPage /></LazyRoute>} />
+              <Route path="/tasks/extras" element={<Navigate to="/tasks/extras/configuration" replace />} />
               <Route path="/tasks/planning" element={<LazyRoute><TasksPlanningPageV2 /></LazyRoute>} />
               <Route path="/tasks/kanban" element={<Navigate to="/tasks" replace />} />
 
@@ -427,6 +446,10 @@ function App() {
               <Route element={<AdminRoute />}>
                 <Route path="/listings/mapping/*" element={<LazyRoute><ListingsMappingHubPage /></LazyRoute>} />
               </Route>
+              {/* Configuration d'établissement — refonte 6 sections. Coexiste
+                  volontairement avec /listings/:id (formulaire legacy) tant que
+                  tous ses réglages n'ont pas été repris (cf. section Autres). */}
+              <Route path="/listings/configuration" element={<LazyRoute><EtablissementPage /></LazyRoute>} />
               <Route path="/listings/orchestration-model" element={<LazyRoute><OwnerOrchestrationModelPage /></LazyRoute>} />
               <Route path="/listings/new" element={<LazyRoute><ListingCreatePage /></LazyRoute>} />
               <Route path="/listings/:id" element={<LazyRoute><ListingFormV2Page /></LazyRoute>} />

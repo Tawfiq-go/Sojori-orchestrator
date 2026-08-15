@@ -12,10 +12,10 @@ export type CreatedVia =
 
 const LABELS: Record<CreatedVia, string> = {
   admin: 'Admin',
-  whatsapp_staff: 'WhatsApp staff',
-  whatsapp_resa: 'WhatsApp resa',
-  site_sojori: 'Site Sojori',
-  whatsapp_owner: 'WhatsApp owner',
+  whatsapp_staff: 'W.S',
+  whatsapp_resa: 'W.R',
+  site_sojori: 'Site',
+  whatsapp_owner: 'W.O',
 };
 
 export function createdViaLabel(via?: string | null): string | null {
@@ -74,4 +74,22 @@ export function isSojoriCommercialSource(reservation: {
   const src = String(reservation.source || '').toLowerCase().trim();
   const ch = String(reservation.channelName || '').toLowerCase().trim();
   return src === 'sojori' || ch === 'sojori';
+}
+
+/**
+ * true si la résa est NÉE côté Mews (hôtel/réception), pas juste synchronisée
+ * vers Mews — ne jamais utiliser `mewsReservationId` seul pour ça (il est
+ * renseigné dès qu'une résa Sojori est POUSSÉE vers Mews, peu importe son
+ * origine réelle). Signal fiable : source/channelName contiennent "mews" ET
+ * aucun createdVia Sojori n'est renseigné.
+ */
+export function isMewsOrigin(reservation: {
+  createdVia?: string | null;
+  source?: string | null;
+  channelName?: string | null;
+}): boolean {
+  if (resolveCreatedVia(reservation)) return false;
+  const src = String(reservation.source || '').toLowerCase().trim();
+  const ch = String(reservation.channelName || '').toLowerCase().trim();
+  return src.includes('mews') || ch.includes('mews');
 }

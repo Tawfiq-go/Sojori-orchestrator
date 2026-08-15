@@ -265,3 +265,193 @@ export function mergeReservationsIntoDayInventories(inventories, reservations) {
   }
   return out;
 }
+
+function overlayResaId(r) {
+  return String(r?._id || r?.reservationId || r?.id || '').trim();
+}
+
+/** Même séjour recopié N jours / seed+fetch avec ids différents. */
+export function overlayStayKey(r, listingId = '') {
+  if (!r || typeof r !== 'object') return '';
+  const arr = toIsoDay(r.arrivalDate);
+  const dep = toIsoDay(r.departureDate);
+  if (!arr || !dep) return '';
+  const room = String(r.roomId || r.roomName || '')
+    .trim()
+    .toLowerCase();
+  const lid = String(r.listingId || r.sojoriId || listingId || '').trim();
+  return `${lid}|${room}|${arr}|${dep}`;
+}
+
+export function dedupeOverlayReservations(rows, listingId = '') {
+  const list = [];
+  const idToIdx = new Map();
+  const stayToIdx = new Map();
+  for (const r of rows || []) {
+    if (!r || typeof r !== 'object') continue;
+    const id = overlayResaId(r);
+    const stay = overlayStayKey(r, listingId);
+    if (id && idToIdx.has(id)) {
+      const i = idToIdx.get(id);
+      list[i] = r;
+      if (stay) stayToIdx.set(stay, i);
+      continue;
+    }
+    if (stay && stayToIdx.has(stay)) {
+      const i = stayToIdx.get(stay);
+      list[i] = r;
+      if (id) idToIdx.set(id, i);
+      continue;
+    }
+    const i = list.length;
+    list.push(r);
+    if (id) idToIdx.set(id, i);
+    if (stay) stayToIdx.set(stay, i);
+  }
+  return list;
+}
+
+/**
+ * Résas déjà dans l’inventaire (get-inventory includeReservations).
+ * Sert de 1er paint instantané — sans attendre GET /reservations.
+ */
+export function flattenInventoryReservationsForOverlay(inventoryData) {
+  const byId = new Map();
+  const staySeen = new Set();
+  for (const [listingId, roomTypes] of Object.entries(inventoryData || {})) {
+    if (!roomTypes || typeof roomTypes !== 'object') continue;
+    for (const [rtId, rt] of Object.entries(roomTypes)) {
+      const days = rt && typeof rt === 'object' ? rt.availability : null;
+      if (!days || typeof days !== 'object') continue;
+      for (const day of Object.values(days)) {
+        const list = Array.isArray(day?.reservations) ? day.reservations : [];
+        for (const raw of list) {
+          if (!raw || typeof raw !== 'object') continue;
+          const tagged = {
+            ...raw,
+            sojoriId: raw.sojoriId || listingId,
+            listingId: raw.listingId || listingId,
+            roomTypeId: raw.roomTypeId || rtId,
+            roomTypeName: raw.roomTypeName || rt?.name,
+          };
+          const id = overlayResaId(tagged);
+          const stay = overlayStayKey(tagged, listingId);
+          const key = id || stay || `tmp:${listingId}:${rtId}:${byId.size}`;
+          if (byId.has(key) || (stay && staySeen.has(stay))) continue;
+          if (stay) staySeen.add(stay);
+          byId.set(key, tagged);
+        }
+      }
+    }
+  }
+  return [...byId.values()];
+}
+
+/** Seed inventaire + fetch /reservations (le fetch gagne sur le même id). */
+export function mergeOverlayReservationLists(seed, fetched) {
+  return dedupeOverlayReservations([...(seed || []), ...(fetched || [])]);
+}
+
+/**
+ * Multi hôtel = propertyUnit Multi et plus d’un type (catalogue ou inventaire).
+ * Le catalogue forCalendar évite de traiter un Multi comme un Single avant l’inventaire.
+ */
+export function isMultiHotelListing(listing, roomTypes = []) {
+  if (String(listing?.propertyUnit || '') !== 'Multi') return false;
+  const catalogN = Array.isArray(listing?.roomTypes) ? listing.roomTypes.length : 0;
+  const treeN = Array.isArray(roomTypes) ? roomTypes.length : 0;
+  return Math.max(catalogN, treeN) > 1;
+}
+
+function catalogRoomTypeIndex(listing) {
+  const catalogRts = Array.isArray(listing?.roomTypes) ? listing.roomTypes : [];
+  const catalogById = new Map();
+  const catalogByName = new Map();
+  catalogRts.forEach((rt) => {
+    const id = mongoId(rt?._id || rt?.id);
+    const name = String(rt?.roomTypeName || rt?.name || '')
+      .trim()
+      .toLowerCase();
+    if (id) catalogById.set(id, rt);
+    if (name) catalogByName.set(name, rt);
+  });
+  return { catalogRts, catalogById, catalogByName };
+}
+
+/**
+ * Arbre types + rooms pour un listing Multi.
+ * Catalogue d’abord (1er paint), inventaire ensuite pour dispo/tarif — même ids, pas de 2e layout.
+ */
+export function buildRoomTypesForListing({ listing, inventoryBlock = {} }) {
+  const { catalogRts, catalogById, catalogByName } = catalogRoomTypeIndex(listing);
+  const inv =
+    inventoryBlock && typeof inventoryBlock === 'object' ? inventoryBlock : {};
+  const invEntries = Object.entries(inv);
+  const out = [];
+  const usedCatalogIds = new Set();
+
+  const pushRt = (rtId, rtName, availability, catalogRt, roomNumber) => {
+    out.push({
+      id: rtId,
+      name: rtName,
+      availability: availability || {},
+      rooms: resolveRoomsForRoomType({
+        catalogRt,
+        roomTypeId: rtId,
+        roomTypeName: rtName,
+        roomNumber,
+        reservations: [],
+      }),
+    });
+  };
+
+  const matchCatalog = (rtId, rtName) =>
+    catalogById.get(rtId) ||
+    catalogByName.get(String(rtName || '').trim().toLowerCase()) ||
+    null;
+
+  if (invEntries.length > 0) {
+    invEntries.forEach(([id, v]) => {
+      const rtId = mongoId(id) || String(id);
+      const rtName = v?.name || `Type ${String(id).slice(-4)}`;
+      const catalogRt = matchCatalog(rtId, rtName);
+      const catalogId = mongoId(catalogRt?._id || catalogRt?.id);
+      if (catalogId) usedCatalogIds.add(catalogId);
+      pushRt(
+        rtId,
+        rtName,
+        v?.availability,
+        catalogRt,
+        Number(v?.roomNumber) || Number(catalogRt?.roomNumber) || 0,
+      );
+    });
+    catalogRts.forEach((rt) => {
+      const rtId = mongoId(rt?._id || rt?.id);
+      if (!rtId || usedCatalogIds.has(rtId) || out.some((x) => x.id === rtId)) return;
+      const rtName = String(rt.roomTypeName || rt.name || `Type ${rtId.slice(-4)}`);
+      pushRt(rtId, rtName, {}, rt, Number(rt.roomNumber) || 0);
+    });
+    return out;
+  }
+
+  catalogRts.forEach((rt) => {
+    const rtId = mongoId(rt?._id || rt?.id);
+    if (!rtId) return;
+    const rtName = String(rt.roomTypeName || rt.name || `Type ${rtId.slice(-4)}`);
+    pushRt(rtId, rtName, {}, rt, Number(rt.roomNumber) || 0);
+  });
+  return out;
+}
+
+/**
+ * Single unit : une seule ligne « Resa » (pas de roomType / pas de chambres).
+ */
+export function buildSingleUnitResaRows({ listingId, listingResas = [] }) {
+  const lid = String(listingId || 'listing');
+  return [
+    {
+      room: { id: `${lid}:resa`, name: 'Resa' },
+      roomResas: listingResas || [],
+    },
+  ];
+}

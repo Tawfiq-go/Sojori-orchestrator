@@ -246,15 +246,27 @@ function MultiResaOverlay({
       endIdx,
       clippedStart: arrIdx < 0,
       clippedEnd: depIdx > days.length - 1,
+      lane: 0,
     });
   });
 
-  // ~25 % d’air en haut (10 % + 15 %) pour alléger la barre vs le rectangle cellule
+  const laneEnd = [];
+  [...segments]
+    .sort((a, b) => a.startIdx - b.startIdx || a.endIdx - b.endIdx)
+    .forEach((seg) => {
+      let lane = 0;
+      while (lane < 6 && laneEnd[lane] != null && laneEnd[lane] > seg.startIdx) lane += 1;
+      seg.lane = lane;
+      laneEnd[lane] = Math.max(laneEnd[lane] || 0, seg.endIdx);
+    });
+  const laneCount = Math.max(1, laneEnd.length);
+
+  // ~25 % d’air en haut — si plusieurs barres se chevauchent, on les empile
   const rh = rowHeight || 48;
-  const barGapTop = Math.max(8, Math.round(rh * 0.25));
+  const barGapTop = laneCount > 1 ? 2 : Math.max(8, Math.round(rh * 0.25));
   const barGapBottom = 2;
-  const barH = Math.max(16, rh - barGapTop - barGapBottom);
-  const barTop = barGapTop;
+  const usable = Math.max(16, rh - barGapTop - barGapBottom);
+  const barH = Math.max(14, Math.floor(usable / laneCount) - (laneCount > 1 ? 1 : 0));
 
   return (
     <div
@@ -265,7 +277,7 @@ function MultiResaOverlay({
         zIndex: 5,
       }}
     >
-      {segments.map(({ r, startIdx, endIdx, clippedStart, clippedEnd }) => {
+      {segments.map(({ r, startIdx, endIdx, clippedStart, clippedEnd, lane }) => {
         const { leftPct, widthPct } = computeReservationBarLayout(
           startIdx,
           endIdx,
@@ -282,14 +294,14 @@ function MultiResaOverlay({
           return Math.round((b - a) / 86400000);
         })();
         const pending = String(r.status || '').toLowerCase().includes('pend');
-        // Arrivée / départ réels dans la fenêtre (pas juste clip scroll)
         const startsHere = !clippedStart;
         const endsHere = !clippedEnd;
         const pillR = Math.round(barH / 2);
         const showLabel = startsHere || startIdx === 0;
+        const barTop = barGapTop + lane * (barH + 1);
         return (
           <button
-            key={String(r._id || r.reservationId)}
+            key={`${String(r._id || r.reservationId || name)}:${isoDay(r.arrivalDate)}:${lane}`}
             type="button"
             title={`${name} · ${isoDay(r.arrivalDate)} → ${isoDay(r.departureDate)}${r.channelName ? ` · ${r.channelName}` : ''} · arrivée / départ`}
             onClick={(e) => {
@@ -528,11 +540,14 @@ import {
 } from '../calendar-views/_shared';
 import { countReservationsOnDay } from '../../utils/planningMultiExpand';
 import {
+  buildRoomTypesForListing,
+  buildSingleUnitResaRows,
+  dedupeOverlayReservations,
   filterReservationsForRoom,
   filterReservationsForRoomType,
   groupMultiReservationsByListing,
-  mongoId,
-  resolveRoomsForRoomType,
+  isMultiHotelListing,
+  overlayStayKey,
   toIsoDay,
 } from './multiCalendarReservations';
 import {
@@ -610,11 +625,10 @@ export default function MultiView({
     [overlayReservations, listings],
   );
 
-  /* ─── Expand/collapse par listing — fermé par défaut ─── */
+  /* Multi hôtel : ouvert par défaut (pas d’effet post-paint). Single : fermé. */
   const [expanded, setExpanded] = useState({});
   /** Multi only: collapse détail (min stay…) par roomType — clé `${listingId}:${rtId}` */
   const [rtExpanded, setRtExpanded] = useState({});
-  const toggleListing = (id) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
   const toggleRoomType = useCallback((key) => {
     setRtExpanded((p) => ({ ...p, [key]: !p[key] }));
   }, []);
@@ -626,87 +640,36 @@ export default function MultiView({
     listings.forEach((listing) => {
       const listingId = String(listing._id || listing.id || '');
       const inv = inventoryData[listing._id] || inventoryData[listingId] || {};
-      const catalogRts = Array.isArray(listing.roomTypes) ? listing.roomTypes : [];
-      const catalogById = new Map();
-      const catalogByName = new Map();
-      catalogRts.forEach((rt) => {
-        const id = mongoId(rt?._id || rt?.id);
-        const name = String(rt?.roomTypeName || rt?.name || '')
-          .trim()
-          .toLowerCase();
-        if (id) catalogById.set(id, rt);
-        if (name) catalogByName.set(name, rt);
-      });
-      const listingResas =
-        reservationsByListing.get(listingId) ||
-        reservationsByListing.get(String(listing._id)) ||
-        [];
-
-      map[listing._id] = Object.entries(inv).map(([id, v]) => {
-        const rtId = mongoId(id) || String(id);
-        const rtName = v?.name || `Type ${String(id).slice(-4)}`;
-        const catalogRt =
-          catalogById.get(rtId) ||
-          catalogByName.get(String(rtName).trim().toLowerCase()) ||
-          null;
-        const rooms = resolveRoomsForRoomType({
-          catalogRt,
-          roomTypeId: rtId,
-          roomTypeName: rtName,
-          roomNumber: Number(v?.roomNumber) || Number(catalogRt?.roomNumber) || 0,
-          reservations: listingResas,
-        });
-        return {
-          id: rtId,
-          name: rtName,
-          availability: v?.availability || {},
-          rooms,
-        };
+      map[listing._id] = buildRoomTypesForListing({
+        listing,
+        inventoryBlock: inv,
       });
     });
     return map;
-  }, [listings, inventoryData, reservationsByListing]);
+  }, [listings, inventoryData]);
 
-  /* Multi : ouvrir les listings hôtel pour voir types (+ rooms sous chaque type). */
-  useEffect(() => {
-    setExpanded((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      listings.forEach((listing) => {
-        const rts = roomTypesByListing[listing._id] || [];
-        const isMulti =
-          String(listing.propertyUnit || '') === 'Multi' && rts.length > 1;
-        if (isMulti && !next[listing._id]) {
-          next[listing._id] = true;
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
-  }, [listings, roomTypesByListing]);
+  const waitingFirstInventory =
+    inventoryLoading && Object.keys(inventoryData || {}).length === 0;
 
-  /* Multi : ouvrir les roomTypes qui ont des rooms catalogue (rooms toujours visibles). */
   useEffect(() => {
-    setRtExpanded((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      listings.forEach((listing) => {
-        const rts = roomTypesByListing[listing._id] || [];
-        const isMulti =
-          String(listing.propertyUnit || '') === 'Multi' && rts.length > 1;
-        if (!isMulti || !expanded[listing._id]) return;
-        rts.forEach((rt) => {
-          const rooms = Array.isArray(rt.rooms) ? rt.rooms : [];
-          const key = `${listing._id}:${rt.id}`;
-          if (rooms.length > 0 && !next[key]) {
-            next[key] = true;
-            changed = true;
-          }
-        });
-      });
-      return changed ? next : prev;
+    console.log('[CalendarMulti] paint', {
+      listings: listings.length,
+      invListings: Object.keys(inventoryData || {}).length,
+      overlay: Array.isArray(overlayReservations) ? overlayReservations.length : 0,
+      loading: inventoryLoading,
+      waitingFirstInventory,
+      trees: listings.slice(0, 6).map((l) => ({
+        name: l.name,
+        unit: l.propertyUnit,
+        catalogRts: Array.isArray(l.roomTypes) ? l.roomTypes.length : 0,
+        treeRts: (roomTypesByListing[l._id] || []).length,
+        rooms: (roomTypesByListing[l._id] || []).reduce(
+          (n, rt) => n + (Array.isArray(rt.rooms) ? rt.rooms.length : 0),
+          0,
+        ),
+      })),
     });
-  }, [listings, roomTypesByListing, expanded]);
+  }, [listings, inventoryData, overlayReservations, inventoryLoading, roomTypesByListing, waitingFirstInventory]);
 
   /* ─── Sélection Excel vs clic détail tarif ─── */
   const [isDragging, setIsDragging] = useState(false);
@@ -1102,7 +1065,7 @@ export default function MultiView({
           width: LEFT_W + days.length * CELL_W,
         }}>
           <div style={{
-            padding: '7px 12px', display: 'flex', alignItems: 'center',
+            padding: '4px 12px', display: 'flex', alignItems: 'center',
             fontSize: 11, fontWeight: 700, color: T.text3,
             letterSpacing: '0.08em', textTransform: 'uppercase',
             borderRight: `1px solid ${T.border}`,
@@ -1149,20 +1112,30 @@ export default function MultiView({
             }}
           />
         )}
+        {waitingFirstInventory ? (
+          <div style={{ padding: '28px 16px', color: T.text3, fontSize: 13, fontWeight: 650 }}>
+            Chargement du calendrier…
+          </div>
+        ) : (
         <div style={{ minWidth: LEFT_W + days.length * CELL_W }}>
           {listings.map((listing) => {
             const roomTypes = roomTypesByListing[listing._id] || [];
-            const isMultiHotel =
-              String(listing.propertyUnit || '') === 'Multi' && roomTypes.length > 1;
-            const isOpen = !!expanded[listing._id];
+            const isMultiHotel = isMultiHotelListing(listing, roomTypes);
+            const isOpen = isMultiHotel
+              ? expanded[listing._id] !== false
+              : !!expanded[listing._id];
             const listingResas =
               reservationsByListing.get(String(listing._id))
               || reservationsByListing.get(String(listing.id))
               || [];
             const buildingInventories = inventoriesByListing[listing._id] || {};
-            /* Single / monotype : barres résa sur la ligne unité si filtre Rés. */
-            const singleUnitResas =
-              !isMultiHotel && showResaFilter ? listingResas : null;
+            /* Single : 1 ligne Resa (pas de roomType). Multi : types + rooms inchangés. */
+            const singleResaRows = isMultiHotel
+              ? []
+              : buildSingleUnitResaRows({
+                  listingId: listing._id,
+                  listingResas,
+                });
             return (
               <div key={listing._id}>
                 <ListingRow
@@ -1172,13 +1145,20 @@ export default function MultiView({
                   }}
                   dpEnabled={dpEnabledByListing[String(listing._id)] !== false}
                   inventories={buildingInventories}
-                  overlayLineReservations={singleUnitResas}
+                  overlayLineReservations={null}
                   showResaBars={showResaFilter}
                   days={days}
                   leftW={LEFT_W}
                   cellW={CELL_W}
                   expanded={isOpen}
-                  onToggle={() => toggleListing(listing._id)}
+                  onToggle={() => {
+                    setExpanded((p) => {
+                      const currentlyOpen = isMultiHotel
+                        ? p[listing._id] !== false
+                        : !!p[listing._id];
+                      return { ...p, [listing._id]: !currentlyOpen };
+                    });
+                  }}
                   forceChevron={isMultiHotel}
                   /* Multi hôtel : ▶ ouvre les roomTypes ; min/max stay sur chaque type */
                   hideDetailCollapse={isMultiHotel}
@@ -1196,6 +1176,44 @@ export default function MultiView({
                   onCalendarImportReviewActivated={onCalendarImportReviewActivated}
                   canActivateCalendarImport={canActivateCalendarImport}
                 />
+                {!isMultiHotel
+                  ? singleResaRows.map(({ room, roomResas }) => (
+                      <ListingRow
+                        key={`${listing._id}-resa-${room.id}`}
+                        listing={{
+                          ...listing,
+                          _id: listing._id,
+                          name: room.name,
+                          roomId: room.id,
+                          propertyUnit: 'Single',
+                          _isRoomTypeRow: false,
+                          _isRoomRow: true,
+                          _isSingleResaRow: true,
+                        }}
+                        dpEnabled={false}
+                        inventories={buildingInventories}
+                        overlayLineReservations={roomResas}
+                        showResaBars={showResaFilter}
+                        days={days}
+                        leftW={LEFT_W}
+                        cellW={CELL_W}
+                        expanded={false}
+                        onToggle={undefined}
+                        forceChevron={false}
+                        hideDetailCollapse
+                        selectedColumns={selectedColumns}
+                        isSelected={isSelected}
+                        onMouseDown={onMouseDown}
+                        onMouseEnter={onMouseEnter}
+                        onPriceClick={onPriceClick}
+                        onReservationClick={handleReservationDayClick}
+                        activeTip={activeTip}
+                        canBlockRooms={canBlockRooms}
+                        onRoomBlockClick={onRoomBlockClick}
+                        onRoomFreeClick={onRoomFreeClick}
+                      />
+                    ))
+                  : null}
                 {isOpen && isMultiHotel
                   ? roomTypes.map((rt) => {
                       const rtKey = `${listing._id}:${rt.id}`;
@@ -1275,19 +1293,32 @@ export default function MultiView({
                       ) : (
                         (() => {
                             const claimed = new Set();
+                            const claimedStay = new Set();
                             const roomRows = rooms.map((room) => {
-                              const roomResas = filterReservationsForRoom(
-                                rtResas,
-                                room.id,
-                                room.name,
+                              const roomResas = dedupeOverlayReservations(
+                                filterReservationsForRoom(
+                                  rtResas,
+                                  room.id,
+                                  room.name,
+                                ),
+                                listing._id,
                               );
-                              roomResas.forEach((r) =>
-                                claimed.add(String(r._id || r.reservationId || '')),
-                              );
+                              roomResas.forEach((r) => {
+                                claimed.add(String(r._id || r.reservationId || ''));
+                                const stay = overlayStayKey(r, listing._id);
+                                if (stay) claimedStay.add(stay);
+                              });
                               return { room, roomResas };
                             });
-                            const leftover = rtResas.filter(
-                              (r) => !claimed.has(String(r._id || r.reservationId || '')),
+                            const leftover = dedupeOverlayReservations(
+                              rtResas.filter((r) => {
+                                const id = String(r._id || r.reservationId || '');
+                                const stay = overlayStayKey(r, listing._id);
+                                if (id && claimed.has(id)) return false;
+                                if (stay && claimedStay.has(stay)) return false;
+                                return true;
+                              }),
+                              listing._id,
                             );
                             if (leftover.length > 0) {
                               roomRows.push({
@@ -1347,6 +1378,7 @@ export default function MultiView({
             );
           })}
         </div>
+        )}
       </div>
 
       {activeTip && (() => {
@@ -1402,7 +1434,7 @@ export default function MultiView({
 const DayHeader = memo(function DayHeader({ day, loading }) {
   return (
     <div style={{
-      padding: '5px 0 4px', textAlign: 'center',
+      padding: '3px 0 3px', textAlign: 'center',
       borderRight: `1px solid ${T.border}`,
       background: day.isToday ? T.primaryTint : 'transparent',
       position: 'relative',
@@ -1410,22 +1442,19 @@ const DayHeader = memo(function DayHeader({ day, loading }) {
       transition: 'opacity 0.15s',
     }}>
       <div style={{
-        fontFamily: '"Geist Mono", monospace', fontSize: 9.5, fontWeight: 700,
-        letterSpacing: '0.08em', textTransform: 'uppercase',
+        fontFamily: '"Geist Mono", monospace', fontSize: 9, fontWeight: 700,
+        letterSpacing: '0.06em', textTransform: 'uppercase',
         color: day.isToday ? T.primaryDeep : day.isWeekend ? T.warning : T.text3,
-        lineHeight: 1,
+        lineHeight: 1.1,
       }}>{day.weekday}</div>
       <div style={{
-        fontFamily: '"Geist Mono", monospace', fontSize: 14, fontWeight: 700,
-        color: day.isToday ? T.primaryDeep : T.text, marginTop: 3,
-      }}>{day.day}</div>
-      <div style={{
-        fontFamily: '"Geist Mono", monospace', fontSize: 8.5, color: T.text4, marginTop: 1,
-      }}>{day.month}</div>
+        fontFamily: '"Geist Mono", monospace', fontSize: 11.5, fontWeight: 700,
+        color: day.isToday ? T.primaryDeep : T.text, marginTop: 1, lineHeight: 1.15,
+      }}>{day.day} {day.month}</div>
       {day.isToday && (
         <div style={{
-          position: 'absolute', left: '50%', bottom: 4, transform: 'translateX(-50%)',
-          width: 24, height: 2, background: T.primary, borderRadius: 999,
+          position: 'absolute', left: '50%', bottom: 1, transform: 'translateX(-50%)',
+          width: 18, height: 2, background: T.primary, borderRadius: 999,
         }} />
       )}
     </div>
@@ -1439,13 +1468,12 @@ const ListingLabel = memo(function ListingLabel({
   onActivateCalendarImport, activatingCalendarImport = false,
   onAuditClick,
 }) {
-  const isSingle = listing.propertyUnit === 'Single';
+  const isSingleResaRow = Boolean(listing._isSingleResaRow);
   const isRoomTypeRow = Boolean(listing._isRoomTypeRow);
   const isRoomRow = Boolean(listing._isRoomRow);
   const isMultiHotelParent = !isRoomTypeRow && !isRoomRow && Number(listing.roomTypeCount) > 1;
   const currency = listing.currencyCode || listing.currency || 'MAD';
   const dpHref = `/dynamic-pricing/bien/${listing._id}`;
-  const roomTypeCount = Number(listing.roomTypeCount) || 0;
   const reviewActive = !isRoomTypeRow && !isRoomRow && isCalendarImportReviewActive(listing);
   // Fond OPAQUE obligatoire : sticky left laisse passer les cellules dates si rgba translucide
   const labelBg = reviewActive
@@ -1461,11 +1489,13 @@ const ListingLabel = memo(function ListingLabel({
     <div
       onClick={showChevron ? onToggle : undefined}
       style={{
-        padding: isRoomRow
-          ? '5px 12px 5px 44px'
+        padding: isSingleResaRow
+          ? '4px 12px 4px 28px'
+          : isRoomRow
+          ? '4px 12px 4px 44px'
           : isRoomTypeRow
-            ? '6px 12px 6px 28px'
-            : '6px 12px',
+            ? '4px 12px 4px 28px'
+            : '4px 12px',
         display: 'flex',
         alignItems: 'center',
         gap: 9,
@@ -1496,8 +1526,8 @@ const ListingLabel = memo(function ListingLabel({
       {!isRoomTypeRow && !isRoomRow && (
         <div
           style={{
-            width: 24,
-            height: 24,
+            width: 18,
+            height: 18,
             borderRadius: 6,
             background: reviewActive
               ? 'linear-gradient(135deg, #fecaca, #b91c1c)'
@@ -1636,10 +1666,9 @@ const ListingLabel = memo(function ListingLabel({
               </button>
             ) : null}
           </div>
-        ) : (
+        ) : isMultiHotelParent && !onAuditClick && !onActivateCalendarImport ? null : (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-            {/* Building multi : pas de prix (tarif = roomType). RoomType / Single : Moy. */}
-            {avgPrice > 0 && !isMultiHotelParent ? (
+            {avgPrice > 0 && !isMultiHotelParent && !isRoomRow && !isSingleResaRow ? (
               <span
                 style={{
                   fontSize: 10,
@@ -1655,20 +1684,6 @@ const ListingLabel = memo(function ListingLabel({
                 <span style={{ fontSize: 8, fontWeight: 700, color: T.text4, letterSpacing: '0.04em' }}>
                   {currency}
                 </span>
-              </span>
-            ) : isMultiHotelParent ? (
-              <span style={{ fontSize: 9.5, color: T.text4 }}>
-                {roomTypeCount} types — dispo somme · tarif ▶ type
-              </span>
-            ) : isRoomRow ? (
-              <span style={{ fontSize: 9.5, color: T.text4 }}>Barres résas</span>
-            ) : isSingle && !isRoomTypeRow ? (
-              <span style={{ fontSize: 9.5, color: T.text4 }}>Dispo · tarif</span>
-            ) : isRoomTypeRow ? (
-              <span style={{ fontSize: 9.5, color: T.text4 }}>
-                {listing._showResaRooms
-                  ? `Dispo · ${listing._roomCount || 0} room${(listing._roomCount || 0) > 1 ? 's' : ''} ↓`
-                  : 'Dispo · tarif · ▶ Min stay'}
               </span>
             ) : null}
             {!isRoomTypeRow && onAuditClick ? (
@@ -1734,8 +1749,8 @@ const ListingLabel = memo(function ListingLabel({
         onMouseDown={(e) => e.stopPropagation()}
         style={{
           flexShrink: 0,
-          width: 28,
-          height: 28,
+          width: 22,
+          height: 22,
           borderRadius: 7,
           display: 'inline-flex',
           alignItems: 'center',
@@ -1915,8 +1930,11 @@ function ListingRow({
   const isMultiHotelParent = hideDetailCollapse && !isRoomTypeRow && !isRoomRow;
   const statusReservations = useMemo(() => {
     if (isMultiHotelParent || isRoomTypeRow) return [];
-    return Array.isArray(overlayLineReservations) ? overlayLineReservations : [];
-  }, [overlayLineReservations, isMultiHotelParent, isRoomTypeRow]);
+    return dedupeOverlayReservations(
+      Array.isArray(overlayLineReservations) ? overlayLineReservations : [],
+      listing._id,
+    );
+  }, [overlayLineReservations, isMultiHotelParent, isRoomTypeRow, listing._id]);
   const lineReservations = showResaBars ? statusReservations : [];
   const roomHkBlocked =
     isRoomRow &&
@@ -1924,8 +1942,19 @@ function ListingRow({
   const blocksByIdForRow = useContext(CalendarBlocksContext);
   const roomBlocks = useMemo(() => {
     if (!isRoomRow || !listing.roomId) return [];
-    return filterBlocksForRoom(blocksByIdForRow, listing.roomId);
-  }, [isRoomRow, listing.roomId, blocksByIdForRow]);
+    const all = filterBlocksForRoom(blocksByIdForRow, listing.roomId);
+    return all.filter((b) => {
+      const from = blockIsoDay(b.dateFrom);
+      const toEx = blockExclusiveEndIso(b.dateTo);
+      if (!from || !toEx) return true;
+      const underResa = statusReservations.some((r) => {
+        const arr = isoDay(r.arrivalDate);
+        const dep = isoDay(r.departureDate);
+        return Boolean(arr && dep && from < dep && arr < toEx);
+      });
+      return !underResa;
+    });
+  }, [isRoomRow, listing.roomId, blocksByIdForRow, statusReservations]);
   // Rooms : barre résa quasi pleine hauteur
   const resaOverlayMode =
     isRoomRow || lineReservations.length > 0 ? (lineReservations.length > 0 ? 'bars' : 'none') : 'none';

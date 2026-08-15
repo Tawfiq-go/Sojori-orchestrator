@@ -83,6 +83,8 @@ export interface Staff {
        * Pertinent pour activités ménage.
        */
       opsRole?: 'agent' | 'supervisor';
+      /** Terminer → Inspected. Indépendant du superviseur planning. */
+      canInspect?: boolean;
     }
   >;
   /**

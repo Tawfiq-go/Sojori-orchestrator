@@ -15,6 +15,9 @@ export const FULLTASK_TASK_TYPES = [
   'registration',
   'cleaning_paid',
   'checkout_cleaning',
+  'stay_cleaning',
+  'welcome_package',
+  'minibar_check',
   'transport',
   'groceries',
   'concierge',
@@ -27,7 +30,7 @@ export type FulltaskTaskTypeId = (typeof FULLTASK_TASK_TYPES)[number];
 export const FULLTASK_TASK_TYPE_LABELS: Record<FulltaskTaskTypeId, string> = {
   arrival_choose: 'Choisir arrivée',
   departure_choose: 'Choisir départ',
-  cleaning_free: 'Ménage gratuit',
+  cleaning_free: 'Ménage séjour',
   arrival_declare: 'Déclarer arrivée',
   departure_declare: 'Déclarer départ',
   receive_arrival: 'Accueil client (check-in)',
@@ -35,6 +38,9 @@ export const FULLTASK_TASK_TYPE_LABELS: Record<FulltaskTaskTypeId, string> = {
   registration: 'Enregistrement',
   cleaning_paid: 'Ménage payant',
   checkout_cleaning: 'Ménage checkout',
+  stay_cleaning: 'Ménage journalier',
+  welcome_package: 'Pack bienvenue',
+  minibar_check: 'Contrôle mini-bar',
   transport: 'Transport',
   groceries: 'Courses',
   concierge: 'Conciergerie',
@@ -53,6 +59,9 @@ export const FULLTASK_TASK_TYPE_EMOJI: Partial<Record<FulltaskTaskTypeId, string
   registration: '📝',
   cleaning_paid: '✨',
   checkout_cleaning: '🧼',
+  stay_cleaning: '🧽',
+  welcome_package: '🎁',
+  minibar_check: '🧊',
   transport: '🚗',
   groceries: '🛒',
   concierge: '🛎',
@@ -81,12 +90,16 @@ const PARTNER_AUTO_ASSIGN_TYPES = new Set(['transport', 'groceries', 'concierge'
  */
 export function defaultOrchestrationReferenceForTaskType(taskType?: string): ReferencePoint {
   const t = (taskType || '').toLowerCase();
-  if (t === 'cleaning_free' || t === 'cleaning_paid') return 'previous_step_done';
+  if (t === 'cleaning_free' || t === 'cleaning_paid' || t === 'stay_cleaning') {
+    return 'previous_step_done';
+  }
   if (
     t === 'transport' ||
     t === 'groceries' ||
     t === 'concierge' ||
-    t === 'checkout_cleaning'
+    t === 'checkout_cleaning' ||
+    t === 'minibar_check' ||
+    t === 'welcome_package'
   ) {
     return 'previous_step_done';
   }
@@ -127,7 +140,7 @@ export function defaultWorkflowAssignment(taskType?: string) {
     };
   }
 
-  if (t === 'cleaning_free' || t === 'cleaning_paid') {
+  if (t === 'cleaning_free' || t === 'cleaning_paid' || t === 'stay_cleaning') {
     return {
       ...ASSIGNMENT_DEFAULTS_BASE,
       reference: 'previous_step_done' as const,

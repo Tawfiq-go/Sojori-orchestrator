@@ -38,6 +38,10 @@ function listingIdsKey(listingIds: string[]): string {
   return [...listingIds].sort().join(',');
 }
 
+function calMultiLog(step: string, extra?: Record<string, unknown>) {
+  console.log(`[CalendarMulti] ${step}`, extra || '');
+}
+
 /** Nb de mois chargés initialement en vue simple (scroll → load more). 1 = 1er paint rapide (Multi 33 types). */
 const SIMPLE_INITIAL_MONTHS = 1;
 /** Mois ajoutés à chaque « load more » (sentinel de scroll). */
@@ -142,6 +146,8 @@ export function CalendarInventoryPageV3() {
     (async () => {
       setListingsLoading(true);
       clearInventoryState();
+      calMultiLog('listings:start', { page: listingsPage, owner: requestOwnerId || null });
+      const t0 = performance.now();
       try {
         const listingsResponse = await listingsService.getListingsForCalendar(
           listingsPage,
@@ -158,12 +164,28 @@ export function CalendarInventoryPageV3() {
             setListings([]);
             setListingsTotal(0);
           }
+          calMultiLog('listings:empty', { ms: Math.round(performance.now() - t0) });
           return;
         }
 
         if (!cancelled) {
           setListings(listingsResponse.data);
           setListingsTotal(listingsResponse.total || listingsResponse.data.length);
+          if (listingsResponse.data.length > 0) {
+            setInventoryLoading(true);
+          }
+          calMultiLog('listings:ok', {
+            n: listingsResponse.data.length,
+            names: listingsResponse.data.slice(0, 8).map((l) => l.name),
+            multi: listingsResponse.data.filter((l) => String(l.propertyUnit) === 'Multi').length,
+            catalogRts: listingsResponse.data.map((l) => ({
+              name: l.name,
+              rts: Array.isArray((l as { roomTypes?: unknown[] }).roomTypes)
+                ? (l as { roomTypes: unknown[] }).roomTypes.length
+                : 0,
+            })),
+            ms: Math.round(performance.now() - t0),
+          });
         }
       } catch (error) {
         console.error('[CalendarV3] Erreur chargement listings:', error);
@@ -282,6 +304,7 @@ export function CalendarInventoryPageV3() {
       const idsKey = listingIdsKey(listingIds);
 
       if (merge && isMultiRangeLoaded(idsKey, from, to)) {
+        calMultiLog('inventory:skip-loaded', { from, to, silent, seq });
         if (seq === inventorySeqRef.current && !silent) {
           setInventoryLoading(false);
         }
@@ -290,6 +313,16 @@ export function CalendarInventoryPageV3() {
 
       const cacheKey = inventoryCacheKey(from, to, listingIds);
       const cached = inventoryCacheRef.current.get(cacheKey);
+      calMultiLog('inventory:start', {
+        from,
+        to,
+        nIds: listingIds.length,
+        merge,
+        silent,
+        seq,
+        cache: Boolean(cached),
+      });
+      const t0 = performance.now();
       if (cached) {
         if (seq !== inventorySeqRef.current) return;
         if (merge) {
@@ -300,6 +333,12 @@ export function CalendarInventoryPageV3() {
         }
         applyRoomTypeDefaults(listingIds, cached);
         if (!silent) setInventoryLoading(false);
+        calMultiLog('inventory:cache', {
+          from,
+          to,
+          keys: Object.keys(cached).length,
+          ms: Math.round(performance.now() - t0),
+        });
         return;
       }
 
@@ -325,6 +364,15 @@ export function CalendarInventoryPageV3() {
           setInventoryData(processed);
         }
         applyRoomTypeDefaults(listingIds, processed);
+        calMultiLog('inventory:ok', {
+          from,
+          to,
+          silent,
+          merge,
+          listings: Object.keys(processed).length,
+          rts: Object.values(processed).reduce((n, block) => n + Object.keys(block || {}).length, 0),
+          ms: Math.round(performance.now() - t0),
+        });
       } catch (error) {
         console.error('[CalendarV3] Erreur chargement inventaire:', error);
       } finally {
@@ -520,12 +568,21 @@ export function CalendarInventoryPageV3() {
   }, [currentDate]);
 
   const totalPages = Math.max(1, Math.ceil(listingsTotal / CALENDAR_LISTINGS_PAGE_SIZE));
+  const startDateJs = useMemo(
+    () => currentDate.toDate(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentDate.format('YYYY-MM-DD')],
+  );
+  const multiBooting =
+    !simpleMode &&
+    (listings.length === 0 || Object.keys(inventoryData).length === 0) &&
+    (listingsLoading || inventoryLoading);
 
-  if (listingsLoading && listings.length === 0) {
+  if ((simpleMode && listingsLoading && listings.length === 0) || multiBooting) {
     return (
       <DashboardWrapper compactMain titleMeta={simpleMode ? undefined : monthLabel}>
         <div style={{ padding: '40px', textAlign: 'center', color: '#7a756c' }}>
-          Chargement des propriétés…
+          Chargement du calendrier…
         </div>
       </DashboardWrapper>
     );
@@ -575,7 +632,7 @@ export function CalendarInventoryPageV3() {
         </Stack>
       ) : null}
       <CalendarInventoryPage
-        startDate={currentDate.toDate()}
+        startDate={startDateJs}
         listingCatalog={listingCatalog}
         inventoriesByListing={inventoriesByListing}
         inventoryData={inventoryData}

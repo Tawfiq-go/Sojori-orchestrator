@@ -79,6 +79,13 @@ import { V3 } from './theme';
 import {
   fetchListingConciergeArrays,
 } from '../listing/components/ConfigOrchestration/conciergeListingPersist';
+import {
+  CLEANING_CAP_TO_TYPE,
+  isCleaningCapabilityKey,
+  mergeCleaningRulesPatch,
+  typeFlags,
+  type CleaningRules,
+} from './cleaningRules';
 
 const GROUP_ORDER: CapabilityGroupId[] = [
   'cleaning',
@@ -504,7 +511,9 @@ function configHints(cap: CapDoc, key: string): string[] {
       : Array.isArray(g.TS_CLEAN)
         ? g.TS_CLEAN
         : [];
-    if (key === 'cleaning_free' && freq.length) {
+    if (key === 'cleaning_free' && g.includedAlways === true) {
+      hints.push('Always · chaque jour');
+    } else if (key === 'cleaning_free' && freq.length) {
       hints.push(`${freq.length} palier${freq.length > 1 ? 's' : ''}`);
     }
     if (key === 'cleaning_free' && slots.length) {
@@ -972,6 +981,65 @@ function messageChannelHuman(rule: ScheduledOrchestrationMessage): string {
   return 'OTA';
 }
 
+function CleaningRulesAssignUi({
+  capKey,
+  rules,
+  saving,
+  onPatch,
+}: {
+  capKey: string;
+  rules: CleaningRules;
+  saving: boolean;
+  onPatch: (patch: Record<string, unknown>) => void;
+}) {
+  const catalogType = CLEANING_CAP_TO_TYPE[capKey] || 'cleaning_stay';
+  const flags = typeFlags(rules, catalogType);
+  return (
+    <Box sx={{ display: 'grid', gap: 0.75, pt: 1, borderTop: '1px solid rgba(20,17,10,0.08)' }}>
+      <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>STATUS-ACCEPT / AUTO</Typography>
+      <Typography sx={{ fontSize: 11, color: V3.t3 }}>
+        Status-Accept est au niveau établissement (toutes les activités ménage). Listing = politique
+        du bien pour toutes les FdM. Staff = fiche de chaque agent.
+      </Typography>
+      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+        <SegChip
+          on={rules.statusAccept === 'listing'}
+          label="Listing"
+          onClick={() => !saving && onPatch({ statusAccept: 'listing' })}
+        />
+        <SegChip
+          on={rules.statusAccept === 'staff'}
+          label="Staff"
+          onClick={() => !saving && onPatch({ statusAccept: 'staff' })}
+        />
+      </Box>
+      {rules.statusAccept === 'staff' ? (
+        <Typography sx={{ fontSize: 11, color: V3.t3 }}>
+          Auto-Accept / Auto-Start lus sur la fiche de chaque FdM, pas ici.
+        </Typography>
+      ) : (
+        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+          <SegChip
+            on={flags.autoAccept}
+            label={`Auto-Accept ${flags.autoAccept ? 'Yes' : 'No'}`}
+            onClick={() =>
+              !saving &&
+              onPatch({ types: { [catalogType]: { autoAccept: !flags.autoAccept } } })
+            }
+          />
+          <SegChip
+            on={flags.autoStart}
+            label={`Auto-Start ${flags.autoStart ? 'Yes' : 'No'}`}
+            onClick={() =>
+              !saving && onPatch({ types: { [catalogType]: { autoStart: !flags.autoStart } } })
+            }
+          />
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 /* ───────────────────────────── composant ───────────────────────────── */
 
 type EditorKind = 'availability' | 'reminders' | 'assign' | 'staffRem' | 'escalation';
@@ -1142,6 +1210,24 @@ export default function OrchestrationOverviewPanel({
       }
     },
     [orchestrationEnabled, listingId, ownerKey],
+  );
+
+  const persistCleaningRules = useCallback(
+    async (patch: Record<string, unknown>) => {
+      if (!listingId) return;
+      const prev = (doc as ListingOrchestrationEffective | null)?.cleaningRules;
+      const next = mergeCleaningRulesPatch(prev, patch);
+      setSaving(true);
+      try {
+        await listingsService.putListingOrchestration(listingId, { cleaningRules: next });
+        setDoc((d) => (d ? { ...d, cleaningRules: next } : d));
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : 'Impossible d’enregistrer les règles ménage');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [listingId, doc],
   );
 
   const saveCapPatch = useCallback(
@@ -1883,6 +1969,17 @@ export default function OrchestrationOverviewPanel({
               )}
             </>
           )}
+          {isListingScope && isCleaningCapabilityKey(editor.capKey) ? (
+            <CleaningRulesAssignUi
+              capKey={editor.capKey}
+              rules={mergeCleaningRulesPatch(
+                (doc as ListingOrchestrationEffective | null)?.cleaningRules,
+                undefined,
+              )}
+              saving={saving}
+              onPatch={(p) => void persistCleaningRules(p)}
+            />
+          ) : null}
         </Box>
       );
     }

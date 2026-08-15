@@ -23,7 +23,7 @@ type QuickType = { type: string; label: string; icon: string; defaultTime?: stri
 /** Catalogue court — les types qu'un PM crée à la main depuis le planning. */
 const QUICK_TYPES: QuickType[] = [
   { type: 'checkout_cleaning', label: 'Ménage checkout', icon: '🧼', defaultTime: '11:00' },
-  { type: 'cleaning_free', label: 'Ménage gratuit', icon: '🧹', defaultTime: '11:00' },
+  { type: 'cleaning_free', label: 'Ménage séjour', icon: '🧹', defaultTime: '11:00' },
   { type: 'cleaning_paid', label: 'Ménage payant', icon: '🧽', defaultTime: '11:00' },
   { type: 'receive_arrival', label: 'Accueil client (check-in)', icon: '🛎️', defaultTime: '15:00' },
   { type: 'receive_departure', label: 'Départ client (check-out)', icon: '🛎️', defaultTime: '11:00' },

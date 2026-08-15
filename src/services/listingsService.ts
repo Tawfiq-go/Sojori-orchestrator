@@ -18,6 +18,7 @@ import {
   type ListingPricingSnapshot,
   type ListingsStats,
   type ListingStatus,
+  type ListingStructure,
   type ListingSummary,
   type ListingRoomTypeSummary,
   type ServiceResult,
@@ -741,6 +742,64 @@ function isExpectedMissingChannexMapping(message: string): boolean {
 
 export const listingsService = {
   apiBaseUrl: LISTING_API_BASE_URL,
+
+  /**
+   * Arbre complet d'un établissement : bâtiment → room types → CHAMBRES
+   * PHYSIQUES, avec la capacité vendable calculée côté serveur.
+   *
+   * ⚠️ `declaredUnits` (le compteur saisi sur le type) et `sellableRooms` ne
+   * disent PAS la même chose : mesuré en prod sur NOMMOS, 14 chambres déclarées
+   * pour 7 réellement vendables. N'affiche jamais le compteur seul.
+   *
+   * Retourne null en cas d'erreur — l'appelant décide quoi montrer.
+   */
+  async getListingStructure(listingId: string): Promise<ListingStructure | null> {
+    try {
+      const response = await apiClient.get(
+        `${LISTING_API_BASE_URL}/listings/${listingId}/structure`,
+      );
+      const payload = asRecord(response.data);
+      if (payload.success !== true) return null;
+      // Garde : ne pas confondre avec /listing-structure (config champs).
+      if (!isRecord(payload.totals) || !Array.isArray(payload.roomTypes)) return null;
+      return payload as unknown as ListingStructure;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Écriture CIBLÉE de l'écran Configuration (whitelist stricte côté serveur).
+   *
+   * ⚠️ Ne PAS remplacer par `updateListingProperty` : cette dernière envoie le
+   * payload complet du formulaire legacy et réécrit des champs que l'écran
+   * Configuration n'affiche pas. Ici, tout champ non transmis reste intact.
+   *
+   * Trois cibles exclusives :
+   *   patchListingConfiguration(id, { building: { name } })
+   *   patchListingConfiguration(id, { roomTypeId, roomType: { active } })
+   *   patchListingConfiguration(id, { roomId, room: { enabled } })
+   */
+  async patchListingConfiguration(
+    listingId: string,
+    payload: Record<string, unknown>,
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await apiClient.patch(
+        `${LISTING_API_BASE_URL}/listings/${listingId}/configuration`,
+        payload,
+      );
+      const data = asRecord(response.data);
+      return { success: data.success === true, error: data.error as string | undefined };
+    } catch (error) {
+      const msg = isAxiosError(error)
+        ? ((asRecord(error.response?.data).error as string) ?? error.message)
+        : error instanceof Error
+          ? error.message
+          : 'Échec de la mise à jour';
+      return { success: false, error: msg };
+    }
+  },
 
   /**
    * Document listing brut tel que renvoyé par `GET /listings/by-id/:id` (pour le formulaire orchestrateur).
@@ -1494,8 +1553,12 @@ export const listingsService = {
    * GET /composition-rooms/get — catalogue global des types de pièces (dashboard).
    * Pas de route /room-composition/:listingId sur srv-listing.
    */
-  /** GET /listing-structure — config champs R / * (legacy FieldIndicator). */
-  async getListingStructure(): Promise<Record<string, unknown> | null> {
+  /**
+   * GET /listing-structure — config champs R / * (legacy FieldIndicator).
+   * ⚠️ Ne pas confondre avec `getListingStructure(listingId)` (arbre Multi
+   * bâtiment → room types → chambres). Deux endpoints distincts.
+   */
+  async getListingFieldStructure(): Promise<Record<string, unknown> | null> {
     try {
       const response = await apiClient.get(`${LISTING_API_BASE_URL}/listing-structure`);
       const payload = asRecord(response.data);
@@ -2000,6 +2063,7 @@ export const listingsService = {
       orchestrationEnabled?: boolean;
       capabilities?: Record<string, unknown>;
       scheduledMessages?: unknown[];
+      cleaningRules?: Record<string, unknown>;
     },
   ) {
     const { data } = await apiClient.put(
