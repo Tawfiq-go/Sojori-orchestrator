@@ -433,7 +433,7 @@ export function cleaningLabelFr(kindOrItem?: string | TimelineItem | TaskItem | 
     k.includes('gratuit') ||
     k.includes('free')
   ) {
-    return 'Ménage gratuit';
+    return 'Ménage séjour';
   }
   return 'Ménage';
 }
@@ -443,7 +443,7 @@ export function cleaningChipLabelFr(kindOrItem?: string | TimelineItem | TaskIte
   const full = cleaningLabelFr(kindOrItem);
   if (full === 'Ménage Sojori') return 'Sojori';
   if (full === 'Ménage payant') return 'Payant';
-  if (full === 'Ménage gratuit' || full === 'Ménage inclus') return 'Gratuit';
+  if (full === 'Ménage séjour' || full === 'Ménage gratuit' || full === 'Ménage inclus') return 'Séjour';
   if (full === 'Ménage checkout') return 'Checkout';
   return 'Ménage';
 }

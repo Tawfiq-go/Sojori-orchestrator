@@ -215,3 +215,84 @@ export interface ListingFilters {
   name?: string;
   staging?: boolean;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * STRUCTURE PHYSIQUE D'UN ÉTABLISSEMENT (Multi / hôtel)
+ * Miroir de GET /listings/:listingId/structure (srv-listing).
+ *
+ * Hiérarchie alignée sur Mews : Bâtiment (Enterprise) → RoomType
+ * (ResourceCategory, l'unité de VENTE) → Room (Resource, l'unité PHYSIQUE).
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/** États Mews `Resource.State`. OutOfOrder/OutOfService = non vendable. */
+export type HousekeepingState =
+  | 'Dirty'
+  | 'Clean'
+  | 'Inspected'
+  | 'OutOfOrder'
+  | 'OutOfService';
+
+/** Chambre PHYSIQUE — ce qu'on assigne à un client et ce qu'on fait nettoyer. */
+export interface ListingStructureRoom {
+  id: string;
+  /** « Villa 05 » — le nom que voit le staff. */
+  name: string;
+  number: number | null;
+  code: string | null;
+  enabled: boolean;
+  housekeepingState: HousekeepingState | string | null;
+  housekeepingStateUpdatedAt?: string | null;
+  /** Calculé serveur : enabled && état ∉ {OutOfOrder, OutOfService}. */
+  sellable: boolean;
+}
+
+/** Type de chambre — l'unité de VENTE (ce qui part vers les OTA). */
+export interface ListingStructureRoomType {
+  id: string;
+  /** Nom interne / mapping Mews. */
+  name: string;
+  /** Nom public poussé aux OTA (fallback `name` si vide). */
+  otaDisplayName: string | null;
+  capacity: number | null;
+  capacityMax: number | null;
+  bedrooms: number | null;
+  beds: number | null;
+  bathrooms: number | null;
+  surface: number | null;
+  basePrice: number | null;
+  active: boolean;
+  /** Compteur THÉORIQUE saisi sur le type — ne jamais l'afficher seul. */
+  declaredUnits: number;
+  /** Chambres réellement créées en base. */
+  physicalRooms: number;
+  /** Capacité RÉELLE — celle qui vaut pour l'occupation et le RevPAR. */
+  sellableRooms: number;
+  rentalUnitedId: string | null;
+  ruObjectTypeId: string | null;
+  rooms: ListingStructureRoom[];
+}
+
+export interface ListingStructure {
+  success: boolean;
+  building: {
+    id: string;
+    name: string;
+    nickname: string | null;
+    propertyType: string | null;
+    /** 'Multi' = hôtel/resort · 'Single' = logement entier. */
+    propertyUnit: 'Multi' | 'Single' | string;
+    city: string | null;
+    address: string | null;
+    district: string | null;
+    active: boolean;
+  };
+  totals: {
+    roomTypes: number;
+    declaredUnits: number;
+    physicalRooms: number;
+    sellableRooms: number;
+  };
+  roomTypes: ListingStructureRoomType[];
+  /** Chambres rattachées à aucun type — défaut de données à montrer, pas à masquer. */
+  orphanRooms: ListingStructureRoom[];
+}

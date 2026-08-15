@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import sojoriLogo from '../../assets/images/sojori-logo.png';
 import airbnbLogo from '../../assets/images/airbnb.png';
 import bookingLogo from '../../assets/images/booking.png';
+import nommosLogo from '../../assets/images/nommos.jpg';
 import {
   createdViaLabel,
   isSojoriCommercialSource,
@@ -213,28 +214,19 @@ function RentalsBadge({ size = 22 }: { size?: number }) {
 
 function NommosBadge({ size = 22 }: { size?: number }) {
   return (
-    <div
+    <img
+      src={nommosLogo}
+      alt="Nommos (direct)"
       title="Nommos (direct)"
       style={{
-        minWidth: size,
+        width: size,
         height: size,
-        padding: '0 4px',
-        border: `2px solid ${NOMMOS_TEAL}`,
+        objectFit: 'cover',
         borderRadius: 4,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontWeight: 800,
-        fontSize: Math.max(8, Math.round(size * 0.32)),
-        color: NOMMOS_TEAL,
-        lineHeight: 1,
-        backgroundColor: '#fff',
-        letterSpacing: '-0.03em',
-        whiteSpace: 'nowrap',
+        border: `1px solid ${NOMMOS_TEAL}`,
+        display: 'block',
       }}
-    >
-      Nommos
-    </div>
+    />
   );
 }
 

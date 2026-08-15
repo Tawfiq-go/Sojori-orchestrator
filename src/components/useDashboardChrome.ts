@@ -28,6 +28,12 @@ export function useDashboardChrome() {
     if (path === '/tasks' || path === '/tasks/list') {
       return 'tasks/list';
     }
+    if (path.startsWith('/tasks/extras/list')) {
+      return 'tasks/extras/list';
+    }
+    if (path.startsWith('/tasks/extras')) {
+      return 'tasks/extras/configuration';
+    }
     if (path === '/planning' || path.startsWith('/planning/')) {
       return 'planning';
     }
@@ -52,6 +58,11 @@ export function useDashboardChrome() {
     }
     if (path.startsWith('/listings/orchestration-model')) {
       return 'listings/orchestration-model';
+    }
+    // ⚠️ AVANT le `startsWith('/listings')` générique ci-dessous, sinon la
+    // sidebar surligne « Listings » au lieu de « Configuration ».
+    if (path.startsWith('/listings/configuration')) {
+      return 'listings/configuration';
     }
     if (path.startsWith('/listings') || path.startsWith('/catalogue/listings')) {
       return 'listings/list';

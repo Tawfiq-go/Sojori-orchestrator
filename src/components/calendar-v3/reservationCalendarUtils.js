@@ -73,3 +73,13 @@ export function reservationRouteId(res) {
   if (!res) return '';
   return String(res.reservationNumber || res._id || res.id || res.reservationId || '');
 }
+
+/** Fetch détail : ObjectId d’abord (cache getById), pas le numéro SJ-… plus lent. */
+export function reservationDetailFetchId(res) {
+  if (!res) return '';
+  for (const v of [res._id, res.id, res.reservationId]) {
+    const s = String(v || '').trim();
+    if (/^[a-f0-9]{24}$/i.test(s)) return s;
+  }
+  return reservationRouteId(res);
+}

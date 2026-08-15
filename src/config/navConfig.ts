@@ -194,6 +194,17 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     items: [
       { id: 'tasks/list', label: 'Liste', iconType: 'check', iconColor: '#93C47D' },
       { id: 'tasks/team', label: 'Équipe', iconType: 'check', iconColor: '#93C47D', description: 'Staff terrain & admin WhatsApp' },
+      {
+        id: 'tasks/extras',
+        label: 'Extra',
+        iconType: 'check',
+        iconColor: '#93C47D',
+        description: 'Catalogue extras Mews',
+        sub: [
+          { id: 'tasks/extras/configuration', label: 'Configuration' },
+          { id: 'tasks/extras/list', label: 'Liste extra' },
+        ],
+      },
     ],
   },
   {
@@ -229,6 +240,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     group: 'Annonces',
     roles: PM_ROLES,
     items: [
+      {
+        id: 'listings/configuration',
+        label: 'Configuration',
+        iconType: 'home',
+        iconColor: '#E6B022',
+        description: 'Établissement · structure, contenu, publication',
+      },
       { id: 'listings/list', label: 'Listings', iconType: 'home', iconColor: '#D4A574' },
       { id: 'listings/mapping', label: 'Mapping RU', iconType: 'link', iconColor: '#6D9EEB', roles: ADMIN_ROLES },
       { id: 'listings/orchestration-model', label: 'Modèle orchestration', iconType: 'home', iconColor: '#D4A574' },

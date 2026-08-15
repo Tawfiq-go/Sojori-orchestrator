@@ -67,11 +67,13 @@ export default function CustomersPage() {
   const [contactableOnly, setContactableOnly] = useState(false);
   const [repeatOnly, setRepeatOnly] = useState(false);
   const [sort, setSort] = useState('lastStayAt');
-  const limit = 50;
+  /** Vue ranking : top 20 séjours / top 10 CA. `null` = liste paginée 50. */
+  const [ranking, setRanking] = useState<null | 'stays20' | 'ca10'>(null);
+  const limit = ranking === 'stays20' ? 20 : ranking === 'ca10' ? 10 : 50;
 
   const params = useMemo(
     () => ({
-      page,
+      page: ranking ? 0 : page,
       limit,
       sort,
       ...(search ? { search } : {}),
@@ -79,8 +81,14 @@ export default function CustomersPage() {
       ...(contactableOnly ? { contactable: 'true' } : {}),
       ...(repeatOnly ? { minReservations: 2 } : {}),
     }),
-    [page, sort, search, channel, contactableOnly, repeatOnly],
+    [page, sort, search, channel, contactableOnly, repeatOnly, ranking, limit],
   );
+
+  const applySort = (next: string, nextRanking: typeof ranking = null) => {
+    setPage(0);
+    setSort(next);
+    setRanking(nextRanking);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -178,15 +186,52 @@ export default function CustomersPage() {
           ))}
         </select>
         <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
+          value={ranking ? `__${ranking}` : sort}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === '__stays20') applySort('reservationsCount', 'stays20');
+            else if (v === '__ca10') applySort('revenueMadTotal', 'ca10');
+            else applySort(v, null);
+          }}
           style={{ padding: '7px 10px', border: '1px solid #e5e2da', borderRadius: 8 }}
         >
           <option value="lastStayAt">Dernier séjour</option>
-          <option value="revenueMadTotal">CA</option>
-          <option value="reservationsCount">Nb séjours</option>
+          <option value="reservationsCount">Nb séjours (tous)</option>
+          <option value="revenueMadTotal">CA (tous)</option>
           <option value="nightsTotal">Nuits</option>
+          <option value="__stays20">Top 20 — plus de séjours</option>
+          <option value="__ca10">Top 10 — chiffre d’affaires</option>
         </select>
+        <button
+          type="button"
+          onClick={() => applySort('reservationsCount', 'stays20')}
+          style={{
+            padding: '7px 10px',
+            borderRadius: 8,
+            border: ranking === 'stays20' ? '1px solid #B8881A' : '1px solid #e5e2da',
+            background: ranking === 'stays20' ? 'rgba(230,176,34,0.16)' : '#fff',
+            fontWeight: 700,
+            fontSize: 12.5,
+            cursor: 'pointer',
+          }}
+        >
+          Top 20 séjours
+        </button>
+        <button
+          type="button"
+          onClick={() => applySort('revenueMadTotal', 'ca10')}
+          style={{
+            padding: '7px 10px',
+            borderRadius: 8,
+            border: ranking === 'ca10' ? '1px solid #B8881A' : '1px solid #e5e2da',
+            background: ranking === 'ca10' ? 'rgba(230,176,34,0.16)' : '#fff',
+            fontWeight: 700,
+            fontSize: 12.5,
+            cursor: 'pointer',
+          }}
+        >
+          Top 10 CA
+        </button>
         <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5 }}>
           <input
             type="checkbox"
@@ -210,7 +255,13 @@ export default function CustomersPage() {
           Récurrents
         </label>
         <span style={{ marginLeft: 'auto', fontSize: 12.5, color: '#7a756c' }}>
-          {loading ? 'Chargement…' : `${total} client${total > 1 ? 's' : ''}`}
+          {loading
+            ? 'Chargement…'
+            : ranking === 'stays20'
+              ? 'Top 20 — plus de séjours'
+              : ranking === 'ca10'
+                ? 'Top 10 — chiffre d’affaires'
+                : `${total} client${total > 1 ? 's' : ''}`}
         </span>
       </div>
 
@@ -218,18 +269,47 @@ export default function CustomersPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
             <tr style={{ background: '#faf9f6', textAlign: 'left' }}>
-              {['Client', 'Contact', 'Pays', 'Profil', 'Canal', 'Séjours', 'Nuits', 'CA', 'Dernier'].map(
-                (h) => (
-                  <th key={h} style={{ padding: '8px 10px', fontSize: 11, color: '#7a756c' }}>
+              {(
+                [
+                  ranking ? ['#', null] : null,
+                  ['Client', null],
+                  ['Contact', null],
+                  ['Pays', null],
+                  ['Profil', null],
+                  ['Canal', null],
+                  ['Séjours', 'reservationsCount'],
+                  ['Nuits', 'nightsTotal'],
+                  ['CA', 'revenueMadTotal'],
+                  ['Dernier', 'lastStayAt'],
+                ] as Array<[string, string | null] | null>
+              )
+                .filter((c): c is [string, string | null] => Boolean(c))
+                .map(([h, key]) => (
+                  <th
+                    key={h}
+                    onClick={key ? () => applySort(key, null) : undefined}
+                    style={{
+                      padding: '8px 10px',
+                      fontSize: 11,
+                      color: sort === key ? '#B8881A' : '#7a756c',
+                      cursor: key ? 'pointer' : 'default',
+                      userSelect: 'none',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={key ? 'Trier par cette colonne' : undefined}
+                  >
                     {h}
+                    {key && sort === key ? ' ↓' : ''}
                   </th>
-                ),
-              )}
+                ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map((c) => (
+            {rows.map((c, i) => (
               <tr key={c._id} style={{ borderTop: '1px solid #eeebe3' }}>
+                {ranking ? (
+                  <td style={{ padding: '8px 10px', fontWeight: 800, color: '#B8881A' }}>{i + 1}</td>
+                ) : null}
                 <td style={{ padding: '8px 10px', fontWeight: 600 }}>{c.fullName || '—'}</td>
                 <td style={{ padding: '8px 10px' }}>
                   <div style={{ color: c.emailIsRelay ? '#b45309' : undefined }}>
@@ -258,7 +338,7 @@ export default function CustomersPage() {
             ))}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#7a756c' }}>
+                <td colSpan={ranking ? 10 : 9} style={{ padding: 24, textAlign: 'center', color: '#7a756c' }}>
                   Aucun client. Lancez le rebuild CRM si la collection est vide.
                 </td>
               </tr>
@@ -267,7 +347,7 @@ export default function CustomersPage() {
         </table>
       </div>
 
-      {pages > 1 && (
+      {!ranking && pages > 1 && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 }}>
           <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
             ‹ Précédent

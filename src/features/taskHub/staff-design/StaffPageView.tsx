@@ -6,6 +6,8 @@ import DayTimeline from './DayTimeline';
 import type { Staff, ContractType } from './types';
 import {
   STAFF_TASK_PILLS,
+  STAFF_ROLE_PRESETS,
+  type StaffRolePreset,
   DAY_LABELS,
   DAY_FULL_LABELS,
   DAY_DISPLAY_ORDER,
@@ -340,6 +342,7 @@ export default function StaffPageView({
         'cleaning_paid',
         'cleaning_sojori',
         'checkout_cleaning',
+        'stay_cleaning',
       ].includes(key);
       const isAccueil = key === 'receive_arrival' || key === 'receive_departure';
       modes[key] = modes[key] || {
@@ -348,6 +351,8 @@ export default function StaffPageView({
         digestTime: '17:00',
         autoAccept: isMenage || isAccueil,
         readyToFinish: isAccueil,
+        opsRole: 'agent',
+        canInspect: false,
       };
     } else {
       set.delete(key);
@@ -371,6 +376,7 @@ export default function StaffPageView({
       autoAccept: boolean;
       readyToFinish: boolean;
       opsRole: 'agent' | 'supervisor';
+      canInspect: boolean;
     }>,
   ) => {
     const prev = form.taskTypeModes?.[key] || {
@@ -379,6 +385,7 @@ export default function StaffPageView({
       autoAccept: false,
       readyToFinish: false,
       opsRole: 'agent' as const,
+      canInspect: false,
     };
     let next = { ...prev, ...patch };
     // Auto accept et Auto start sont orthogonaux (ne pas forcer l’un via l’autre).
@@ -392,6 +399,39 @@ export default function StaffPageView({
     }
     patchForm({
       taskTypeModes: { ...(form.taskTypeModes || {}), [key]: next },
+    });
+  };
+
+  const applyRolePreset = (preset: StaffRolePreset) => {
+    const set = new Set(form.allowedTaskTypes as string[]);
+    const modes = { ...(form.taskTypeModes || {}) };
+    for (const key of preset.taskTypes) {
+      set.add(key);
+      const isMenage = [
+        'cleaning_free',
+        'cleaning_paid',
+        'cleaning_sojori',
+        'checkout_cleaning',
+        'stay_cleaning',
+      ].includes(key);
+      const prev = modes[key] || {
+        notifyAssign: false,
+        remindMode: isMenage ? ('daily_digest' as const) : ('individual' as const),
+        digestTime: '17:00',
+        autoAccept: isMenage,
+        readyToFinish: false,
+        opsRole: 'agent' as const,
+        canInspect: false,
+      };
+      modes[key] = {
+        ...prev,
+        opsRole: preset.opsRole,
+        canInspect: preset.canInspect,
+      };
+    }
+    patchForm({
+      allowedTaskTypes: [...set] as Staff['allowedTaskTypes'],
+      taskTypeModes: modes,
     });
   };
 
@@ -971,7 +1011,24 @@ export default function StaffPageView({
                 Activités<span className="req">*</span>
               </div>
               <div className="ds" style={{ marginBottom: 8 }}>
-                Accès Oui = staff assignable. Ouvrir ▶ pour Notifier · Rappels · Auto accept · Auto start.
+                Accès Oui = staff assignable. Ouvrir ▶ pour Notifier · Rappels · Auto accept · Auto
+                start · Superviseur · Inspecter.
+              </div>
+              <div className="ds" style={{ marginBottom: 6 }}>
+                Raccourcis (tout reste modifiable) :
+              </div>
+              <div className="pill-group" style={{ marginBottom: 10, flexWrap: 'wrap' }}>
+                {STAFF_ROLE_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className="pill-toggle"
+                    title={preset.hint}
+                    onClick={() => applyRolePreset(preset)}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
               </div>
               {form.allowedTaskTypes.length === 0 ? (
                 <p className="staff-recap-warn">
@@ -988,12 +1045,16 @@ export default function StaffPageView({
                     autoAccept: false,
                     readyToFinish: false,
                     opsRole: 'agent' as const,
+                    canInspect: false,
                   };
                   const canBeCleaningSupervisor = [
                     'cleaning_free',
                     'cleaning_paid',
                     'cleaning_sojori',
                     'checkout_cleaning',
+                    'stay_cleaning',
+                    'welcome_package',
+                    'minibar_check',
                   ].includes(p.key);
                   return (
                     <div
@@ -1240,13 +1301,24 @@ export default function StaffPageView({
                             </div>
 
                             {canBeCleaningSupervisor ? (
+                              <>
                               <div
                                 className="activity-cfg-item"
                                 style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                                title="Superviseur planning : porte le planning ménage sans FdM staff. S’il couvre le listing, l’auto-assignation lui donne la tâche."
+                                title={
+                                  p.key === 'minibar_check'
+                                    ? 'Superviseur mini-bar : valide les déclarations (WhatsApp N).'
+                                    : p.key === 'welcome_package'
+                                      ? 'Superviseur welcome : porte le planning pack bienvenue.'
+                                      : 'Superviseur planning : porte le planning ménage sans FdM staff. S’il couvre le listing, l’auto-assignation lui donne la tâche.'
+                                }
                               >
                                 <span className="nm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                                  Superviseur planning
+                                  {p.key === 'minibar_check'
+                                    ? 'Superviseur mini-bar'
+                                    : p.key === 'welcome_package'
+                                      ? 'Superviseur welcome'
+                                      : 'Superviseur planning'}
                                 </span>
                                 <div className="pill-group">
                                   {(
@@ -1270,6 +1342,37 @@ export default function StaffPageView({
                                   ))}
                                 </div>
                               </div>
+                              <div
+                                className="activity-cfg-item"
+                                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                                title="Terminer → chambre Inspected. Sinon Clean. Indépendant du superviseur planning."
+                              >
+                                <span className="nm" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                                  Peut inspecter
+                                </span>
+                                <div className="pill-group">
+                                  {(
+                                    [
+                                      { id: true, label: 'Oui' },
+                                      { id: false, label: 'Non' },
+                                    ] as const
+                                  ).map((opt) => (
+                                    <button
+                                      key={`insp-${String(opt.id)}`}
+                                      type="button"
+                                      className={`pill-toggle${
+                                        Boolean(cfg.canInspect) === opt.id ? ' on' : ''
+                                      }`}
+                                      onClick={() =>
+                                        patchTaskTypeCfg(p.key, { canInspect: opt.id })
+                                      }
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
                             ) : null}
                           </div>
                         </div>

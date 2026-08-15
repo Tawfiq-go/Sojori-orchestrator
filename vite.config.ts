@@ -39,11 +39,14 @@ function rewriteAdminFulltaskPath(path: string): string {
     '/staff-simplified',
     '/admin-whatsapp',
     '/staff-whatsapp',
+    '/extras',
     '/expense-categories',
     '/expenses',
     '/ledger',
     '/expense-recurring',
     '/profit-reports',
+    '/proprio-contacts',
+    '/owner-bookers',
     '/communications-ai',
   ]
   if (v1Prefixes.some((p) => rest === p || rest.startsWith(`${p}/`))) {

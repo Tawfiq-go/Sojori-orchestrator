@@ -91,7 +91,7 @@ export function ListingFormV2Page() {
 
   const { data: listingStructure } = useQuery({
     queryKey: ['listing-structure'],
-    queryFn: () => listingsService.getListingStructure(),
+    queryFn: () => listingsService.getListingFieldStructure(),
     staleTime: 5 * 60 * 1000,
   });
 

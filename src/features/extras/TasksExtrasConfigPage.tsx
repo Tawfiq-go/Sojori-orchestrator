@@ -1,0 +1,108 @@
+import { useEffect, useState } from 'react';
+import { toast } from 'react-toastify';
+import { Alert, Box, Button, Paper, Stack, Typography } from '@mui/material';
+import { DashboardWrapper } from '../../components/DashboardWrapper';
+import { useFinancesOwnerScope } from '../finances/useFinancesOwnerScope';
+import { ExtraCatalogTable } from './ExtraCatalogTable';
+import {
+  fetchExtraStats,
+  importExtrasFromPms,
+  listExtras,
+  type ExtraCatalogStats,
+  type ExtraProduct,
+} from './extrasApi';
+
+function formatWhen(iso: string | null): string {
+  if (!iso) return 'jamais';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('fr-FR');
+}
+
+export function TasksExtrasConfigPage() {
+  const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
+  const [stats, setStats] = useState<ExtraCatalogStats | null>(null);
+  const [rows, setRows] = useState<ExtraProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [nextStats, nextRows] = await Promise.all([
+        fetchExtraStats({ ownerId }),
+        listExtras({}, { ownerId }),
+      ]);
+      setStats(nextStats);
+      setRows(nextRows);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Chargement impossible');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, [ownerId]);
+
+  const onImport = async () => {
+    if (needsOwnerPick) {
+      toast.error('Sélectionnez un propriétaire PM dans la barre du haut.');
+      return;
+    }
+    setImporting(true);
+    try {
+      const result = await importExtrasFromPms({ ownerId });
+      toast.success(
+        `Import Mews : ${result.total} produits (${result.minibar} mini-bar), ${result.categoriesCreated} catégories ledger.`,
+      );
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Import impossible');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <DashboardWrapper breadcrumb={['Task', 'Extra', 'Configuration']}>
+      <Paper sx={{ p: 2.5, mb: 2 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
+          One-shot : copie le catalogue produits Mews dans Sojori. Ensuite le mini-bar et la liste
+          Extra lisent cette base — plus d’appel PMS à chaque ouverture, plus de fallback vide.
+        </Typography>
+        {needsOwnerPick ? (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Sélectionnez un propriétaire PM pour importer les catégories ledger.
+          </Alert>
+        ) : null}
+        {loading && !stats ? (
+          <Typography variant="body2">Chargement…</Typography>
+        ) : null}
+        {stats ? (
+          <Box component="ul" sx={{ pl: 2, mb: 2, lineHeight: 1.9 }}>
+            <li>
+              Produits en base : <strong>{stats.total}</strong> (actifs {stats.active})
+            </li>
+            <li>
+              Mini-bar actifs : <strong>{stats.minibar}</strong>
+            </li>
+            <li>Dernier import : {formatWhen(stats.lastImportedAt)}</li>
+          </Box>
+        ) : null}
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button variant="contained" disabled={importing} onClick={() => void onImport()}>
+            {importing ? 'Import Mews…' : 'Importer depuis Mews'}
+          </Button>
+        </Stack>
+      </Paper>
+      <ExtraCatalogTable
+        ownerId={ownerId}
+        rows={rows}
+        loading={loading}
+        onRowsChange={setRows}
+      />
+    </DashboardWrapper>
+  );
+}

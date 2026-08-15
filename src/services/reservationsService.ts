@@ -132,6 +132,9 @@ class ReservationsService {
     startDate?: string;
     endDate?: string;
     reservationNumber?: string;
+    /** Restreindre aux listings visibles (calendrier multi). */
+    listingId?: string;
+    listingIds?: string[];
     /** `default` = annulations + créées auj. puis arrivées les plus proches. */
     sortField?: 'default' | 'createdAt' | 'checkin' | 'checkout';
     sortOrder?: 'asc' | 'desc';
@@ -180,6 +183,17 @@ class ReservationsService {
       if (params.reservationNumber?.trim()) {
         queryParams.append('reservationNumber', params.reservationNumber.trim());
       }
+
+      const listingIds = Array.isArray(params.listingIds)
+        ? params.listingIds
+        : params.listingId
+          ? [params.listingId]
+          : [];
+      listingIds
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)
+        .slice(0, 80)
+        .forEach((id) => queryParams.append('listingId', id));
 
       queryParams.append('sortField', params.sortField || 'default');
       queryParams.append(

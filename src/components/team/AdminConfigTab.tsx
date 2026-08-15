@@ -39,6 +39,7 @@ import {
   updatePlatformPaymentPolicy,
 } from '../../features/staff/services/serverApi.task';
 import { WHATSAPP_AI_TIER_OPTIONS } from '../../constants/whatsappAiTier';
+import { resolveRuEmailDisplay } from '../../features/staff/utils/ruEmailUtils';
 import { TEAM_T } from './teamHubTokens';
 
 type PaymentMethod = 'card' | 'wire' | 'cash';
@@ -54,6 +55,7 @@ type OwnerRow = {
   firstName?: string;
   lastName?: string;
   email?: string;
+  ruEmail?: string;
   whatsappConversationalTier?: number;
 };
 
@@ -111,7 +113,16 @@ export function AdminConfigTab() {
     const rows = [...owners].sort((a, b) => ownerLabel(a).localeCompare(ownerLabel(b), 'fr'));
     if (!q) return rows;
     return rows.filter((row) => {
-      const hay = [ownerLabel(row), row.email, row.firstName, row.lastName].filter(Boolean).join(' ').toLowerCase();
+      const hay = [
+        ownerLabel(row),
+        row.email,
+        resolveRuEmailDisplay(row),
+        row.firstName,
+        row.lastName,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
       return hay.includes(q);
     });
   }, [owners, search]);
@@ -188,7 +199,7 @@ export function AdminConfigTab() {
     return <Navigate to="/admin/equipe?tab=worker" replace />;
   }
 
-  const colSpan = 3 + PAYMENT_COLUMNS.length;
+  const colSpan = 4 + PAYMENT_COLUMNS.length;
 
   return (
     <Box>
@@ -274,6 +285,7 @@ export function AdminConfigTab() {
             <TableRow>
               <TableCell sx={{ fontWeight: 700, minWidth: 200 }}>Property manager</TableCell>
               <TableCell sx={{ fontWeight: 700, minWidth: 160 }}>Email</TableCell>
+              <TableCell sx={{ fontWeight: 700, minWidth: 180 }}>Email RU</TableCell>
               <TableCell sx={{ fontWeight: 700, minWidth: 200 }}>Config IA (WhatsApp)</TableCell>
               {PAYMENT_COLUMNS.map((col) => (
                 <TableCell key={col.key} align="center" sx={{ fontWeight: 700, minWidth: 90 }}>
@@ -308,6 +320,9 @@ export function AdminConfigTab() {
                     <Typography sx={{ fontWeight: 600, fontSize: 13 }}>{ownerLabel(row)}</Typography>
                   </TableCell>
                   <TableCell sx={{ fontSize: 12, color: TEAM_T.text2 }}>{row.email || '—'}</TableCell>
+                  <TableCell sx={{ fontSize: 12, color: TEAM_T.text2 }}>
+                    {resolveRuEmailDisplay(row) || '—'}
+                  </TableCell>
                   <TableCell>
                     <Select
                       size="small"

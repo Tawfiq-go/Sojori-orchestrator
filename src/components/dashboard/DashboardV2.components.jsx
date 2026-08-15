@@ -707,6 +707,7 @@ const OWNER_QUICK_ACTIONS = [
  * Visible uniquement hors simulation PM.
  */
 const ADMIN_QUICK_ACTIONS = [
+  { emoji: '🤖', label: 'Config PM', to: '/admin/equipe?tab=admin-config' },
   { emoji: '🛰️', label: 'LogApiRU', to: '/channels?tab=LogApiRU' },
   { emoji: '🏨', label: 'LogApiMews', to: '/channels?tab=LogApiMews' },
   { emoji: '🏗️', label: 'Summary infra', to: '/monitor?tab=Infrastructure' },

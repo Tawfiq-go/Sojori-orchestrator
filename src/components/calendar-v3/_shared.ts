@@ -319,12 +319,11 @@ export const ALL_COLUMNS: ColumnDef[] = [
  */
 export const CALENDAR_PRIMARY_ROW_COLUMNS = ['rate', 'availableRoom'] as const;
 
-/** Sélection colonnes par défaut (vue multi) — Dispo + Rés. ; Min stay / dyn en collapse. */
+/** Sélection colonnes par défaut (vue multi) — Tarif · Dispo · Rés. · Dyn. Min stay opt-in. */
 export const CALENDAR_DEFAULT_COLUMNS = [
   'rate',
   'availableRoom',
   'reservations',
-  'minStay',
   'dynamicPrice',
 ] as const;
 

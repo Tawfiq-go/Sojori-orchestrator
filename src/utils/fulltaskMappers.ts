@@ -694,6 +694,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
           autoAccept: boolean;
           readyToFinish: boolean;
           opsRole?: 'agent' | 'supervisor';
+          canInspect?: boolean;
         }
       > = {};
       // API/Mongo : tableau [{ taskType, ... }] OU map legacy { [taskType]: {...} }
@@ -726,6 +727,7 @@ export function apiStaffToDesign(row: Record<string, unknown>) {
           autoAccept,
           readyToFinish,
           opsRole,
+          canInspect: m.canInspect === true,
         };
       }
       if (Object.keys(out).length === 0) {
@@ -798,6 +800,7 @@ export function designStaffToApi(
             autoAccept?: boolean;
             readyToFinish?: boolean;
             opsRole?: string;
+            canInspect?: boolean;
           }
         >
       | undefined) || {};
@@ -807,6 +810,9 @@ export function designStaffToApi(
     'cleaning_paid',
     'cleaning_sojori',
     'checkout_cleaning',
+    'stay_cleaning',
+    'welcome_package',
+    'minibar_check',
   ]);
   const taskTypeModes = allowedTypes.map((taskType) => {
     const cfg = taskTypeModesMap[taskType] || {};
@@ -844,6 +850,7 @@ export function designStaffToApi(
       autoAccept,
       readyToFinish,
       opsRole,
+      canInspect: cfg.canInspect === true,
     };
   });
   const modes = taskTypeModes.map((m) => m.mode);

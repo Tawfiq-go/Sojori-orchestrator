@@ -126,6 +126,31 @@ export default function V3CleaningIncludedPanel({
 
   return (
     <Box sx={{ width: '100%', maxWidth: 'none' }}>
+      <Box sx={{ ...sectionSx, mb: 2, p: 2 }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t }}>Always</Typography>
+        <Typography sx={{ fontSize: 11, color: V3.t3, mb: 1 }}>
+          Hôtel : un ménage séjour chaque jour (hors arrivée / départ). Aucun palier. Appartement :
+          laisser OFF et régler les paliers.
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 0.75 }}>
+          <Button
+            size="small"
+            variant={state.always ? 'contained' : 'outlined'}
+            onClick={() => patch(s => ({ ...s, always: true }))}
+            sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '8px' }}
+          >
+            Always ON
+          </Button>
+          <Button
+            size="small"
+            variant={!state.always ? 'contained' : 'outlined'}
+            onClick={() => patch(s => ({ ...s, always: false }))}
+            sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '8px' }}
+          >
+            Paliers
+          </Button>
+        </Box>
+      </Box>
       <Box
         sx={{
           display: 'grid',
@@ -136,7 +161,7 @@ export default function V3CleaningIncludedPanel({
         }}
       >
         {/* Paliers */}
-        <Box sx={sectionSx}>
+        <Box sx={{ ...sectionSx, opacity: state.always ? 0.45 : 1, pointerEvents: state.always ? 'none' : 'auto' }}>
           <Box
             sx={{
               px: 2,

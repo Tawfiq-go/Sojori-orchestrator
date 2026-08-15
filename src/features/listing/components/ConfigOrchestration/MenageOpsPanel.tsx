@@ -471,6 +471,35 @@ export default function MenageOpsPanel({
           </Stack>
         </Box>
 
+      <Box
+        sx={{
+          p: 1.5,
+          borderRadius: 1.5,
+          border: `1px solid ${T.border}`,
+          bgcolor: T.bg1,
+        }}
+      >
+        <Typography sx={{ fontWeight: 800, fontSize: 14, mb: 1 }}>Flow FdM</Typography>
+        <TextField
+          size="small"
+          label="Jours visibles"
+          type="number"
+          value={cfg.fdmVisibleDays}
+          onChange={e =>
+            setCfg(c => ({
+              ...c,
+              fdmVisibleDays: Math.min(7, Math.max(1, Number(e.target.value) || 1)),
+            }))
+          }
+          inputProps={{ min: 1, max: 7 }}
+          sx={{ width: 140 }}
+        />
+        <Typography sx={{ fontSize: 12, color: T.text2, mt: 0.75 }}>
+          1 = aujourd’hui · 2 = aujourd’hui + demain. La FdM ne peut <strong>commencer</strong> que
+          les ménages du jour.
+        </Typography>
+      </Box>
+
       <Stack direction="row" spacing={1} alignItems="center">
         <Button
           variant="contained"

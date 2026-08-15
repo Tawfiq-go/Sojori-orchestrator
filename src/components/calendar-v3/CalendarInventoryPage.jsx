@@ -1,9 +1,9 @@
 // ════════════════════════════════════════════════════════════════════
 // CalendarInventoryPage.jsx — wrapper toolbar + Multi/Simple toggle
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { T, resolveSelectionCurrency, sortCalendarColumns } from './_shared';
+import { T, resolveSelectionCurrency, sortCalendarColumns, CALENDAR_DEFAULT_COLUMNS } from './_shared';
 import MultiView from './MultiView';
 import SimpleView from './SimpleView';
 import ColumnFilters from './ColumnFilters';
@@ -15,7 +15,7 @@ import DpSyncAuditStrip from './DpSyncAuditStrip';
 import CalendarLandscapeHint from './CalendarLandscapeHint';
 import ReservationCalendarDrawer from './ReservationCalendarDrawer';
 import { useCalendarBreakpoint } from '../../hooks/useCalendarBreakpoint';
-import { normalizeCalendarReservation, reservationRouteId } from './reservationCalendarUtils';
+import { normalizeCalendarReservation, reservationDetailFetchId } from './reservationCalendarUtils';
 import reservationsService from '../../services/reservationsService';
 import calendarService from '../../services/calendarService';
 import { isCalendarImportReviewActive } from '../../services/calendarImportReviewService';
@@ -28,7 +28,12 @@ import {
   formatHorizonEndLabel,
   getCalendarWindowBounds,
 } from './inventoryCalendarConstants';
-import { toIsoDay, filterReservationsForRoom } from './multiCalendarReservations';
+import {
+  toIsoDay,
+  filterReservationsForRoom,
+  flattenInventoryReservationsForOverlay,
+  mergeOverlayReservationLists,
+} from './multiCalendarReservations';
 import { filterBlocksForRoom, roomRangeOverlapMessage } from './roomBlockDisplay';
 import { useWriteAccess } from '../../hooks/useWriteAccess';
 import { useAuth } from '../../hooks/useAuth';
@@ -155,13 +160,7 @@ export default function CalendarInventoryPage({
     setViewState(viewFromUrl);
   }, [viewFromUrl]);
 
-  const [selectedColumns, setSelectedColumns] = useState([
-    'rate',
-    'availableRoom',
-    'reservations',
-    'minStay',
-    'dynamicPrice',
-  ]);
+  const [selectedColumns, setSelectedColumns] = useState(() => [...CALENDAR_DEFAULT_COLUMNS]);
   const [pivotDate, setPivotDate] = useState(() => startOfDay(startDate));
   const [modalCells, setModalCells] = useState(null);
   const [blockRoomDraft, setBlockRoomDraft] = useState(null);
@@ -170,7 +169,6 @@ export default function CalendarInventoryPage({
   const [pickerAnchor, setPickerAnchor] = useState(null);
   const [limitHint, setLimitHint] = useState(null);
   const [drawerReservation, setDrawerReservation] = useState(null);
-  const [drawerLoading, setDrawerLoading] = useState(false);
   /** Plein écran grille — même geste ⛶ que planning / inbox (mobile + web). */
   const calendarFs = usePageFullscreen();
   const calendarFullscreen = calendarFs.fullscreen;
@@ -186,7 +184,18 @@ export default function CalendarInventoryPage({
    * Filtre « Rés. » = barres Gantt uniquement (pas l’affichage des rooms).
    */
   const [multiOverlayReservations, setMultiOverlayReservations] = useState([]);
+  const overlayCacheRef = useRef(new Map());
+  const overlayInflightKeyRef = useRef('');
+  const overlayWantedKeyRef = useRef('');
   const resaFilterOn = view === 'multi' && selectedColumns.includes('reservations');
+  const overlayFromInventory = useMemo(
+    () => flattenInventoryReservationsForOverlay(inventoryData),
+    [inventoryData],
+  );
+  const overlayReservations = useMemo(
+    () => mergeOverlayReservationLists(overlayFromInventory, multiOverlayReservations),
+    [overlayFromInventory, multiOverlayReservations],
+  );
 
   const handleCellsSelected = useCallback(
     (cells) => {
@@ -201,7 +210,7 @@ export default function CalendarInventoryPage({
       if (!canBlockRooms || !roomId || !dateStr) return;
       const roomBlocks = filterBlocksForRoom(calendarBlocksById, roomId);
       const roomResas = filterReservationsForRoom(
-        multiOverlayReservations,
+        overlayReservations,
         roomId,
         roomName,
       );
@@ -221,47 +230,86 @@ export default function CalendarInventoryPage({
         overlapMessage: null,
       });
     },
-    [canBlockRooms, calendarBlocksById, multiOverlayReservations],
+    [canBlockRooms, calendarBlocksById, overlayReservations],
   );
 
   const refreshBlocks = useCallback(async () => {
     await onRefreshCalendarBlocks?.();
   }, [onRefreshCalendarBlocks]);
 
+  const overlayRangeKey = useMemo(() => {
+    const from = toIsoDay(windowStart);
+    const end = new Date(windowStart.getFullYear(), windowStart.getMonth(), windowStart.getDate() + MULTI_VISIBLE_DAYS);
+    const to = toIsoDay(end);
+    return `${from}|${to}|${listingIdsKey}`;
+  }, [windowStart, listingIdsKey]);
+
   useEffect(() => {
     if (view !== 'multi') {
       setMultiOverlayReservations([]);
+      overlayInflightKeyRef.current = '';
       return undefined;
     }
-    let cancelled = false;
-    const from = toIsoDay(windowStart);
-    const end = new Date(windowStart);
-    end.setDate(end.getDate() + MULTI_VISIBLE_DAYS);
-    const to = toIsoDay(end);
-    if (!from || !to) return undefined;
+    const [from, to, idsJoined] = overlayRangeKey.split('|');
+    const listingIds = String(idsJoined || '')
+      .split(',')
+      .filter(Boolean);
+    if (!from || !to || listingIds.length === 0) return undefined;
+
+    const cacheKey = overlayRangeKey;
+    overlayWantedKeyRef.current = cacheKey;
+    const cached = overlayCacheRef.current.get(cacheKey);
+    if (cached) {
+      setMultiOverlayReservations(cached);
+      console.log('[CalendarMulti] overlay:cache', { n: cached.length, from, to });
+      return undefined;
+    }
+    if (overlayInflightKeyRef.current === cacheKey) {
+      console.log('[CalendarMulti] overlay:skip-inflight', { from, to });
+      return undefined;
+    }
+
+    overlayInflightKeyRef.current = cacheKey;
+    console.log('[CalendarMulti] overlay:start', { listings: listingIds.length, from, to });
+    const t0 = performance.now();
     (async () => {
       try {
         const res = await reservationsService.getList({
           limit: 500,
-          // Calendrier : actifs seulement. Annulées (même non ack) → pages /resa, pas ici.
           status: 'Confirmed,Started,Pending,Inside',
-          dateType: 'arrival_or_departure',
+          dateType: 'overlap',
           startDate: from,
           endDate: to,
+          listingIds,
         });
-        if (!cancelled) setMultiOverlayReservations(Array.isArray(res?.data) ? res.data : []);
+        const next = Array.isArray(res?.data) ? res.data : [];
+        overlayCacheRef.current.set(cacheKey, next);
+        if (overlayWantedKeyRef.current === cacheKey) {
+          setMultiOverlayReservations(next);
+        }
+        console.log('[CalendarMulti] overlay:ok', {
+          n: next.length,
+          ms: Math.round(performance.now() - t0),
+        });
       } catch (err) {
-        console.warn('[CalendarMulti] fetch résas overlay:', err);
-        if (!cancelled) setMultiOverlayReservations([]);
+        console.warn('[CalendarMulti] overlay:err', err);
+        if (overlayWantedKeyRef.current === cacheKey) setMultiOverlayReservations([]);
+      } finally {
+        if (overlayInflightKeyRef.current === cacheKey) overlayInflightKeyRef.current = '';
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [view, windowStart]);
+    return undefined;
+  }, [view, overlayRangeKey]);
 
   useEffect(() => {
-    setPivotDate(clampPivotDate(startDate));
+    const next = clampPivotDate(startDate);
+    setPivotDate((prev) => {
+      const same =
+        prev.getFullYear() === next.getFullYear() &&
+        prev.getMonth() === next.getMonth() &&
+        prev.getDate() === next.getDate();
+      return same ? prev : next;
+    });
   }, [startDate]);
 
   useEffect(() => {
@@ -486,29 +534,40 @@ export default function CalendarInventoryPage({
     const shell = normalizeCalendarReservation(rawRes);
     if (!shell) return;
     setDrawerReservation(shell);
-    setDrawerLoading(true);
+    const id = reservationDetailFetchId(shell);
+    if (!id) return;
     try {
-      const id = reservationRouteId(shell);
-      if (id) {
-        const full = await reservationsService.getByRouteParam(id);
-        setDrawerReservation({
+      const full = await reservationsService.getByRouteParam(id);
+      setDrawerReservation((prev) => {
+        if (!prev) return prev;
+        const sameNumber =
+          prev.reservationNumber &&
+          full.reservationNumber &&
+          String(prev.reservationNumber) === String(full.reservationNumber);
+        const sameId =
+          prev._id && full._id && String(prev._id) === String(full._id);
+        if (prev.reservationNumber && full.reservationNumber && !sameNumber && !sameId) {
+          return prev;
+        }
+        return {
+          ...prev,
           ...full,
           guestName:
             full.guestName ||
             `${full.guestFirstName || ''} ${full.guestLastName || ''}`.trim() ||
-            shell.guestName,
-        });
-      }
+            prev.guestName,
+          listingName: full.listingName || full.sojoriName || prev.listingName,
+          roomName: full.roomName || prev.roomName,
+          roomTypeName: full.roomTypeName || prev.roomTypeName,
+        };
+      });
     } catch (err) {
       console.error('[CalendarV3] détail résa:', err);
-    } finally {
-      setDrawerLoading(false);
     }
   }, []);
 
   const closeReservationDrawer = useCallback(() => {
     setDrawerReservation(null);
-    setDrawerLoading(false);
   }, []);
 
   const pageShellStyle = calendarFullscreen
@@ -821,7 +880,7 @@ export default function CalendarInventoryPage({
           dpEnabledByListing={dpEnabledByListing}
           inventoriesByListing={inventoriesByListing}
           inventoryData={inventoryData}
-          overlayReservations={multiOverlayReservations}
+          overlayReservations={overlayReservations}
           calendarBlocksById={calendarBlocksById}
           inventoryLoading={inventoryLoading}
           selectedColumns={selectedColumns}
@@ -974,7 +1033,6 @@ export default function CalendarInventoryPage({
       {drawerReservation && (
         <ReservationCalendarDrawer
           reservation={drawerReservation}
-          loading={drawerLoading}
           onClose={closeReservationDrawer}
         />
       )}

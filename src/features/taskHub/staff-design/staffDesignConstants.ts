@@ -30,11 +30,14 @@ export const STAFF_ASSIGNABLE_TASK_TYPES = FULLTASK_TASK_TYPES.filter(
 
 /** Libellés courts UI équipe terrain. */
 const STAFF_PILL_LABEL_OVERRIDES: Partial<Record<FulltaskTaskTypeId, string>> = {
-  cleaning_free: 'Ménage gratuit',
+  cleaning_free: 'Ménage séjour',
   cleaning_paid: 'Ménage payant',
+  stay_cleaning: 'Ménage journalier',
   receive_arrival: 'Accueil client (check-in)',
   receive_departure: 'Départ client (check-out)',
   checkout_cleaning: 'Ménage checkout',
+  welcome_package: 'Pack bienvenue',
+  minibar_check: 'Contrôle mini-bar',
 };
 
 export const STAFF_TASK_PILLS = STAFF_ASSIGNABLE_TASK_TYPES.map((key) => ({
@@ -42,6 +45,74 @@ export const STAFF_TASK_PILLS = STAFF_ASSIGNABLE_TASK_TYPES.map((key) => ({
   label: STAFF_PILL_LABEL_OVERRIDES[key] ?? labelForTaskTypeId(key),
   emoji: FULLTASK_TASK_TYPE_EMOJI[key] ?? '📋',
 }));
+
+const MENAGE_KEYS = [
+  'cleaning_free',
+  'cleaning_paid',
+  'cleaning_sojori',
+  'checkout_cleaning',
+  'stay_cleaning',
+] as const;
+
+export type StaffRolePresetId =
+  | 'fdm'
+  | 'sup_stay'
+  | 'sup_housekeeping'
+  | 'sup_checkout'
+  | 'inspector';
+
+export type StaffRolePreset = {
+  id: StaffRolePresetId;
+  label: string;
+  hint: string;
+  taskTypes: readonly string[];
+  opsRole: 'agent' | 'supervisor';
+  canInspect: boolean;
+};
+
+/** Raccourcis admin — appliquent des flags, tout reste éditable ensuite. */
+export const STAFF_ROLE_PRESETS: StaffRolePreset[] = [
+  {
+    id: 'fdm',
+    label: 'FdM',
+    hint: 'Exécute Recouche / checkout / journalier. Terminer → Clean.',
+    taskTypes: MENAGE_KEYS,
+    opsRole: 'agent',
+    canInspect: false,
+  },
+  {
+    id: 'sup_stay',
+    label: 'Sup. séjour',
+    hint: 'Planning Recouche (cleaning_free).',
+    taskTypes: ['cleaning_free'],
+    opsRole: 'supervisor',
+    canInspect: false,
+  },
+  {
+    id: 'sup_housekeeping',
+    label: 'Sup. ménage',
+    hint: 'Planning de toutes les activités ménage.',
+    taskTypes: MENAGE_KEYS,
+    opsRole: 'supervisor',
+    canInspect: false,
+  },
+  {
+    id: 'sup_checkout',
+    label: 'Sup. checkout',
+    hint: 'Planning ménage checkout.',
+    taskTypes: ['checkout_cleaning', 'cleaning_sojori'],
+    opsRole: 'supervisor',
+    canInspect: false,
+  },
+  {
+    id: 'inspector',
+    label: 'Inspecter',
+    hint: 'Femme de linge / inspecteur. Terminer → Inspected.',
+    taskTypes: MENAGE_KEYS,
+    opsRole: 'agent',
+    canInspect: true,
+  },
+];
 
 /**
  * ⚠️ CRITICAL : l'index DOIT suivre la convention JS/backend (Dimanche = 0),

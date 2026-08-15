@@ -7,6 +7,7 @@ import {
 } from '../listing/components/ConfigOrchestration/cleaningConfigTypes';
 
 export type CleaningIncludedGestion = {
+  always: boolean
   frequency: FrequencyTier[];
   timeSlots: TimeSlot[];
   descriptionFr: string;
@@ -39,7 +40,13 @@ export function parseCleaningIncludedGestion(
     hasGestionExtras ? g.extras : listingValues.includedCleaningExtras
   ) as IncludedCleaningExtra[] | undefined;
 
+  const ops = g.menageOps as { included?: { always?: boolean } } | undefined
+  const listingOps = listingValues.menageOps as { included?: { always?: boolean } } | undefined
+  const always =
+    g.includedAlways === true || ops?.included?.always === true || listingOps?.included?.always === true
+
   return {
+    always,
     frequency:
       Array.isArray(rawFreq) && rawFreq.length > 0
         ? rawFreq.map(normalizeTier)
@@ -58,6 +65,7 @@ export function parseCleaningIncludedGestion(
 export function cleaningIncludedToGestion(state: CleaningIncludedGestion): Record<string, unknown> {
   const slots = state.timeSlots.map(normalizeIncludedCleaningSlot);
   return {
+    includedAlways: state.always,
     frequency: state.frequency,
     timeSlots: slots,
     TS_CLEAN: slots,
