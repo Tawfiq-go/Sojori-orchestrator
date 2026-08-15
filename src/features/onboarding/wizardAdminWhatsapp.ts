@@ -25,7 +25,7 @@ export const WA_MENU_TYPES = [
   { type: 'Lead', label: 'Leads', menuLetter: 'L' },
   { type: 'Reservation', label: 'Réservations', menuLetter: 'R' },
   { type: 'ArrivalDeparture', label: 'Arr. / dép.', menuLetter: 'P' },
-  { type: 'Task:Cleaning', label: 'Superviseur Ménage', menuLetter: 'S' },
+  { type: 'Task:Cleaning', label: 'Superviseur Ménage', menuLetter: 'SM' },
   { type: 'Task:Arrival', label: 'Superviseur Accueil', menuLetter: 'S' },
   { type: 'Task:Support', label: 'Superviseur Support', menuLetter: 'S' },
   { type: 'Task:ServiceClient', label: 'Superviseur Service client', menuLetter: 'S' },

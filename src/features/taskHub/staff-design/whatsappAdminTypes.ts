@@ -43,7 +43,7 @@ export const WA_ADMIN_TYPES = [
   { type: 'ArrivalDeparture', label: 'Arr. / dép.', menuLetter: 'P', abbr: 'DC' },
   { type: 'Finances', label: 'Dépense / Extra', menuLetter: 'D', abbr: 'EX' },
   { type: 'Enregistrement', label: 'Enregistrement (passeports)', menuLetter: 'E', abbr: 'PG' },
-  { type: 'Task:Cleaning', label: 'Superviseur Ménage', menuLetter: 'S', abbr: 'SM' },
+  { type: 'Task:Cleaning', label: 'Superviseur Ménage', menuLetter: 'SM', abbr: 'SM' },
   { type: 'Task:Arrival', label: 'Superviseur Accueil', menuLetter: 'S', abbr: 'SA' },
   { type: 'Task:Support', label: 'Superviseur Support', menuLetter: 'S', abbr: 'SP' },
   { type: 'Task:ServiceClient', label: 'Superviseur Service client', menuLetter: 'S', abbr: 'SC' },
