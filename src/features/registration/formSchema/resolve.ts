@@ -1,5 +1,5 @@
-import { WHATSAPP_FLOW_SUPPORTED_BINDINGS } from './builtinCatalog'
-import { derivedRegistrationLevel, enabledFields } from './completeness'
+import { derivedRegistrationLevel } from './completeness'
+import { canRenderInWhatsAppFlow } from './flowSlots'
 import { schemaFromGestion, schemaFromLegacyLevel } from './normalize'
 import type {
   EffectiveRegistrationForm,
@@ -88,16 +88,16 @@ export function resolveOwnerRegistrationForm(
 }
 
 /**
- * Published WhatsApp Flows have a fixed screen/field list. Arbitrary custom
- * forms cannot be rendered there without publishing a new Flow.
+ * @deprecated Guest registration always stays inside the WhatsApp Flow.
+ * Kept so existing snapshot/API fields do not break. Always false.
+ * Use `canRenderInWhatsAppFlow` to know whether a schema fits the Flow slots.
  */
-export function needsWebCheckin(schema: RegistrationFormSchema): boolean {
-  if (schema.source === 'custom') return true
-  return enabledFields(schema).some((field) => {
-    if (field.kind === 'custom') return true
-    if (!field.binding) return true
-    return !WHATSAPP_FLOW_SUPPORTED_BINDINGS.includes(field.binding)
-  })
+export function needsWebCheckin(_schema: RegistrationFormSchema): boolean {
+  return false
+}
+
+export function registrationUsesWhatsAppFlow(schema: RegistrationFormSchema): boolean {
+  return canRenderInWhatsAppFlow(schema)
 }
 
 export function gestionWithSchema(
