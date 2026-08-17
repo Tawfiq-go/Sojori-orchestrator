@@ -320,6 +320,8 @@ function initBoolean(value: unknown): string {
 
 export function emptySlotFlowData(slot: number): Record<string, unknown> {
   return {
+    [`slot_${slot}_active`]: false,
+    [`slot_${slot}_show_helper`]: false,
     [`slot_${slot}_show_short_text`]: false,
     [`slot_${slot}_show_long_text`]: false,
     [`slot_${slot}_show_date`]: false,
@@ -327,6 +329,13 @@ export function emptySlotFlowData(slot: number): Record<string, unknown> {
     [`slot_${slot}_show_select`]: false,
     [`slot_${slot}_show_multi_select`]: false,
     [`slot_${slot}_show_boolean`]: false,
+    [`slot_${slot}_short_text_required`]: false,
+    [`slot_${slot}_long_text_required`]: false,
+    [`slot_${slot}_date_required`]: false,
+    [`slot_${slot}_time_required`]: false,
+    [`slot_${slot}_select_required`]: false,
+    [`slot_${slot}_multi_select_required`]: false,
+    [`slot_${slot}_boolean_required`]: false,
     [`slot_${slot}_label`]: ' ',
     [`slot_${slot}_helper`]: ' ',
     [`slot_${slot}_init_short_text`]: '',
@@ -353,12 +362,20 @@ export function buildSlotFlowData(input: {
   const field = input.field
   if (!field) return base
   const variant = fieldTypeToVariant(field.type)
-  const label = markedRequiredLabel(fieldLabel(field, input.locale || undefined), field.required)
+  const required = field.required === true
+  const label = markedRequiredLabel(fieldLabel(field, input.locale || undefined), required)
+  const timeHint = String(input.locale || '').toLowerCase().startsWith('en')
+    ? 'Use HH:MM (24h).'
+    : 'Format HH:MM (24h).'
+  const helper = (input.helper || (variant === 'time' ? timeHint : '')).trim()
   return {
     ...base,
+    [`slot_${input.slot}_active`]: true,
+    [`slot_${input.slot}_show_helper`]: Boolean(helper),
     [`slot_${input.slot}_show_${variant}`]: true,
+    [`slot_${input.slot}_${variant}_required`]: required,
     [`slot_${input.slot}_label`]: label,
-    [`slot_${input.slot}_helper`]: (input.helper || ' ').trim() || ' ',
+    [`slot_${input.slot}_helper`]: helper || ' ',
     [`slot_${input.slot}_init_short_text`]: variant === 'short_text' ? initString(input.value) : '',
     [`slot_${input.slot}_init_long_text`]: variant === 'long_text' ? initString(input.value) : '',
     [`slot_${input.slot}_init_date`]: variant === 'date' ? initString(input.value) : '',
