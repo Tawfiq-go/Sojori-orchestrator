@@ -34,6 +34,7 @@ const TITLE_OVERRIDES: Record<string, string> = {
   'tasks/list': 'Liste des tâches',
   'tasks/extras/configuration': 'Configuration Extra',
   'tasks/extras/list': 'Liste extra',
+  'tasks/extras/minibar': 'Suivi mini-bar',
   'pricing/portfolio': 'Prix dynamique',
   'pricing/audit': 'Audit prix',
   'comms/guests': 'WhatsApp',

@@ -40,6 +40,7 @@ function rewriteAdminFulltaskPath(path: string): string {
     '/admin-whatsapp',
     '/staff-whatsapp',
     '/extras',
+    '/minibar',
     '/expense-categories',
     '/expenses',
     '/ledger',

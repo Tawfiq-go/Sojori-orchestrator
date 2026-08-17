@@ -25,6 +25,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'tasks/extras': '/tasks/extras/configuration',
   'tasks/extras/configuration': '/tasks/extras/configuration',
   'tasks/extras/list': '/tasks/extras/list',
+  'tasks/extras/minibar': '/tasks/extras/minibar',
   calendar: '/calendar?view=multi',
   'calendar/multi': '/calendar?view=multi',
   'calendar/simple': '/calendar?view=simple',

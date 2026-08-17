@@ -114,6 +114,11 @@ const TasksExtrasConfigPage = lazyWithReload(() =>
     default: module.TasksExtrasConfigPage,
   }))
 );
+const MinibarSuiviPage = lazyWithReload(() =>
+  import('./features/minibar/MinibarSuiviPage').then((module) => ({
+    default: module.MinibarSuiviPage,
+  })),
+);
 const TasksExtrasListPage = lazyWithReload(() =>
   import('./features/extras/TasksExtrasListPage').then((module) => ({
     default: module.TasksExtrasListPage,
@@ -411,6 +416,7 @@ function App() {
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
               <Route path="/tasks/extras/configuration" element={<LazyRoute><TasksExtrasConfigPage /></LazyRoute>} />
               <Route path="/tasks/extras/list" element={<LazyRoute><TasksExtrasListPage /></LazyRoute>} />
+              <Route path="/tasks/extras/minibar" element={<LazyRoute><MinibarSuiviPage /></LazyRoute>} />
               <Route path="/tasks/extras" element={<Navigate to="/tasks/extras/configuration" replace />} />
               <Route path="/tasks/planning" element={<LazyRoute><TasksPlanningPageV2 /></LazyRoute>} />
               <Route path="/tasks/kanban" element={<Navigate to="/tasks" replace />} />
