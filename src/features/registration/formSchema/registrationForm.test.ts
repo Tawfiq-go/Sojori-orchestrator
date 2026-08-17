@@ -22,12 +22,21 @@ import {
   newCustomField,
   nextCustomScreen,
   parseRegistrationFormSchema,
+  pickEnabledFormMemberPatch,
   reconstructSlotMapping,
   requiredEnabledFields,
   resolveEffectiveRegistrationForm,
+  screenshotHotelRegistrationSchema,
   simplePresetSchema,
   slotBindingsForPage,
   splitSlotAnswersByKind,
+  validateFormReviewFields,
+  formReviewControlFlags,
+  isLegacyFormComponentEnabled,
+  isPassportPhotoRequired,
+  isPassportPhotoEnabled,
+  nextScreenAfterFormSave,
+  registrationFieldTypeLabel,
 } from './index'
 
 const janeComplete = {
@@ -588,5 +597,163 @@ describe('WhatsApp Flow dynamic slots', () => {
     const split = splitSlotAnswersByKind(fields, { profession: 'Engineer', q1: 'Hello' })
     assert.equal(split.builtins.profession, 'Engineer')
     assert.equal(split.custom.q1, 'Hello')
+  })
+})
+
+describe('schema-aware FORM review', () => {
+  it('does not block an optional first name', () => {
+    const schema = screenshotHotelRegistrationSchema()
+    const result = validateFormReviewFields(schema, {
+      first_name: '',
+      last_name: 'Benali',
+      document_number: 'AB1',
+      nationality: 'MA',
+      birth_date: '1990-01-01',
+      hasVerifiedPhoto: true,
+    })
+    assert.equal(result.ok, true)
+  })
+
+  it('blocks a required first name', () => {
+    const schema = simplePresetSchema()
+    const result = validateFormReviewFields(schema, {
+      first_name: '',
+      last_name: 'Benali',
+      document_number: 'AB1',
+      nationality: 'MA',
+      birth_date: '1990-01-01',
+      hasVerifiedPhoto: true,
+    })
+    assert.equal(result.ok, false)
+    if (!result.ok) assert.ok(result.missing.includes('first_name'))
+  })
+
+  it('hides disabled gender and residence country', () => {
+    const schema = screenshotHotelRegistrationSchema()
+    assert.equal(isLegacyFormComponentEnabled(schema, 'gender'), false)
+    assert.equal(isLegacyFormComponentEnabled(schema, 'residence_country'), false)
+    assert.equal(formReviewControlFlags(schema, 'last_name').visible, true)
+    assert.equal(formReviewControlFlags(schema, 'place_of_birth').visible, true)
+  })
+
+  it('sends the configured label and required marker', () => {
+    const schema = screenshotHotelRegistrationSchema()
+    const first = formReviewControlFlags(schema, 'first_name', 'fr')
+    assert.equal(first.required, false)
+    assert.equal(first.label.includes('*'), false)
+    const last = formReviewControlFlags(schema, 'last_name', 'fr')
+    assert.equal(last.required, true)
+    assert.ok(last.label.includes('*'))
+    assert.ok(last.label.toLowerCase().includes('nom'))
+  })
+
+  it('uses date controls for date builtins', () => {
+    const schema = screenshotHotelRegistrationSchema()
+    const birth = formReviewControlFlags(schema, 'birth_date')
+    assert.equal(birth.showDate, true)
+    assert.equal(birth.showText, false)
+    const issued = formReviewControlFlags(schema, 'document_issued_on')
+    assert.equal(issued.showDate, true)
+  })
+
+  it('does not put disabled FORM fields on the save patch', () => {
+    const schema = {
+      version: 1 as const,
+      source: 'custom' as const,
+      fields: simplePresetSchema().fields.map((f) =>
+        f.id === 'nationality' ? { ...f, enabled: false, required: false } : f,
+      ),
+    }
+    const patch = pickEnabledFormMemberPatch(schema, {
+      first_name: 'Amine',
+      last_name: 'Benali',
+      nationality: '',
+      document_number: 'AB1',
+      birth_date: '1990-01-01',
+    })
+    assert.equal(patch.first_name, 'Amine')
+    assert.equal(patch.nationality, undefined)
+    assert.equal('gender' in patch, false)
+    assert.equal('residence_country' in patch, false)
+  })
+
+  it('requires verified photo only when passport photo is required', () => {
+    const required = screenshotHotelRegistrationSchema()
+    assert.equal(isPassportPhotoRequired(required), true)
+    const noPhoto = validateFormReviewFields(required, {
+      last_name: 'Benali',
+      document_number: 'AB1',
+      nationality: 'MA',
+      birth_date: '1990-01-01',
+      hasVerifiedPhoto: false,
+    })
+    assert.equal(noPhoto.ok, false)
+    const disabled = {
+      version: 1 as const,
+      source: 'custom' as const,
+      fields: simplePresetSchema().fields.map((f) =>
+        f.id === 'passport_photo' ? { ...f, enabled: false, required: false } : f,
+      ),
+    }
+    assert.equal(isPassportPhotoEnabled(disabled), false)
+    const skipped = validateFormReviewFields(disabled, {
+      first_name: 'Amine',
+      last_name: 'Benali',
+      document_number: 'AB1',
+      nationality: 'MA',
+      birth_date: '1990-01-01',
+      hasVerifiedPhoto: false,
+    })
+    assert.equal(skipped.ok, true)
+  })
+
+  it('navigates the screenshot schema FORM → CUSTOM_FIELDS_A with 5 then 2 extras', () => {
+    const schema = screenshotHotelRegistrationSchema()
+    assert.equal(nextScreenAfterFormSave(schema), 'CUSTOM_FIELDS_A')
+    const traveler = dynamicFlowFieldsForScope(schema, 'per_traveler')
+    assert.deepEqual(
+      traveler.map((f) => f.label),
+      [
+        'Profession',
+        'Lieu de provenance',
+        'Allant à',
+        'Téléphone',
+        'Nouvelle question',
+        'Domicile habituel',
+        'Ville',
+      ],
+    )
+    assert.equal(slotBindingsForPage(traveler, 'A').filter((s) => s.field).length, 5)
+    assert.equal(slotBindingsForPage(traveler, 'B').filter((s) => s.field).length, 2)
+    assert.equal(buildSlotFlowData({ slot: 1, field: traveler[0]! }).slot_1_show_short_text, true)
+    assert.equal(buildSlotFlowData({ slot: 5, field: traveler[4]! }).slot_5_show_time, true)
+    assert.equal(emptySlotFlowData(8).slot_8_show_short_text, false)
+    assert.equal(nextScreenAfterFormSave(simplePresetSchema()), 'LIST_REFRESH')
+    assert.equal(nextScreenAfterFormSave(completePresetSchema()), 'CUSTOM_FIELDS_A')
+  })
+
+  it('keeps owner inheritance and listing override', () => {
+    const owner = screenshotHotelRegistrationSchema()
+    const inherited = resolveEffectiveRegistrationForm({
+      listingGestion: {},
+      ownerGestion: { registrationFormSchema: owner },
+    })
+    assert.equal(inherited.origin, 'owner')
+    assert.equal(nextScreenAfterFormSave(inherited.schema), 'CUSTOM_FIELDS_A')
+    const listing = resolveEffectiveRegistrationForm({
+      listingGestion: {
+        registrationFormOverride: true,
+        registrationFormSchema: simplePresetSchema(),
+      },
+      ownerGestion: { registrationFormSchema: owner },
+    })
+    assert.equal(listing.origin, 'listing')
+    assert.equal(nextScreenAfterFormSave(listing.schema), 'LIST_REFRESH')
+  })
+
+  it('labels passport photo as a document upload, not short_text', () => {
+    const photo = simplePresetSchema().fields.find((f) => f.id === 'passport_photo')
+    assert.ok(photo)
+    assert.equal(registrationFieldTypeLabel(photo!), 'photo/document')
   })
 })
