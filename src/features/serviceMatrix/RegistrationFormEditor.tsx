@@ -37,8 +37,10 @@ import {
   enabledFields,
   gestionResetToInherited,
   gestionWithSchema,
+  isOcrReviewField,
   newCustomField,
   parseRegistrationFormSchema,
+  registrationFieldTypeLabel,
   resolveEffectiveRegistrationForm,
   simplePresetSchema,
   type RegistrationFieldDef,
@@ -223,8 +225,9 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
       </Typography>
       <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>{inheritLabel}</Typography>
       <Alert severity="info" sx={{ fontSize: 12, mb: 1.5 }}>
-        Ces champs s’affichent directement dans le Flow WhatsApp d’enregistrement. Le voyageur
-        reste dans WhatsApp — aucun lien vers un formulaire externe n’est envoyé.
+        Ces champs s’affichent dans le Flow WhatsApp. Le bloc OCR / pièce d’identité a un ordre
+        fixe sur l’écran « Vérifier ». Seuls les champs supplémentaires peuvent être réordonnés.
+        Aucun lien vers un formulaire externe n’est envoyé.
       </Alert>
       <Typography sx={{ fontSize: 12.5, fontWeight: 600, mb: 1 }}>
         Champs supplémentaires : {dynamicFlowSlotCount(schema)} / {REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT}
@@ -275,7 +278,19 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
         </Button>
       </Stack>
       <Stack spacing={1}>
-        {fields.map((field, index) => (
+        {fields.map((field, index) => {
+          const ocrBlock = isOcrReviewField(field);
+          const canMoveUp =
+            !ocrBlock &&
+            index > 0 &&
+            !isOcrReviewField(fields[index - 1]!) &&
+            !saving;
+          const canMoveDown =
+            !ocrBlock &&
+            index < fields.length - 1 &&
+            !isOcrReviewField(fields[index + 1]!) &&
+            !saving;
+          return (
           <Box
             key={field.id}
             sx={{
@@ -288,6 +303,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
               px: 1.25,
               py: 1,
               opacity: field.enabled === false ? 0.55 : 1,
+              bgcolor: ocrBlock ? 'rgba(26,22,17,0.03)' : undefined,
             }}
           >
             <Box>
@@ -296,20 +312,22 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
                 {field.required ? ' *' : ''}
               </Typography>
               <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-                {field.kind === 'builtin' ? 'intégré' : 'personnalisé'} · {field.type} ·{' '}
+                {field.kind === 'builtin' ? 'intégré' : 'personnalisé'} ·{' '}
+                {registrationFieldTypeLabel(field)} ·{' '}
                 {field.scope === 'per_stay' ? 'une fois / séjour' : 'par voyageur'}
+                {ocrBlock ? ' · bloc OCR' : ''}
                 {field.enabled === false ? ' · désactivé' : ''}
               </Typography>
             </Box>
             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-              <IconButton size="small" disabled={index === 0 || saving} onClick={() => {
+              <IconButton size="small" disabled={!canMoveUp} onClick={() => {
                 const next = [...fields];
                 [next[index - 1], next[index]] = [next[index], next[index - 1]];
                 updateFields(next);
               }}>
                 <ArrowUpward fontSize="small" />
               </IconButton>
-              <IconButton size="small" disabled={index === fields.length - 1 || saving} onClick={() => {
+              <IconButton size="small" disabled={!canMoveDown} onClick={() => {
                 const next = [...fields];
                 [next[index + 1], next[index]] = [next[index], next[index + 1]];
                 updateFields(next);
@@ -351,7 +369,8 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
               </IconButton>
             </Stack>
           </Box>
-        ))}
+          );
+        })}
       </Stack>
       <Box sx={{ mt: 2, p: 1.5, bgcolor: '#fafaf7', borderRadius: 1.5 }}>
         <Typography sx={{ fontSize: 12, fontWeight: 700, mb: 0.75 }}>Aperçu voyageur</Typography>
@@ -391,11 +410,19 @@ function FieldEditorDialog({
   useEffect(() => setDraft(field), [field]);
   if (!draft) return null;
   const custom = draft.kind === 'custom';
+  const passportPhoto = draft.binding === 'passport_photo';
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{custom ? 'Question personnalisée' : 'Champ intégré'}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+          {passportPhoto && (
+            <Alert severity="info" sx={{ fontSize: 12 }}>
+              Photo / document d’identité. Ce champ déclenche l’OCR WhatsApp. Le type ne peut pas
+              être changé en texte générique. Désactivez-le seulement si la photo n’est pas
+              demandée.
+            </Alert>
+          )}
           <TextField
             label="Libellé"
             size="small"
@@ -418,6 +445,14 @@ function FieldEditorDialog({
                 ))}
               </TextField>
             </FormControl>
+          )}
+          {passportPhoto && (
+            <TextField
+              label="Type"
+              size="small"
+              value="photo/document"
+              disabled
+            />
           )}
           <TextField
             select
