@@ -75,7 +75,10 @@ export const ALL_BUILTIN_BINDINGS: BuiltinBinding[] = Object.keys(
   REGISTRATION_FIELD_LABELS,
 ) as BuiltinBinding[]
 
-/** Fields the published WhatsApp registration Flow can collect. Do not expand without publishing a new Flow. */
+/**
+ * Built-in fields collected on the static FORM / UPLOAD screens.
+ * Extra builtins (profession, phone, …) use dynamic Flow slots.
+ */
 export const WHATSAPP_FLOW_SUPPORTED_BINDINGS: BuiltinBinding[] = [
   'first_name',
   'last_name',

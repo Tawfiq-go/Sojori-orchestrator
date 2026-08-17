@@ -152,9 +152,10 @@ export function CapabilityGestionPanel({
     return (
       <Box sx={embeddedSx}>
         <Alert severity="info" sx={{ fontSize: 12.5 }}>
-          Formulaire d&apos;enregistrement configurable (voyageur / séjour). Les champs requis
-          déterminent le statut Complet. L&apos;onglet réservation Enregistrement sert à saisir les
-          réponses, pas à configurer le formulaire.
+          Formulaire d&apos;enregistrement configurable (voyageur / séjour). Les champs
+          supplémentaires (hors passeport / OCR) apparaissent dans le Flow WhatsApp, jusqu&apos;à 10
+          questions. Les champs requis déterminent le statut Complet. L&apos;onglet réservation
+          Enregistrement sert à saisir les réponses, pas à configurer le formulaire.
         </Alert>
         {(lid || templateMode) && (
           <>

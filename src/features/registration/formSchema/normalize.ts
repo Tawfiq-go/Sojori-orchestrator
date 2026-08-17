@@ -1,4 +1,5 @@
 import { ALL_BUILTIN_BINDINGS, builtinField } from './builtinCatalog'
+import { whatsAppFlowRenderCheck } from './flowSlots'
 import { completePresetSchema, presetSchemaForLevel, simplePresetSchema } from './presets'
 import type {
   BuiltinBinding,
@@ -199,6 +200,8 @@ export function parseRegistrationFormSchema(raw: unknown): SchemaValidationResul
     source: detectSource(fields, declared),
     fields,
   }
+  const flowCheck = whatsAppFlowRenderCheck(schema)
+  if (!flowCheck.ok) errors.push(...flowCheck.errors)
   return { ok: errors.length === 0, schema: errors.length === 0 ? schema : null, errors }
 }
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -29,7 +30,10 @@ import {
   type OwnerOrchestrationDoc,
 } from '../orchestrationListingV3/ownerOrchestrationApi';
 import {
+  REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT,
+  canAddDynamicRegistrationField,
   completePresetSchema,
+  dynamicFlowSlotCount,
   enabledFields,
   gestionResetToInherited,
   gestionWithSchema,
@@ -131,6 +135,15 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
 
   const persist = async (nextSchema: RegistrationFormSchema, asOverride: boolean) => {
     if (!doc || saving) return;
+    const parsed = parseRegistrationFormSchema(nextSchema);
+    if (!parsed.ok || !parsed.schema) {
+      toast.error(
+        parsed.errors.some((e) => /10|extra WhatsApp Flow/i.test(e))
+          ? `Maximum ${REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT} champs supplémentaires dans le Flow WhatsApp.`
+          : parsed.errors.join('; ') || 'Formulaire invalide',
+      );
+      return;
+    }
     setSaving(true);
     const existingGestion = (doc.capabilities?.registration?.gestion ?? {}) as Record<string, unknown>;
     const gestion = asOverride || ownerMode
@@ -209,6 +222,13 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
         Formulaire d’enregistrement
       </Typography>
       <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>{inheritLabel}</Typography>
+      <Alert severity="info" sx={{ fontSize: 12, mb: 1.5 }}>
+        Ces champs s’affichent directement dans le Flow WhatsApp d’enregistrement. Le voyageur
+        reste dans WhatsApp — aucun lien vers un formulaire externe n’est envoyé.
+      </Alert>
+      <Typography sx={{ fontSize: 12.5, fontWeight: 600, mb: 1 }}>
+        Champs supplémentaires : {dynamicFlowSlotCount(schema)} / {REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT}
+      </Typography>
       {!ownerMode && (
         <Stack direction="row" spacing={1} sx={{ mb: 1.5, flexWrap: 'wrap' }}>
           <Chip size="small" label={override ? 'Override annonce' : 'Hérité'} color={override ? 'warning' : 'default'} />
@@ -234,8 +254,14 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
         <Button
           size="small"
           startIcon={<Add />}
-          disabled={saving}
+          disabled={saving || !canAddDynamicRegistrationField(schema)}
           onClick={() => {
+            if (!canAddDynamicRegistrationField(schema)) {
+              toast.error(
+                `Maximum ${REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT} champs supplémentaires dans le Flow WhatsApp.`,
+              );
+              return;
+            }
             const field = newCustomField({
               label: 'Nouvelle question',
               order: fields.length,
@@ -245,7 +271,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
             setEditing(field);
           }}
         >
-          Ajouter
+          Ajouter un champ
         </Button>
       </Stack>
       <Stack spacing={1}>
