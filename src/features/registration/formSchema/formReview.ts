@@ -6,8 +6,9 @@ import {
   markedRequiredLabel,
 } from './flowSlots'
 import { builtinField } from './builtinCatalog'
-import { newCustomField } from './normalize'
+import { newCustomField, parseRegistrationFormSchema } from './normalize'
 import { simplePresetSchema } from './presets'
+import { resolveEffectiveRegistrationForm } from './resolve'
 import type {
   RegistrationFieldDef,
   RegistrationFormSchema,
@@ -17,9 +18,9 @@ import type {
 export const REGISTRATION_FLOW_FORM_BINDINGS = [
   'first_name',
   'last_name',
-  'document_number',
-  'nationality',
   'birth_date',
+  'nationality',
+  'document_number',
   'place_of_birth',
   'document_issued_at',
   'document_issued_on',
@@ -45,8 +46,7 @@ export function schemaFieldForBinding(
   schema: RegistrationFormSchema,
   binding: string,
 ): RegistrationFieldDef | null {
-  const enabled = enabledFields(schema)
-  const exact = enabled.find(
+  const exact = schema.fields.find(
     (f) => f.binding === binding || f.id === binding || f.key === binding,
   )
   return exact ?? null
@@ -97,19 +97,101 @@ export function registrationNavigationDiagnostics(
   schema: RegistrationFormSchema,
   extra?: {
     reservationId?: string
+    listingId?: string
     origin?: string
     override?: boolean
+    selectedNextScreen?: string
   },
 ): Record<string, unknown> {
+  const flags = formScreenFlowFlags(schema)
   return {
     reservationId: extra?.reservationId,
+    listingId: extra?.listingId,
     origin: extra?.origin,
     override: extra?.override,
     enabledFieldIds: enabledFields(schema).map((f) => f.id),
+    disabledFieldIds: schema.fields.filter((f) => f.enabled === false).map((f) => f.id),
+    requiredFieldIds: enabledFields(schema).filter((f) => f.required).map((f) => f.id),
+    formVisibilityFlags: {
+      first_name_visible: flags.first_name_visible,
+      last_name_visible: flags.last_name_visible,
+      birth_date_visible: flags.birth_date_visible,
+      nationality_visible: flags.nationality_visible,
+      document_number_visible: flags.document_number_visible,
+      place_of_birth_visible: flags.place_of_birth_visible,
+      document_issued_at_visible: flags.document_issued_at_visible,
+      document_issued_on_visible: flags.document_issued_on_visible,
+      gender_visible: flags.gender_visible,
+      residence_country_visible: flags.residence_country_visible,
+    },
+    formRequiredFlags: {
+      first_name_required: flags.first_name_required,
+      last_name_required: flags.last_name_required,
+      birth_date_required: flags.birth_date_required,
+      nationality_required: flags.nationality_required,
+      document_number_required: flags.document_number_required,
+      place_of_birth_required: flags.place_of_birth_required,
+      document_issued_at_required: flags.document_issued_at_required,
+      document_issued_on_required: flags.document_issued_on_required,
+    },
     travelerDynamicIds: dynamicFlowFieldsForScope(schema, 'per_traveler').map((f) => f.id),
     stayDynamicIds: dynamicFlowFieldsForScope(schema, 'per_stay').map((f) => f.id),
-    nextScreen: nextScreenAfterFormSave(schema),
+    selectedNextScreen: extra?.selectedNextScreen ?? nextScreenAfterFormSave(schema),
   }
+}
+
+/** Prefer the attached listing/owner schema. Never replace a custom override with the simple preset. */
+export function schemaFromFlowState(state: {
+  registrationForm?: {
+    schema?: RegistrationFormSchema | null
+    origin?: string
+    override?: boolean
+  } | null
+  registrationLevel?: string | null
+} | null | undefined): RegistrationFormSchema {
+  const attached = state?.registrationForm?.schema
+  if (attached && Array.isArray(attached.fields) && attached.fields.length) {
+    const parsed = parseRegistrationFormSchema(attached)
+    return parsed.schema ?? attached
+  }
+  const origin = String(state?.registrationForm?.origin || '')
+  if (origin && !origin.startsWith('preset:')) {
+    return { version: 1, source: 'custom', fields: [] }
+  }
+  return resolveEffectiveRegistrationForm({
+    listingGestion: { registrationLevel: state?.registrationLevel },
+  }).schema
+}
+
+const DATE_RE_STRICT = /^\d{4}-\d{2}-\d{2}$/
+
+export function sanitizeFlowDateValue(raw: unknown): string {
+  const text = String(raw ?? '').trim()
+  return DATE_RE_STRICT.test(text) ? text : ''
+}
+
+export function formScreenFlowFlags(
+  schema: RegistrationFormSchema,
+  locale?: string | null,
+): Record<string, boolean | string> {
+  const flags: Record<string, boolean | string> = {}
+  for (const binding of REGISTRATION_FLOW_FORM_BINDINGS) {
+    const control = formReviewControlFlags(schema, binding, locale)
+    flags[`${binding}_visible`] = control.visible
+    flags[`${binding}_required`] = control.visible && control.required
+    flags[`${binding}_label`] = control.label
+    if (binding === 'birth_date' || binding === 'document_issued_on') {
+      flags[`${binding}_show_date`] = control.visible && control.showDate
+      flags[`${binding}_show_text`] = control.visible && control.showText
+    }
+  }
+  const genderVisible = isLegacyFormComponentEnabled(schema, 'gender')
+  const residenceVisible = isLegacyFormComponentEnabled(schema, 'residence_country')
+  flags.gender_visible = genderVisible
+  flags.gender_required = false
+  flags.residence_country_visible = residenceVisible
+  flags.residence_country_required = false
+  return flags
 }
 
 function fallbackFormField(binding: RegistrationFlowFormBinding): RegistrationFieldDef {
@@ -238,21 +320,21 @@ export function registrationFieldTypeLabel(field: RegistrationFieldDef): string 
   return labels[field.type] || field.type
 }
 
-/** Exact production screenshot schema used for navigation regressions. */
+/** Exact production listing-override fixture (Ray Ain Diab / latest screenshots). */
 export function screenshotHotelRegistrationSchema(): RegistrationFormSchema {
   return {
     version: 1,
     source: 'custom',
     fields: [
-      builtinField('first_name', { required: false, enabled: true, order: 0 }),
-      builtinField('last_name', { required: true, enabled: true, order: 1 }),
-      builtinField('birth_date', { required: true, enabled: true, order: 2 }),
+      builtinField('first_name', { required: false, enabled: false, order: 0 }),
+      builtinField('last_name', { required: false, enabled: false, order: 1 }),
+      builtinField('birth_date', { required: false, enabled: true, order: 2 }),
       builtinField('nationality', { required: true, enabled: true, order: 3 }),
       builtinField('document_number', { required: true, enabled: true, order: 4 }),
       builtinField('passport_photo', { required: true, enabled: true, order: 5 }),
       builtinField('place_of_birth', { required: false, enabled: true, order: 6 }),
-      builtinField('document_issued_at', { required: false, enabled: true, order: 7 }),
-      builtinField('document_issued_on', { required: false, enabled: true, order: 8 }),
+      builtinField('document_issued_at', { required: false, enabled: false, order: 7 }),
+      builtinField('document_issued_on', { required: false, enabled: false, order: 8 }),
       builtinField('profession', { required: true, enabled: true, order: 9 }),
       builtinField('coming_from', { required: true, enabled: true, order: 10 }),
       builtinField('going_to', { required: true, enabled: true, order: 11 }),
@@ -268,7 +350,7 @@ export function screenshotHotelRegistrationSchema(): RegistrationFormSchema {
         order: 13,
       }),
       builtinField('domicile', { required: false, enabled: true, order: 14 }),
-      builtinField('city', { required: false, enabled: true, order: 15 }),
+      builtinField('city', { required: true, enabled: true, order: 15 }),
     ],
   }
 }

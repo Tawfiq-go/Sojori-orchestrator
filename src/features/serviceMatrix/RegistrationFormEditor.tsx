@@ -309,7 +309,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
             <Box>
               <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
                 {field.label}
-                {field.required ? ' *' : ''}
+                {field.enabled !== false && field.required ? ' *' : ''}
               </Typography>
               <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
                 {field.kind === 'builtin' ? 'intégré' : 'personnalisé'} ·{' '}
@@ -320,6 +320,8 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
               </Typography>
             </Box>
             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+              {!ocrBlock && (
+                <>
               <IconButton size="small" disabled={!canMoveUp} onClick={() => {
                 const next = [...fields];
                 [next[index - 1], next[index]] = [next[index], next[index - 1]];
@@ -334,6 +336,8 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
               }}>
                 <ArrowDownward fontSize="small" />
               </IconButton>
+                </>
+              )}
               <FormControlLabel
                 sx={{ mr: 0 }}
                 control={
