@@ -20,6 +20,8 @@ import {
   MenuItem,
   IconButton,
   CircularProgress,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 import { Add, Close, CloudUpload, Edit, Person, PictureAsPdf } from '@mui/icons-material';
 import { toast } from 'react-toastify';
@@ -30,13 +32,17 @@ import { MICROSERVICE_BASE_URL } from '../../config/authConfig';
 import { generateRandomString } from '../../utils/upload/helpers';
 import { postFormDataAsMultipart } from '../../utils/upload/postFormData';
 import { getListingMediaDisplayUrl, isListingsBucketUrl } from '../../features/finances/services/listingMediaApi';
+import { normalizeRegistrationLevel, type RegistrationLevel } from '../../features/registration/registrationLevel';
 import {
-  REGISTRATION_FIELD_LABELS,
-  missingFieldsForMember,
-  normalizeRegistrationLevel,
-  type RegistrationFieldKey,
-  type RegistrationLevel,
-} from '../../features/registration/registrationLevel';
+  enabledFields,
+  evaluateRegistrationCompleteness,
+  fieldLabel,
+  fieldValueForStay,
+  resolveEffectiveRegistrationForm,
+  simplePresetSchema,
+  type RegistrationFieldDef,
+  type RegistrationFormSchema,
+} from '../../features/registration/formSchema';
 import { downloadFichePolicePdf } from '../../features/registration/fichePolicePdf';
 import { fetchDefaultPmReportHeader } from '../../features/finances/financesApi';
 import { normalizeProfitReportHeader } from '../../features/finances/utils/profitReportHeader';
@@ -116,10 +122,16 @@ function memberDocUrl(m: Member, side: 'front' | 'back'): string {
 
 function memberStatus(
   m: Member,
-  level: RegistrationLevel,
+  schema: RegistrationFormSchema,
+  travelerAnswers?: Record<string, unknown>,
 ): 'complete' | 'draft' | 'empty' {
-  const missing = missingFieldsForMember(m, level);
-  if (missing.length === 0) return 'complete';
+  const schemaMissing =
+    evaluateRegistrationCompleteness(schema, {
+      members: [m],
+      customAnswers: { stay: {}, travelers: { '0': travelerAnswers ?? {} } },
+      travelerCount: 1,
+    }).travelersMissing[0] ?? [];
+  if (schemaMissing.length === 0) return 'complete';
   if (m.status === 'DRAFT' || m.draft === true) return 'draft';
   const hasAny =
     Boolean(m.first_name || m.firstName) ||
@@ -190,6 +202,9 @@ export function RegistrationTab({
       '',
   ).trim();
   const guestReg = r?.guestRegistration ?? {};
+  const customAnswersKey = JSON.stringify(
+    (r?.guestRegistration as { customAnswers?: unknown } | undefined)?.customAnswers ?? null,
+  );
   const members: Member[] = Array.isArray(guestReg.members) ? guestReg.members : [];
   const regTotal =
     Number(guestReg.nbre_guest_to_register ?? r?.adults ?? 0) || Math.max(members.length, 1);
@@ -202,52 +217,83 @@ export function RegistrationTab({
   const [saving, setSaving] = useState(false);
   const [imageKey, setImageKey] = useState(0);
   const [registrationLevel, setRegistrationLevel] = useState<RegistrationLevel>('simple');
+  const [formSchema, setFormSchema] = useState<RegistrationFormSchema>(simplePresetSchema());
+  const [stayAnswers, setStayAnswers] = useState<Record<string, unknown>>({});
+  const [travelerAnswers, setTravelerAnswers] = useState<Record<string, Record<string, unknown>>>({});
+  const [editCustom, setEditCustom] = useState<Record<string, unknown>>({});
   const [pdfBusy, setPdfBusy] = useState(false);
 
   const loadLevel = useCallback(async () => {
+    const custom = ((r?.guestRegistration as { customAnswers?: {
+      stay?: Record<string, unknown>
+      travelers?: Record<string, Record<string, unknown>>
+    } } | undefined)?.customAnswers ?? {}) as {
+      stay?: Record<string, unknown>;
+      travelers?: Record<string, Record<string, unknown>>;
+    };
+    setStayAnswers(custom.stay ?? {});
+    setTravelerAnswers(custom.travelers ?? {});
     if (!listingId) {
       setRegistrationLevel('simple');
+      setFormSchema(simplePresetSchema());
       return;
     }
     try {
       const raw = (await listingsService.getListingOrchestrationCompiled(listingId)) as {
-        data?: { capabilities?: { registration?: { gestion?: { registrationLevel?: unknown } } } };
-        capabilities?: { registration?: { gestion?: { registrationLevel?: unknown } } };
+        data?: {
+          registrationForm?: { schema?: RegistrationFormSchema; registrationLevel?: unknown };
+          capabilities?: { registration?: { gestion?: Record<string, unknown> } };
+        };
+        registrationForm?: { schema?: RegistrationFormSchema; registrationLevel?: unknown };
+        capabilities?: { registration?: { gestion?: Record<string, unknown> } };
       } | null;
       const doc = raw && typeof raw === 'object' && 'data' in raw && raw.data ? raw.data : raw;
-      setRegistrationLevel(
-        normalizeRegistrationLevel(doc?.capabilities?.registration?.gestion?.registrationLevel),
-      );
+      const attached = doc?.registrationForm?.schema;
+      const resolved = attached?.fields
+        ? {
+            schema: attached,
+            registrationLevel: normalizeRegistrationLevel(doc?.registrationForm?.registrationLevel),
+          }
+        : resolveEffectiveRegistrationForm({
+            listingGestion: doc?.capabilities?.registration?.gestion ?? {},
+          });
+      setFormSchema(resolved.schema);
+      setRegistrationLevel(resolved.registrationLevel);
     } catch {
       setRegistrationLevel('simple');
+      setFormSchema(simplePresetSchema());
     }
-  }, [listingId]);
+  }, [listingId, resaId, customAnswersKey]);
 
   useEffect(() => {
     void loadLevel();
   }, [loadLevel]);
 
   const stats = useMemo(() => {
-    let ok = 0;
-    let draft = 0;
-    const allMissing = new Set<RegistrationFieldKey>();
-    for (let i = 0; i < regTotal; i++) {
-      const m = members[i] || {};
-      const missing = missingFieldsForMember(m, registrationLevel);
-      missing.forEach((k) => allMissing.add(k));
-      const s = memberStatus(m, registrationLevel);
-      if (s === 'complete') ok += 1;
-      else if (s === 'draft') draft += 1;
-    }
+    const completeness = evaluateRegistrationCompleteness(formSchema, {
+      members,
+      customAnswers: { stay: stayAnswers, travelers: travelerAnswers },
+      stay: r,
+      travelerCount: regTotal,
+    });
+    const allMissing = new Set<string>();
+    completeness.stayMissing.forEach((k) => allMissing.add(k));
+    completeness.travelersMissing.forEach((list) => list.forEach((k) => allMissing.add(k)));
+    const labels = [...allMissing].map((id) => {
+      const field = formSchema.fields.find((f) => f.id === id);
+      return field ? fieldLabel(field) : id;
+    });
     return {
-      ok,
-      draft,
-      missing: Math.max(0, regTotal - ok),
-      missingLabels: [...allMissing].map((k) => REGISTRATION_FIELD_LABELS[k]),
+      ok: completeness.registeredCount,
+      draft: Math.max(0, completeness.total - completeness.registeredCount),
+      missing: Math.max(0, completeness.total - completeness.registeredCount),
+      missingLabels: labels,
+      stayMissing: completeness.stayMissing,
+      complete: completeness.complete,
     };
-  }, [members, regTotal, registrationLevel]);
+  }, [members, regTotal, formSchema, stayAnswers, travelerAnswers, r]);
 
-  const complete = regTotal > 0 && stats.ok >= regTotal;
+  const complete = stats.complete;
 
   const openAdd = () => {
     // Première case vide / brouillon plutôt que d’empiler un 4e voyageur
@@ -266,6 +312,7 @@ export function RegistrationTab({
     setPreviewUrl(null);
     setEditIndex(target);
     setForm({ ...EMPTY_FORM });
+    setEditCustom({});
     setImageKey(Date.now());
     setModalOpen(true);
   };
@@ -279,6 +326,7 @@ export function RegistrationTab({
     setEditIndex(index);
     // Case vide / brouillon sans identité → formulaire vierge (pas d’image du voyageur N-1)
     setForm(hasIdentity ? toForm(m) : { ...EMPTY_FORM });
+    setEditCustom({ ...(travelerAnswers[String(index)] ?? {}) });
     setImageKey(Date.now());
     setModalOpen(true);
   };
@@ -288,6 +336,7 @@ export function RegistrationTab({
     setEditIndex(null);
     setPreviewUrl(null);
     setForm({ ...EMPTY_FORM });
+    setEditCustom({});
     setImageKey(Date.now());
   };
 
@@ -343,6 +392,8 @@ export function RegistrationTab({
         document_issued_on: form.document_issued_on
           ? `${form.document_issued_on}T00:00:00.000Z`
           : undefined,
+        customAnswers: editCustom,
+        stayAnswers,
       });
       if (res?.success === false) throw new Error(res?.error || 'Échec enregistrement');
       toast.success(editIndex === null ? 'Voyageur ajouté' : 'Voyageur mis à jour');
@@ -431,7 +482,7 @@ export function RegistrationTab({
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: T.bg0, minHeight: 320 }}>
-      {registrationLevel === 'complete' ? (
+      {stats.missingLabels.length ? (
         <Alert
           severity="error"
           sx={{
@@ -440,13 +491,60 @@ export function RegistrationTab({
             '& .MuiAlert-message': { fontSize: 13, fontWeight: 700 },
           }}
         >
-          Mode complet (fiche police) — les champs manquants apparaissent en rouge ci-dessous
-          {stats.missingLabels.length
-            ? ` : ${stats.missingLabels.slice(0, 8).join(', ')}${
-                stats.missingLabels.length > 8 ? '…' : ''
-              }`
-            : '.'}
+          Champs requis manquants : {stats.missingLabels.slice(0, 8).join(', ')}
+          {stats.missingLabels.length > 8 ? '…' : ''}
         </Alert>
+      ) : null}
+      {enabledFields(formSchema).some((f) => f.scope === 'per_stay') ? (
+        <Paper
+          sx={{
+            p: 2,
+            mb: 1.75,
+            border: `1px solid ${T.border}`,
+            borderRadius: 1.5,
+            bgcolor: T.bg1,
+          }}
+        >
+          <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>Questions du séjour</Typography>
+          <Stack spacing={1.25}>
+            {enabledFields(formSchema)
+              .filter((f) => f.scope === 'per_stay')
+              .map((field) => (
+                <SchemaAnswerField
+                  key={field.id}
+                  field={field}
+                  value={fieldValueForStay(field, r, stayAnswers)}
+                  onChange={(v) => setStayAnswers((prev) => ({ ...prev, [field.id]: v }))}
+                  readOnly={readOnly}
+                />
+              ))}
+            {!readOnly && (
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={saving}
+                onClick={() => {
+                  if (!resaId) return;
+                  void (async () => {
+                    setSaving(true);
+                    try {
+                      const res = await fulltaskApi.saveRegistrationAnswers(resaId, { stay: stayAnswers });
+                      if (res?.success === false) throw new Error(res.error || 'Échec');
+                      toast.success('Questions du séjour enregistrées');
+                      onRefresh?.();
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : 'Erreur');
+                    } finally {
+                      setSaving(false);
+                    }
+                  })();
+                }}
+              >
+                Enregistrer le séjour
+              </Button>
+            )}
+          </Stack>
+        </Paper>
       ) : null}
       <Paper
         sx={{
@@ -630,8 +728,12 @@ export function RegistrationTab({
         >
           {Array.from({ length: Math.max(members.length, regTotal) }, (_, i) => {
             const m = (members[i] || {}) as Member;
-            const status = memberStatus(m, registrationLevel);
-            const missing = missingFieldsForMember(m, registrationLevel);
+            const status = memberStatus(m, formSchema, travelerAnswers[String(i)]);
+            const missing = evaluateRegistrationCompleteness(formSchema, {
+              members: [m],
+              customAnswers: { stay: stayAnswers, travelers: { '0': travelerAnswers[String(i)] ?? {} } },
+              travelerCount: 1,
+            }).travelersMissing[0] ?? [];
             const first = String(m.first_name || m.firstName || '—');
             const last = String(m.last_name || m.lastName || '');
             const front = memberDocUrl(m, 'front');
@@ -710,7 +812,10 @@ export function RegistrationTab({
                     Manquent :{' '}
                     {missing
                       .slice(0, 8)
-                      .map((k) => REGISTRATION_FIELD_LABELS[k])
+                      .map((k) => {
+                        const field = formSchema.fields.find((f) => f.id === k);
+                        return field ? fieldLabel(field) : k;
+                      })
                       .join(', ')}
                     {missing.length > 8 ? ` (+${missing.length - 8})` : ''}
                   </Typography>
@@ -997,6 +1102,17 @@ export function RegistrationTab({
                 </Stack>
               </>
             ) : null}
+
+            {enabledFields(formSchema)
+              .filter((f) => f.scope === 'per_traveler' && f.kind === 'custom')
+              .map((field) => (
+                <SchemaAnswerField
+                  key={field.id}
+                  field={field}
+                  value={editCustom[field.id]}
+                  onChange={(v) => setEditCustom((prev) => ({ ...prev, [field.id]: v }))}
+                />
+              ))}
 
             <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, pt: 0.5 }}>
               Pièce d’identité
@@ -1328,5 +1444,72 @@ function DocUploadButton({
         </Button>
       </label>
     </>
+  );
+}
+
+function SchemaAnswerField({
+  field,
+  value,
+  onChange,
+  readOnly = false,
+}: {
+  field: RegistrationFieldDef;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  readOnly?: boolean;
+}) {
+  const str = value == null ? '' : Array.isArray(value) ? value.join(',') : String(value);
+  const label = `${field.label}${field.required ? ' *' : ''}`;
+  if (field.type === 'boolean') {
+    return (
+      <FormControlLabel
+        control={
+          <Switch
+            size="small"
+            checked={str === 'true' || str === '1' || value === true}
+            disabled={readOnly}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+        }
+        label={label}
+      />
+    );
+  }
+  if (field.type === 'select' || field.type === 'multi_select') {
+    return (
+      <TextField
+        select
+        label={label}
+        size="small"
+        fullWidth
+        value={str}
+        disabled={readOnly}
+        onChange={(e) => onChange(e.target.value)}
+        slotProps={field.type === 'multi_select' ? { select: { multiple: true } } : undefined}
+      >
+        <MenuItem value="">—</MenuItem>
+        {(field.options ?? []).map((o) => (
+          <MenuItem key={o.value} value={o.value}>
+            {o.label}
+          </MenuItem>
+        ))}
+      </TextField>
+    );
+  }
+  return (
+    <TextField
+      label={label}
+      size="small"
+      fullWidth
+      multiline={field.type === 'long_text'}
+      minRows={field.type === 'long_text' ? 2 : undefined}
+      type={field.type === 'date' ? 'date' : field.type === 'time' ? 'time' : 'text'}
+      value={str}
+      disabled={readOnly}
+      onChange={(e) => onChange(e.target.value)}
+      slotProps={
+        field.type === 'date' || field.type === 'time' ? { inputLabel: { shrink: true } } : undefined
+      }
+    />
   );
 }

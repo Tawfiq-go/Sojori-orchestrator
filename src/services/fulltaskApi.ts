@@ -1022,6 +1022,12 @@ export type RegistrationFlowState = {
   registered: number;
   complete: boolean;
   registrationLevel?: 'simple' | 'complete';
+  stayMissing?: string[];
+  registrationForm?: {
+    schema?: unknown;
+    origin?: string;
+    override?: boolean;
+  };
 };
 
 export type GuestMemberInput = {
@@ -1046,6 +1052,8 @@ export type GuestMemberInput = {
   going_to?: string;
   document_issued_at?: string;
   document_issued_on?: string;
+  customAnswers?: Record<string, unknown>;
+  stayAnswers?: Record<string, unknown>;
 };
 
 export async function getRegistrationFlowState(reservationId: string) {
@@ -1087,7 +1095,16 @@ export async function registerGuestMember(
   };
 }
 
-/** Efface un voyageur enregistré (Task fulltask → sync résa / guest context). */
+export async function saveRegistrationAnswers(
+  reservationId: string,
+  patch: { stay?: Record<string, unknown>; travelers?: Record<string, Record<string, unknown>> },
+) {
+  const { data } = await apiClient.patch(`${BASE}/guest-actions/registration-answers`, {
+    reservationId,
+    ...patch,
+  });
+  return data as { success?: boolean; error?: string; data?: { state?: RegistrationFlowState } };
+}
 export async function unregisterGuestMember(reservationId: string, index: number) {
   logResaGuest('api:unregister-guest →', { reservationId, index });
   const { data } = await apiClient.patch(

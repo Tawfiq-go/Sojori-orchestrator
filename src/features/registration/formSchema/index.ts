@@ -1,0 +1,8 @@
+/** Mirror of @sojori/registration-form — keep in sync with sojori-production/packages/registration-form. */
+export * from './types'
+export * from './builtinCatalog'
+export * from './presets'
+export * from './answers'
+export * from './completeness'
+export * from './normalize'
+export * from './resolve'
