@@ -31,7 +31,7 @@ import SupportConfigTabContainer from '../listing/components/ConfigOrchestration
 import TransportConfigTab from '../listing/components/ConfigOrchestration/TransportConfigTab';
 import { V3BlockSaveBar } from '../orchestrationListingV3/V3BlockSaveBar';
 import PreArrivalRequiredToggle from './PreArrivalRequiredToggle';
-import RegistrationLevelSelect from './RegistrationLevelSelect';
+import RegistrationFormEditor from './RegistrationFormEditor';
 import type { CapabilityDefinition } from './capabilityRegistry';
 import type { MatrixScopeMode } from './types';
 import { SOJORI_TOKENS as T } from '../listing/components/ConfigOrchestration/types';
@@ -152,8 +152,9 @@ export function CapabilityGestionPanel({
     return (
       <Box sx={embeddedSx}>
         <Alert severity="info" sx={{ fontSize: 12.5 }}>
-          Enregistrement voyageurs (flow E / admin P) — simple = passeport OCR ; complet = fiche de
-          police. Les champs manquants s&apos;affichent en rouge tant que ce n&apos;est pas prêt.
+          Formulaire d&apos;enregistrement configurable (voyageur / séjour). Les champs requis
+          déterminent le statut Complet. L&apos;onglet réservation Enregistrement sert à saisir les
+          réponses, pas à configurer le formulaire.
         </Alert>
         {(lid || templateMode) && (
           <>
@@ -165,7 +166,7 @@ export function CapabilityGestionPanel({
               helpRequired="Les codes d'accès (menu F) restent verrouillés tant que l'enregistrement n'est pas complété, et l'assistant WhatsApp l'explique au voyageur : l'enregistrement sur place ne suffit pas."
               helpOptional="Le voyageur peut aussi s'enregistrer sur place à l'arrivée — le menu F (Accès & codes) n'exige plus l'enregistrement, et l'assistant le confirme si on lui demande."
             />
-            <RegistrationLevelSelect
+            <RegistrationFormEditor
               listingId={lid || undefined}
               ownerKey={templateMode ? templateOwnerKey : undefined}
             />
