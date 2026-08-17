@@ -203,6 +203,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         sub: [
           { id: 'tasks/extras/configuration', label: 'Configuration' },
           { id: 'tasks/extras/list', label: 'Liste extra' },
+          { id: 'tasks/extras/minibar', label: 'Suivi mini-bar' },
         ],
       },
     ],
