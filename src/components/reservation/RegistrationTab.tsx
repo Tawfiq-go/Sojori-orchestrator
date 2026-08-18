@@ -44,6 +44,7 @@ import {
   type RegistrationFormSchema,
 } from '../../features/registration/formSchema';
 import { downloadFichePolicePdf } from '../../features/registration/fichePolicePdf';
+import { GuestContractSection } from './GuestContractSection';
 import { fetchDefaultPmReportHeader } from '../../features/finances/financesApi';
 import { normalizeProfitReportHeader } from '../../features/finances/utils/profitReportHeader';
 
@@ -687,6 +688,8 @@ export function RegistrationTab({
           </Stack>
         </Stack>
       </Paper>
+
+      {resaId ? <GuestContractSection reservationId={resaId} readOnly={readOnly} /> : null}
 
       {Math.max(members.length, regTotal) === 0 ? (
         <Paper
