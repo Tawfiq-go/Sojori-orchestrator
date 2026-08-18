@@ -9,8 +9,12 @@ import { missingSigners } from './guestContractUi';
 
 test('contract signature config is disabled by default', () => {
   assert.equal(DEFAULT_CONTRACT_SIGNATURE.enabled, false);
+  assert.equal(DEFAULT_CONTRACT_SIGNATURE.autoSendAfterRegistration, false);
   assert.equal(parseContractSignature(undefined).enabled, false);
+  assert.equal(parseContractSignature(undefined).autoSendAfterRegistration, false);
   assert.equal(parseContractSignature({ enabled: true }).enabled, true);
+  assert.equal(parseContractSignature({ enabled: true }).autoSendAfterRegistration, false);
+  assert.equal(parseContractSignature({ autoSendAfterRegistration: true }).autoSendAfterRegistration, true);
   assert.equal(parseContractSignature({ signerPolicy: 'each_traveler' }).signerPolicy, 'each_traveler');
 });
 

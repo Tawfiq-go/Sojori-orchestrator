@@ -56,7 +56,8 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
         : raw) as AnyDoc | null;
       setDoc(d ?? null);
       const gestion = (d?.capabilities?.registration?.gestion ?? {}) as Record<string, unknown>;
-      setValue(parseContractSignature(gestion.contractSignature));
+      const compiled = (d as { contractSignature?: unknown } | null)?.contractSignature;
+      setValue(parseContractSignature(gestion.contractSignature ?? compiled));
     } catch {
       setDoc(null);
     } finally {
@@ -125,10 +126,9 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
         Contrat et signature électronique simple
       </Typography>
       <Alert severity="info" sx={{ mb: 1.5, fontSize: 12.5 }}>
-        Configuration du pilote manuel. La génération automatique et l&apos;envoi WhatsApp après
-        enregistrement ne sont pas actifs. Le contenu juridique reste un modèle placeholder
-        versionné (templateId). Signature électronique simple au sens du cadre marocain applicable,
-        notamment la loi n° 43-20 — non présentée comme avancée ou qualifiée.
+        Signature électronique simple au sens du cadre marocain applicable, notamment la loi n°
+        43-20 — non présentée comme avancée ou qualifiée. L&apos;envoi WhatsApp automatique reste
+        désactivé tant que les deux options ci-dessous ne sont pas activées.
       </Alert>
       <Stack spacing={1.25}>
         <FormControlLabel
@@ -140,6 +140,16 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
             />
           }
           label="Activer le contrat et la signature (pilote manuel dashboard)"
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              checked={value.autoSendAfterRegistration}
+              disabled={saving || !doc || !value.enabled}
+              onChange={e => void save({ ...value, autoSendAfterRegistration: e.target.checked })}
+            />
+          }
+          label="Générer et envoyer automatiquement après l’enregistrement"
         />
         <FormControl size="small" fullWidth>
           <TextField

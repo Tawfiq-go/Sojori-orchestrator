@@ -3,6 +3,7 @@ import { MICROSERVICE_BASE_URL } from '../config/authConfig';
 import type { GuestContractSummary } from './guestContractUi';
 
 export type {
+  GuestContractLinkDelivery,
   GuestContractStatus,
   GuestContractSummary,
   GuestContractTraveler,
@@ -74,6 +75,18 @@ class GuestContractsService {
     const url = `${RESERVATIONS_API}/guest-contracts/${encodeURIComponent(contractId)}/evidence`;
     const response = await apiClient.get(url);
     return unwrap<GuestContractEvidenceSummary>(response.data);
+  }
+
+  async retryLinkDelivery(contractId: string, deliveryId: string) {
+    const url = `${RESERVATIONS_API}/guest-contracts/${encodeURIComponent(contractId)}/link-deliveries/${encodeURIComponent(deliveryId)}/retry`;
+    const response = await apiClient.post(url, {});
+    return unwrap<{
+      id: string;
+      status: string;
+      recipientMasked?: string;
+      sentAt?: string | null;
+      lastError?: string | null;
+    }>(response.data);
   }
 }
 
