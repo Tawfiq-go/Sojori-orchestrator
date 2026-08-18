@@ -16,6 +16,18 @@ export type GuestContractTraveler = {
   signerId: string;
 };
 
+export type GuestContractLinkDelivery = {
+  id: string;
+  signerId: string;
+  signerLabel?: string;
+  status: 'pending' | 'sending' | 'sent' | 'failed';
+  recipientMasked?: string;
+  attemptCount?: number;
+  sentAt?: string | Date | null;
+  lastError?: string | null;
+  retryable?: boolean;
+};
+
 export type GuestContractSummary = {
   id: string;
   reservationId: string;
@@ -35,6 +47,7 @@ export type GuestContractSummary = {
   signatures?: Array<{ signerId: string; signerName: string; travelerIndex: number | null }>;
   establishmentName?: string;
   reservationNumber?: string;
+  linkDeliveries?: GuestContractLinkDelivery[];
 };
 
 export function missingSigners(contract: GuestContractSummary): GuestContractTraveler[] {

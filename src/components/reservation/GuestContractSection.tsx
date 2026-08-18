@@ -163,6 +163,36 @@ export function GuestContractSection({ reservationId, readOnly = false }: Props)
 
   const pendingSigners = current && !signed ? missingSigners(current) : [];
   const uiStatus: GuestContractStatus | 'none' = current?.status ?? 'none';
+  const deliveries = current?.linkDeliveries ?? [];
+
+  const deliveryLabel = (status: string) => {
+    if (status === 'sent') return 'Lien envoyé';
+    if (status === 'failed') return 'Échec d’envoi';
+    if (status === 'sending') return 'Envoi en cours';
+    return 'Envoi automatique en attente';
+  };
+
+  const formatSentAt = (value?: string | Date | null) => {
+    if (!value) return '';
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
+  const handleRetryDelivery = (deliveryId: string) =>
+    void run(async () => {
+      if (!current) return;
+      const res = await guestContractsService.retryLinkDelivery(current.id, deliveryId);
+      if (!res.success) {
+        toast.error(res.message || 'Nouvel envoi impossible');
+        return;
+      }
+      if (res.data?.status === 'sent') {
+        toast.success('Lien renvoyé');
+        return;
+      }
+      toast.error(res.data?.lastError || 'Nouvel envoi impossible');
+    });
 
   return (
     <Box
@@ -211,6 +241,51 @@ export function GuestContractSection({ reservationId, readOnly = false }: Props)
         <Alert severity="info" sx={{ mb: 1.25, py: 0.5, fontSize: 12.5 }}>
           Le PDF signé est immuable. Une nouvelle génération crée une nouvelle version.
         </Alert>
+      ) : null}
+      {deliveries.length ? (
+        <Stack spacing={0.75} sx={{ mb: 1.25 }}>
+          {deliveries.map(delivery => (
+            <Stack
+              key={delivery.id}
+              direction="row"
+              sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
+            >
+              <Chip
+                size="small"
+                label={deliveryLabel(delivery.status)}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: 11,
+                  height: 22,
+                  bgcolor: T.bg3,
+                  color:
+                    delivery.status === 'failed'
+                      ? T.error
+                      : delivery.status === 'sent'
+                        ? T.success
+                        : T.warning,
+                }}
+              />
+              <Typography sx={{ fontSize: 12, color: T.text3 }}>
+                {delivery.signerLabel || delivery.signerId}
+                {delivery.recipientMasked ? ` · ${delivery.recipientMasked}` : ''}
+                {delivery.sentAt ? ` · ${formatSentAt(delivery.sentAt)}` : ''}
+                {delivery.status === 'failed' && delivery.lastError ? ` · ${delivery.lastError}` : ''}
+              </Typography>
+              {delivery.status === 'failed' && delivery.retryable !== false && !readOnly ? (
+                <Button
+                  size="small"
+                  variant="text"
+                  disabled={busy}
+                  onClick={() => handleRetryDelivery(delivery.id)}
+                  sx={{ textTransform: 'none', fontWeight: 700, minWidth: 0 }}
+                >
+                  Réessayer l’envoi
+                </Button>
+              ) : null}
+            </Stack>
+          ))}
+        </Stack>
       ) : null}
       {link ? (
         <Typography sx={{ fontSize: 12, color: T.text3, mb: 1, wordBreak: 'break-all' }}>{link}</Typography>
