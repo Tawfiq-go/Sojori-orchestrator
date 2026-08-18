@@ -32,6 +32,7 @@ import TransportConfigTab from '../listing/components/ConfigOrchestration/Transp
 import { V3BlockSaveBar } from '../orchestrationListingV3/V3BlockSaveBar';
 import PreArrivalRequiredToggle from './PreArrivalRequiredToggle';
 import RegistrationFormEditor from './RegistrationFormEditor';
+import { ContractSignatureConfig } from './ContractSignatureConfig';
 import type { CapabilityDefinition } from './capabilityRegistry';
 import type { MatrixScopeMode } from './types';
 import { SOJORI_TOKENS as T } from '../listing/components/ConfigOrchestration/types';
@@ -171,6 +172,10 @@ export function CapabilityGestionPanel({
               listingId={lid || undefined}
               ownerKey={templateMode ? templateOwnerKey : undefined}
             />
+            <ContractSignatureConfig
+              listingId={lid || undefined}
+              ownerKey={templateMode ? templateOwnerKey : undefined}
+            />
           </>
         )}
       </Box>
@@ -284,7 +289,6 @@ export function CapabilityWhatsAppPanel({
   listingId,
   orchestrationDoc,
   ownerOrchestrationDoc,
-  onOrchestrationSaved,
   onWhatsappPatch,
 }: WhatsAppProps) {
   if (!def.menuCodes.length) {
@@ -451,8 +455,6 @@ type WhatsappOptionsEditorProps = {
 function WhatsappOptionsEditor({
   capabilityKey,
   menuCodes,
-  saving,
-  dirty,
   menuOptions,
   onUpdateOption,
 }: WhatsappOptionsEditorProps) {
