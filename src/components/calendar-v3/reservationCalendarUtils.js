@@ -27,19 +27,30 @@ function isMewsOccupyingOnCalendar(res) {
   return !MEWS_NON_OCCUPYING.has(mews);
 }
 
+/** Annulée pour l’occupation (acquittée ou non, payée ou non). */
+export function isReservationCancelledOnCalendar(res) {
+  if (!res || typeof res !== 'object') return false;
+  if (/cancel/i.test(String(res.status || ''))) return true;
+  if (res.cancellationDate != null && String(res.cancellationDate).trim() !== '') {
+    return true;
+  }
+  const mews = String(res.mewsState || '')
+    .trim()
+    .toLowerCase();
+  return mews.includes('cancel');
+}
+
 /**
  * Calendrier : Confirmed / Started / Pending / Inside uniquement.
- * Jamais les annulées — même Cancelled* non acknowledged (cancellationAcknowledged=false).
+ * Jamais les annulées — même Cancelled* non acknowledged (cancellationAcknowledged=false)
+ * et même impayées (paymentStatus UnPaid). L’acquittement se fait sur /reservations.
  * Mews Optional / waitlist / no-show (Canceled+NoShow) / Processed : pas de barre.
  */
 export function isReservationVisibleOnCalendar(res) {
   if (!res || typeof res === 'string') return false;
+  if (isReservationCancelledOnCalendar(res)) return false;
   const status = String(res.status || '').trim();
   if (!status) return false;
-  if (/cancel/i.test(status)) return false;
-  if (res.cancellationDate != null && String(res.cancellationDate).trim() !== '') {
-    return false;
-  }
   if (!isMewsOccupyingOnCalendar(res)) return false;
   return CALENDAR_VISIBLE_STATUSES.has(status.toLowerCase());
 }

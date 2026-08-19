@@ -525,7 +525,10 @@ import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import TooltipBreakdown from './TooltipBreakdown';
 import PopoverReservations from './PopoverReservations';
 import AuditBlockedDaysModal from './AuditBlockedDaysModal';
-import { normalizeCalendarReservations } from './reservationCalendarUtils';
+import {
+  isReservationVisibleOnCalendar,
+  normalizeCalendarReservations,
+} from './reservationCalendarUtils';
 import { useCalendarBreakpoint } from '../../hooks/useCalendarBreakpoint';
 import calendarService from '../../services/calendarService';
 import {
@@ -1312,6 +1315,7 @@ export default function MultiView({
                             });
                             const leftover = dedupeOverlayReservations(
                               rtResas.filter((r) => {
+                                if (!isReservationVisibleOnCalendar(r)) return false;
                                 const id = String(r._id || r.reservationId || '');
                                 const stay = overlayStayKey(r, listing._id);
                                 if (id && claimed.has(id)) return false;

@@ -13,7 +13,11 @@ import {
   reservationMatchesRoom,
   reservationMatchesRoomType,
 } from '../../utils/planningMultiExpand';
-import { normalizeCalendarReservation, isReservationVisibleOnCalendar } from './reservationCalendarUtils';
+import {
+  normalizeCalendarReservation,
+  isReservationCancelledOnCalendar,
+  isReservationVisibleOnCalendar,
+} from './reservationCalendarUtils';
 
 /** YYYY-MM-DD fiable (string ISO, Date, ou objet). */
 export function toIsoDay(v) {
@@ -47,6 +51,10 @@ function mapListingSummaries(listings) {
 export function normalizeMultiOverlayReservation(res) {
   const shell = normalizeCalendarReservation(res);
   if (!shell) return null;
+  // Seed inventaire encore Confirmed + live Cancelled → masquer (pas AND des deux visibles).
+  if (isReservationCancelledOnCalendar(shell) || isReservationCancelledOnCalendar(res)) {
+    return null;
+  }
   if (!isReservationVisibleOnCalendar(shell) && !isReservationVisibleOnCalendar(res)) {
     return null;
   }
@@ -334,6 +342,7 @@ export function flattenInventoryReservationsForOverlay(inventoryData) {
             roomTypeId: raw.roomTypeId || rtId,
             roomTypeName: raw.roomTypeName || rt?.name,
           };
+          if (isReservationCancelledOnCalendar(tagged)) continue;
           const id = overlayResaId(tagged);
           const stay = overlayStayKey(tagged, listingId);
           const key = id || stay || `tmp:${listingId}:${rtId}:${byId.size}`;
@@ -347,9 +356,57 @@ export function flattenInventoryReservationsForOverlay(inventoryData) {
   return [...byId.values()];
 }
 
-/** Seed inventaire + fetch /reservations (le fetch gagne sur le même id). */
+/** Même séjour sans room — pour évincer un seed inventaire quand l’overlay live est Cancelled. */
+function overlayGuestStayKey(r, listingId = '') {
+  if (!r || typeof r !== 'object') return '';
+  const arr = toIsoDay(r.arrivalDate);
+  const dep = toIsoDay(r.departureDate);
+  if (!arr || !dep) return '';
+  const lid = String(r.listingId || r.sojoriId || listingId || '').trim();
+  const guest = String(
+    r.guestName || `${r.guestFirstName || ''} ${r.guestLastName || ''}`,
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  if (!guest) return '';
+  return `${lid}|${guest}|${arr}|${dep}`;
+}
+
+function keepOnCalendarOverlay(r) {
+  if (!r || typeof r !== 'object') return false;
+  if (isReservationCancelledOnCalendar(r)) return false;
+  const status = String(r.status || '').trim();
+  if (!status) return true;
+  return isReservationVisibleOnCalendar(r);
+}
+
+/** Seed inventaire + fetch /reservations (le fetch gagne sur le même id). Jamais d’annulées. */
 export function mergeOverlayReservationLists(seed, fetched) {
-  return dedupeOverlayReservations([...(seed || []), ...(fetched || [])]);
+  const fetchedList = fetched || [];
+  const cancelledIds = new Set();
+  const cancelledNumbers = new Set();
+  const cancelledGuestStays = new Set();
+  for (const r of fetchedList) {
+    if (!isReservationCancelledOnCalendar(r)) continue;
+    const id = overlayResaId(r);
+    if (id) cancelledIds.add(id);
+    const num = String(r.reservationNumber || '').trim().toLowerCase();
+    if (num) cancelledNumbers.add(num);
+    const guestStay = overlayGuestStayKey(r);
+    if (guestStay) cancelledGuestStays.add(guestStay);
+  }
+  const seedKept = (seed || []).filter((r) => {
+    if (!keepOnCalendarOverlay(r)) return false;
+    if (cancelledIds.has(overlayResaId(r))) return false;
+    const num = String(r.reservationNumber || '').trim().toLowerCase();
+    if (num && cancelledNumbers.has(num)) return false;
+    const guestStay = overlayGuestStayKey(r);
+    if (guestStay && cancelledGuestStays.has(guestStay)) return false;
+    return true;
+  });
+  const fetchedKept = fetchedList.filter(keepOnCalendarOverlay);
+  return dedupeOverlayReservations([...seedKept, ...fetchedKept]);
 }
 
 /**
