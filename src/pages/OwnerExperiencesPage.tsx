@@ -28,6 +28,7 @@ import './partnersAdmin.css';
 
 type Draft = {
   partnerId: string;
+  kind: 'experience' | 'transport';
   category: string;
   title: string;
   description: string;
@@ -132,9 +133,29 @@ function money(n: number) {
     .replace(/\u202f/g, ' ');
 }
 
+/**
+ * Destinations proposées par ville (kind transport). Un clic les insère dans
+ * les formules ; prix modifiables ensuite. « Autre destination » n'y figure
+ * pas : le flow guest l'ajoute automatiquement pour tout service transport.
+ */
+const NAVETTE_PROPOSALS: Record<string, Array<{ label: string; priceMad: number | null }>> = {
+  Marrakech: [
+    { label: 'Aéroport Marrakech', priceMad: 330 },
+    { label: 'Gare Marrakech', priceMad: 200 },
+    { label: 'Centre Marrakech', priceMad: 150 },
+    { label: 'Aéroport Casablanca', priceMad: 900 },
+  ],
+  Casablanca: [
+    { label: 'Aéroport Casablanca', priceMad: 300 },
+    { label: 'Gare Casa-Voyageurs', priceMad: 150 },
+    { label: 'Centre Casablanca', priceMad: 120 },
+  ],
+};
+
 function emptyDraft(): Draft {
   return {
     partnerId: '',
+    kind: 'experience',
     category: 'Aventure',
     title: '',
     description: '',
@@ -157,11 +178,12 @@ function emptyDraft(): Draft {
 function toDraft(s: PartnerService): Draft {
   const formules =
     Array.isArray(s.formules) && s.formules.length
-      ? s.formules.map((f) => ({ label: f.label || '', priceMad: Number(f.priceMad) || 0 }))
+      ? s.formules.map((f) => ({ label: f.label || '', priceMad: f.priceMad === null ? null : Number(f.priceMad) || 0 }))
       : [{ label: '', priceMad: 0 }];
   const pay = s.payment || DEFAULT_PAYMENT;
   return {
     partnerId: s.partnerId ? String(s.partnerId) : '',
+    kind: s.kind === 'transport' ? 'transport' : 'experience',
     category: s.category || 'Aventure',
     title: s.title || '',
     description: s.description || '',
@@ -518,7 +540,11 @@ export function OwnerExperiencesPage() {
       return;
     }
     const formules = draft.formules
-      .map((f) => ({ label: f.label.trim(), priceMad: Number(f.priceMad) || 0 }))
+      .map((f) => ({
+        label: f.label.trim(),
+        // null = sur devis : le provider donnera le prix (jamais 0 par accident).
+        priceMad: f.priceMad === null ? null : Number(f.priceMad) || 0,
+      }))
       .filter((f) => f.label);
     if (!formules.length) {
       toast.error('Au moins une formule');
@@ -545,6 +571,7 @@ export function OwnerExperiencesPage() {
     };
     const body = {
       partnerId: draft.partnerId,
+      kind: draft.kind,
       category: draft.category.trim(),
       title: draft.title.trim(),
       description: draft.description,
@@ -1301,6 +1328,38 @@ export function OwnerExperiencesPage() {
               ) : null}
             </section>
             <section style={{ marginBottom: 22 }}>
+              <div className="pa-lbl">Type</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                {([
+                  { v: 'experience' as const, l: '✨ Expérience' },
+                  { v: 'transport' as const, l: '🚐 Transport / Navette' },
+                ]).map((t) => (
+                  <button
+                    key={t.v}
+                    type="button"
+                    style={draft.kind === t.v ? btnGold({}) : btnOutline({})}
+                    onClick={() =>
+                      setDraft((d) => ({
+                        ...d,
+                        kind: t.v,
+                        // Un transport est une Mobilité — pas la peine de choisir.
+                        category: t.v === 'transport' ? 'Mobilité' : d.category,
+                      }))
+                    }
+                  >
+                    {t.l}
+                  </button>
+                ))}
+              </div>
+              {draft.kind === 'transport' ? (
+                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                  Chaque formule est une destination depuis le logement. Prix vide = sur
+                  devis (le chauffeur confirme avec son prix — c'est le prix client).
+                  « Autre destination » est ajoutée automatiquement côté client.
+                </div>
+              ) : null}
+            </section>
+            <section style={{ marginBottom: 22 }}>
               <div className="pa-lbl">Présentation</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 12, marginTop: 8 }}>
                 <input
@@ -1389,7 +1448,34 @@ export function OwnerExperiencesPage() {
             </section>
 
             <section style={{ marginBottom: 22 }}>
-              <div className="pa-lbl">Formules</div>
+              <div className="pa-lbl">
+                {draft.kind === 'transport' ? 'Destinations (depuis le logement)' : 'Formules'}
+              </div>
+              {draft.kind === 'transport' ? (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  {Object.keys(NAVETTE_PROPOSALS).map((city) => (
+                    <button
+                      key={city}
+                      type="button"
+                      style={btnOutline({ fontSize: 13 })}
+                      onClick={() =>
+                        setDraft((d) => {
+                          const existing = new Set(
+                            d.formules.map((f) => f.label.trim().toLowerCase()),
+                          );
+                          const add = NAVETTE_PROPOSALS[city].filter(
+                            (pr) => !existing.has(pr.label.toLowerCase()),
+                          );
+                          const kept = d.formules.filter((f) => f.label.trim());
+                          return { ...d, formules: [...kept, ...add] };
+                        })
+                      }
+                    >
+                      + Destinations {city}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {draft.formules.map((f, i) => (
                 <div
                   key={i}
@@ -1411,13 +1497,20 @@ export function OwnerExperiencesPage() {
                     className="pa-in"
                     style={inpBase}
                     type="number"
-                    placeholder="MAD"
-                    value={f.priceMad}
+                    placeholder={draft.kind === 'transport' ? 'MAD (vide = devis)' : 'MAD'}
+                    value={f.priceMad === null ? '' : f.priceMad}
                     onChange={(e) =>
                       setDraft((d) => ({
                         ...d,
                         formules: d.formules.map((x, j) =>
-                          j === i ? { ...x, priceMad: Number(e.target.value) || 0 } : x,
+                          j === i
+                            ? {
+                                ...x,
+                                // Vide = sur devis : le provider donnera le prix.
+                                priceMad:
+                                  e.target.value.trim() === '' ? null : Number(e.target.value) || 0,
+                              }
+                            : x,
                         ),
                       }))
                     }

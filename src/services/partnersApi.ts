@@ -23,7 +23,8 @@ export type Partner = {
   marketplace?: boolean;
 };
 
-export type PartnerServiceFormule = { label: string; priceMad: number };
+/** priceMad null = SUR DEVIS : le provider donne le prix (navette « Autre »-like). */
+export type PartnerServiceFormule = { label: string; priceMad: number | null };
 
 export type PartnerServiceSlot = { time: string; label?: string };
 
@@ -129,6 +130,8 @@ export type PartnerService = {
   providerKind?: 'owner' | 'partner' | null;
   category: string;
   subCategory?: string;
+  /** 'transport' = navette : les formules sont des DESTINATIONS depuis le logement. */
+  kind?: 'experience' | 'transport';
   title: string;
   description: string;
   /** WhatsApp provider (E.164) — notifs commande. Obligatoire. */
