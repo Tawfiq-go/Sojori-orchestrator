@@ -1,4 +1,21 @@
 import { enabledFields, fieldLabel } from './completeness'
+import {
+  COMPLETION_SLOT_BANK,
+  PASSPORT_GENERIC_SLOT_BANK,
+  REGISTRATION_FLOW_VARIANT_TYPES,
+  assignFieldsToSlotBank,
+  completionFields,
+  completionFieldsForTraveler,
+  fieldScreen,
+  fieldTypeToVariant,
+  passportGenericFields,
+  registrationCapacityReport,
+  typedSlotName,
+  type RegistrationFlowVariantType,
+  type ScreenCapacityId,
+  type SlotBank,
+  type TypedSlotAssignment,
+} from './componentBudget'
 import type {
   RegistrationFieldDef,
   RegistrationFieldScope,
@@ -6,27 +23,19 @@ import type {
   RegistrationFormSchema,
 } from './types'
 
-/** Sojori product limit for extra fields rendered as WhatsApp Flow slots. Not Meta's official maximum. */
-export const REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT = 10
-export const REGISTRATION_FLOW_SLOTS_PER_PAGE = 5
+/** @deprecated Use typed slot banks + component budget. Kept as the completion short_text bank size. */
+export const REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT = COMPLETION_SLOT_BANK.short_text
 
-export const REGISTRATION_FLOW_VARIANT_TYPES = [
-  'short_text',
-  'long_text',
-  'date',
-  'time',
-  'select',
-  'multi_select',
-  'boolean',
-] as const
+/** @deprecated Two information screens; leftover stay uses STAY_COMPLETE. */
+export const REGISTRATION_FLOW_SLOTS_PER_PAGE = COMPLETION_SLOT_BANK.short_text
 
-export type RegistrationFlowVariantType = (typeof REGISTRATION_FLOW_VARIANT_TYPES)[number]
+export type { RegistrationFlowVariantType }
 
 /**
- * Passport / OCR review fields already collected on FORM and UPLOAD.
- * These do not consume dynamic Flow slots.
+ * Dedicated passport/OCR properties collected on FORM (not generic slots).
  */
 export const REGISTRATION_FLOW_STATIC_BINDINGS = [
+  'document_type',
   'first_name',
   'last_name',
   'birth_date',
@@ -35,14 +44,13 @@ export const REGISTRATION_FLOW_STATIC_BINDINGS = [
   'document_number',
   'document_issued_at',
   'document_issued_on',
+  'issuing_country',
+  'gender',
+  'document_expiry_date',
   'passport_photo',
 ] as const
 
-export type RegistrationFlowCustomScreenId =
-  | 'CUSTOM_FIELDS_A'
-  | 'CUSTOM_FIELDS_B'
-  | 'STAY_FIELDS_A'
-  | 'STAY_FIELDS_B'
+export type RegistrationFlowCustomScreenId = 'COMPLETE' | 'STAY_COMPLETE'
 
 export type RegistrationFlowSlotPage = 'A' | 'B'
 
@@ -55,6 +63,8 @@ export interface WhatsAppFlowRenderCheck {
   ok: boolean
   errors: string[]
   dynamicCount: number
+  passportComponents: number
+  completionComponents: number
 }
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -62,9 +72,16 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export function requiresDynamicFlowSlot(field: RegistrationFieldDef): boolean {
   if (field.enabled === false) return false
-  if (field.kind === 'custom') return true
-  if (!field.binding) return true
-  return !(REGISTRATION_FLOW_STATIC_BINDINGS as readonly string[]).includes(field.binding)
+  if (field.binding === 'passport_photo') return false
+  if (fieldScreen(field) === 'upload') return false
+  if (
+    field.kind === 'builtin' &&
+    fieldScreen(field) === 'passport' &&
+    (REGISTRATION_FLOW_STATIC_BINDINGS as readonly string[]).includes(field.binding || '')
+  ) {
+    return false
+  }
+  return fieldScreen(field) === 'passport' || fieldScreen(field) === 'completion'
 }
 
 export function dynamicFlowFields(schema: RegistrationFormSchema): RegistrationFieldDef[] {
@@ -83,23 +100,41 @@ export function dynamicFlowFieldsForScope(
 }
 
 export function canAddDynamicRegistrationField(schema: RegistrationFormSchema): boolean {
-  return dynamicFlowSlotCount(schema) < REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT
+  const trial: RegistrationFieldDef = {
+    id: `__trial_${schema.fields.length}`,
+    key: `__trial_${schema.fields.length}`,
+    kind: 'custom',
+    type: 'short_text',
+    label: 'Nouvelle question',
+    required: false,
+    enabled: true,
+    order: schema.fields.length,
+    scope: 'per_traveler',
+    screen: 'completion',
+    valueSource: 'manual',
+  }
+  return registrationCapacityReport({
+    ...schema,
+    fields: [...schema.fields, trial],
+  }).ok
 }
 
 export function whatsAppFlowRenderCheck(schema: RegistrationFormSchema): WhatsAppFlowRenderCheck {
+  const report = registrationCapacityReport(schema)
   const fields = dynamicFlowFields(schema)
-  const errors: string[] = []
-  if (fields.length > REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT) {
-    errors.push(
-      `at most ${REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT} extra WhatsApp Flow fields (got ${fields.length})`,
-    )
-  }
+  const errors = [...report.errors]
   for (const field of fields) {
     if (!REGISTRATION_FLOW_VARIANT_TYPES.includes(field.type as RegistrationFlowVariantType)) {
       errors.push(`unsupported Flow field type ${field.type} on ${field.id}`)
     }
   }
-  return { ok: errors.length === 0, errors, dynamicCount: fields.length }
+  return {
+    ok: errors.length === 0,
+    errors,
+    dynamicCount: fields.length,
+    passportComponents: report.passport.components,
+    completionComponents: report.completion.components,
+  }
 }
 
 export function canRenderInWhatsAppFlow(schema: RegistrationFormSchema): boolean {
@@ -107,41 +142,42 @@ export function canRenderInWhatsAppFlow(schema: RegistrationFormSchema): boolean
 }
 
 export function slotNumbersForPage(page: RegistrationFlowSlotPage): number[] {
-  const start = page === 'A' ? 1 : REGISTRATION_FLOW_SLOTS_PER_PAGE + 1
-  return Array.from({ length: REGISTRATION_FLOW_SLOTS_PER_PAGE }, (_, i) => start + i)
+  const start = page === 'A' ? 1 : 6
+  return Array.from({ length: 5 }, (_, i) => start + i)
 }
 
 export function pageForSlot(slot: number): RegistrationFlowSlotPage {
-  return slot <= REGISTRATION_FLOW_SLOTS_PER_PAGE ? 'A' : 'B'
+  return slot <= 5 ? 'A' : 'B'
 }
 
 export function customScreenIdFor(
   scope: RegistrationFieldScope,
-  page: RegistrationFlowSlotPage,
+  _page?: RegistrationFlowSlotPage,
 ): RegistrationFlowCustomScreenId {
-  if (scope === 'per_stay') return page === 'A' ? 'STAY_FIELDS_A' : 'STAY_FIELDS_B'
-  return page === 'A' ? 'CUSTOM_FIELDS_A' : 'CUSTOM_FIELDS_B'
+  return scope === 'per_stay' ? 'STAY_COMPLETE' : 'COMPLETE'
 }
 
 export function scopeAndPageFromScreen(
   screen: string,
 ): { scope: RegistrationFieldScope; page: RegistrationFlowSlotPage } | null {
-  if (screen === 'CUSTOM_FIELDS_A') return { scope: 'per_traveler', page: 'A' }
-  if (screen === 'CUSTOM_FIELDS_B') return { scope: 'per_traveler', page: 'B' }
-  if (screen === 'STAY_FIELDS_A') return { scope: 'per_stay', page: 'A' }
-  if (screen === 'STAY_FIELDS_B') return { scope: 'per_stay', page: 'B' }
+  if (screen === 'COMPLETE' || screen === 'CUSTOM_FIELDS_A' || screen === 'CUSTOM_FIELDS_B') {
+    return { scope: 'per_traveler', page: 'A' }
+  }
+  if (screen === 'STAY_COMPLETE' || screen === 'STAY_FIELDS_A' || screen === 'STAY_FIELDS_B') {
+    return { scope: 'per_stay', page: 'A' }
+  }
   return null
 }
 
 export function isRegistrationCustomScreen(screen: string): screen is RegistrationFlowCustomScreenId {
-  return scopeAndPageFromScreen(screen) != null
+  return screen === 'COMPLETE' || screen === 'STAY_COMPLETE'
 }
 
 export function slotBindingsForPage(
   fields: RegistrationFieldDef[],
   page: RegistrationFlowSlotPage,
 ): Array<{ slot: number; field: RegistrationFieldDef | null }> {
-  const offset = page === 'A' ? 0 : REGISTRATION_FLOW_SLOTS_PER_PAGE
+  const offset = page === 'A' ? 0 : 5
   return slotNumbersForPage(page).map((slot, i) => ({
     slot,
     field: fields[offset + i] ?? null,
@@ -149,25 +185,20 @@ export function slotBindingsForPage(
 }
 
 export function nextCustomScreen(
-  scope: RegistrationFieldScope,
-  page: RegistrationFlowSlotPage,
-  fieldCount: number,
+  _scope: RegistrationFieldScope,
+  _page: RegistrationFlowSlotPage,
+  _fieldCount: number,
 ): RegistrationFlowCustomScreenId | null {
-  if (page === 'A' && fieldCount > REGISTRATION_FLOW_SLOTS_PER_PAGE) {
-    return customScreenIdFor(scope, 'B')
-  }
   return null
 }
 
-export function fieldTypeToVariant(type: RegistrationFieldType): RegistrationFlowVariantType {
-  if (REGISTRATION_FLOW_VARIANT_TYPES.includes(type as RegistrationFlowVariantType)) {
-    return type as RegistrationFlowVariantType
-  }
-  return 'short_text'
-}
+export { fieldTypeToVariant }
 
 export function markedRequiredLabel(label: string, required: boolean): string {
   const trimmed = label.trim() || ' '
+  if (/\(\s*optional\s*\)/i.test(trimmed) && required) {
+    return trimmed.replace(/\(\s*optional\s*\)/gi, '').trim()
+  }
   if (!required) return trimmed
   return trimmed.endsWith('*') ? trimmed : `${trimmed} *`
 }
@@ -246,37 +277,15 @@ export function coerceAndValidateFlowAnswer(
 
 export function extractActiveSlotRawValue(
   field: RegistrationFieldDef,
-  slot: number,
+  slotNameOrNumber: number | string,
   data: Record<string, unknown>,
 ): unknown {
   const variant = fieldTypeToVariant(field.type)
-  const key = `slot_${slot}_${variant}`
-  return data[key]
-}
-
-export function mapSlotAnswersFromFlowData(input: {
-  fields: RegistrationFieldDef[]
-  page: RegistrationFlowSlotPage
-  data: Record<string, unknown>
-}): {
-  ok: boolean
-  answers: Record<string, unknown>
-  errors: Array<{ slot: number; fieldId: string; error: string }>
-} {
-  const answers: Record<string, unknown> = {}
-  const errors: Array<{ slot: number; fieldId: string; error: string }> = []
-  for (const { slot, field } of slotBindingsForPage(input.fields, input.page)) {
-    if (!field) continue
-    const raw = extractActiveSlotRawValue(field, slot, input.data)
-    const checked = coerceAndValidateFlowAnswer(field, raw)
-    if (!checked.ok) {
-      errors.push({ slot, fieldId: field.id, error: checked.error })
-      continue
-    }
-    answers[field.id] = checked.value
-    if (field.key && field.key !== field.id) answers[field.key] = checked.value
+  if (typeof slotNameOrNumber === 'string') {
+    return data[slotNameOrNumber] ?? data[`${slotNameOrNumber}_${variant}`]
   }
-  return { ok: errors.length === 0, answers, errors }
+  const key = `slot_${slotNameOrNumber}_${variant}`
+  return data[key]
 }
 
 function flowOptionList(
@@ -318,6 +327,142 @@ function initBoolean(value: unknown): string {
   return ''
 }
 
+function timeHelper(locale?: string | null): string {
+  return String(locale || '').toLowerCase().startsWith('en')
+    ? 'Use HH:MM (24h).'
+    : 'Format HH:MM (24h).'
+}
+
+export function emptyTypedSlotFlowData(
+  screen: ScreenCapacityId,
+  type: RegistrationFlowVariantType,
+  index: number,
+  locale?: string | null,
+): Record<string, unknown> {
+  const name = typedSlotName(screen, type, index)
+  const init: unknown = type === 'multi_select' ? [] : ''
+  return {
+    [`${name}_visible`]: false,
+    [`${name}_required`]: false,
+    [`${name}_label`]: ' ',
+    [`${name}_helper`]: ' ',
+    [`${name}_init`]: init,
+    [`${name}_options`]: type === 'boolean' ? booleanOptions(locale) : [{ id: '_', title: '—' }],
+  }
+}
+
+export function buildTypedSlotFlowData(input: {
+  assignment: TypedSlotAssignment
+  screen: ScreenCapacityId
+  value?: unknown
+  helper?: string
+  locale?: string | null
+}): Record<string, unknown> {
+  const { assignment, screen } = input
+  const name = assignment.name
+  const field = assignment.field
+  const required = field.required === true
+  const label = markedRequiredLabel(fieldLabel(field, input.locale || undefined), required)
+  const helper =
+    (input.helper || field.helperText || (assignment.type === 'time' ? timeHelper(input.locale) : '')).trim() || ' '
+  const init =
+    assignment.type === 'multi_select'
+      ? initMulti(input.value)
+      : assignment.type === 'boolean'
+        ? initBoolean(input.value)
+        : initString(input.value)
+  return {
+    [`${name}_visible`]: true,
+    [`${name}_required`]: required,
+    [`${name}_label`]: label,
+    [`${name}_helper`]: helper,
+    [`${name}_init`]: init,
+    [`${name}_options`]:
+      assignment.type === 'boolean'
+        ? booleanOptions(input.locale)
+        : flowOptionList(field, input.locale),
+  }
+}
+
+export function emptyBankFlowData(screen: ScreenCapacityId, bank: SlotBank, locale?: string | null): Record<string, unknown> {
+  const data: Record<string, unknown> = {}
+  for (const [type, count] of Object.entries(bank) as Array<[RegistrationFlowVariantType, number]>) {
+    for (let i = 1; i <= count; i++) {
+      Object.assign(data, emptyTypedSlotFlowData(screen, type, i, locale))
+    }
+  }
+  return data
+}
+
+export function buildBankFlowData(input: {
+  screen: ScreenCapacityId
+  bank: SlotBank
+  assignments: TypedSlotAssignment[]
+  values?: Record<string, unknown>
+  helpers?: Record<string, string>
+  locale?: string | null
+}): Record<string, unknown> {
+  const data = emptyBankFlowData(input.screen, input.bank, input.locale)
+  for (const assignment of input.assignments) {
+    const value =
+      input.values?.[assignment.field.id] ??
+      (assignment.field.key ? input.values?.[assignment.field.key] : undefined)
+    Object.assign(
+      data,
+      buildTypedSlotFlowData({
+        assignment,
+        screen: input.screen,
+        value,
+        helper: input.helpers?.[assignment.field.id],
+        locale: input.locale,
+      }),
+    )
+  }
+  return data
+}
+
+export function mapTypedSlotAnswers(input: {
+  assignments: TypedSlotAssignment[]
+  data: Record<string, unknown>
+}): {
+  ok: boolean
+  answers: Record<string, unknown>
+  errors: Array<{ name: string; fieldId: string; error: string }>
+} {
+  const answers: Record<string, unknown> = {}
+  const errors: Array<{ name: string; fieldId: string; error: string }> = []
+  for (const assignment of input.assignments) {
+    const raw = input.data[assignment.name]
+    const checked = coerceAndValidateFlowAnswer(assignment.field, raw)
+    if (!checked.ok) {
+      errors.push({ name: assignment.name, fieldId: assignment.field.id, error: checked.error })
+      continue
+    }
+    answers[assignment.field.id] = checked.value
+    if (assignment.field.key && assignment.field.key !== assignment.field.id) {
+      answers[assignment.field.key] = checked.value
+    }
+  }
+  return { ok: errors.length === 0, answers, errors }
+}
+
+export function assignPassportGenericSlots(schema: RegistrationFormSchema): ReturnType<typeof assignFieldsToSlotBank> {
+  return assignFieldsToSlotBank(passportGenericFields(schema), PASSPORT_GENERIC_SLOT_BANK, 'passport')
+}
+
+export function assignCompletionSlots(
+  schema: RegistrationFormSchema,
+  opts?: { travelerIndex?: number; travelerCount?: number; stayOnly?: boolean },
+): ReturnType<typeof assignFieldsToSlotBank> {
+  const fields = opts?.stayOnly
+    ? completionFields(schema).filter((f) => f.scope === 'per_stay')
+    : opts?.travelerIndex != null && opts.travelerCount != null
+      ? completionFieldsForTraveler(schema, opts.travelerIndex, opts.travelerCount)
+      : completionFields(schema)
+  return assignFieldsToSlotBank(fields, COMPLETION_SLOT_BANK, 'completion')
+}
+
+/** Legacy page mapping used by older tests — maps typed assignments onto slot_N_* keys. */
 export function emptySlotFlowData(slot: number): Record<string, unknown> {
   return {
     [`slot_${slot}_active`]: false,
@@ -364,14 +509,11 @@ export function buildSlotFlowData(input: {
   const variant = fieldTypeToVariant(field.type)
   const required = field.required === true
   const label = markedRequiredLabel(fieldLabel(field, input.locale || undefined), required)
-  const timeHint = String(input.locale || '').toLowerCase().startsWith('en')
-    ? 'Use HH:MM (24h).'
-    : 'Format HH:MM (24h).'
-  const helper = (input.helper || (variant === 'time' ? timeHint : '')).trim()
+  const helper = (input.helper || field.helperText || (variant === 'time' ? timeHelper(input.locale) : '')).trim()
   return {
     ...base,
     [`slot_${input.slot}_active`]: true,
-    [`slot_${input.slot}_show_helper`]: Boolean(helper),
+    [`slot_${input.slot}_show_helper`]: false,
     [`slot_${input.slot}_show_${variant}`]: true,
     [`slot_${input.slot}_${variant}_required`]: required,
     [`slot_${input.slot}_label`]: label,
@@ -387,6 +529,33 @@ export function buildSlotFlowData(input: {
     [`slot_${input.slot}_multi_options`]: flowOptionList(field, input.locale),
     [`slot_${input.slot}_boolean_options`]: booleanOptions(input.locale),
   }
+}
+
+export function mapSlotAnswersFromFlowData(input: {
+  fields: RegistrationFieldDef[]
+  page: RegistrationFlowSlotPage
+  data: Record<string, unknown>
+}): {
+  ok: boolean
+  answers: Record<string, unknown>
+  errors: Array<{ slot: number; fieldId: string; error: string }>
+} {
+  const answers: Record<string, unknown> = {}
+  const errors: Array<{ slot: number; fieldId: string; error: string }> = []
+  for (const { slot, field } of slotBindingsForPage(input.fields, input.page)) {
+    if (!field) continue
+    const variant = fieldTypeToVariant(field.type)
+    const typedName = typedSlotName('completion', variant, slot)
+    const raw = input.data[typedName] ?? extractActiveSlotRawValue(field, slot, input.data)
+    const checked = coerceAndValidateFlowAnswer(field, raw)
+    if (!checked.ok) {
+      errors.push({ slot, fieldId: field.id, error: checked.error })
+      continue
+    }
+    answers[field.id] = checked.value
+    if (field.key && field.key !== field.id) answers[field.key] = checked.value
+  }
+  return { ok: errors.length === 0, answers, errors }
 }
 
 export function splitSlotAnswersByKind(

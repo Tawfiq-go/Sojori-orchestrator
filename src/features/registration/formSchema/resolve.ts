@@ -107,7 +107,7 @@ export function gestionWithSchema(
 ): Record<string, unknown> {
   const next: Record<string, unknown> = {
     ...existing,
-    registrationFormSchema: schema,
+    registrationFormSchema: { ...schema, version: 2 },
     registrationLevel: derivedRegistrationLevel(schema),
   }
   if (opts?.override === true) next.registrationFormOverride = true

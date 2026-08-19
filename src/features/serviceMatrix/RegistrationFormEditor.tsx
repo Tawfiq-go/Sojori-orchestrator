@@ -30,22 +30,26 @@ import {
   type OwnerOrchestrationDoc,
 } from '../orchestrationListingV3/ownerOrchestrationApi';
 import {
-  REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT,
+  PASSPORT_OCR_PROPERTIES,
+  PASSPORT_OCR_PROPERTY_LABELS,
   canAddDynamicRegistrationField,
   completePresetSchema,
-  dynamicFlowSlotCount,
   enabledFields,
+  formatCapacityCounter,
   gestionResetToInherited,
   gestionWithSchema,
-  isOcrReviewField,
   newCustomField,
   parseRegistrationFormSchema,
+  registrationCapacityReport,
   registrationFieldTypeLabel,
   resolveEffectiveRegistrationForm,
   simplePresetSchema,
+  type PassportOcrProperty,
   type RegistrationFieldDef,
   type RegistrationFieldType,
   type RegistrationFormSchema,
+  type RegistrationScreenPlacement,
+  type RegistrationValueSource,
 } from '../registration/formSchema';
 
 type Props = {
@@ -140,9 +144,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
     const parsed = parseRegistrationFormSchema(nextSchema);
     if (!parsed.ok || !parsed.schema) {
       toast.error(
-        parsed.errors.some((e) => /10|extra WhatsApp Flow/i.test(e))
-          ? `Maximum ${REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT} champs supplémentaires dans le Flow WhatsApp.`
-          : parsed.errors.join('; ') || 'Formulaire invalide',
+        parsed.errors[0] || parsed.errors.join('; ') || 'Formulaire invalide',
       );
       return;
     }
@@ -178,7 +180,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
 
   const updateFields = (fields: RegistrationFieldDef[]) => {
     const parsed = parseRegistrationFormSchema({
-      version: 1,
+      version: 2,
       fields: fields.map((f, i) => ({ ...f, order: i })),
     });
     if (!parsed.ok || !parsed.schema) {
@@ -225,13 +227,28 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
       </Typography>
       <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>{inheritLabel}</Typography>
       <Alert severity="info" sx={{ fontSize: 12, mb: 1.5 }}>
-        Ces champs s’affichent dans le Flow WhatsApp. Le bloc OCR / pièce d’identité a un ordre
-        fixe sur l’écran « Vérifier ». Seuls les champs supplémentaires peuvent être réordonnés.
-        Aucun lien vers un formulaire externe n’est envoyé.
+        L’enregistrement reste entièrement dans WhatsApp Flow : photo du document, puis
+        « Informations du passeport », puis « Complétez votre enregistrement » s’il y a des
+        champs. Aucun lien vers un formulaire externe n’est envoyé.
       </Alert>
-      <Typography sx={{ fontSize: 12.5, fontWeight: 600, mb: 1 }}>
-        Champs supplémentaires : {dynamicFlowSlotCount(schema)} / {REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT}
-      </Typography>
+      {(() => {
+        const cap = registrationCapacityReport(schema);
+        return (
+          <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>
+              {formatCapacityCounter(cap.passport)}
+            </Typography>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>
+              {formatCapacityCounter(cap.completion)}
+            </Typography>
+            {!cap.ok && (
+              <Alert severity="error" sx={{ fontSize: 12 }}>
+                {cap.errors.join(' ')}
+              </Alert>
+            )}
+          </Stack>
+        );
+      })()}
       {!ownerMode && (
         <Stack direction="row" spacing={1} sx={{ mb: 1.5, flexWrap: 'wrap' }}>
           <Chip size="small" label={override ? 'Override annonce' : 'Hérité'} color={override ? 'warning' : 'default'} />
@@ -261,7 +278,8 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
           onClick={() => {
             if (!canAddDynamicRegistrationField(schema)) {
               toast.error(
-                `Maximum ${REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT} champs supplémentaires dans le Flow WhatsApp.`,
+                registrationCapacityReport(schema).errors[0] ||
+                  'Capacité WhatsApp de l’écran « Compléter l’enregistrement » atteinte.',
               );
               return;
             }
@@ -279,17 +297,20 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
       </Stack>
       <Stack spacing={1}>
         {fields.map((field, index) => {
-          const ocrBlock = isOcrReviewField(field);
-          const canMoveUp =
-            !ocrBlock &&
-            index > 0 &&
-            !isOcrReviewField(fields[index - 1]!) &&
-            !saving;
+          const photo = field.binding === 'passport_photo';
+          const canMoveUp = !photo && index > 0 && fields[index - 1]?.binding !== 'passport_photo' && !saving;
           const canMoveDown =
-            !ocrBlock &&
-            index < fields.length - 1 &&
-            !isOcrReviewField(fields[index + 1]!) &&
-            !saving;
+            !photo && index < fields.length - 1 && fields[index + 1]?.binding !== 'passport_photo' && !saving;
+          const screenLabel =
+            field.screen === 'upload' || photo
+              ? 'photo'
+              : field.screen === 'passport'
+                ? 'passeport'
+                : 'compléter';
+          const sourceLabel =
+            field.valueSource === 'ocr' && field.ocrProperty
+              ? `OCR · ${PASSPORT_OCR_PROPERTY_LABELS[field.ocrProperty]}`
+              : 'saisie manuelle';
           return (
           <Box
             key={field.id}
@@ -303,7 +324,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
               px: 1.25,
               py: 1,
               opacity: field.enabled === false ? 0.55 : 1,
-              bgcolor: ocrBlock ? 'rgba(26,22,17,0.03)' : undefined,
+              bgcolor: photo ? 'rgba(26,22,17,0.03)' : undefined,
             }}
           >
             <Box>
@@ -314,13 +335,13 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
               <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
                 {field.kind === 'builtin' ? 'intégré' : 'personnalisé'} ·{' '}
                 {registrationFieldTypeLabel(field)} ·{' '}
-                {field.scope === 'per_stay' ? 'une fois / séjour' : 'par voyageur'}
-                {ocrBlock ? ' · bloc OCR' : ''}
+                {field.scope === 'per_stay' ? 'une fois / séjour' : 'par voyageur'} · {screenLabel} ·{' '}
+                {sourceLabel}
                 {field.enabled === false ? ' · désactivé' : ''}
               </Typography>
             </Box>
             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-              {!ocrBlock && (
+              {!photo && (
                 <>
               <IconButton size="small" disabled={!canMoveUp} onClick={() => {
                 const next = [...fields];
@@ -387,6 +408,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
       </Box>
       <FieldEditorDialog
         field={editing}
+        allFields={fields}
         onClose={() => setEditing(null)}
         onSave={(nextField) => {
           const exists = fields.some((f) => f.id === nextField.id);
@@ -403,10 +425,12 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
 
 function FieldEditorDialog({
   field,
+  allFields,
   onClose,
   onSave,
 }: {
   field: RegistrationFieldDef | null;
+  allFields: RegistrationFieldDef[];
   onClose: () => void;
   onSave: (field: RegistrationFieldDef) => void;
 }) {
@@ -415,6 +439,28 @@ function FieldEditorDialog({
   if (!draft) return null;
   const custom = draft.kind === 'custom';
   const passportPhoto = draft.binding === 'passport_photo';
+  const takenOcr = new Set(
+    allFields
+      .filter((f) => f.id !== draft.id && f.enabled !== false && f.valueSource === 'ocr' && f.ocrProperty)
+      .map((f) => f.ocrProperty as PassportOcrProperty),
+  );
+  const applyScreen = (screen: RegistrationScreenPlacement): RegistrationFieldDef => {
+    if (passportPhoto) return { ...draft, screen: 'upload' };
+    if (screen === 'upload') return { ...draft, screen: 'completion' };
+    return { ...draft, screen };
+  };
+  const applySource = (valueSource: RegistrationValueSource): RegistrationFieldDef => {
+    if (valueSource === 'manual') {
+      return { ...draft, valueSource: 'manual', ocrProperty: undefined };
+    }
+    const fallback =
+      draft.ocrProperty && PASSPORT_OCR_PROPERTIES.includes(draft.ocrProperty)
+        ? draft.ocrProperty
+        : draft.binding && PASSPORT_OCR_PROPERTIES.includes(draft.binding as PassportOcrProperty)
+          ? (draft.binding as PassportOcrProperty)
+          : undefined;
+    return { ...draft, valueSource: 'ocr', ocrProperty: fallback };
+  };
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{custom ? 'Question personnalisée' : 'Champ intégré'}</DialogTitle>
@@ -471,6 +517,68 @@ function FieldEditorDialog({
             <MenuItem value="per_traveler">Par voyageur</MenuItem>
             <MenuItem value="per_stay">Une fois par séjour</MenuItem>
           </TextField>
+          {!passportPhoto && (
+            <TextField
+              select
+              label="Afficher dans"
+              size="small"
+              value={draft.screen === 'passport' ? 'passport' : 'completion'}
+              onChange={(e) =>
+                setDraft(applyScreen(e.target.value as RegistrationScreenPlacement))
+              }
+            >
+              <MenuItem value="passport">Informations du passeport</MenuItem>
+              <MenuItem value="completion">Compléter l’enregistrement</MenuItem>
+            </TextField>
+          )}
+          {!passportPhoto && (
+            <TextField
+              select
+              label="Source de la valeur"
+              size="small"
+              value={draft.valueSource === 'ocr' ? 'ocr' : 'manual'}
+              onChange={(e) => setDraft(applySource(e.target.value as RegistrationValueSource))}
+            >
+              <MenuItem value="manual">Saisie manuelle</MenuItem>
+              <MenuItem value="ocr">Champ passeport/OCR pris en charge</MenuItem>
+            </TextField>
+          )}
+          {!passportPhoto && draft.valueSource === 'ocr' && (
+            <TextField
+              select
+              label="Propriété passeport / OCR"
+              size="small"
+              value={draft.ocrProperty || ''}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  valueSource: 'ocr',
+                  ocrProperty: e.target.value as PassportOcrProperty,
+                })
+              }
+              helperText="Seules les propriétés d’extraction prises en charge sont proposées. Placer un champ sur l’écran passeport ne le rend pas extractible."
+            >
+              {PASSPORT_OCR_PROPERTIES.map((prop) => (
+                <MenuItem key={prop} value={prop} disabled={takenOcr.has(prop)}>
+                  {PASSPORT_OCR_PROPERTY_LABELS[prop]}
+                  {takenOcr.has(prop) ? ' (déjà liée)' : ''}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+          {!passportPhoto && draft.valueSource !== 'ocr' && draft.screen === 'passport' && (
+            <Alert severity="info" sx={{ fontSize: 12 }}>
+              Ce champ restera en saisie manuelle sur l’écran passeport. L’OCR ne le remplira pas.
+            </Alert>
+          )}
+          {!passportPhoto && (
+            <TextField
+              label="Texte d’aide (optionnel)"
+              size="small"
+              value={draft.helperText || ''}
+              onChange={(e) => setDraft({ ...draft, helperText: e.target.value })}
+            />
+          )}
           {(draft.type === 'select' || draft.type === 'multi_select') && (
             <TextField
               label="Options (une par ligne, valeur|libellé)"

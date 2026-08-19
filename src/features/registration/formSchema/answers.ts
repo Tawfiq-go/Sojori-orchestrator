@@ -36,6 +36,14 @@ export function memberFieldValue(
       return pick(m, 'document_issued_at', 'issued_at')
     case 'document_issued_on':
       return pick(m, 'document_issued_on', 'issued_on')
+    case 'document_expiry_date':
+      return pick(m, 'document_expiry_date', 'expiry_date', 'document_expires_on')
+    case 'document_type':
+      return pick(m, 'document_type')
+    case 'gender':
+      return pick(m, 'gender')
+    case 'issuing_country':
+      return pick(m, 'issuing_country', 'document_issuing_country')
     case 'profession':
       return pick(m, 'profession', 'occupation')
     case 'domicile':
