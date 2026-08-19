@@ -30,16 +30,21 @@ import {
   type OwnerOrchestrationDoc,
 } from '../orchestrationListingV3/ownerOrchestrationApi';
 import {
+  OCR_SOURCE_PASSPORT_HINT,
   PASSPORT_OCR_PROPERTIES,
   PASSPORT_OCR_PROPERTY_LABELS,
+  applyMaxPassportExtraction,
+  applyOcrBindingToField,
   canAddDynamicRegistrationField,
   completePresetSchema,
+  disabledBuiltinOcrHint,
   enabledFields,
   formatCapacityCounter,
   gestionResetToInherited,
   gestionWithSchema,
   newCustomField,
   parseRegistrationFormSchema,
+  parseRegistrationFormSchemaStrict,
   registrationCapacityReport,
   registrationFieldTypeLabel,
   resolveEffectiveRegistrationForm,
@@ -141,7 +146,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
 
   const persist = async (nextSchema: RegistrationFormSchema, asOverride: boolean) => {
     if (!doc || saving) return;
-    const parsed = parseRegistrationFormSchema(nextSchema);
+    const parsed = parseRegistrationFormSchemaStrict(nextSchema);
     if (!parsed.ok || !parsed.schema) {
       toast.error(
         parsed.errors[0] || parsed.errors.join('; ') || 'Formulaire invalide',
@@ -229,7 +234,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
       <Alert severity="info" sx={{ fontSize: 12, mb: 1.5 }}>
         L’enregistrement reste entièrement dans WhatsApp Flow : photo du document, puis
         « Informations du passeport », puis « Complétez votre enregistrement » s’il y a des
-        champs. Aucun lien vers un formulaire externe n’est envoyé.
+        champs. Aucun lien vers un formulaire externe n’est envoyé. {OCR_SOURCE_PASSPORT_HINT}
       </Alert>
       {(() => {
         const cap = registrationCapacityReport(schema);
@@ -270,6 +275,14 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
         </Button>
         <Button size="small" variant="outlined" disabled={saving} onClick={() => updateFields(completePresetSchema().fields)}>
           Préréglage fiche police
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={saving}
+          onClick={() => updateFields(applyMaxPassportExtraction(schema).fields)}
+        >
+          Passeport — extraction maximale
         </Button>
         <Button
           size="small"
@@ -435,7 +448,11 @@ function FieldEditorDialog({
   onSave: (field: RegistrationFieldDef) => void;
 }) {
   const [draft, setDraft] = useState<RegistrationFieldDef | null>(field);
-  useEffect(() => setDraft(field), [field]);
+  const [typeAdjustedNotice, setTypeAdjustedNotice] = useState<string | null>(null);
+  useEffect(() => {
+    setDraft(field);
+    setTypeAdjustedNotice(null);
+  }, [field]);
   if (!draft) return null;
   const custom = draft.kind === 'custom';
   const passportPhoto = draft.binding === 'passport_photo';
@@ -446,11 +463,13 @@ function FieldEditorDialog({
   );
   const applyScreen = (screen: RegistrationScreenPlacement): RegistrationFieldDef => {
     if (passportPhoto) return { ...draft, screen: 'upload' };
+    if (draft.valueSource === 'ocr') return { ...draft, screen: 'passport' };
     if (screen === 'upload') return { ...draft, screen: 'completion' };
     return { ...draft, screen };
   };
   const applySource = (valueSource: RegistrationValueSource): RegistrationFieldDef => {
     if (valueSource === 'manual') {
+      setTypeAdjustedNotice(null);
       return { ...draft, valueSource: 'manual', ocrProperty: undefined };
     }
     const fallback =
@@ -459,7 +478,17 @@ function FieldEditorDialog({
         : draft.binding && PASSPORT_OCR_PROPERTIES.includes(draft.binding as PassportOcrProperty)
           ? (draft.binding as PassportOcrProperty)
           : undefined;
-    return { ...draft, valueSource: 'ocr', ocrProperty: fallback };
+    if (!fallback) {
+      return { ...draft, valueSource: 'ocr', screen: 'passport' };
+    }
+    const applied = applyOcrBindingToField(draft, fallback, allFields);
+    setTypeAdjustedNotice(applied.notice || null);
+    return applied.field;
+  };
+  const applyOcrProperty = (ocrProperty: PassportOcrProperty): RegistrationFieldDef => {
+    const applied = applyOcrBindingToField(draft, ocrProperty, allFields);
+    setTypeAdjustedNotice(applied.notice || null);
+    return applied.field;
   };
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
@@ -486,6 +515,7 @@ function FieldEditorDialog({
                 label="Type"
                 size="small"
                 value={draft.type}
+                disabled={draft.valueSource === 'ocr'}
                 onChange={(e) => setDraft({ ...draft, type: e.target.value as RegistrationFieldType })}
               >
                 {FIELD_TYPES.map((t) => (
@@ -522,7 +552,8 @@ function FieldEditorDialog({
               select
               label="Afficher dans"
               size="small"
-              value={draft.screen === 'passport' ? 'passport' : 'completion'}
+              value={draft.screen === 'passport' || draft.valueSource === 'ocr' ? 'passport' : 'completion'}
+              disabled={draft.valueSource === 'ocr'}
               onChange={(e) =>
                 setDraft(applyScreen(e.target.value as RegistrationScreenPlacement))
               }
@@ -549,14 +580,8 @@ function FieldEditorDialog({
               label="Propriété passeport / OCR"
               size="small"
               value={draft.ocrProperty || ''}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  valueSource: 'ocr',
-                  ocrProperty: e.target.value as PassportOcrProperty,
-                })
-              }
-              helperText="Seules les propriétés d’extraction prises en charge sont proposées. Placer un champ sur l’écran passeport ne le rend pas extractible."
+              onChange={(e) => setDraft(applyOcrProperty(e.target.value as PassportOcrProperty))}
+              helperText={OCR_SOURCE_PASSPORT_HINT}
             >
               {PASSPORT_OCR_PROPERTIES.map((prop) => (
                 <MenuItem key={prop} value={prop} disabled={takenOcr.has(prop)}>
@@ -565,6 +590,21 @@ function FieldEditorDialog({
                 </MenuItem>
               ))}
             </TextField>
+          )}
+          {!passportPhoto && draft.valueSource === 'ocr' && (
+            <Alert severity="info" sx={{ fontSize: 12 }}>
+              {OCR_SOURCE_PASSPORT_HINT}
+            </Alert>
+          )}
+          {typeAdjustedNotice && (
+            <Alert severity="warning" sx={{ fontSize: 12 }}>
+              {typeAdjustedNotice}
+            </Alert>
+          )}
+          {draft.valueSource === 'ocr' && draft.ocrProperty && disabledBuiltinOcrHint(allFields, draft.ocrProperty, draft.id) && (
+            <Alert severity="warning" sx={{ fontSize: 12 }}>
+              {disabledBuiltinOcrHint(allFields, draft.ocrProperty, draft.id)}
+            </Alert>
           )}
           {!passportPhoto && draft.valueSource !== 'ocr' && draft.screen === 'passport' && (
             <Alert severity="info" sx={{ fontSize: 12 }}>

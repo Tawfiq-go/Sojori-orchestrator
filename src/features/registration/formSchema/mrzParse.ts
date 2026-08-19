@@ -13,6 +13,7 @@ export type ParsedMrzFields = {
   birth_date: string
   gender: string
   document_expiry_date: string
+  personal_number: string
   checkDigitsOk: boolean
   format: 'TD1' | 'TD2' | 'TD3' | ''
 }
@@ -27,6 +28,7 @@ const EMPTY: ParsedMrzFields = {
   birth_date: '',
   gender: '',
   document_expiry_date: '',
+  personal_number: '',
   checkDigitsOk: false,
   format: '',
 }
@@ -295,6 +297,13 @@ function documentTypeFromCode(code: string): 'passport' | 'national_id' | '' {
   return ''
 }
 
+function personalNumberFromOptional(optional: string, checkDigit: string): string {
+  const data = optional.replace(/[^A-Z0-9<]/g, '<')
+  if (!data.replace(/</g, '').trim()) return ''
+  if (!mrzCheckDigitValid(data, checkDigit)) return ''
+  return data.replace(/</g, '').trim()
+}
+
 function parseTd3(line1: string, line2: string): ParsedMrzFields {
   const l1 = cleanLine(line1, 44)
   const l2 = cleanLine(line2, 44)
@@ -326,6 +335,7 @@ function parseTd3(line1: string, line2: string): ParsedMrzFields {
     birth_date: mrzDateToIso(birth, 'past'),
     gender,
     document_expiry_date: mrzDateToIso(expiry, 'future'),
+    personal_number: personalNumberFromOptional(optional, optionalCheck),
     checkDigitsOk,
     format: 'TD3',
   }
@@ -358,6 +368,7 @@ function parseTd1(line1: string, line2: string, line3: string): ParsedMrzFields 
     birth_date: mrzDateToIso(birth, 'past'),
     gender,
     document_expiry_date: mrzDateToIso(expiry, 'future'),
+    personal_number: '',
     checkDigitsOk,
     format: 'TD1',
   }
@@ -389,6 +400,7 @@ function parseTd2(line1: string, line2: string): ParsedMrzFields {
     birth_date: mrzDateToIso(birth, 'past'),
     gender,
     document_expiry_date: mrzDateToIso(expiry, 'future'),
+    personal_number: '',
     checkDigitsOk,
     format: 'TD2',
   }
@@ -438,6 +450,9 @@ export function mergeMrzIntoOcr<T extends Record<string, unknown>>(
   set('birth_date', mrz.birth_date)
   set('gender', mrz.gender)
   set('document_expiry_date', mrz.document_expiry_date)
+  if (mrz.checkDigitsOk && mrz.personal_number) {
+    set('personal_number', mrz.personal_number)
+  }
   fill('document_type', mrz.document_type)
   return out
 }

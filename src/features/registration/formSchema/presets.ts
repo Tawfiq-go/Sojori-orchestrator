@@ -1,5 +1,6 @@
-import { builtinField } from './builtinCatalog'
-import type { RegistrationFormSchema, RegistrationLevel } from './types'
+import { builtinField, PASSPORT_DEDICATED_OCR_PROPERTIES } from './builtinCatalog'
+import { applyOcrBindingToField } from './ocrBinding'
+import type { BuiltinBinding, RegistrationFieldDef, RegistrationFormSchema, RegistrationLevel } from './types'
 
 function cloneSchema(schema: RegistrationFormSchema): RegistrationFormSchema {
   return JSON.parse(JSON.stringify(schema)) as RegistrationFormSchema
@@ -60,3 +61,87 @@ export const COMPLETE_EXTRA_REQUIRED_KEYS = [
   'going_to',
   'phone',
 ] as const
+
+const MAX_PASSPORT_CORE_REQUIRED = new Set([
+  'first_name',
+  'last_name',
+  'document_number',
+  'nationality',
+  'birth_date',
+  'passport_photo',
+])
+
+/**
+ * Enable every supported passport OCR field on the passport screen.
+ * Required flags stay as they were (or the simple-core defaults for new fields).
+ * Completion extras are preserved.
+ */
+export function applyMaxPassportExtraction(schema: RegistrationFormSchema): RegistrationFormSchema {
+  const existing = new Map(schema.fields.map((f) => [f.id, f]))
+  const next: RegistrationFieldDef[] = []
+  let order = 0
+  const taken = new Set<string>()
+
+  for (const binding of PASSPORT_DEDICATED_OCR_PROPERTIES as BuiltinBinding[]) {
+    const prev = existing.get(binding)
+    const field = builtinField(binding, {
+      required: prev ? prev.required === true : MAX_PASSPORT_CORE_REQUIRED.has(binding),
+      enabled: true,
+      order: order++,
+    })
+    next.push({
+      ...field,
+      label: prev?.label || field.label,
+      helperText: prev?.helperText,
+      required: prev ? prev.required === true : field.required,
+    })
+    taken.add(binding)
+  }
+
+  const photoPrev = existing.get('passport_photo')
+  next.push({
+    ...builtinField('passport_photo', {
+      required: photoPrev ? photoPrev.required === true : true,
+      enabled: true,
+      order: order++,
+    }),
+    required: photoPrev ? photoPrev.required === true : true,
+    label: photoPrev?.label || 'Photo pièce',
+  })
+  taken.add('passport_photo')
+
+  const countryPrev = existing.get('country')
+  const countryBase = builtinField('country', {
+    required: countryPrev ? countryPrev.required === true : false,
+    enabled: true,
+    order: order++,
+  })
+  next.push(
+    applyOcrBindingToField(
+      {
+        ...countryBase,
+        required: countryPrev ? countryPrev.required === true : false,
+        label: countryPrev?.label || countryBase.label,
+      },
+      'residence_country',
+    ).field,
+  )
+  taken.add('country')
+
+  const personalPrev = existing.get('personal_number')
+  next.push(
+    builtinField('personal_number', {
+      required: personalPrev ? personalPrev.required === true : false,
+      enabled: true,
+      order: order++,
+    }),
+  )
+  taken.add('personal_number')
+
+  for (const field of schema.fields) {
+    if (taken.has(field.id) || (field.binding && taken.has(field.binding))) continue
+    next.push({ ...field, order: order++ })
+  }
+
+  return { version: 2, source: 'custom', fields: next }
+}

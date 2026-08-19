@@ -288,6 +288,7 @@ const MEMBER_KEY: Record<string, string> = {
   issuing_country: 'issuing_country',
   residence_country: 'residence_country',
   country: 'residence_country',
+  personal_number: 'personal_number',
 }
 
 /** Only enabled FORM fields — omitted keys must not be written as empty strings. */
@@ -315,7 +316,9 @@ export function ocrPrefillForField(
   const raw = ocr[prop]
   if (raw == null) return undefined
   const text = String(raw).trim()
-  return text ? text : undefined
+  if (!text) return undefined
+  const checked = coerceAndValidateFlowAnswer({ ...field, required: false }, text)
+  return checked.ok && checked.value !== '' && checked.value !== false ? checked.value : undefined
 }
 
 export function registrationFieldTypeLabel(field: RegistrationFieldDef): string {

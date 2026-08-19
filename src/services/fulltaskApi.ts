@@ -1126,6 +1126,24 @@ export async function unregisterGuestMember(reservationId: string, index: number
   };
 }
 
+export async function resetGuestRegistrationAttempt(reservationId: string) {
+  logResaGuest('api:reset-registration →', { reservationId });
+  const { data } = await apiClient.post(`${BASE}/guest-actions/reset-registration`, {
+    reservationId,
+  });
+  logResaGuest('api:reset-registration ←', {
+    reservationId,
+    success: data?.success,
+    error: data?.error,
+    state: data?.data?.state,
+  });
+  return data as {
+    success?: boolean;
+    error?: string;
+    data?: { state?: RegistrationFlowState; guestContext?: unknown };
+  };
+}
+
 // ========================================
 // COPY ADMIN CONFIG TO OWNER(S)
 // ========================================

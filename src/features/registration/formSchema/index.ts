@@ -1,4 +1,3 @@
-/** Mirror of @sojori/registration-form — keep in sync with sojori-production/packages/registration-form. */
 export * from './types'
 export * from './builtinCatalog'
 export * from './presets'
@@ -47,3 +46,5 @@ export type {
 } from './componentBudget'
 export * from './screens'
 export * from './mrzParse'
+export * from './ocrBinding'
+export * from './registrationInstance'
