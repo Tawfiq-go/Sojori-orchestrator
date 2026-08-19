@@ -6,6 +6,7 @@ import {
   flattenInventoryReservationsForOverlay,
   isMultiHotelListing,
   mergeOverlayReservationLists,
+  normalizeMultiOverlayReservation,
 } from './multiCalendarReservations.js'
 
 describe('isMultiHotelListing', () => {
@@ -149,6 +150,39 @@ describe('flattenInventoryReservationsForOverlay', () => {
     })
     assert.equal(rows.length, 1)
   })
+
+  it('skips cancelled inventory copies', () => {
+    const rows = flattenInventoryReservationsForOverlay({
+      lid1: {
+        rt1: {
+          name: 'Villa',
+          availability: {
+            '2026-08-25': {
+              reservations: [
+                {
+                  _id: 'c1',
+                  guestName: 'amar mamoune',
+                  status: 'Cancelled',
+                  cancellationAcknowledged: false,
+                  arrivalDate: '2026-08-25',
+                  departureDate: '2026-09-01',
+                },
+                {
+                  _id: 'ok1',
+                  guestName: 'Ada',
+                  status: 'Confirmed',
+                  arrivalDate: '2026-08-25',
+                  departureDate: '2026-08-27',
+                },
+              ],
+            },
+          },
+        },
+      },
+    })
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0]!._id, 'ok1')
+  })
 })
 
 describe('mergeOverlayReservationLists', () => {
@@ -186,5 +220,79 @@ describe('mergeOverlayReservationLists', () => {
     )
     assert.equal(merged.length, 1)
     assert.equal(merged[0]!._id, 'mongo-1')
+  })
+
+  it('drops cancelled overlay even if unpaid and not acknowledged', () => {
+    const merged = mergeOverlayReservationLists(
+      [
+        {
+          _id: 'r1',
+          listingId: 'lid',
+          roomName: 'Villa 03',
+          arrivalDate: '2026-08-25',
+          departureDate: '2026-09-01',
+          guestName: 'amar mamoune',
+          status: 'Confirmed',
+        },
+      ],
+      [
+        {
+          _id: 'r1',
+          reservationNumber: 'SJ-2OW6O0E0',
+          listingId: 'lid',
+          arrivalDate: '2026-08-25',
+          departureDate: '2026-09-01',
+          guestName: 'amar mamoune',
+          status: 'Cancelled',
+          cancellationAcknowledged: false,
+          paymentStatus: 'UnPaid',
+        },
+      ],
+    )
+    assert.equal(merged.length, 0)
+  })
+
+  it('evicts inventory seed when live copy is cancelled without the same room', () => {
+    const merged = mergeOverlayReservationLists(
+      [
+        {
+          _id: 'inv-1',
+          listingId: 'lid',
+          roomName: 'Villa 03',
+          arrivalDate: '2026-08-25',
+          departureDate: '2026-09-01',
+          guestName: 'amar mamoune',
+          status: 'Confirmed',
+        },
+      ],
+      [
+        {
+          _id: 'mongo-1',
+          reservationNumber: 'SJ-2OW6O0E0',
+          listingId: 'lid',
+          arrivalDate: '2026-08-25',
+          departureDate: '2026-09-01',
+          guestName: 'amar mamoune',
+          status: 'Cancelled',
+          cancellationAcknowledged: false,
+        },
+      ],
+    )
+    assert.equal(merged.length, 0)
+  })
+})
+
+describe('normalizeMultiOverlayReservation', () => {
+  it('hides Cancelled even when inventory shell is still Confirmed', () => {
+    const hidden = normalizeMultiOverlayReservation({
+      _id: 'r1',
+      status: 'Cancelled',
+      cancellationAcknowledged: false,
+      paymentStatus: 'UnPaid',
+      arrivalDate: '2026-08-25',
+      departureDate: '2026-09-01',
+      guestName: 'amar mamoune',
+    })
+    assert.equal(hidden, null)
   })
 })

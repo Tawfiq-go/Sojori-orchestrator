@@ -15,7 +15,11 @@ import DpSyncAuditStrip from './DpSyncAuditStrip';
 import CalendarLandscapeHint from './CalendarLandscapeHint';
 import ReservationCalendarDrawer from './ReservationCalendarDrawer';
 import { useCalendarBreakpoint } from '../../hooks/useCalendarBreakpoint';
-import { normalizeCalendarReservation, reservationDetailFetchId } from './reservationCalendarUtils';
+import {
+  isReservationVisibleOnCalendar,
+  normalizeCalendarReservation,
+  reservationDetailFetchId,
+} from './reservationCalendarUtils';
 import reservationsService from '../../services/reservationsService';
 import calendarService from '../../services/calendarService';
 import { isCalendarImportReviewActive } from '../../services/calendarImportReviewService';
@@ -281,8 +285,11 @@ export default function CalendarInventoryPage({
           startDate: from,
           endDate: to,
           listingIds,
+          excludeCancelled: true,
         });
-        const next = Array.isArray(res?.data) ? res.data : [];
+        const next = (Array.isArray(res?.data) ? res.data : []).filter(
+          isReservationVisibleOnCalendar,
+        );
         overlayCacheRef.current.set(cacheKey, next);
         if (overlayWantedKeyRef.current === cacheKey) {
           setMultiOverlayReservations(next);

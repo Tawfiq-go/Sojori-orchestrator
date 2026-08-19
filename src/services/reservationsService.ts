@@ -146,6 +146,11 @@ class ReservationsService {
      * (sinon check-in octobre + annulé en juillet pollue juillet).
      */
     strictArrivalWindow?: boolean;
+    /**
+     * Calendrier d’occupation : n’injecte pas les annulations <24h non acquittées.
+     * La liste `/reservations` les garde pour l’acquittement ops.
+     */
+    excludeCancelled?: boolean;
   }): Promise<{ success: boolean; data: Reservation[]; count: number; total: number }> {
     try {
       const queryParams = new URLSearchParams();
@@ -163,6 +168,10 @@ class ReservationsService {
 
       if (params.strictArrivalWindow) {
         queryParams.append('strictArrivalWindow', 'true');
+      }
+
+      if (params.excludeCancelled) {
+        queryParams.append('excludeCancelled', 'true');
       }
 
       if (params.page != null) {
