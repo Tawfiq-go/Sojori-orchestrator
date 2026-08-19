@@ -367,7 +367,7 @@ describe('schema validation', () => {
     assert.equal(needsWebCheckin(classified.schema!), false)
   })
 
-  it('rejects an eleventh enabled dynamic field', () => {
+  it('rejects a configuration that exceeds the completion short_text bank', () => {
     const extras = Array.from({ length: REGISTRATION_FLOW_DYNAMIC_FIELD_LIMIT + 1 }, (_, i) =>
       newCustomField({
         id: `extra_${i + 1}`,
@@ -383,10 +383,10 @@ describe('schema validation', () => {
       fields: [...simplePresetSchema().fields, ...extras],
     })
     assert.equal(result.ok, false)
-    assert.ok(result.errors.some((e) => /10|extra WhatsApp Flow/i.test(e)))
+    assert.ok(result.errors.some((e) => /Extra 13|capacité|short_text|texte court/i.test(e)))
     assert.equal(
       canAddDynamicRegistrationField({
-        version: 1,
+        version: 2,
         source: 'custom',
         fields: [
           ...simplePresetSchema().fields,
@@ -429,7 +429,7 @@ describe('WhatsApp Flow dynamic slots', () => {
     assert.equal(unused.slot_2_show_boolean, false)
   })
 
-  it('fits five fields on page A and ten across both pages', () => {
+  it('fits completion fields on a single screen and skips page B', () => {
     const extras = Array.from({ length: 10 }, (_, i) =>
       newCustomField({
         id: `f${i + 1}`,
@@ -439,17 +439,17 @@ describe('WhatsApp Flow dynamic slots', () => {
         order: 20 + i,
       }),
     )
-    const fields = dynamicFlowFields({
-      version: 1,
-      source: 'custom',
+    const schema = {
+      version: 1 as const,
+      source: 'custom' as const,
       fields: [...simplePresetSchema().fields, ...extras],
-    })
-    assert.equal(slotBindingsForPage(fields, 'A').filter((s) => s.field).length, 5)
-    assert.equal(slotBindingsForPage(fields, 'B').filter((s) => s.field).length, 5)
-    assert.equal(customScreenIdFor('per_traveler', 'A'), 'CUSTOM_FIELDS_A')
-    assert.equal(nextCustomScreen('per_traveler', 'A', 10), 'CUSTOM_FIELDS_B')
-    assert.equal(nextCustomScreen('per_stay', 'A', 5), null)
-    assert.equal(nextCustomScreen('per_stay', 'A', 6), 'STAY_FIELDS_B')
+    }
+    const fields = dynamicFlowFields(schema)
+    assert.equal(fields.length, 10)
+    assert.equal(customScreenIdFor('per_traveler', 'A'), 'COMPLETE')
+    assert.equal(customScreenIdFor('per_stay', 'A'), 'STAY_COMPLETE')
+    assert.equal(nextCustomScreen('per_traveler', 'A', 10), null)
+    assert.equal(nextCustomScreen('per_stay', 'A', 6), null)
   })
 
   it('converts each supported field type to the matching Flow variant and value type', () => {
@@ -568,7 +568,7 @@ describe('WhatsApp Flow dynamic slots', () => {
     const stay = reconstructSlotMapping({ schema, scope: 'per_stay', page: 'A' })
     assert.equal(traveler[0]?.field?.id, 'coming_city')
     assert.equal(stay[0]?.field?.id, 'trip_origin')
-    assert.equal(customScreenIdFor('per_stay', 'A'), 'STAY_FIELDS_A')
+    assert.equal(customScreenIdFor('per_stay', 'A'), 'STAY_COMPLETE')
   })
 
   it('prefills existing answers and preserves field order/labels', () => {
@@ -639,7 +639,6 @@ describe('schema-aware FORM review', () => {
     assert.equal(flags.first_name_visible, false)
     assert.equal(flags.last_name_visible, false)
     assert.equal(flags.birth_date_visible, true)
-    assert.equal(flags.birth_date_show_date, true)
     assert.equal(flags.birth_date_required, false)
     assert.equal(flags.nationality_visible, true)
     assert.equal(flags.nationality_required, true)
@@ -712,9 +711,9 @@ describe('schema-aware FORM review', () => {
     assert.equal(skipped.ok, true)
   })
 
-  it('navigates the production schema FORM → CUSTOM_FIELDS_A → B with required extras', () => {
+  it('navigates the production schema FORM → COMPLETE with required extras', () => {
     const schema = screenshotHotelRegistrationSchema()
-    assert.equal(nextScreenAfterFormSave(schema), 'CUSTOM_FIELDS_A')
+    assert.equal(nextScreenAfterFormSave(schema, 0, 1), 'COMPLETE')
     const traveler = dynamicFlowFieldsForScope(schema, 'per_traveler')
     assert.deepEqual(
       traveler.map((f) => f.label),
@@ -748,7 +747,7 @@ describe('schema-aware FORM review', () => {
     assert.equal(city.slot_7_short_text_required, true)
     assert.equal(emptySlotFlowData(8).slot_8_active, false)
     assert.equal(emptySlotFlowData(8).slot_8_show_short_text, false)
-    assert.equal(nextCustomScreen('per_traveler', 'A', traveler.length), 'CUSTOM_FIELDS_B')
+    assert.equal(nextCustomScreen('per_traveler', 'A', traveler.length), null)
     assert.equal(nextCustomScreen('per_traveler', 'B', traveler.length), null)
     assert.equal(coerceAndValidateFlowAnswer(traveler[4]!, '').ok, false)
     assert.equal(coerceAndValidateFlowAnswer(traveler[4]!, '08:30').ok, true)
@@ -767,20 +766,23 @@ describe('schema-aware FORM review', () => {
       override: true,
     })
     assert.deepEqual(diag.formVisibilityFlags, {
+      document_type_visible: false,
       first_name_visible: false,
       last_name_visible: false,
       birth_date_visible: true,
       nationality_visible: true,
       document_number_visible: true,
+      issuing_country_visible: false,
       place_of_birth_visible: true,
       document_issued_at_visible: false,
       document_issued_on_visible: false,
+      document_expiry_date_visible: false,
       gender_visible: false,
       residence_country_visible: false,
     })
-    assert.equal(diag.selectedNextScreen, 'CUSTOM_FIELDS_A')
-    assert.equal(nextScreenAfterFormSave(simplePresetSchema()), 'LIST_REFRESH')
-    assert.equal(nextScreenAfterFormSave(completePresetSchema()), 'CUSTOM_FIELDS_A')
+    assert.equal(diag.selectedNextScreen, 'COMPLETE')
+    assert.equal(nextScreenAfterFormSave(simplePresetSchema(), 0, 1), 'LIST_REFRESH')
+    assert.equal(nextScreenAfterFormSave(completePresetSchema(), 0, 1), 'COMPLETE')
   })
 
   it('keeps a listing override with disabled names instead of falling back to simple', () => {

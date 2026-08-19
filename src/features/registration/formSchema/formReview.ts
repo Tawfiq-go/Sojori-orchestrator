@@ -1,45 +1,30 @@
 import { enabledFields, fieldLabel } from './completeness'
-import {
-  REGISTRATION_FLOW_STATIC_BINDINGS,
-  coerceAndValidateFlowAnswer,
-  dynamicFlowFieldsForScope,
-  markedRequiredLabel,
-} from './flowSlots'
+import { coerceAndValidateFlowAnswer, markedRequiredLabel } from './flowSlots'
 import { builtinField } from './builtinCatalog'
+import { PASSPORT_DEDICATED_PROPERTIES, isDedicatedPassportField } from './componentBudget'
 import { newCustomField, parseRegistrationFormSchema } from './normalize'
 import { simplePresetSchema } from './presets'
 import { resolveEffectiveRegistrationForm } from './resolve'
-import type {
-  RegistrationFieldDef,
-  RegistrationFormSchema,
-} from './types'
+import { nextScreenAfterFormSave as nextInfoScreenAfterFormSave } from './screens'
+import type { PassportOcrProperty, RegistrationFieldDef, RegistrationFormSchema } from './types'
 
-/** Built-in fields shown on the WhatsApp FORM review screen (not UPLOAD). */
-export const REGISTRATION_FLOW_FORM_BINDINGS = [
-  'first_name',
-  'last_name',
-  'birth_date',
-  'nationality',
-  'document_number',
-  'place_of_birth',
-  'document_issued_at',
-  'document_issued_on',
-] as const
+/** Dedicated WhatsApp FORM / passport-information fields. */
+export const REGISTRATION_FLOW_FORM_BINDINGS = PASSPORT_DEDICATED_PROPERTIES
 
 export type RegistrationFlowFormBinding = (typeof REGISTRATION_FLOW_FORM_BINDINGS)[number]
 
-/** Legacy FORM extras that are not in the builtin catalog. Hidden unless a matching enabled field exists. */
-export const REGISTRATION_FLOW_FORM_LEGACY_COMPONENTS = ['gender', 'residence_country'] as const
+/** @deprecated Residence is not a passport field. Hidden unless a matching enabled field exists on FORM. */
+export const REGISTRATION_FLOW_FORM_LEGACY_COMPONENTS = ['residence_country'] as const
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export function isOcrReviewBinding(binding: string | undefined): boolean {
   if (!binding) return false
-  return (REGISTRATION_FLOW_STATIC_BINDINGS as readonly string[]).includes(binding)
+  return (REGISTRATION_FLOW_FORM_BINDINGS as readonly string[]).includes(binding)
 }
 
 export function isOcrReviewField(field: RegistrationFieldDef): boolean {
-  return field.kind === 'builtin' && isOcrReviewBinding(field.binding)
+  return isDedicatedPassportField(field) || (field.kind === 'builtin' && isOcrReviewBinding(field.binding))
 }
 
 export function schemaFieldForBinding(
@@ -47,7 +32,7 @@ export function schemaFieldForBinding(
   binding: string,
 ): RegistrationFieldDef | null {
   const exact = schema.fields.find(
-    (f) => f.binding === binding || f.id === binding || f.key === binding,
+    (f) => f.binding === binding || f.id === binding || f.key === binding || f.ocrProperty === binding,
   )
   return exact ?? null
 }
@@ -57,18 +42,22 @@ export function isFormReviewFieldEnabled(
   binding: RegistrationFlowFormBinding,
 ): boolean {
   const field = schemaFieldForBinding(schema, binding)
-  return Boolean(field && field.enabled !== false)
+  return Boolean(field && field.enabled !== false && (field.screen === 'passport' || field.screen == null))
 }
 
 export function isLegacyFormComponentEnabled(
   schema: RegistrationFormSchema,
-  name: (typeof REGISTRATION_FLOW_FORM_LEGACY_COMPONENTS)[number],
+  name: (typeof REGISTRATION_FLOW_FORM_LEGACY_COMPONENTS)[number] | 'gender',
 ): boolean {
-  const enabled = enabledFields(schema)
   if (name === 'gender') {
-    return enabled.some((f) => f.id === 'gender' || f.key === 'gender')
+    return isFormReviewFieldEnabled(schema, 'gender')
   }
-  return enabled.some((f) => f.id === 'residence_country' || f.key === 'residence_country')
+  const enabled = enabledFields(schema)
+  return enabled.some(
+    (f) =>
+      (f.id === 'residence_country' || f.key === 'residence_country' || f.binding === 'country') &&
+      f.screen === 'passport',
+  )
 }
 
 export function passportPhotoField(schema: RegistrationFormSchema): RegistrationFieldDef | null {
@@ -85,14 +74,6 @@ export function isPassportPhotoRequired(schema: RegistrationFormSchema): boolean
   return Boolean(field && field.enabled !== false && field.required)
 }
 
-export function nextScreenAfterFormSave(
-  schema: RegistrationFormSchema,
-): 'CUSTOM_FIELDS_A' | 'LIST_REFRESH' {
-  return dynamicFlowFieldsForScope(schema, 'per_traveler').length > 0
-    ? 'CUSTOM_FIELDS_A'
-    : 'LIST_REFRESH'
-}
-
 export function registrationNavigationDiagnostics(
   schema: RegistrationFormSchema,
   extra?: {
@@ -101,9 +82,13 @@ export function registrationNavigationDiagnostics(
     origin?: string
     override?: boolean
     selectedNextScreen?: string
+    travelerIndex?: number
+    travelerCount?: number
   },
 ): Record<string, unknown> {
   const flags = formScreenFlowFlags(schema)
+  const travelerIndex = extra?.travelerIndex ?? 0
+  const travelerCount = extra?.travelerCount ?? 1
   return {
     reservationId: extra?.reservationId,
     listingId: extra?.listingId,
@@ -113,30 +98,41 @@ export function registrationNavigationDiagnostics(
     disabledFieldIds: schema.fields.filter((f) => f.enabled === false).map((f) => f.id),
     requiredFieldIds: enabledFields(schema).filter((f) => f.required).map((f) => f.id),
     formVisibilityFlags: {
+      document_type_visible: flags.document_type_visible,
       first_name_visible: flags.first_name_visible,
       last_name_visible: flags.last_name_visible,
       birth_date_visible: flags.birth_date_visible,
       nationality_visible: flags.nationality_visible,
       document_number_visible: flags.document_number_visible,
+      issuing_country_visible: flags.issuing_country_visible,
       place_of_birth_visible: flags.place_of_birth_visible,
       document_issued_at_visible: flags.document_issued_at_visible,
       document_issued_on_visible: flags.document_issued_on_visible,
+      document_expiry_date_visible: flags.document_expiry_date_visible,
       gender_visible: flags.gender_visible,
       residence_country_visible: flags.residence_country_visible,
     },
     formRequiredFlags: {
+      document_type_required: flags.document_type_required,
       first_name_required: flags.first_name_required,
       last_name_required: flags.last_name_required,
       birth_date_required: flags.birth_date_required,
       nationality_required: flags.nationality_required,
       document_number_required: flags.document_number_required,
+      issuing_country_required: flags.issuing_country_required,
       place_of_birth_required: flags.place_of_birth_required,
       document_issued_at_required: flags.document_issued_at_required,
       document_issued_on_required: flags.document_issued_on_required,
+      document_expiry_date_required: flags.document_expiry_date_required,
+      gender_required: flags.gender_required,
     },
-    travelerDynamicIds: dynamicFlowFieldsForScope(schema, 'per_traveler').map((f) => f.id),
-    stayDynamicIds: dynamicFlowFieldsForScope(schema, 'per_stay').map((f) => f.id),
-    selectedNextScreen: extra?.selectedNextScreen ?? nextScreenAfterFormSave(schema),
+    travelerDynamicIds: enabledFields(schema)
+      .filter((f) => f.screen === 'completion' && f.scope === 'per_traveler')
+      .map((f) => f.id),
+    stayDynamicIds: enabledFields(schema)
+      .filter((f) => f.screen === 'completion' && f.scope === 'per_stay')
+      .map((f) => f.id),
+    selectedNextScreen: extra?.selectedNextScreen ?? nextInfoScreenAfterFormSave(schema, travelerIndex, travelerCount),
   }
 }
 
@@ -180,22 +176,17 @@ export function formScreenFlowFlags(
     flags[`${binding}_visible`] = control.visible
     flags[`${binding}_required`] = control.visible && control.required
     flags[`${binding}_label`] = control.label
-    if (binding === 'birth_date' || binding === 'document_issued_on') {
-      flags[`${binding}_show_date`] = control.visible && control.showDate
-      flags[`${binding}_show_text`] = control.visible && control.showText
-    }
+    flags[`${binding}_helper`] = control.helper
   }
-  const genderVisible = isLegacyFormComponentEnabled(schema, 'gender')
-  const residenceVisible = isLegacyFormComponentEnabled(schema, 'residence_country')
-  flags.gender_visible = genderVisible
-  flags.gender_required = false
-  flags.residence_country_visible = residenceVisible
+  flags.gender_visible = Boolean(flags.gender_visible)
+  flags.gender_required = Boolean(flags.gender_required)
+  flags.residence_country_visible = false
   flags.residence_country_required = false
   return flags
 }
 
 function fallbackFormField(binding: RegistrationFlowFormBinding): RegistrationFieldDef {
-  return builtinField(binding, { required: false, enabled: false, order: 0 })
+  return builtinField(binding as 'first_name', { required: false, enabled: false, order: 0 })
 }
 
 export function formReviewControlFlags(
@@ -206,16 +197,18 @@ export function formReviewControlFlags(
   visible: boolean
   required: boolean
   label: string
+  helper: string
   showDate: boolean
   showText: boolean
 } {
   const field = schemaFieldForBinding(schema, binding)
-  if (!field || field.enabled === false) {
+  if (!field || field.enabled === false || field.screen === 'completion' || field.screen === 'upload') {
     const base = fallbackFormField(binding)
     return {
       visible: false,
       required: false,
       label: markedRequiredLabel(fieldLabel(base, locale || undefined), false),
+      helper: ' ',
       showDate: false,
       showText: false,
     }
@@ -225,20 +218,24 @@ export function formReviewControlFlags(
     visible: true,
     required: field.required === true,
     label: markedRequiredLabel(fieldLabel(field, locale || undefined), field.required === true),
+    helper: (field.helperText || ' ').trim() || ' ',
     showDate: isDate,
-    showText: !isDate,
+    showText: false,
   }
 }
 
 export type FormReviewValues = {
+  document_type?: string
   first_name?: string
   last_name?: string
   document_number?: string
   nationality?: string
+  issuing_country?: string
   birth_date?: string
   place_of_birth?: string
   document_issued_at?: string
   document_issued_on?: string
+  document_expiry_date?: string
   gender?: string
   residence_country?: string
   hasVerifiedPhoto?: boolean
@@ -252,7 +249,8 @@ export function validateFormReviewFields(
   for (const binding of REGISTRATION_FLOW_FORM_BINDINGS) {
     const field = schemaFieldForBinding(schema, binding)
     if (!field || field.enabled === false || field.required !== true) continue
-    const raw = values[binding]
+    if (field.screen === 'completion' || field.screen === 'upload') continue
+    const raw = values[binding as keyof FormReviewValues]
     const checked = coerceAndValidateFlowAnswer(field, raw)
     if (!checked.ok) missing.push(binding)
   }
@@ -267,6 +265,10 @@ export function validateFormReviewFields(
   if (issuedRaw && !DATE_RE.test(issuedRaw) && isFormReviewFieldEnabled(schema, 'document_issued_on')) {
     if (!missing.includes('document_issued_on')) missing.push('document_issued_on')
   }
+  const expiryRaw = String(values.document_expiry_date ?? '').trim()
+  if (expiryRaw && !DATE_RE.test(expiryRaw) && isFormReviewFieldEnabled(schema, 'document_expiry_date')) {
+    if (!missing.includes('document_expiry_date')) missing.push('document_expiry_date')
+  }
   if (missing.length) return { ok: false, missing }
   return { ok: true, birthDate: birthRaw }
 }
@@ -280,7 +282,10 @@ const MEMBER_KEY: Record<string, string> = {
   place_of_birth: 'place_of_birth',
   document_issued_at: 'document_issued_at',
   document_issued_on: 'document_issued_on',
+  document_expiry_date: 'document_expiry_date',
+  document_type: 'document_type',
   gender: 'gender',
+  issuing_country: 'issuing_country',
   residence_country: 'residence_country',
   country: 'residence_country',
 }
@@ -295,15 +300,22 @@ export function pickEnabledFormMemberPatch(
     if (!isFormReviewFieldEnabled(schema, binding)) continue
     const memberKey = MEMBER_KEY[binding]
     if (!memberKey) continue
-    patch[memberKey] = String(values[binding] ?? '').trim()
-  }
-  if (isLegacyFormComponentEnabled(schema, 'gender')) {
-    patch.gender = String(values.gender ?? '').trim()
-  }
-  if (isLegacyFormComponentEnabled(schema, 'residence_country')) {
-    patch.residence_country = String(values.residence_country ?? '').trim()
+    patch[memberKey] = String(values[binding as keyof FormReviewValues] ?? '').trim()
   }
   return patch
+}
+
+export function ocrPrefillForField(
+  field: RegistrationFieldDef,
+  ocr: Record<string, unknown> | null | undefined,
+): unknown {
+  if (!ocr) return undefined
+  const prop = field.ocrProperty || (field.valueSource === 'ocr' ? field.binding : undefined)
+  if (!prop) return undefined
+  const raw = ocr[prop]
+  if (raw == null) return undefined
+  const text = String(raw).trim()
+  return text ? text : undefined
 }
 
 export function registrationFieldTypeLabel(field: RegistrationFieldDef): string {
@@ -358,3 +370,5 @@ export function screenshotHotelRegistrationSchema(): RegistrationFormSchema {
 export function defaultFormReviewSchema(): RegistrationFormSchema {
   return simplePresetSchema()
 }
+
+export type { PassportOcrProperty }

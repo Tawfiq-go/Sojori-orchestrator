@@ -1,14 +1,19 @@
-import { ALL_BUILTIN_BINDINGS, builtinField } from './builtinCatalog'
+import { ALL_BUILTIN_BINDINGS, builtinField, isPassportOcrProperty } from './builtinCatalog'
 import { whatsAppFlowRenderCheck } from './flowSlots'
 import { completePresetSchema, presetSchemaForLevel, simplePresetSchema } from './presets'
+import { defaultScreenForField, defaultValueSourceForField, effectiveOcrProperty } from './screens'
 import type {
   BuiltinBinding,
+  PassportOcrProperty,
   RegistrationFieldDef,
   RegistrationFieldKind,
   RegistrationFieldScope,
   RegistrationFieldType,
   RegistrationFormSchema,
+  RegistrationFormSchemaVersion,
   RegistrationFormSourceKind,
+  RegistrationScreenPlacement,
+  RegistrationValueSource,
   SchemaValidationResult,
 } from './types'
 
@@ -25,6 +30,8 @@ const FIELD_TYPES: RegistrationFieldType[] = [
 const SCOPES: RegistrationFieldScope[] = ['per_stay', 'per_traveler']
 const KINDS: RegistrationFieldKind[] = ['builtin', 'custom']
 const SOURCES: RegistrationFormSourceKind[] = ['preset:simple', 'preset:complete', 'custom']
+const SCREENS: RegistrationScreenPlacement[] = ['passport', 'completion', 'upload']
+const VALUE_SOURCES: RegistrationValueSource[] = ['manual', 'ocr']
 const MAX_FIELDS = 40
 const MAX_OPTIONS = 30
 const ID_RE = /^[a-z][a-z0-9_]{0,47}$/
@@ -50,6 +57,15 @@ function asLabels(raw: unknown): Record<string, string> | undefined {
 
 export function normalizeRegistrationLevel(raw: unknown): 'simple' | 'complete' {
   return String(raw || '').trim().toLowerCase() === 'complete' ? 'complete' : 'simple'
+}
+
+function normalizeScreen(
+  raw: unknown,
+  fallback: RegistrationScreenPlacement,
+): RegistrationScreenPlacement {
+  return SCREENS.includes(raw as RegistrationScreenPlacement)
+    ? (raw as RegistrationScreenPlacement)
+    : fallback
 }
 
 function normalizeField(raw: unknown, index: number, errors: string[]): RegistrationFieldDef | null {
@@ -113,6 +129,16 @@ function normalizeField(raw: unknown, index: number, errors: string[]): Registra
     : undefined
 
   const order = Number.isFinite(Number(raw.order)) ? Number(raw.order) : index
+  const helperText = str(raw.helperText) || undefined
+
+  let ocrProperty: PassportOcrProperty | undefined
+  if (raw.ocrProperty != null && str(raw.ocrProperty)) {
+    if (!isPassportOcrProperty(str(raw.ocrProperty))) {
+      errors.push(`fields[${index}].ocrProperty is not a supported passport/OCR field`)
+    } else {
+      ocrProperty = str(raw.ocrProperty) as PassportOcrProperty
+    }
+  }
 
   if (kind === 'builtin' && binding) {
     const base = builtinField(binding, {
@@ -120,6 +146,18 @@ function normalizeField(raw: unknown, index: number, errors: string[]): Registra
       enabled: raw.enabled !== false,
       order,
     })
+    const screen = normalizeScreen(raw.screen, defaultScreenForField(base))
+    if (binding === 'passport_photo' && screen !== 'upload') {
+      /* photo stays on the technical upload screen */
+    }
+    const valueSource: RegistrationValueSource = VALUE_SOURCES.includes(raw.valueSource as RegistrationValueSource)
+      ? (raw.valueSource as RegistrationValueSource)
+      : defaultValueSourceForField({ ...base, ocrProperty: ocrProperty ?? base.ocrProperty })
+    const resolvedOcr =
+      valueSource === 'ocr' ? ocrProperty ?? effectiveOcrProperty({ ...base, valueSource, ocrProperty }) : undefined
+    if (valueSource === 'ocr' && !resolvedOcr) {
+      errors.push(`fields[${index}] OCR source requires a supported passport property`)
+    }
     return {
       ...base,
       label: label || base.label,
@@ -128,7 +166,24 @@ function normalizeField(raw: unknown, index: number, errors: string[]): Registra
       scope: raw.scope && SCOPES.includes(raw.scope as RegistrationFieldScope) ? scope : base.scope,
       options: options ?? base.options,
       validation,
+      screen: binding === 'passport_photo' ? 'upload' : screen === 'upload' ? base.screen : screen,
+      valueSource,
+      ocrProperty: valueSource === 'ocr' ? resolvedOcr : undefined,
+      helperText: helperText ?? base.helperText,
     }
+  }
+
+  const screen = normalizeScreen(raw.screen, 'completion')
+  const valueSource: RegistrationValueSource = VALUE_SOURCES.includes(raw.valueSource as RegistrationValueSource)
+    ? (raw.valueSource as RegistrationValueSource)
+    : ocrProperty
+      ? 'ocr'
+      : 'manual'
+  if (valueSource === 'ocr' && !ocrProperty) {
+    errors.push(`fields[${index}] custom OCR field must bind to a supported passport property`)
+  }
+  if (screen === 'upload') {
+    errors.push(`fields[${index}] only passport_photo may use the upload screen`)
   }
 
   return {
@@ -144,6 +199,10 @@ function normalizeField(raw: unknown, index: number, errors: string[]): Registra
     scope,
     options,
     validation,
+    screen: screen === 'upload' ? 'completion' : screen,
+    valueSource: valueSource === 'ocr' && ocrProperty ? 'ocr' : 'manual',
+    ocrProperty: valueSource === 'ocr' ? ocrProperty : undefined,
+    helperText,
   }
 }
 
@@ -164,6 +223,26 @@ function detectSource(fields: RegistrationFieldDef[], declared?: RegistrationFor
   return 'custom'
 }
 
+function collectOcrBindingErrors(fields: RegistrationFieldDef[]): string[] {
+  const errors: string[] = []
+  const seen = new Map<string, string>()
+  for (const field of fields) {
+    if (field.enabled === false) continue
+    if (defaultValueSourceForField(field) !== 'ocr') continue
+    const prop = effectiveOcrProperty(field)
+    if (!prop) continue
+    const prev = seen.get(prop)
+    if (prev) {
+      errors.push(
+        `Deux champs (« ${prev} » et « ${field.label || field.id} ») sont liés à la même propriété passeport « ${prop} ».`,
+      )
+    } else {
+      seen.set(prop, field.label || field.id)
+    }
+  }
+  return errors
+}
+
 export function parseRegistrationFormSchema(raw: unknown): SchemaValidationResult {
   if (raw == null) {
     return { ok: false, schema: null, errors: ['schema is required'] }
@@ -172,8 +251,9 @@ export function parseRegistrationFormSchema(raw: unknown): SchemaValidationResul
     return { ok: false, schema: null, errors: ['schema must be an object'] }
   }
   const errors: string[] = []
-  const version = Number(raw.version ?? 1)
-  if (version !== 1) errors.push('unsupported schema version')
+  const versionNum = Number(raw.version ?? 1)
+  if (versionNum !== 1 && versionNum !== 2) errors.push('unsupported schema version')
+  const version: RegistrationFormSchemaVersion = versionNum === 2 ? 2 : 1
   const fieldsRaw = Array.isArray(raw.fields) ? raw.fields : []
   if (fieldsRaw.length > MAX_FIELDS) errors.push(`at most ${MAX_FIELDS} fields`)
   const fields: RegistrationFieldDef[] = []
@@ -192,11 +272,12 @@ export function parseRegistrationFormSchema(raw: unknown): SchemaValidationResul
   fields.forEach((f, i) => {
     f.order = i
   })
+  errors.push(...collectOcrBindingErrors(fields))
   const declared = SOURCES.includes(raw.source as RegistrationFormSourceKind)
     ? (raw.source as RegistrationFormSourceKind)
     : undefined
   const schema: RegistrationFormSchema = {
-    version: 1,
+    version,
     source: detectSource(fields, declared),
     fields,
   }
@@ -219,6 +300,10 @@ export function newCustomField(partial?: Partial<RegistrationFieldDef>): Registr
   const nonce = Math.random().toString(36).slice(2, 10)
   const id = str(partial?.id) || `c_${nonce}`
   const key = str(partial?.key) || id
+  const valueSource: RegistrationValueSource =
+    partial?.valueSource === 'ocr' && isPassportOcrProperty(partial.ocrProperty || '')
+      ? 'ocr'
+      : 'manual'
   return {
     id,
     key,
@@ -232,5 +317,9 @@ export function newCustomField(partial?: Partial<RegistrationFieldDef>): Registr
     scope: partial?.scope === 'per_stay' ? 'per_stay' : 'per_traveler',
     options: partial?.options,
     validation: partial?.validation,
+    screen: partial?.screen === 'passport' ? 'passport' : 'completion',
+    valueSource,
+    ocrProperty: valueSource === 'ocr' ? partial?.ocrProperty : undefined,
+    helperText: partial?.helperText,
   }
 }

@@ -1,6 +1,8 @@
 /** Canonical registration form contract — consumed by listing, fulltask, reservations, chatbot, orchestrator. */
 
-export const REGISTRATION_FORM_SCHEMA_VERSION = 1 as const
+export const REGISTRATION_FORM_SCHEMA_VERSION = 2 as const
+
+export type RegistrationFormSchemaVersion = 1 | 2
 
 export type RegistrationLevel = 'simple' | 'complete'
 
@@ -17,6 +19,26 @@ export type RegistrationFieldScope = 'per_stay' | 'per_traveler'
 
 export type RegistrationFieldKind = 'builtin' | 'custom'
 
+/** WhatsApp information screen (UPLOAD is technical and is not one of the two). */
+export type RegistrationScreenPlacement = 'passport' | 'completion' | 'upload'
+
+export type RegistrationValueSource = 'manual' | 'ocr'
+
+/** Explicit passport/OCR properties that may be extracted. Not authenticity. */
+export type PassportOcrProperty =
+  | 'document_type'
+  | 'first_name'
+  | 'last_name'
+  | 'document_number'
+  | 'nationality'
+  | 'issuing_country'
+  | 'birth_date'
+  | 'gender'
+  | 'place_of_birth'
+  | 'document_issued_on'
+  | 'document_issued_at'
+  | 'document_expiry_date'
+
 export type BuiltinBinding =
   | 'first_name'
   | 'last_name'
@@ -26,6 +48,10 @@ export type BuiltinBinding =
   | 'document_number'
   | 'document_issued_at'
   | 'document_issued_on'
+  | 'document_type'
+  | 'gender'
+  | 'issuing_country'
+  | 'document_expiry_date'
   | 'profession'
   | 'domicile'
   | 'city'
@@ -73,10 +99,17 @@ export interface RegistrationFieldDef {
   options?: RegistrationFieldOption[]
   validation?: RegistrationFieldValidation
   binding?: BuiltinBinding
+  /** Information screen. `upload` is only valid for passport_photo. */
+  screen: RegistrationScreenPlacement
+  /** Manual entry vs a supported passport/OCR property. Independent of screen. */
+  valueSource: RegistrationValueSource
+  /** Set only when valueSource is `ocr`. Must be a supported passport property. */
+  ocrProperty?: PassportOcrProperty
+  helperText?: string
 }
 
 export interface RegistrationFormSchema {
-  version: typeof REGISTRATION_FORM_SCHEMA_VERSION
+  version: RegistrationFormSchemaVersion
   source: RegistrationFormSourceKind
   fields: RegistrationFieldDef[]
 }
