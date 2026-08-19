@@ -22,6 +22,7 @@ export const REGISTRATION_FIELD_LABELS: Record<BuiltinBinding, string> = {
   gender: 'Genre',
   issuing_country: 'Pays émetteur',
   document_expiry_date: 'Date d’expiration',
+  personal_number: 'N° personnel / optionnel MRZ',
   profession: 'Profession',
   domicile: 'Domicile habituel',
   city: 'Ville',
@@ -35,7 +36,8 @@ export const REGISTRATION_FIELD_LABELS: Record<BuiltinBinding, string> = {
   arrival_time: "Heure d'arrivée estimée",
 }
 
-export const PASSPORT_OCR_PROPERTIES: PassportOcrProperty[] = [
+/** Dedicated WhatsApp FORM components — keep at 12 so the screen stays ≤ 50. */
+export const PASSPORT_DEDICATED_OCR_PROPERTIES: PassportOcrProperty[] = [
   'document_type',
   'first_name',
   'last_name',
@@ -48,6 +50,17 @@ export const PASSPORT_OCR_PROPERTIES: PassportOcrProperty[] = [
   'document_issued_on',
   'document_issued_at',
   'document_expiry_date',
+]
+
+/** Extra OCR properties that use generic passport slots. Never inferred. */
+export const OPTIONAL_PASSPORT_OCR_PROPERTIES: PassportOcrProperty[] = [
+  'residence_country',
+  'personal_number',
+]
+
+export const PASSPORT_OCR_PROPERTIES: PassportOcrProperty[] = [
+  ...PASSPORT_DEDICATED_OCR_PROPERTIES,
+  ...OPTIONAL_PASSPORT_OCR_PROPERTIES,
 ]
 
 export const PASSPORT_OCR_PROPERTY_LABELS: Record<PassportOcrProperty, string> = {
@@ -63,6 +76,8 @@ export const PASSPORT_OCR_PROPERTY_LABELS: Record<PassportOcrProperty, string> =
   document_issued_on: 'Date de délivrance',
   document_issued_at: 'Autorité / lieu de délivrance',
   document_expiry_date: 'Date d’expiration',
+  residence_country: 'Pays de résidence (imprimé)',
+  personal_number: 'N° personnel / optionnel MRZ',
 }
 
 const BINDING_TYPE: Record<BuiltinBinding, RegistrationFieldType> = {
@@ -78,6 +93,7 @@ const BINDING_TYPE: Record<BuiltinBinding, RegistrationFieldType> = {
   gender: 'select',
   issuing_country: 'short_text',
   document_expiry_date: 'date',
+  personal_number: 'short_text',
   profession: 'short_text',
   domicile: 'short_text',
   city: 'short_text',
@@ -104,6 +120,7 @@ const BINDING_SCOPE: Record<BuiltinBinding, RegistrationFieldScope> = {
   gender: 'per_traveler',
   issuing_country: 'per_traveler',
   document_expiry_date: 'per_traveler',
+  personal_number: 'per_traveler',
   profession: 'per_traveler',
   domicile: 'per_traveler',
   city: 'per_traveler',
@@ -119,23 +136,26 @@ const BINDING_SCOPE: Record<BuiltinBinding, RegistrationFieldScope> = {
 
 export function defaultScreenForBinding(binding: BuiltinBinding): RegistrationScreenPlacement {
   if (binding === 'passport_photo') return 'upload'
-  if ((PASSPORT_OCR_PROPERTIES as readonly string[]).includes(binding)) return 'passport'
+  if ((PASSPORT_DEDICATED_OCR_PROPERTIES as readonly string[]).includes(binding)) return 'passport'
+  if (binding === 'personal_number') return 'passport'
   return 'completion'
 }
 
 export function defaultValueSourceForBinding(binding: BuiltinBinding): RegistrationValueSource {
-  if ((PASSPORT_OCR_PROPERTIES as readonly string[]).includes(binding)) return 'ocr'
+  if ((PASSPORT_DEDICATED_OCR_PROPERTIES as readonly string[]).includes(binding)) return 'ocr'
+  if (binding === 'personal_number') return 'ocr'
   return 'manual'
 }
 
 export function defaultOcrPropertyForBinding(binding: BuiltinBinding): PassportOcrProperty | undefined {
-  if ((PASSPORT_OCR_PROPERTIES as readonly string[]).includes(binding)) {
+  if ((PASSPORT_DEDICATED_OCR_PROPERTIES as readonly string[]).includes(binding)) {
     return binding as PassportOcrProperty
   }
+  if (binding === 'personal_number') return 'personal_number'
   return undefined
 }
 
-function documentTypeOptions(): RegistrationFieldOption[] {
+export function documentTypeOptions(): RegistrationFieldOption[] {
   return [
     { value: 'passport', label: 'Passeport', labels: { en: 'Passport', fr: 'Passeport' } },
     {
@@ -146,7 +166,7 @@ function documentTypeOptions(): RegistrationFieldOption[] {
   ]
 }
 
-function genderOptions(): RegistrationFieldOption[] {
+export function genderOptions(): RegistrationFieldOption[] {
   return [
     { value: 'Male', label: 'Homme', labels: { en: 'Male', fr: 'Homme' } },
     { value: 'Female', label: 'Femme', labels: { en: 'Female', fr: 'Femme' } },
@@ -175,6 +195,7 @@ export const WHATSAPP_FLOW_SUPPORTED_BINDINGS: BuiltinBinding[] = [
   'document_issued_at',
   'document_issued_on',
   'document_expiry_date',
+  'personal_number',
   'profession',
   'domicile',
   'city',

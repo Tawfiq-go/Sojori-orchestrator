@@ -15,11 +15,16 @@ import type {
 
 export type RegistrationFlowInfoScreenId = 'FORM' | 'COMPLETE' | 'STAY_COMPLETE' | 'LIST_REFRESH'
 
-export function defaultScreenForField(field: Pick<RegistrationFieldDef, 'kind' | 'binding' | 'scope' | 'screen'>): RegistrationScreenPlacement {
-  if (field.screen === 'passport' || field.screen === 'completion' || field.screen === 'upload') {
+export function defaultScreenForField(
+  field: Pick<RegistrationFieldDef, 'kind' | 'binding' | 'scope' | 'screen' | 'valueSource' | 'ocrProperty'>,
+): RegistrationScreenPlacement {
+  if (field.binding === 'passport_photo' || field.screen === 'upload') return 'upload'
+  if (field.valueSource === 'ocr' || (field.ocrProperty && (PASSPORT_OCR_PROPERTIES as readonly string[]).includes(field.ocrProperty))) {
+    return 'passport'
+  }
+  if (field.screen === 'passport' || field.screen === 'completion') {
     return field.screen
   }
-  if (field.binding === 'passport_photo') return 'upload'
   if (field.kind === 'builtin' && field.binding && (PASSPORT_OCR_PROPERTIES as readonly string[]).includes(field.binding)) {
     return 'passport'
   }

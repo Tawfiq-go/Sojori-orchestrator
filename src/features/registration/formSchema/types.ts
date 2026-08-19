@@ -38,6 +38,8 @@ export type PassportOcrProperty =
   | 'document_issued_on'
   | 'document_issued_at'
   | 'document_expiry_date'
+  | 'residence_country'
+  | 'personal_number'
 
 export type BuiltinBinding =
   | 'first_name'
@@ -52,6 +54,7 @@ export type BuiltinBinding =
   | 'gender'
   | 'issuing_country'
   | 'document_expiry_date'
+  | 'personal_number'
   | 'profession'
   | 'domicile'
   | 'city'

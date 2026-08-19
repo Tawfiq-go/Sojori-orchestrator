@@ -1,5 +1,5 @@
 import { enabledFields, fieldLabel } from './completeness'
-import { PASSPORT_OCR_PROPERTIES } from './builtinCatalog'
+import { PASSPORT_DEDICATED_OCR_PROPERTIES } from './builtinCatalog'
 import type {
   RegistrationFieldDef,
   RegistrationFieldType,
@@ -38,7 +38,7 @@ export type SlotBank = Record<RegistrationFlowVariantType, number>
  * fields placed on the passport screen.
  * 12*2 + 10*2 + 4 chrome = 48.
  */
-export const PASSPORT_DEDICATED_PROPERTIES = [...PASSPORT_OCR_PROPERTIES] as const
+export const PASSPORT_DEDICATED_PROPERTIES = [...PASSPORT_DEDICATED_OCR_PROPERTIES] as const
 
 export const PASSPORT_GENERIC_SLOT_BANK: SlotBank = {
   short_text: 5,
@@ -145,11 +145,12 @@ export function isDedicatedPassportField(field: RegistrationFieldDef): boolean {
 }
 
 export function fieldScreen(field: RegistrationFieldDef): RegistrationScreenPlacement {
-  if (field.screen === 'passport' || field.screen === 'completion' || field.screen === 'upload') {
+  if (field.binding === 'passport_photo' || field.screen === 'upload') return 'upload'
+  if (field.valueSource === 'ocr') return 'passport'
+  if (field.screen === 'passport' || field.screen === 'completion') {
     return field.screen
   }
-  if (field.binding === 'passport_photo') return 'upload'
-  if (field.kind === 'builtin' && field.binding && (PASSPORT_OCR_PROPERTIES as readonly string[]).includes(field.binding)) {
+  if (field.kind === 'builtin' && field.binding && (PASSPORT_DEDICATED_OCR_PROPERTIES as readonly string[]).includes(field.binding)) {
     return 'passport'
   }
   return 'completion'

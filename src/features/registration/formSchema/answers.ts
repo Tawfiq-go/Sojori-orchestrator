@@ -44,6 +44,8 @@ export function memberFieldValue(
       return pick(m, 'gender')
     case 'issuing_country':
       return pick(m, 'issuing_country', 'document_issuing_country')
+    case 'personal_number':
+      return pick(m, 'personal_number', 'optional_data')
     case 'profession':
       return pick(m, 'profession', 'occupation')
     case 'domicile':

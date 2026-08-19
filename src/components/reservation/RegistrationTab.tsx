@@ -23,7 +23,7 @@ import {
   FormControlLabel,
   Switch,
 } from '@mui/material';
-import { Add, Close, CloudUpload, Edit, Person, PictureAsPdf } from '@mui/icons-material';
+import { Add, Close, CloudUpload, Edit, Person, PictureAsPdf, RestartAlt } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { ReservationRegistrationActions } from '../reservations/ReservationRegistrationActions';
 import * as fulltaskApi from '../../services/fulltaskApi';
@@ -428,6 +428,27 @@ export function RegistrationTab({
     }
   };
 
+  const handleResetAttempt = async () => {
+    if (!resaId || readOnly) return;
+    if (
+      !window.confirm(
+        'Réinitialiser l’enregistrement ? Identité, réponses personnalisées, schéma WhatsApp et brouillons Flow seront effacés. Un nouvel essai utilisera le formulaire listing actuel.',
+      )
+    )
+      return;
+    setSaving(true);
+    try {
+      const res = await fulltaskApi.resetGuestRegistrationAttempt(resaId);
+      if (res?.success === false) throw new Error(res?.error || 'Échec réinitialisation');
+      toast.success('Nouvel essai d’enregistrement — formulaire listing à jour');
+      onRefresh?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur réinitialisation');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDownloadFichePolice = async () => {
     if (registrationLevel !== 'complete') return;
     setPdfBusy(true);
@@ -655,6 +676,24 @@ export function RegistrationTab({
                 }}
               >
                 PDF fiche police
+              </Button>
+            ) : null}
+            {resaId && !readOnly ? (
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={saving}
+                startIcon={<RestartAlt sx={{ fontSize: 16 }} />}
+                onClick={() => void handleResetAttempt()}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: 12,
+                  borderColor: T.border,
+                  color: T.text2,
+                }}
+              >
+                Nouvel essai
               </Button>
             ) : null}
             {resaId ? (

@@ -1,5 +1,6 @@
 import { isAnswerFilled, memberFieldValue, stayFieldValue } from './answers'
 import { REGISTRATION_FIELD_LABELS } from './builtinCatalog'
+import { coerceAndValidateFlowAnswer } from './flowSlots'
 import type {
   BuiltinBinding,
   RegistrationAnswerContext,
@@ -29,6 +30,12 @@ function customValue(
   return undefined
 }
 
+function compatibleValue(field: RegistrationFieldDef, raw: unknown): unknown {
+  if (raw == null || raw === '') return raw
+  const checked = coerceAndValidateFlowAnswer({ ...field, required: false }, raw)
+  return checked.ok ? checked.value : ''
+}
+
 export function fieldValueForTraveler(
   field: RegistrationFieldDef,
   member: Record<string, unknown> | null | undefined,
@@ -36,9 +43,9 @@ export function fieldValueForTraveler(
 ): unknown {
   if (field.kind === 'builtin' && field.binding) {
     const bound = memberFieldValue(member, field.binding)
-    if (isAnswerFilled(bound)) return bound
+    if (isAnswerFilled(bound)) return compatibleValue(field, bound)
   }
-  return customValue(travelerAnswers, field)
+  return compatibleValue(field, customValue(travelerAnswers, field))
 }
 
 export function fieldValueForStay(
@@ -48,9 +55,9 @@ export function fieldValueForStay(
 ): unknown {
   if (field.kind === 'builtin' && field.binding) {
     const bound = stayFieldValue(stay, field.binding)
-    if (isAnswerFilled(bound)) return bound
+    if (isAnswerFilled(bound)) return compatibleValue(field, bound)
   }
-  return customValue(stayAnswers, field)
+  return compatibleValue(field, customValue(stayAnswers, field))
 }
 
 export function missingFieldsForMember(
