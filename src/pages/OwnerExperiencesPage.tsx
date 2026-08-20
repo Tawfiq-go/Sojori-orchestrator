@@ -29,6 +29,7 @@ import './partnersAdmin.css';
 type Draft = {
   partnerId: string;
   kind: 'experience' | 'transport';
+  transportDirections: { toDestination: boolean; fromDestination: boolean };
   category: string;
   title: string;
   description: string;
@@ -156,6 +157,7 @@ function emptyDraft(): Draft {
   return {
     partnerId: '',
     kind: 'experience',
+    transportDirections: { toDestination: true, fromDestination: true },
     category: 'Aventure',
     title: '',
     description: '',
@@ -184,6 +186,10 @@ function toDraft(s: PartnerService): Draft {
   return {
     partnerId: s.partnerId ? String(s.partnerId) : '',
     kind: s.kind === 'transport' ? 'transport' : 'experience',
+    transportDirections: {
+      toDestination: s.transportDirections?.toDestination !== false,
+      fromDestination: s.transportDirections?.fromDestination !== false,
+    },
     category: s.category || 'Aventure',
     title: s.title || '',
     description: s.description || '',
@@ -578,6 +584,7 @@ export function OwnerExperiencesPage() {
     const body = {
       partnerId: draft.partnerId,
       kind: draft.kind,
+      ...(draft.kind === 'transport' ? { transportDirections: draft.transportDirections } : {}),
       category: draft.category.trim(),
       title: draft.title.trim(),
       description: draft.description,
@@ -1358,11 +1365,41 @@ export function OwnerExperiencesPage() {
                 ))}
               </div>
               {draft.kind === 'transport' ? (
-                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-                  Chaque formule est une destination depuis le logement. Prix vide = sur
-                  devis (le chauffeur confirme avec son prix — c'est le prix client).
-                  « Autre destination » est ajoutée automatiquement côté client.
-                </div>
+                <>
+                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                    Chaque formule est une destination. Prix vide = sur devis (le
+                    chauffeur confirme avec son prix — c'est le prix client).
+                    « Autre destination » est ajoutée automatiquement côté client.
+                  </div>
+                  <div style={{ display: 'flex', gap: 18, marginTop: 10, flexWrap: 'wrap' }}>
+                    {([
+                      ['toDestination', '🏠 → Destination (navette vers l’aéroport…)'],
+                      ['fromDestination', 'Destination → 🏠 (navette depuis l’aéroport…)'],
+                    ] as const).map(([key, label]) => (
+                      <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={draft.transportDirections[key]}
+                          onChange={(e) =>
+                            setDraft((d) => {
+                              const next = { ...d.transportDirections, [key]: e.target.checked };
+                              // Au moins un sens : décocher le dernier réactive l'autre.
+                              if (!next.toDestination && !next.fromDestination) {
+                                next[key === 'toDestination' ? 'fromDestination' : 'toDestination'] = true;
+                              }
+                              return { ...d, transportDirections: next };
+                            })
+                          }
+                        />
+                        <span style={{ fontSize: 13 }}>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}>
+                    Même prix dans les deux sens. Décochez-en un pour ne proposer qu'un
+                    seul sens.
+                  </div>
+                </>
               ) : null}
             </section>
             <section style={{ marginBottom: 22 }}>
