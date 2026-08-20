@@ -133,6 +133,8 @@ export type PartnerService = {
   subCategory?: string;
   /** 'transport' = navette : les formules sont des DESTINATIONS depuis le logement. */
   kind?: 'experience' | 'transport';
+  /** Sens proposés (navette) — les deux par défaut, même prix dans les deux sens. */
+  transportDirections?: { toDestination: boolean; fromDestination: boolean };
   title: string;
   description: string;
   /** WhatsApp provider (E.164) — notifs commande. Obligatoire. */
