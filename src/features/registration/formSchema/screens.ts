@@ -3,8 +3,8 @@ import { PASSPORT_OCR_PROPERTIES } from './builtinCatalog'
 import {
   completionFieldsForTraveler,
   fieldScreen,
-  isDedicatedPassportField,
 } from './componentBudget'
+import { canonicalOwnerForDedicatedOcrProperty } from './canonicalOcr'
 import type {
   PassportOcrProperty,
   RegistrationFieldDef,
@@ -98,9 +98,5 @@ export function dedicatedPassportFieldForProperty(
   schema: RegistrationFormSchema,
   prop: PassportOcrProperty,
 ): RegistrationFieldDef | null {
-  return (
-    passportInfoFields(schema).find(
-      (f) => isDedicatedPassportField(f) && (f.ocrProperty || f.binding) === prop,
-    ) ?? null
-  )
+  return canonicalOwnerForDedicatedOcrProperty(schema, prop)
 }

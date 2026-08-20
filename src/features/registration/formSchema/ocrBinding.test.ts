@@ -7,6 +7,7 @@ import {
   applyMaxPassportExtraction,
   applyOcrBindingToField,
   completePresetSchema,
+  builtinField,
   fieldScreen,
   fieldValueForTraveler,
   newCustomField,
@@ -146,17 +147,19 @@ describe('OCR type compatibility map', () => {
       ],
     })
     assert.equal(parsed.ok, true, parsed.errors.join(' | '))
-    const field = parsed.schema!.fields.find((f) => f.id === 'nouvelle_question')!
-    assert.equal(field.type, 'select')
-    assert.equal(field.screen, 'passport')
-    assert.equal(fieldScreen(field), 'passport')
-    assert.equal(fieldValueForTraveler(field, {}, { nouvelle_question: '12:34' }), '')
-    assert.equal(ocrPrefillForField(field, { gender: '12:34' }), undefined)
-    assert.equal(ocrPrefillForField(field, { gender: 'Female' }), 'Female')
+    const gender = parsed.schema!.fields.find((f) => f.id === 'gender')!
+    const custom = parsed.schema!.fields.find((f) => f.id === 'nouvelle_question')!
+    assert.equal(gender.enabled, true)
+    assert.equal(gender.type, 'select')
+    assert.equal(gender.screen, 'passport')
+    assert.equal(custom.enabled, false)
+    assert.equal(fieldValueForTraveler(gender, {}, { nouvelle_question: '12:34', gender: '12:34' }), '')
+    assert.equal(ocrPrefillForField(gender, { gender: '12:34' }), undefined)
+    assert.equal(ocrPrefillForField(gender, { gender: 'Female' }), 'Female')
   })
 
   it('rejects duplicate enabled OCR bindings', () => {
-    const result = parseRegistrationFormSchema({
+    const result = parseRegistrationFormSchemaStrict({
       version: 2,
       fields: [
         ...simplePresetSchema().fields,

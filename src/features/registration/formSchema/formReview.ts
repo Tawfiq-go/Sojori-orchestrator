@@ -2,6 +2,7 @@ import { enabledFields, fieldLabel } from './completeness'
 import { coerceAndValidateFlowAnswer, markedRequiredLabel } from './flowSlots'
 import { builtinField } from './builtinCatalog'
 import { PASSPORT_DEDICATED_PROPERTIES, isDedicatedPassportField } from './componentBudget'
+import { schemaFieldForCanonicalBinding } from './canonicalOcr'
 import { newCustomField, parseRegistrationFormSchema } from './normalize'
 import { simplePresetSchema } from './presets'
 import { resolveEffectiveRegistrationForm } from './resolve'
@@ -31,10 +32,7 @@ export function schemaFieldForBinding(
   schema: RegistrationFormSchema,
   binding: string,
 ): RegistrationFieldDef | null {
-  const exact = schema.fields.find(
-    (f) => f.binding === binding || f.id === binding || f.key === binding || f.ocrProperty === binding,
-  )
-  return exact ?? null
+  return schemaFieldForCanonicalBinding(schema, binding)
 }
 
 export function isFormReviewFieldEnabled(

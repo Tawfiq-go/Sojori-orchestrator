@@ -47,4 +47,5 @@ export type {
 export * from './screens'
 export * from './mrzParse'
 export * from './ocrBinding'
+export * from './canonicalOcr'
 export * from './registrationInstance'

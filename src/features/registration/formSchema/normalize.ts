@@ -10,6 +10,7 @@ import {
   coerceOcrFieldForMigrate,
   ocrCompatibilityErrors,
 } from './ocrBinding'
+import { migrateCanonicalOcrBindings } from './canonicalOcr'
 import { completePresetSchema, presetSchemaForLevel, simplePresetSchema } from './presets'
 import { defaultScreenForField, defaultValueSourceForField, effectiveOcrProperty } from './screens'
 import type {
@@ -328,6 +329,9 @@ export function parseRegistrationFormSchema(
   fields.forEach((f, i) => {
     f.order = i
   })
+  if (mode === 'migrate') {
+    fields.splice(0, fields.length, ...migrateCanonicalOcrBindings(fields))
+  }
   errors.push(...collectOcrBindingErrors(fields))
   const declared = SOURCES.includes(raw.source as RegistrationFormSourceKind)
     ? (raw.source as RegistrationFormSourceKind)

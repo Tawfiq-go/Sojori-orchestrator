@@ -23,6 +23,7 @@ import {
   nextScreenAfterFormSave,
   parseMrz,
   parseRegistrationFormSchema,
+  parseRegistrationFormSchemaStrict,
   registrationCapacityReport,
   screenshotHotelRegistrationSchema,
   simplePresetSchema,
@@ -126,7 +127,7 @@ describe('two information screens', () => {
     assert.equal(assignPassportGenericSlots(parsed.schema!).assignments[0]?.field.id, 'eye_color')
   })
 
-  it('fills a supported OCR binding onto the matching field id', () => {
+  it('fills a supported OCR binding onto the canonical built-in field', () => {
     const schema = parseRegistrationFormSchema({
       version: 2,
       source: 'custom',
@@ -144,13 +145,16 @@ describe('two information screens', () => {
         }),
       ],
     }).schema!
+    const builtin = schema.fields.find((f) => f.id === 'first_name')!
     const given = schema.fields.find((f) => f.id === 'given_name')!
-    assert.equal(effectiveOcrProperty(given), 'first_name')
-    assert.equal(assignPassportGenericSlots(schema).assignments[0]?.field.id, 'given_name')
+    assert.equal(builtin.enabled, true)
+    assert.equal(effectiveOcrProperty(builtin), 'first_name')
+    assert.equal(given.enabled, false)
+    assert.equal(assignPassportGenericSlots(schema).assignments.some((a) => a.field.id === 'given_name'), false)
   })
 
   it('rejects two fields bound to the same passport OCR property', () => {
-    const result = parseRegistrationFormSchema({
+    const result = parseRegistrationFormSchemaStrict({
       version: 2,
       source: 'custom',
       fields: [
