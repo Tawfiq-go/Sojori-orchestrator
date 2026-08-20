@@ -133,6 +133,11 @@ export function ocrCompatibilityErrors(
     if (own && prop !== own) {
       out.push(`Le champ intégré « ${field.label || field.id} » doit rester lié à OCR « ${own} ».`)
     }
+    if (!own && prop) {
+      out.push(
+        `Le champ intégré « ${field.label || field.id} » ne peut pas être lié à OCR « ${prop} ».`,
+      )
+    }
   }
   return out
 }

@@ -1,6 +1,7 @@
 import { enabledFields, fieldLabel } from './completeness'
 import {
   COMPLETION_SLOT_BANK,
+  PASSPORT_DEDICATED_PROPERTIES,
   PASSPORT_GENERIC_SLOT_BANK,
   REGISTRATION_FLOW_VARIANT_TYPES,
   assignFieldsToSlotBank,
@@ -16,6 +17,7 @@ import {
   type SlotBank,
   type TypedSlotAssignment,
 } from './componentBudget'
+import { effectiveOcrProperty } from './screens'
 import type {
   RegistrationFieldDef,
   RegistrationFieldScope,
@@ -74,6 +76,13 @@ export function requiresDynamicFlowSlot(field: RegistrationFieldDef): boolean {
   if (field.enabled === false) return false
   if (field.binding === 'passport_photo') return false
   if (fieldScreen(field) === 'upload') return false
+  const dedicatedProp = effectiveOcrProperty(field)
+  if (
+    dedicatedProp &&
+    (PASSPORT_DEDICATED_PROPERTIES as readonly string[]).includes(dedicatedProp)
+  ) {
+    return false
+  }
   if (
     field.kind === 'builtin' &&
     fieldScreen(field) === 'passport' &&

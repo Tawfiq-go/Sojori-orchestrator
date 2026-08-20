@@ -36,12 +36,14 @@ import {
   applyMaxPassportExtraction,
   applyOcrBindingToField,
   canAddDynamicRegistrationField,
+  canonicalOwnerForDedicatedOcrProperty,
   completePresetSchema,
   disabledBuiltinOcrHint,
   enabledFields,
   formatCapacityCounter,
   gestionResetToInherited,
   gestionWithSchema,
+  isDedicatedOcrProperty,
   newCustomField,
   parseRegistrationFormSchema,
   parseRegistrationFormSchemaStrict,
@@ -457,9 +459,19 @@ function FieldEditorDialog({
   const custom = draft.kind === 'custom';
   const passportPhoto = draft.binding === 'passport_photo';
   const takenOcr = new Set(
-    allFields
-      .filter((f) => f.id !== draft.id && f.enabled !== false && f.valueSource === 'ocr' && f.ocrProperty)
-      .map((f) => f.ocrProperty as PassportOcrProperty),
+    PASSPORT_OCR_PROPERTIES.filter((prop) => {
+      if (isDedicatedOcrProperty(prop)) {
+        const owner = canonicalOwnerForDedicatedOcrProperty({ version: 2, fields: allFields }, prop);
+        return Boolean(owner && owner.id !== draft.id);
+      }
+      return allFields.some(
+        (f) =>
+          f.id !== draft.id &&
+          f.enabled !== false &&
+          f.valueSource === 'ocr' &&
+          f.ocrProperty === prop,
+      );
+    }),
   );
   const applyScreen = (screen: RegistrationScreenPlacement): RegistrationFieldDef => {
     if (passportPhoto) return { ...draft, screen: 'upload' };
@@ -574,7 +586,7 @@ function FieldEditorDialog({
               <MenuItem value="ocr">Champ passeport/OCR pris en charge</MenuItem>
             </TextField>
           )}
-          {!passportPhoto && draft.valueSource === 'ocr' && (
+          {!passportPhoto && draft.valueSource === 'ocr' && custom && (
             <TextField
               select
               label="Propriété passeport / OCR"
@@ -590,6 +602,11 @@ function FieldEditorDialog({
                 </MenuItem>
               ))}
             </TextField>
+          )}
+          {!passportPhoto && draft.valueSource === 'ocr' && !custom && draft.ocrProperty && (
+            <Alert severity="info" sx={{ fontSize: 12 }}>
+              Propriété OCR fixe pour ce champ intégré : {PASSPORT_OCR_PROPERTY_LABELS[draft.ocrProperty]}.
+            </Alert>
           )}
           {!passportPhoto && draft.valueSource === 'ocr' && (
             <Alert severity="info" sx={{ fontSize: 12 }}>

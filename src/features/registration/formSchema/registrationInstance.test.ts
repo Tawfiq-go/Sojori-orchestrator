@@ -79,14 +79,17 @@ describe('registration instance lifecycle', () => {
     )
   })
 
-  it('changing manual → OCR on a new attempt moves the field to the passport screen', () => {
+  it('changing manual → OCR on a new attempt enables the canonical built-in gender field', () => {
     const before = schemaWith({ valueSource: 'manual', screen: 'completion', type: 'time' })
     assert.equal(fieldScreen(before.fields.find((f) => f.id === 'nouvelle_question')!), 'completion')
     const after = schemaWith({ valueSource: 'ocr', type: 'time' })
-    const field = after.fields.find((f) => f.id === 'nouvelle_question')!
-    assert.equal(field.valueSource, 'ocr')
-    assert.equal(field.screen, 'passport')
-    assert.equal(field.type, 'select')
+    const gender = after.fields.find((f) => f.id === 'gender')!
+    const custom = after.fields.find((f) => f.id === 'nouvelle_question')!
+    assert.equal(gender.enabled, true)
+    assert.equal(gender.valueSource, 'ocr')
+    assert.equal(gender.screen, 'passport')
+    assert.equal(gender.type, 'select')
+    assert.equal(custom.enabled, false)
   })
 
   it('changing completion → passport on a new attempt updates WhatsApp screen placement', () => {
@@ -98,10 +101,9 @@ describe('registration instance lifecycle', () => {
   })
 
   it('old 12:34 custom answers do not appear in a new attempt', () => {
-    const field = schemaWith({ valueSource: 'ocr', type: 'time' }).fields.find(
-      (f) => f.id === 'nouvelle_question',
-    )!
-    assert.equal(fieldValueForTraveler(field, {}, { nouvelle_question: '12:34' }), '')
+    const schema = schemaWith({ valueSource: 'ocr', type: 'time' })
+    const gender = schema.fields.find((f) => f.id === 'gender')!
+    assert.equal(fieldValueForTraveler(gender, {}, { nouvelle_question: '12:34', gender: '12:34' }), '')
   })
 
   it('reopening the same active attempt preserves valid draft progress', () => {

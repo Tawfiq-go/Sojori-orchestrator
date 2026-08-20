@@ -62,10 +62,10 @@ describe('dashboard schema vs Flow payload', () => {
     const field = schema.fields.find((f) => f.id === 'nouvelle_question')!
     assert.equal(field.screen, 'passport')
     assert.equal(field.type, 'select')
-    assert.equal(formScreenFlowFlags(schema).gender_visible, false)
+    assert.equal(formScreenFlowFlags(schema).gender_visible, true)
     const generic = assignPassportGenericSlots(schema)
-    const slot = generic.assignments.find((a) => a.field.id === 'nouvelle_question')
-    assert.equal(slot?.type, 'select')
+    assert.equal(generic.assignments.some((a) => a.field.id === 'nouvelle_question'), false)
+    assert.equal(generic.assignments.some((a) => a.field.id === 'gender'), false)
     assert.equal(fieldValueForTraveler(field, {}, { nouvelle_question: '12:34' }), '')
     assert.equal(
       assignCompletionSlots(schema, { travelerIndex: 0, travelerCount: 1 }).assignments.some(

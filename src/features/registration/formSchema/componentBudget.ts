@@ -1,4 +1,9 @@
 import { enabledFields, fieldLabel } from './completeness'
+import {
+  passportDedicatedCanonicalFields,
+  passportGenericEligibleFields,
+  schemaFieldForCanonicalBinding,
+} from './canonicalOcr'
 import { PASSPORT_DEDICATED_OCR_PROPERTIES } from './builtinCatalog'
 import type {
   RegistrationFieldDef,
@@ -136,10 +141,21 @@ export function fieldTypeToVariant(type: RegistrationFieldType): RegistrationFlo
   return 'short_text'
 }
 
-export function isDedicatedPassportField(field: RegistrationFieldDef): boolean {
+export function isDedicatedPassportField(
+  field: RegistrationFieldDef,
+  schema?: RegistrationFormSchema,
+): boolean {
   if (field.enabled === false) return false
-  if (field.kind !== 'builtin') return false
   if (fieldScreen(field) !== 'passport') return false
+  if (schema) {
+    const prop = field.ocrProperty || field.binding
+    if (!prop || !(PASSPORT_DEDICATED_PROPERTIES as readonly string[]).includes(prop)) {
+      return field.kind === 'builtin' && Boolean(field.binding && (PASSPORT_DEDICATED_PROPERTIES as readonly string[]).includes(field.binding))
+    }
+    const owner = schemaFieldForCanonicalBinding(schema, prop)
+    return owner?.id === field.id
+  }
+  if (field.kind !== 'builtin') return false
   const prop = field.ocrProperty || field.binding
   return Boolean(prop && (PASSPORT_DEDICATED_PROPERTIES as readonly string[]).includes(prop))
 }
@@ -217,13 +233,11 @@ export function assignFieldsToSlotBank(
 }
 
 export function passportDedicatedFields(schema: RegistrationFormSchema): RegistrationFieldDef[] {
-  return enabledFields(schema).filter(isDedicatedPassportField)
+  return passportDedicatedCanonicalFields(schema)
 }
 
 export function passportGenericFields(schema: RegistrationFormSchema): RegistrationFieldDef[] {
-  return enabledFields(schema).filter(
-    (f) => fieldScreen(f) === 'passport' && !isDedicatedPassportField(f) && f.binding !== 'passport_photo',
-  )
+  return passportGenericEligibleFields(schema)
 }
 
 export function completionFields(
