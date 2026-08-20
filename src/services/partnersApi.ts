@@ -23,8 +23,9 @@ export type Partner = {
   marketplace?: boolean;
 };
 
-/** priceMad null = SUR DEVIS : le provider donne le prix (navette « Autre »-like). */
-export type PartnerServiceFormule = { label: string; priceMad: number | null };
+/** priceMad null = SUR DEVIS : le provider donne le prix (navette « Autre »-like).
+ *  city : grille de prix PAR VILLE (navette) — vide = valable partout. */
+export type PartnerServiceFormule = { label: string; priceMad: number | null; city?: string };
 
 export type PartnerServiceSlot = { time: string; label?: string };
 

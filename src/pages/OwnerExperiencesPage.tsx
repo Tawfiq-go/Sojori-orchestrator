@@ -178,7 +178,7 @@ function emptyDraft(): Draft {
 function toDraft(s: PartnerService): Draft {
   const formules =
     Array.isArray(s.formules) && s.formules.length
-      ? s.formules.map((f) => ({ label: f.label || '', priceMad: f.priceMad === null ? null : Number(f.priceMad) || 0 }))
+      ? s.formules.map((f) => ({ label: f.label || '', priceMad: f.priceMad === null ? null : Number(f.priceMad) || 0, city: f.city || undefined }))
       : [{ label: '', priceMad: 0 }];
   const pay = s.payment || DEFAULT_PAYMENT;
   return {
@@ -269,6 +269,10 @@ export function OwnerExperiencesPage() {
   const [q, setQ] = useState('');
   const [providerFilter, setProviderFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  // Navette : onglet de ville actif (grille de prix par ville) + saisie d'une
+  // nouvelle ville. '' = groupe « Toutes villes » (formules sans ville).
+  const [activeCity, setActiveCity] = useState('');
+  const [newCityName, setNewCityName] = useState('');
   const [groupBy, setGroupBy] = useState<'city' | 'category'>('category');
   /** Ids marché Activés pour mes listings */
   const [marketAdopted, setMarketAdopted] = useState<Set<string>>(new Set());
@@ -544,6 +548,8 @@ export function OwnerExperiencesPage() {
         label: f.label.trim(),
         // null = sur devis : le provider donnera le prix (jamais 0 par accident).
         priceMad: f.priceMad === null ? null : Number(f.priceMad) || 0,
+        // Grille par ville (navette) — perdre ce champ fusionnerait les onglets.
+        ...(f.city ? { city: f.city } : {}),
       }))
       .filter((f) => f.label);
     if (!formules.length) {
@@ -1452,31 +1458,85 @@ export function OwnerExperiencesPage() {
                 {draft.kind === 'transport' ? 'Destinations (depuis le logement)' : 'Formules'}
               </div>
               {draft.kind === 'transport' ? (
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                  {Object.keys(NAVETTE_PROPOSALS).map((city) => (
-                    <button
-                      key={city}
-                      type="button"
-                      style={btnOutline({ fontSize: 13 })}
-                      onClick={() =>
+                <>
+                  {/* Un onglet PAR VILLE : chaque ville a sa grille de prix
+                      (Aéroport Casablanca : 900 depuis Marrakech, 300 depuis
+                      Casablanca). Le guest ne verra que la grille de SA ville. */}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {Array.from(
+                      new Set(draft.formules.map((f) => (f.city || '').trim()).filter(Boolean)),
+                    ).map((city) => (
+                      <button
+                        key={city}
+                        type="button"
+                        style={
+                          activeCity === city
+                            ? btnGold({ padding: '6px 12px', fontSize: 13 })
+                            : btnOutline({ padding: '6px 12px', fontSize: 13 })
+                        }
+                        onClick={() => setActiveCity(city)}
+                      >
+                        {city}
+                      </button>
+                    ))}
+                    <input
+                      className="pa-in"
+                      style={{ ...inpBase, width: 140, padding: '6px 10px' }}
+                      placeholder="+ Ville…"
+                      value={newCityName}
+                      onChange={(e) => setNewCityName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return;
+                        const city = newCityName.trim();
+                        if (!city) return;
                         setDraft((d) => {
-                          const existing = new Set(
-                            d.formules.map((f) => f.label.trim().toLowerCase()),
-                          );
-                          const add = NAVETTE_PROPOSALS[city].filter(
-                            (pr) => !existing.has(pr.label.toLowerCase()),
-                          );
-                          const kept = d.formules.filter((f) => f.label.trim());
-                          return { ...d, formules: [...kept, ...add] };
-                        })
-                      }
-                    >
-                      + Destinations {city}
-                    </button>
-                  ))}
-                </div>
+                          const proposals = NAVETTE_PROPOSALS[city] || [];
+                          const rows = proposals.length
+                            ? proposals.map((pr) => ({ ...pr, city }))
+                            : [{ label: '', priceMad: 0 as number | null, city }];
+                          return { ...d, formules: [...d.formules.filter((f) => f.label.trim()), ...rows] };
+                        });
+                        setActiveCity(city);
+                        setNewCityName('');
+                      }}
+                    />
+                    {Object.keys(NAVETTE_PROPOSALS)
+                      .filter(
+                        (c) => !draft.formules.some((f) => (f.city || '').trim() === c),
+                      )
+                      .map((city) => (
+                        <button
+                          key={city}
+                          type="button"
+                          style={btnOutline({ padding: '6px 10px', fontSize: 12, opacity: 0.85 })}
+                          onClick={() => {
+                            setDraft((d) => ({
+                              ...d,
+                              formules: [
+                                ...d.formules.filter((f) => f.label.trim()),
+                                ...NAVETTE_PROPOSALS[city].map((pr) => ({ ...pr, city })),
+                              ],
+                            }));
+                            setActiveCity(city);
+                          }}
+                        >
+                          + {city}
+                        </button>
+                      ))}
+                  </div>
+                </>
               ) : null}
-              {draft.formules.map((f, i) => (
+              {draft.formules
+                .map((f, i) => ({ f, i }))
+                .filter(
+                  ({ f }) =>
+                    draft.kind !== 'transport' ||
+                    (f.city || '').trim() ===
+                      (draft.formules.some((x) => (x.city || '').trim() === activeCity)
+                        ? activeCity
+                        : (draft.formules.find((x) => (x.city || '').trim())?.city || '').trim()),
+                )
+                .map(({ f, i }) => (
                 <div
                   key={i}
                   style={{ display: 'grid', gridTemplateColumns: '1fr 120px 36px', gap: 8, marginTop: 8 }}
@@ -1528,13 +1588,23 @@ export function OwnerExperiencesPage() {
                     ×
                   </button>
                 </div>
-              ))}
+                ))}
               <button
                 type="button"
                 style={btnOutline({ marginTop: 10 })}
-                onClick={() => setDraft((d) => ({ ...d, formules: [...d.formules, { label: '', priceMad: 0 }] }))}
+                onClick={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    formules: [
+                      ...d.formules,
+                      draft.kind === 'transport'
+                        ? { label: '', priceMad: 0, city: activeCity || undefined }
+                        : { label: '', priceMad: 0 },
+                    ],
+                  }))
+                }
               >
-                + Formule
+                {draft.kind === 'transport' ? '+ Destination' : '+ Formule'}
               </button>
             </section>
             </>
@@ -1898,6 +1968,60 @@ export function OwnerExperiencesPage() {
                     setDraft((d) => ({ ...d, schedule: { ...d.schedule, windowEnd: e.target.value } }))
                   }
                 />
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={draft.schedule.windowStart === '00:00' && draft.schedule.windowEnd === '23:59'}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      schedule: e.target.checked
+                        ? { ...d.schedule, timeMode: 'window', windowStart: '00:00', windowEnd: '23:59' }
+                        : { ...d.schedule, windowStart: '09:00', windowEnd: '18:00' },
+                    }))
+                  }
+                />
+                <span>24h/24</span>
+              </label>
+              <div className="pa-lbl" style={{ marginTop: 12 }}>Jours de service</div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                {([[1,'Lun'],[2,'Mar'],[3,'Mer'],[4,'Jeu'],[5,'Ven'],[6,'Sam'],[7,'Dim']] as const).map(
+                  ([n, l]) => {
+                    const all = !draft.schedule.weekdays || draft.schedule.weekdays.length === 0;
+                    const on = all || draft.schedule.weekdays.includes(n);
+                    return (
+                      <button
+                        key={n}
+                        type="button"
+                        style={on ? btnGold({ padding: '6px 10px', fontSize: 13 }) : btnOutline({ padding: '6px 10px', fontSize: 13 })}
+                        onClick={() =>
+                          setDraft((d) => {
+                            // [] = tous les jours (convention du modèle). Décocher
+                            // depuis « tous » matérialise les 7 puis retire le jour.
+                            const cur =
+                              !d.schedule.weekdays || d.schedule.weekdays.length === 0
+                                ? [1, 2, 3, 4, 5, 6, 7]
+                                : [...d.schedule.weekdays];
+                            const next = cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n];
+                            return {
+                              ...d,
+                              schedule: {
+                                ...d.schedule,
+                                weekdays: next.length === 7 ? [] : next.sort(),
+                              },
+                            };
+                          })
+                        }
+                      >
+                        {l}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+              <div style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}>
+                Tous allumés = service proposé chaque jour.
               </div>
               <textarea
                 className="pa-in"
