@@ -10,6 +10,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Checkbox,
   FormControlLabel,
   IconButton,
   MenuItem,
@@ -2623,7 +2624,7 @@ export default function OrchestrationOverviewPanel({
       case 'cleaning_sojori':
         return 'Tarifs Normal/Grand (ou forfait mensuel) + déclenchement après checkout — puis Enregistrer.';
       case 'transport':
-        return 'La navette se gère en expérience Transport (onglet Expériences) — destinations, prix par ville, sens, devis.';
+        return 'Suivi du vol : activez-le et choisissez les vérifications. Destinations et prix → onglet Expériences.';
       case 'concierge':
         return 'Les expériences (J3) se cochent dans l’onglet listing Expériences — pas ici.';
       case 'groceries':
@@ -2848,12 +2849,10 @@ export default function OrchestrationOverviewPanel({
                       minHeight: 28,
                       alignItems: 'center',
                       py: 0.25,
-                      ...(r.key === 'concierge' || r.key === 'transport'
-                        ? { cursor: 'default', opacity: 0.85 }
-                        : null),
+                      ...(r.key === 'concierge' ? { cursor: 'default', opacity: 0.85 } : null),
                     }}
                     onClick={
-                      r.key === 'concierge' || r.key === 'transport'
+                      r.key === 'concierge'
                         ? undefined
                         : () => setConfigModal({ capKey: r.key, tab: 'gestion' })
                     }
@@ -2861,7 +2860,7 @@ export default function OrchestrationOverviewPanel({
                       r.key === 'concierge'
                         ? 'Expériences (J3) — onglet listing Expériences'
                         : r.key === 'transport'
-                          ? 'Navette = expérience Transport — onglet listing Expériences'
+                          ? 'Suivi du vol — destinations et prix dans l’onglet Expériences'
                           : 'Contenu (prix, créneaux, catalogue…)'
                     }
                   >
@@ -3638,6 +3637,72 @@ export default function OrchestrationOverviewPanel({
                         await onGestionPatch(configDef.key, nextGestion);
                       }}
                     />
+                  ) : configDef.key === 'transport' ? (
+                    (() => {
+                      const ft = (configGestionValues.flightTracking ?? {}) as {
+                        enabled?: boolean;
+                        checks?: { j1?: boolean; takeoff?: boolean; landing?: boolean };
+                      };
+                      const checks = ft.checks ?? {};
+                      const save = (next: typeof ft) =>
+                        onGestionPatch('transport', { ...configGestionValues, flightTracking: next });
+                      const CHECKS = [
+                        ['j1', 'J-1 (la veille) — le vol existe, horaire confirmé'],
+                        ['takeoff', 'Au décollage — retard confirmé → client et chauffeur prévenus'],
+                        ['landing', 'À l’atterrissage — bienvenue + contact du chauffeur'],
+                      ] as const;
+                      return (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                          <Typography sx={{ fontSize: 13, color: V3.t3 }}>
+                            Les destinations et prix de la navette se gèrent dans l’onglet
+                            listing <b>Expériences</b>. Ici : la politique de <b>suivi du vol</b> —
+                            chaque vérification a un coût, chaque client choisit les siennes.
+                          </Typography>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={ft.enabled === true}
+                                onChange={(e) =>
+                                  save({
+                                    enabled: e.target.checked,
+                                    checks: e.target.checked
+                                      ? { j1: true, takeoff: true, landing: true, ...checks }
+                                      : checks,
+                                  })
+                                }
+                              />
+                            }
+                            label="Appliquer le suivi du vol aux courses navette"
+                          />
+                          {ft.enabled === true ? (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, pl: 1 }}>
+                              {CHECKS.map(([k, label]) => (
+                                <FormControlLabel
+                                  key={k}
+                                  control={
+                                    <Checkbox
+                                      size="small"
+                                      checked={checks[k] !== false}
+                                      onChange={(e) =>
+                                        save({
+                                          ...ft,
+                                          checks: { ...checks, [k]: e.target.checked },
+                                        })
+                                      }
+                                    />
+                                  }
+                                  label={<Typography sx={{ fontSize: 13 }}>{label}</Typography>}
+                                />
+                              ))}
+                              <Typography sx={{ fontSize: 12, color: V3.t3, mt: 0.5 }}>
+                                Le moteur de suivi (cron 3 passes, notifications) arrive avec le
+                                chantier Vols — cette configuration sera lue telle quelle.
+                              </Typography>
+                            </Box>
+                          ) : null}
+                        </Box>
+                      );
+                    })()
                   ) : configDef.key === 'inform_syndic' ? (
                     <V3InformSyndicPanel
                       gestion={configGestionValues}
