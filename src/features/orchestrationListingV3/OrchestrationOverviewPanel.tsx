@@ -521,16 +521,9 @@ function configHints(cap: CapDoc, key: string): string[] {
     }
   }
 
-  if (key === 'transport') {
-    const zones = Array.isArray(g.transportServices)
-      ? g.transportServices
-      : Array.isArray(g.zones)
-        ? g.zones
-        : Array.isArray(g.routes)
-          ? g.routes
-          : [];
-    if (zones.length) hints.push(`${zones.length} trajet${zones.length > 1 ? 's' : ''} / prix`);
-  }
+  // Transport : le contenu vit dans les expériences navette (onglet
+  // Expériences) — l'ancien compteur « N trajets / prix » lisait le legacy
+  // supprimé du parcours guest le 16/08.
 
   if (key === 'groceries') {
     const items = Array.isArray(g.groceryServices)
@@ -994,6 +987,7 @@ function CleaningRulesAssignUi({
 }) {
   const catalogType = CLEANING_CAP_TO_TYPE[capKey] || 'cleaning_stay';
   const flags = typeFlags(rules, catalogType);
+  const createAheadDays = Math.max(0, Number(rules.createAheadDays) || 0);
   return (
     <Box sx={{ display: 'grid', gap: 0.75, pt: 1, borderTop: '1px solid rgba(20,17,10,0.08)' }}>
       <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3 }}>STATUS-ACCEPT / AUTO</Typography>
@@ -1036,6 +1030,23 @@ function CleaningRulesAssignUi({
           />
         </Box>
       )}
+      <Typography sx={{ fontSize: 11, fontWeight: 800, color: V3.t3, pt: 0.5 }}>
+        CRÉATION TÂCHE
+      </Typography>
+      <Typography sx={{ fontSize: 11, color: V3.t3 }}>
+        Créer la tâche N jours avant la date d’exécution (séjour + checkout). 0 = à la réservation.
+        La séquence reste visible sur le plan dès la résa.
+      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+        {[0, 3, 5, 7].map((d) => (
+          <SegChip
+            key={d}
+            on={createAheadDays === d}
+            label={d === 0 ? 'J0 (immédiat)' : `J−${d}`}
+            onClick={() => !saving && onPatch({ createAheadDays: d })}
+          />
+        ))}
+      </Box>
     </Box>
   );
 }
@@ -2612,7 +2623,7 @@ export default function OrchestrationOverviewPanel({
       case 'cleaning_sojori':
         return 'Tarifs Normal/Grand (ou forfait mensuel) + déclenchement après checkout — puis Enregistrer.';
       case 'transport':
-        return 'Ajoutez des trajets et fixez le prix de chaque course — puis Enregistrer.';
+        return 'La navette se gère en expérience Transport (onglet Expériences) — destinations, prix par ville, sens, devis.';
       case 'concierge':
         return 'Les expériences (J3) se cochent dans l’onglet listing Expériences — pas ici.';
       case 'groceries':
@@ -2704,8 +2715,9 @@ export default function OrchestrationOverviewPanel({
           >
             {group.id === 'concierge' && isListingScope ? (
               <Typography sx={{ fontSize: 11.5, color: V3.t3, mb: 1.25, lineHeight: 1.45 }}>
-                Les expériences (J3) se cochent dans l’onglet listing <b>Expériences</b>. Ici :
-                Transport &amp; Courses uniquement.
+                Les expériences (J3) et la <b>navette</b> (expérience Transport) se cochent
+                dans l’onglet listing <b>Expériences</b>. Ici : Courses uniquement — le
+                transport legacy est remplacé.
               </Typography>
             ) : null}
 
@@ -2836,22 +2848,26 @@ export default function OrchestrationOverviewPanel({
                       minHeight: 28,
                       alignItems: 'center',
                       py: 0.25,
-                      ...(r.key === 'concierge' ? { cursor: 'default', opacity: 0.85 } : null),
+                      ...(r.key === 'concierge' || r.key === 'transport'
+                        ? { cursor: 'default', opacity: 0.85 }
+                        : null),
                     }}
                     onClick={
-                      r.key === 'concierge'
+                      r.key === 'concierge' || r.key === 'transport'
                         ? undefined
                         : () => setConfigModal({ capKey: r.key, tab: 'gestion' })
                     }
                     title={
                       r.key === 'concierge'
                         ? 'Expériences (J3) — onglet listing Expériences'
-                        : 'Contenu (prix, créneaux, catalogue…)'
+                        : r.key === 'transport'
+                          ? 'Navette = expérience Transport — onglet listing Expériences'
+                          : 'Contenu (prix, créneaux, catalogue…)'
                     }
                   >
-                    {r.key === 'concierge' ? (
+                    {r.key === 'concierge' || r.key === 'transport' ? (
                       <Typography sx={{ ...cell, color: V3.t3, fontSize: 11.5, fontWeight: 700 }}>
-                        → Expériences
+                        {r.key === 'transport' ? '→ Expériences (navette)' : '→ Expériences'}
                       </Typography>
                     ) : r.hints.length === 0 ? (
                       <Typography sx={{ ...cell, color: V3.p, fontSize: 11.5, fontWeight: 700 }}>
