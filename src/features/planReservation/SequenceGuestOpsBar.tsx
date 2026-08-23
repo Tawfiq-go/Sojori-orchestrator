@@ -125,10 +125,60 @@ export default function SequenceGuestOpsBar({
       ? 'Modifier l’heure'
       : 'Choisir l’heure';
 
+  const [flightLine, setFlightLine] = useState<string | null>(null);
+  const [flightBusy, setFlightBusy] = useState(false);
+
+  const checkFlight = async () => {
+    setFlightBusy(true);
+    try {
+      const d = await fulltaskApi.getTaskFlightStatus(taskId);
+      if (!d.hasFlight) {
+        setFlightLine('Aucun numéro de vol sur cette course.');
+        return;
+      }
+      const snap = (d.live?.snapshot ?? {}) as {
+        status?: string;
+        arrivalDelayMinutes?: number | null;
+        estimatedInUtc?: string | null;
+        actualInUtc?: string | null;
+      };
+      if (!d.live?.found) {
+        setFlightLine(`✈️ ${d.flightNumber} : introuvable (${d.live?.reason || '?'}).`);
+        return;
+      }
+      const delay = Number(snap.arrivalDelayMinutes ?? 0);
+      const when = snap.actualInUtc || snap.estimatedInUtc || '';
+      const hhmm = when ? new Date(when).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const passes = (d.tracking?.checks ?? [])
+        .map((c) => `${c.kind}${c.ranAt ? '✓' : '·'}`)
+        .join(' ');
+      setFlightLine(
+        `✈️ ${d.flightNumber} · ${snap.status || '?'}${delay ? ` · retard ${delay} min` : ''}${
+          hhmm ? ` · arrivée ${hhmm}` : ''
+        }${passes ? ` · passes ${passes}` : ' · suivi non planifié'}`,
+      );
+    } catch {
+      setFlightLine('✈️ Statut vol indisponible.');
+    } finally {
+      setFlightBusy(false);
+    }
+  };
+
   return (
     <>
       <div className="seq-guest-ops" onClick={(e) => e.stopPropagation()}>
         <span className="seq-guest-ops-lbl">Actions admin</span>
+        {taskType === 'transport' ? (
+          <button
+            type="button"
+            className="seq-guest-ops-btn"
+            disabled={flightBusy}
+            title="Interroger FlightAware en direct — n'altère pas les passes du cron"
+            onClick={checkFlight}
+          >
+            {flightBusy ? '✈️ …' : '✈️ Vol'}
+          </button>
+        ) : null}
         {showManualAssign ? (
           <span className="seq-guest-ops-assign" title="Assignation manuelle (sans créneau auto)">
             <PlanAssignButtons

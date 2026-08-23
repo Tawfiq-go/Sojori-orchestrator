@@ -531,6 +531,21 @@ export async function sendExtraPlanRelance(
 }
 
 /** Rappel staff admin hors planning — nouvelle ligne d'historique. */
+/** Statut du vol d'une course navette, EN DIRECT (bouton ✈️ du plan). */
+export async function getTaskFlightStatus(taskId: string): Promise<{
+  hasFlight: boolean;
+  flightNumber?: string;
+  live?: { found: boolean; snapshot?: Record<string, unknown>; reason?: string };
+  tracking?: {
+    checks?: Array<{ kind: string; plannedAt: string; ranAt?: string; status?: string; delayMinutes?: number | null }>;
+    lastStatus?: string;
+    lastDelayMinutes?: number | null;
+  } | null;
+}> {
+  const res = await apiClient.get(`${BASE}/plans/tasks/${encodeURIComponent(taskId)}/flight`);
+  return (res.data?.data ?? res.data) as never;
+}
+
 export async function sendExtraPlanStaffReminder(reservationId: string, taskId: string) {
   return postPlanDispatch(
     `${BASE}/plans/${encodeURIComponent(reservationId)}/sequences/${encodeURIComponent(taskId)}/staff-reminders/extra`,
