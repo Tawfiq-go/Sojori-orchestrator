@@ -168,15 +168,15 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
             <MenuItem value="stay_contract">Contrat de séjour</MenuItem>
             {value.documentType === 'moroccan_police_form' ? (
               <MenuItem value="moroccan_police_form" disabled>
-                Fiche de police (placeholder, non officiel)
+                Fiche de police (non officiel)
               </MenuItem>
             ) : null}
           </TextField>
         </FormControl>
         {value.documentType === 'moroccan_police_form' ? (
           <Alert severity="warning" sx={{ fontSize: 12.5 }}>
-            La fiche de police marocaine n&apos;est pas un formulaire officiel pour ce pilote. Le
-            renderer placeholder est utilisé. Revenez au contrat de séjour.
+            La fiche de police marocaine n&apos;est pas un formulaire officiel pour ce pilote.
+            Revenez au contrat de séjour.
           </Alert>
         ) : null}
         <FormControl size="small" fullWidth>
@@ -200,10 +200,22 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
         <TextField
           size="small"
           label="Template ID"
+          helperText="Identifiant interne, non imprimé sur le PDF voyageur"
           value={value.templateId}
           disabled={saving || !doc}
           onBlur={() => void save(value)}
           onChange={e => setValue({ ...value, templateId: e.target.value })}
+        />
+        <TextField
+          size="small"
+          multiline
+          minRows={2}
+          label="Mention / règlement de l’établissement"
+          helperText="Texte affiché en pied de fiche. Modifiable sans nouveau déploiement."
+          value={value.establishmentNotice}
+          disabled={saving || !doc}
+          onBlur={() => void save(value)}
+          onChange={e => setValue({ ...value, establishmentNotice: e.target.value })}
         />
       </Stack>
     </Box>
