@@ -93,6 +93,7 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
   const [resolvedOwnerId, setResolvedOwnerId] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState('');
   const [establishmentName, setEstablishmentName] = useState('');
+  const [listingName, setListingName] = useState('');
   const [logoBusy, setLogoBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const ownerMode = !listingId && Boolean(ownerKey);
@@ -185,11 +186,30 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
         setLogoUrl('');
         setEstablishmentName('');
       }
+
+      // Listing name for header fallback (priority over owner public name).
+      if (!ownerMode && listingId) {
+        try {
+          const listingRes = await listingsService.getListingById(listingId);
+          const listing = listingRes?.data as
+            | { nickname?: string; name?: string }
+            | undefined;
+          const ln =
+            String(listing?.nickname || listing?.name || '')
+              .trim() || '';
+          setListingName(ln);
+        } catch {
+          setListingName('');
+        }
+      } else {
+        setListingName('');
+      }
     } catch {
       setDoc(null);
       setResolvedOwnerId(null);
       setLogoUrl('');
       setEstablishmentName('');
+      setListingName('');
       setOrigin('default');
     } finally {
       setLoading(false);
@@ -281,7 +301,14 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
   }
 
   const hasLogo = Boolean(logoUrl.trim());
-  const displayName = establishmentName.trim() || 'Établissement';
+  // Same fallback chain as PDF: listing name → establishment public/legal → Établissement
+  const displayName =
+    listingName.trim() || establishmentName.trim() || 'Établissement';
+  const secondaryName =
+    establishmentName.trim() &&
+    establishmentName.trim() !== displayName
+      ? establishmentName.trim()
+      : '';
   const originChipLabel = `Configuration effective : ${contractSignatureOriginLabel(origin)}`;
 
   return (
@@ -444,6 +471,9 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
           </Box>
           <Box>
             <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{displayName}</Typography>
+            {secondaryName ? (
+              <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{secondaryName}</Typography>
+            ) : null}
             <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>Fiche de séjour</Typography>
           </Box>
         </Stack>
