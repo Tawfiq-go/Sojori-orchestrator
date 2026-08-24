@@ -125,7 +125,15 @@ export default function SequenceGuestOpsBar({
       ? 'Modifier l’heure'
       : 'Choisir l’heure';
 
-  const [flightLine, setFlightLine] = useState<string | null>(null);
+  type FlightPanel = {
+    error?: string;
+    flightNumber?: string;
+    statusLine?: string;
+    provider?: { name: string; whatsapp: string } | null;
+    checks?: Array<{ kind: string; plannedAt: string; ranAt?: string; status?: string; delayMinutes?: number | null }>;
+    nextCheckAt?: string | null;
+  };
+  const [flight, setFlight] = useState<FlightPanel | null>(null);
   const [flightBusy, setFlightBusy] = useState(false);
 
   const checkFlight = async () => {
@@ -133,7 +141,7 @@ export default function SequenceGuestOpsBar({
     try {
       const d = await fulltaskApi.getTaskFlightStatus(taskId);
       if (!d.hasFlight) {
-        setFlightLine('Aucun numéro de vol sur cette course.');
+        setFlight({ error: 'Aucun numéro de vol sur cette course.' });
         return;
       }
       const snap = (d.live?.snapshot ?? {}) as {
@@ -142,27 +150,45 @@ export default function SequenceGuestOpsBar({
         estimatedInUtc?: string | null;
         actualInUtc?: string | null;
       };
-      if (!d.live?.found) {
-        setFlightLine(`✈️ ${d.flightNumber} : introuvable (${d.live?.reason || '?'}).`);
-        return;
-      }
       const delay = Number(snap.arrivalDelayMinutes ?? 0);
       const when = snap.actualInUtc || snap.estimatedInUtc || '';
-      const hhmm = when ? new Date(when).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
-      const passes = (d.tracking?.checks ?? [])
-        .map((c) => `${c.kind}${c.ranAt ? '✓' : '·'}`)
-        .join(' ');
-      setFlightLine(
-        `✈️ ${d.flightNumber} · ${snap.status || '?'}${delay ? ` · retard ${delay} min` : ''}${
-          hhmm ? ` · arrivée ${hhmm}` : ''
-        }${passes ? ` · passes ${passes}` : ' · suivi non planifié'}`,
-      );
+      const hhmm = when
+        ? new Date(when).toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'Africa/Casablanca',
+          })
+        : '';
+      const statusLine = d.live?.found
+        ? `${snap.status || '?'}${delay ? ` · retard ${delay} min` : ' · à l’heure'}${hhmm ? ` · arrivée ${hhmm}` : ''}`
+        : `introuvable (${d.live?.reason || '?'})`;
+      setFlight({
+        flightNumber: d.flightNumber,
+        statusLine,
+        provider: d.provider ?? null,
+        checks: d.tracking?.checks ?? [],
+        nextCheckAt: d.nextCheck?.plannedAt ?? null,
+      });
     } catch {
-      setFlightLine('✈️ Statut vol indisponible.');
+      setFlight({ error: 'Statut vol indisponible.' });
     } finally {
       setFlightBusy(false);
     }
   };
+
+  const CHECK_LABELS: Record<string, string> = {
+    j1: 'J-1 (la veille, 18h)',
+    takeoff: 'Décollage',
+    landing: 'Atterrissage',
+  };
+  const fmtCheckDate = (iso: string) =>
+    new Date(iso).toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Africa/Casablanca',
+    });
 
   return (
     <>
@@ -252,6 +278,44 @@ export default function SequenceGuestOpsBar({
           Cockpit chaînes →
         </Link>
       </div>
+      {flight ? (
+        <div className="seq-guest-ops-flight" onClick={(e) => e.stopPropagation()}>
+          {flight.error ? (
+            <div className="seq-guest-ops-flight-line">✈️ {flight.error}</div>
+          ) : (
+            <>
+              <div className="seq-guest-ops-flight-line">
+                <strong>✈️ {flight.flightNumber}</strong> · {flight.statusLine}
+              </div>
+              {flight.provider?.whatsapp ? (
+                <div className="seq-guest-ops-flight-line">
+                  🚗 Chauffeur : {flight.provider.name || 'provider'} · {flight.provider.whatsapp}
+                </div>
+              ) : null}
+              {(flight.checks ?? []).length ? (
+                <div className="seq-guest-ops-flight-checks">
+                  {(flight.checks ?? []).map((c) => (
+                    <div key={`${c.kind}-${c.plannedAt}`} className="seq-guest-ops-flight-line">
+                      {c.ranAt ? '✓' : '•'} {CHECK_LABELS[c.kind] || c.kind} — appel API{' '}
+                      {c.ranAt ? `fait le ${fmtCheckDate(c.ranAt)}` : `prévu le ${fmtCheckDate(c.plannedAt)}`}
+                      {c.status ? ` → ${c.status}` : ''}
+                      {typeof c.delayMinutes === 'number' && c.delayMinutes ? ` (retard ${c.delayMinutes} min)` : ''}
+                    </div>
+                  ))}
+                  <div className="seq-guest-ops-flight-line seq-guest-ops-flight-note">
+                    Les passes se recalent sur les horaires réels du vol après chaque appel.
+                  </div>
+                </div>
+              ) : (
+                <div className="seq-guest-ops-flight-line">
+                  Suivi non planifié (activez « Suivi du vol » dans la config Transport — le cron pose les passes
+                  sous 10 min).
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      ) : null}
       {slotOpen ? (
         <EscaladeForceSlotModal
           open={slotOpen}

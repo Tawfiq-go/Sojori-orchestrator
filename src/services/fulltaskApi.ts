@@ -541,6 +541,8 @@ export async function getTaskFlightStatus(taskId: string): Promise<{
     lastStatus?: string;
     lastDelayMinutes?: number | null;
   } | null;
+  nextCheck?: { kind: string; plannedAt: string } | null;
+  provider?: { name: string; whatsapp: string } | null;
 }> {
   const res = await apiClient.get(`${BASE}/plans/tasks/${encodeURIComponent(taskId)}/flight`);
   return (res.data?.data ?? res.data) as never;
