@@ -7,6 +7,9 @@ export type ContractSignatureConfigValue = {
   establishmentNotice: string;
 };
 
+/** Effective source on compiled orchestration `contractSignature.origin`. */
+export type ContractSignatureOrigin = 'listing' | 'owner' | 'default';
+
 export const DEFAULT_ESTABLISHMENT_NOTICE =
   "La direction n'est pas responsable des objets de valeur laissés dans les chambres.";
 
@@ -36,4 +39,15 @@ export function parseContractSignature(raw: unknown): ContractSignatureConfigVal
         ? rec.establishmentNotice.trim()
         : DEFAULT_CONTRACT_SIGNATURE.establishmentNotice,
   };
+}
+
+export function parseContractSignatureOrigin(raw: unknown): ContractSignatureOrigin {
+  if (raw === 'listing' || raw === 'owner' || raw === 'default') return raw;
+  return 'default';
+}
+
+export function contractSignatureOriginLabel(origin: ContractSignatureOrigin): string {
+  if (origin === 'listing') return 'Surcharge logement';
+  if (origin === 'owner') return 'héritée du propriétaire';
+  return 'Valeurs par défaut';
 }
