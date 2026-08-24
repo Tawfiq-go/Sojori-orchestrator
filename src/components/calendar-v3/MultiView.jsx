@@ -2023,8 +2023,22 @@ function ListingRow({
               !hasResa &&
               !hasUnitBlock;
             const draggable = !isRoomRow && cellState === 'data';
-            // Hatch cellule villa = OOO HK seulement. Résa / unit block → barres (pas de double rendu).
-            const roomDayBlocked = roomHkBlocked;
+            // ⚠️ LE HACHURAGE SUIT LA PÉRIODE, PAS L'ÉTAT PERMANENT.
+            //
+            // `housekeepingState` (OutOfOrder / OutOfService) n'a AUCUNE date :
+            // c'est un attribut de la chambre, pas du calendrier. L'utiliser
+            // pour hachurer barrait la ligne ENTIÈRE sur les 3 ans affichés,
+            // alors que le blocage réel dure souvent 2 ou 3 jours (constaté le
+            // 24/08/2026 : Villa 01 barrée partout pour un blocage 24→27).
+            //
+            // La vérité datée est dans les CalendarBlocks, issus des
+            // resourceBlocks Mews. Ils sont déjà rendus en BARRES overlay plus
+            // bas (`roomBlocks`) : on ne les hachure donc pas en plus, sinon
+            // double rendu sur la même période.
+            //
+            // Reste ici le seul cas réellement permanent et sans période :
+            // une chambre désactivée. Elle est barrée partout, à juste titre.
+            const roomDayBlocked = isRoomRow && listing.enabled === false;
             return (
               <PrimaryInventoryCell
                 key={d.iso}
