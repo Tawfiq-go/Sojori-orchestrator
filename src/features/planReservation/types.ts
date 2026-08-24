@@ -138,6 +138,8 @@ export interface PlanEvent {
   sequenceFlow?: SequenceFlowItem[];
   /** Règles fenêtre assignation (auto-accept, créneaux 11h/16h, etc.) */
   staffAssignment?: StaffAssignmentPlan;
+  /** Tâche fournisseur : la chaîne provider remplace l'assignation staff. */
+  provider?: ProviderPlanInfo;
   /** Pour les séquences futures · description "1 relance + 1 assignation + escalade J+4" */
   futureConfig?: string;
 }
@@ -155,6 +157,22 @@ export interface SequenceFlowItem {
   channel?: Channel;
   /** Ex. « Après relance #2 · 29 AVR 10:00 » */
   contextNote?: string;
+}
+
+export interface ProviderPlanInfo {
+  /** Nom du contact fournisseur (ou titre du service). */
+  name: string;
+  whatsapp?: string;
+  sentAt?: string;
+  confirmedAt?: string;
+  refusedAt?: string;
+  refuseReason?: string;
+  slaHours?: number;
+  quotePending?: boolean;
+  quotedPriceMad?: number;
+  prestationReminderPlannedAt?: string;
+  prestationReminderSentAt?: string;
+  paymentMethod?: string;
 }
 
 export interface StaffAssignmentPlan {
@@ -255,6 +273,8 @@ export interface PlanSequenceView {
   atDisplay?: string;
   range?: string;
   planStep?: number;
+  /** Séquence ménage planifiée, Task pas encore créée (J−X). */
+  taskPendingMaterialization?: boolean;
   relances: PlanGuestRelanceItem[];
   staffReminders: PlanStaffReminderItem[];
   staffAssignment?: StaffAssignmentPlan;

@@ -44,6 +44,7 @@ export default function SequenceGuestOpsBar({
   taskId,
   taskType,
   hasAssignation,
+  providerManaged,
   staffAssigned,
   actionCompleted,
   clientChosenTime,
@@ -74,7 +75,7 @@ export default function SequenceGuestOpsBar({
     GUEST_RELANCE_TYPES.has(taskType);
   const showForceSlot = GUEST_SLOT_TYPES.has(taskType);
   // Assigner dans Actions admin tant que pas déjà un bloc Assignation (évite doublon).
-  const showManualAssign = isStaffAssignableType(taskType) && !hasAssignation;
+  const showManualAssign = isStaffAssignableType(taskType) && !hasAssignation && !providerManaged;
   // Rappeler staff : visible pour ops staff, actif seulement si staff assigné.
   const showManualStaffRappel = isStaffAssignableType(taskType);
   const canRappeler = Boolean(staffAssigned);

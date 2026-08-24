@@ -236,6 +236,62 @@ function assignExecutionLine(assign: StaffAssignmentPlan): string {
   return 'Exécution · assignation en cours';
 }
 
+function fmtProviderAt(iso?: string): string {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Africa/Casablanca',
+  });
+}
+
+function ProviderBlockBody({ provider }: { provider: import('./types').ProviderPlanInfo }) {
+  return (
+    <div className="rel-row rel-row--assign" style={{ display: 'block' }}>
+      <div className="rel-row-top" style={{ marginBottom: 4 }}>
+        <span className="nm">
+          {provider.name}
+          {provider.whatsapp ? ` · ${provider.whatsapp}` : ''}
+        </span>
+      </div>
+      <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+        <div>
+          {provider.sentAt ? `✓ Demande envoyée · ${fmtProviderAt(provider.sentAt)}` : '• Demande pas encore envoyée'}
+        </div>
+        {provider.refusedAt ? (
+          <div>
+            ✗ Refusé · {fmtProviderAt(provider.refusedAt)}
+            {provider.refuseReason ? ` — ${provider.refuseReason}` : ''}
+          </div>
+        ) : provider.confirmedAt ? (
+          <div>
+            ✓ Accepté · {fmtProviderAt(provider.confirmedAt)}
+            {provider.quotedPriceMad ? ` — devis ${provider.quotedPriceMad} MAD` : ''}
+          </div>
+        ) : (
+          <div>
+            • En attente de réponse
+            {provider.slaHours ? ` · SLA ${provider.slaHours} h (relances auto avant/après)` : ''}
+            {provider.quotePending ? ' · devis attendu (destination libre)' : ''}
+          </div>
+        )}
+        {provider.prestationReminderSentAt ? (
+          <div>✓ Rappel prestation envoyé · {fmtProviderAt(provider.prestationReminderSentAt)}</div>
+        ) : provider.prestationReminderPlannedAt ? (
+          <div>• Rappel prestation prévu · {fmtProviderAt(provider.prestationReminderPlannedAt)}</div>
+        ) : null}
+        {provider.paymentMethod ? <div>Paiement · {provider.paymentMethod}</div> : null}
+        <div style={{ opacity: 0.65, fontStyle: 'italic', marginTop: 4 }}>
+          Un seul fournisseur — pas d'assignation staff : envoi de la demande, acceptation/refus, rappels selon
+          l'orchestration.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AssignBlockBody({
   assign,
   attempts,
@@ -552,6 +608,12 @@ type SubtitlePart = {
 function sequenceConfigSubtitleParts(seq: PlanSequenceView): SubtitlePart[] {
   const parts: SubtitlePart[] = [];
 
+  if (seq.taskPendingMaterialization) {
+    const when = seq.range || seq.atDisplay;
+    parts.push({ text: when ? `Planifié · ${when}` : 'Planifié · en attente de tâche' });
+    return parts;
+  }
+
   const rel = seq.relances?.length ?? 0;
   if (rel > 0) {
     parts.push({ text: `${rel} relance${rel !== 1 ? 's' : ''}` });
@@ -563,7 +625,18 @@ function sequenceConfigSubtitleParts(seq: PlanSequenceView): SubtitlePart[] {
   }
 
   const assign = seq.staffAssignment;
-  if (seq.hasAssignation && assign) {
+  if (seq.provider) {
+    const pv = seq.provider;
+    if (pv.refusedAt) {
+      parts.push({ text: `Fournisseur refusé${pv.refuseReason ? ` · ${pv.refuseReason}` : ''}`, tone: 'failed' });
+    } else if (pv.confirmedAt) {
+      parts.push({ text: `Fournisseur accepté · ${pv.name}`, tone: 'accepted' });
+    } else if (pv.sentAt) {
+      parts.push({ text: `Demande envoyée · ${pv.name}`, tone: 'assigned' });
+    } else {
+      parts.push({ text: `Fournisseur · ${pv.name}` });
+    }
+  } else if (seq.hasAssignation && assign) {
     const name = assign.staffName?.trim();
     const withName = (label: string) => (name ? `${label} · ${name}` : label);
     const taskSt = String(seq.taskStatus || '').trim();
@@ -664,6 +737,7 @@ export default function SequencePlanCard({
   onDispatched?: (planDoc?: import('./buildPlanViewModel').FulltaskPlanDoc) => void;
 }) {
   const taskId = seq.taskId || seq.id;
+  const pendingTask = Boolean(seq.taskPendingMaterialization);
   const [open, setOpen] = useState(defaultOpenForStatus(seq.status));
 
   const relancesResolved =
@@ -693,7 +767,11 @@ export default function SequencePlanCard({
             <span className="kind-badge sequence-kind">Séquence</span>
             <GroupStatusBadge
               status={seq.status}
-              label={sequenceStatusLabel(seq.status, seq.taskStatus)}
+              label={
+                pendingTask
+                  ? 'PLANIFIÉ'
+                  : sequenceStatusLabel(seq.status, seq.taskStatus)
+              }
             />
           </div>
           <div className="ds">
@@ -735,11 +813,21 @@ export default function SequencePlanCard({
 
       {open ? (
         <div className="ev-body seq-l1-body">
+          {pendingTask ? (
+            <div className="seq-reg-actions" style={{ marginBottom: 8 }}>
+              <span className="registration-at-arrival-banner">
+                Tâche créée automatiquement à J−X avant la date d’exécution — pas d’assignation staff
+                tant que la tâche n’existe pas.
+              </span>
+            </div>
+          ) : (
+            <>
           <SequenceGuestOpsBar
             reservationId={reservationId}
             taskId={taskId}
             taskType={seq.taskType}
             hasAssignation={Boolean(seq.hasAssignation)}
+            providerManaged={Boolean(seq.provider)}
             staffAssigned={Boolean(
               seq.staffAssignment &&
                 (seq.staffAssignment.status === 'found' ||
@@ -786,7 +874,25 @@ export default function SequencePlanCard({
             </CollapseBlock>
           ) : null}
 
-          {seq.hasAssignation && seq.staffAssignment ? (
+          {seq.provider ? (
+            <CollapseBlock
+              icon="🚗"
+              title="Fournisseur"
+              groupStatus={assignGroup}
+              countLabel={
+                seq.provider.refusedAt
+                  ? 'Refusé'
+                  : seq.provider.confirmedAt
+                    ? 'Accepté'
+                    : seq.provider.sentAt
+                      ? 'En attente de réponse'
+                      : 'À envoyer'
+              }
+              defaultOpen={defaultOpenForStatus(assignGroup)}
+            >
+              <ProviderBlockBody provider={seq.provider} />
+            </CollapseBlock>
+          ) : seq.hasAssignation && seq.staffAssignment ? (
             <CollapseBlock
               icon="🎯"
               title="Assignation staff"
@@ -899,6 +1005,8 @@ export default function SequencePlanCard({
               />
             </CollapseBlock>
           ) : null}
+            </>
+          )}
 
         </div>
       ) : null}
