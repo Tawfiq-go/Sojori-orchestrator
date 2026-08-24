@@ -24,6 +24,7 @@ import type {
   RelanceExecutionStatus,
   SequenceFlowItem,
   StaffAssignmentPlan,
+  ProviderPlanInfo,
 } from './types';
 import {
   messagePlanOrderKey,
@@ -55,7 +56,7 @@ export interface FulltaskPlanDoc {
   ownerId: string;
   status: 'en_cours' | 'termine' | 'bloque' | 'annule' | 'archive';
   sequences: Array<{
-    taskId: string;
+    taskId?: string | null;
     taskScheduledDate?: string | Date;
     taskType: string;
     status:
@@ -243,6 +244,46 @@ export interface FulltaskPlanDoc {
     reason?: string;
     meta?: Record<string, unknown>;
   }>;
+}
+
+
+/** Tâche fournisseur : infos provider depuis le payload de la tâche. */
+function mapProviderInfo(seq: FulltaskPlanDoc['sequences'][0]): ProviderPlanInfo | undefined {
+  const payload = taskPayloadRecord(seq);
+  if (!payload) return undefined;
+  const cfg = payload.providerConfig as Record<string, unknown> | undefined;
+  if (payload.providerMode !== true && !cfg) return undefined;
+  const pd = (payload.providerDispatch ?? {}) as Record<string, unknown>;
+  const contact = ((cfg?.contact ?? {}) as Record<string, unknown>) || {};
+  const name =
+    [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim() ||
+    String(cfg?.title || 'Fournisseur');
+  const confirmation = (cfg?.confirmation ?? {}) as Record<string, unknown>;
+  return {
+    name,
+    whatsapp: cfg?.whatsapp ? String(cfg.whatsapp) : undefined,
+    sentAt: pd.infoSentAt ? String(pd.infoSentAt) : undefined,
+    confirmedAt: pd.providerConfirmedAt ? String(pd.providerConfirmedAt) : undefined,
+    refusedAt: pd.providerRefusedAt ? String(pd.providerRefusedAt) : undefined,
+    refuseReason: pd.providerRefuseReasonLabel ? String(pd.providerRefuseReasonLabel) : undefined,
+    slaHours: Number(confirmation.slaHours) || undefined,
+    quotePending: Boolean(pd.quotePendingAt) && !pd.quotedAt,
+    quotedPriceMad: typeof pd.quotedPriceMad === 'number' ? pd.quotedPriceMad : undefined,
+    prestationReminderPlannedAt: pd.prestationReminderPlannedAt
+      ? String(pd.prestationReminderPlannedAt)
+      : undefined,
+    prestationReminderSentAt: pd.prestationReminderSentAt
+      ? String(pd.prestationReminderSentAt)
+      : undefined,
+    paymentMethod: payload.paymentMethod ? String(payload.paymentMethod) : undefined,
+  };
+}
+
+/** Statut de groupe pour le bloc fournisseur (remplace l'assignation staff). */
+function providerGroupStatus(p: ProviderPlanInfo): import('./types').EventStatus {
+  if (p.refusedAt) return 'blocked';
+  if (p.confirmedAt) return 'done';
+  return p.sentAt ? 'now' : 'future';
 }
 
 /** staffId présents sur le plan (assignation + tentatives) — pour lookup noms. */
@@ -1686,6 +1727,7 @@ function buildSequenceView(
   ];
 
   const staffAssignment = mapStaffAssignment(seq, staffNames, now);
+  const provider = mapProviderInfo(seq);
   const attempts = mapAttempts(seq, staffNames);
   const lmAssignSlots = mapLmAssignSlots(seq, now);
   const escalade = seq.escalade
@@ -1722,6 +1764,14 @@ function buildSequenceView(
     undefined;
 
   const hasLinkedTask = Boolean(seq.taskId || seq.task);
+  const deferredCleaningTypes = new Set([
+    'cleaning_free',
+    'checkout_cleaning',
+    'cleaning_checkout',
+    'cleaning_stay',
+  ]);
+  const taskPendingMaterialization =
+    !hasLinkedTask && deferredCleaningTypes.has(String(seq.taskType || ''));
   const blockStatusesFromApi = mapBackendBlockStatuses(seq.blocks);
   let status = seq.status
     ? mapBackendOrchestrationStatus(seq.status)
@@ -1734,11 +1784,16 @@ function buildSequenceView(
   if (clientActionCompleted && status !== 'blocked') {
     status = 'done';
   }
+  if (taskPendingMaterialization && status !== 'blocked' && status !== 'done') {
+    status = 'future';
+  }
 
   const blockStatuses = {
     ...(blockStatusesFromApi ?? {
       relances: aggregateRelancesGroupStatus(relances, clientActionCompleted),
-      assignation: aggregateAssignGroupStatus(staffAssignment, attempts, lmAssignSlots),
+      assignation: provider
+        ? providerGroupStatus(provider)
+        : aggregateAssignGroupStatus(staffAssignment, attempts, lmAssignSlots),
       staffReminders: aggregateStaffRemindersGroupStatus(staffReminders),
       escalade: seq.escalade
         ? mapBackendOrchestrationStatus(
@@ -1766,9 +1821,11 @@ function buildSequenceView(
     atDisplay,
     range,
     planStep,
+    taskPendingMaterialization: taskPendingMaterialization || undefined,
     relances,
     staffReminders,
     staffAssignment,
+    provider,
     attempts,
     lmAssignSlots,
     escalade,
