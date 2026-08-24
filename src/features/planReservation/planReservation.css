@@ -728,3 +728,24 @@ button{cursor:pointer;border:0;background:transparent;font:inherit;color:inherit
 .msg-body-preview-vars{margin:0 0 8px;padding-left:18px;font-size:11px;color:var(--t2);line-height:1.45}
 .msg-body-preview-vars code{font-family:var(--mono);font-size:10px;color:var(--pd);margin-right:4px}
 .msg-body-preview-text{margin:0;padding:10px 12px;background:var(--bg1);border:1px solid var(--b);border-radius:8px;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:280px;overflow:auto;font-family:var(--sans);color:var(--t)}
+
+/* Panneau ✈️ Vol — sous la barre d'actions de la ligne Transport */
+.seq-guest-ops-flight {
+  margin: 6px 0 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 8px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.03));
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.seq-guest-ops-flight-line {
+  white-space: normal;
+}
+.seq-guest-ops-flight-checks {
+  margin-top: 4px;
+}
+.seq-guest-ops-flight-note {
+  opacity: 0.65;
+  font-style: italic;
+}
