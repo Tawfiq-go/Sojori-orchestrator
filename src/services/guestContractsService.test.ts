@@ -16,6 +16,11 @@ test('contract signature config is disabled by default', () => {
   assert.equal(parseContractSignature({ enabled: true }).autoSendAfterRegistration, false);
   assert.equal(parseContractSignature({ autoSendAfterRegistration: true }).autoSendAfterRegistration, true);
   assert.equal(parseContractSignature({ signerPolicy: 'each_traveler' }).signerPolicy, 'each_traveler');
+  assert.ok(parseContractSignature(undefined).establishmentNotice.length > 10);
+  assert.equal(
+    parseContractSignature({ establishmentNotice: '  Avis maison  ' }).establishmentNotice,
+    'Avis maison',
+  );
 });
 
 test('missingSigners returns every remaining traveler for dashboard link creation', () => {

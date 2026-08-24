@@ -4,14 +4,19 @@ export type ContractSignatureConfigValue = {
   documentType: 'stay_contract' | 'moroccan_police_form';
   signerPolicy: 'primary_guest' | 'each_traveler';
   templateId: string;
+  establishmentNotice: string;
 };
+
+export const DEFAULT_ESTABLISHMENT_NOTICE =
+  "La direction n'est pas responsable des objets de valeur laissés dans les chambres.";
 
 export const DEFAULT_CONTRACT_SIGNATURE: ContractSignatureConfigValue = {
   enabled: false,
   autoSendAfterRegistration: false,
   documentType: 'stay_contract',
   signerPolicy: 'primary_guest',
-  templateId: 'stay_contract_placeholder',
+  templateId: 'hotel_guest_sheet_v1',
+  establishmentNotice: DEFAULT_ESTABLISHMENT_NOTICE,
 };
 
 export function parseContractSignature(raw: unknown): ContractSignatureConfigValue {
@@ -26,5 +31,9 @@ export function parseContractSignature(raw: unknown): ContractSignatureConfigVal
       typeof rec.templateId === 'string' && rec.templateId.trim()
         ? rec.templateId.trim()
         : DEFAULT_CONTRACT_SIGNATURE.templateId,
+    establishmentNotice:
+      typeof rec.establishmentNotice === 'string'
+        ? rec.establishmentNotice.trim()
+        : DEFAULT_CONTRACT_SIGNATURE.establishmentNotice,
   };
 }
