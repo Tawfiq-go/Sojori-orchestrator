@@ -32,6 +32,10 @@ import { uploadReportLogo } from '../finances/services/reportLogoUpload';
 import { getAccounById, updateOwner } from '../staff/services/serverApi.task';
 
 import {
+  contractLogoOriginLabel,
+  resolveEffectiveContractLogoPreview,
+} from './contractLogoInheritance';
+import {
   contractSignatureOriginLabel,
   DEFAULT_CONTRACT_SIGNATURE,
   parseContractSignature,
@@ -91,7 +95,8 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resolvedOwnerId, setResolvedOwnerId] = useState<string | null>(null);
-  const [logoUrl, setLogoUrl] = useState('');
+  const [ownerLogoUrl, setOwnerLogoUrl] = useState('');
+  const [listingOverrideUrl, setListingOverrideUrl] = useState('');
   const [establishmentName, setEstablishmentName] = useState('');
   const [listingName, setListingName] = useState('');
   const [logoBusy, setLogoBusy] = useState(false);
@@ -109,10 +114,10 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
       const publicName = typeof pm.publicName === 'string' ? pm.publicName.trim() : '';
       const company =
         typeof account?.companyName === 'string' ? String(account.companyName).trim() : '';
-      setLogoUrl(logo);
+      setOwnerLogoUrl(logo);
       setEstablishmentName(publicName || company || '');
     } catch {
-      setLogoUrl('');
+      setOwnerLogoUrl('');
       setEstablishmentName('');
     }
   }, []);
@@ -159,6 +164,14 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
         compiled && typeof compiled === 'object' ? (compiled as Record<string, unknown>) : null;
       setValue(parseContractSignature(gestion.contractSignature ?? compiled));
 
+      const rawListingLogo =
+        gestion.contractLogo && typeof gestion.contractLogo === 'object'
+          ? (gestion.contractLogo as { logoImage?: unknown }).logoImage
+          : null;
+      setListingOverrideUrl(
+        typeof rawListingLogo === 'string' ? rawListingLogo.trim() : '',
+      );
+
       let nextOrigin = parseContractSignatureOrigin(compiledRec?.origin);
       const hasListingOverride =
         !ownerMode &&
@@ -183,7 +196,7 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
       setResolvedOwnerId(oid);
       if (oid) await loadOwnerBranding(oid);
       else {
-        setLogoUrl('');
+        setOwnerLogoUrl('');
         setEstablishmentName('');
       }
 
@@ -207,7 +220,8 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
     } catch {
       setDoc(null);
       setResolvedOwnerId(null);
-      setLogoUrl('');
+      setOwnerLogoUrl('');
+      setListingOverrideUrl('');
       setEstablishmentName('');
       setListingName('');
       setOrigin('default');
@@ -253,23 +267,52 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
     }
   };
 
-  const persistLogo = async (url: string) => {
+  const persistOwnerLogo = async (url: string) => {
     if (!resolvedOwnerId) {
       toast.error('Propriétaire introuvable pour enregistrer le logo');
       return;
     }
     await updateOwner(resolvedOwnerId, { pmProfile: { logoImage: url } });
-    setLogoUrl(url);
+    setOwnerLogoUrl(url);
+  };
+
+  const persistListingLogoOverride = async (url: string | null) => {
+    if (!doc || ownerMode || !listingId) return;
+    const existingGestion = (doc.capabilities?.registration?.gestion ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const gestion = { ...existingGestion };
+    if (url && url.trim()) {
+      gestion.contractLogo = { logoImage: url.trim() };
+    } else {
+      delete gestion.contractLogo;
+    }
+    await saveListingGestion({
+      listingId,
+      capabilityKey: 'registration',
+      gestion,
+      doc: doc as ListingOrchestrationDoc,
+    });
+    setListingOverrideUrl(url?.trim() || '');
   };
 
   const onLogoFile = async (files: FileList | null) => {
     const file = files?.[0];
-    if (!file || !resolvedOwnerId || logoBusy) return;
+    if (!file || logoBusy) return;
+    if (ownerMode && !resolvedOwnerId) return;
+    if (!ownerMode && (!doc || !listingId)) return;
     setLogoBusy(true);
     try {
       const url = await uploadReportLogo(file);
-      await persistLogo(url);
-      toast.success(logoUrl ? 'Logo remplacé' : 'Logo enregistré');
+      if (ownerMode) {
+        await persistOwnerLogo(url);
+        toast.success(ownerLogoUrl ? 'Logo propriétaire remplacé' : 'Logo propriétaire enregistré');
+      } else {
+        await persistListingLogoOverride(url);
+        toast.success(listingOverrideUrl ? 'Logo annonce remplacé' : 'Logo annonce enregistré');
+        void load();
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload logo impossible');
     } finally {
@@ -279,11 +322,18 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
   };
 
   const onRemoveLogo = async () => {
-    if (!resolvedOwnerId || logoBusy) return;
+    if (logoBusy) return;
     setLogoBusy(true);
     try {
-      await persistLogo('');
-      toast.success('Logo retiré');
+      if (ownerMode) {
+        if (!resolvedOwnerId) return;
+        await persistOwnerLogo('');
+        toast.success('Logo propriétaire retiré');
+      } else {
+        await persistListingLogoOverride(null);
+        toast.success('Override retiré — retour au logo propriétaire');
+        void load();
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Suppression logo impossible');
     } finally {
@@ -300,16 +350,22 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
     );
   }
 
-  const hasLogo = Boolean(logoUrl.trim());
-  // Same fallback chain as PDF: listing name → establishment public/legal → Établissement
-  const displayName =
-    listingName.trim() || establishmentName.trim() || 'Établissement';
+  const logoPreview = resolveEffectiveContractLogoPreview({
+    listingOverrideUrl: ownerMode ? '' : listingOverrideUrl,
+    ownerUrl: ownerLogoUrl,
+    listingName: ownerMode ? '' : listingName,
+    establishmentName,
+  });
+  const hasEffectiveLogo = Boolean(logoPreview.effectiveUrl);
+  const hasListingOverride = Boolean(listingOverrideUrl.trim());
+  const displayName = logoPreview.textFallback;
   const secondaryName =
     establishmentName.trim() &&
     establishmentName.trim() !== displayName
       ? establishmentName.trim()
       : '';
   const originChipLabel = `Configuration effective : ${contractSignatureOriginLabel(origin)}`;
+  const logoChipLabel = contractLogoOriginLabel(logoPreview.origin);
 
   return (
     <Box
@@ -347,7 +403,24 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
           border: '1px solid rgba(26,22,17,0.08)',
         }}
       >
-        <Typography sx={{ fontSize: 12.5, fontWeight: 600, mb: 1 }}>Logo propriétaire</Typography>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
+          <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>
+            {ownerMode ? 'Logo propriétaire' : 'Logo du contrat'}
+          </Typography>
+          <Chip
+            size="small"
+            label={logoChipLabel}
+            variant="outlined"
+            sx={{ height: 22, fontSize: 11 }}
+            color={
+              logoPreview.origin === 'listing'
+                ? 'warning'
+                : logoPreview.origin === 'owner'
+                  ? 'info'
+                  : 'default'
+            }
+          />
+        </Stack>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
           <Box
             sx={{
@@ -358,7 +431,7 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
             }}
           >
             <ReportLogoPreview
-              canonicalUrl={logoUrl}
+              canonicalUrl={logoPreview.effectiveUrl}
               alt={displayName}
               empty={<LogoFallback name={displayName} />}
               brokenFallback={<LogoFallback name={displayName} />}
@@ -369,8 +442,13 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
               {displayName}
             </Typography>
             <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.25 }}>
-              Logo propriétaire (pmProfile.logoImage) — même asset que les rapports P&amp;L. Hérité
-              par tous les logements.
+              {ownerMode
+                ? 'Logo optionnel — défaut pour tous les logements sans override. Même asset que les rapports P&L.'
+                : logoPreview.origin === 'listing'
+                  ? 'Override annonce — ce logo remplace le logo propriétaire pour ce logement uniquement.'
+                  : logoPreview.origin === 'owner'
+                    ? 'Hérité du propriétaire — aucun override stocké sur l’annonce.'
+                    : 'Sans logo image — le PDF affichera le nom du logement (ou le nom d’établissement).'}
             </Typography>
           </Box>
         </Stack>
@@ -385,12 +463,24 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
           <Button
             size="small"
             variant="contained"
-            disabled={!resolvedOwnerId || logoBusy || saving}
+            disabled={
+              logoBusy ||
+              saving ||
+              (ownerMode ? !resolvedOwnerId : !doc)
+            }
             onClick={() => fileRef.current?.click()}
           >
-            {logoBusy ? 'Envoi…' : hasLogo ? 'Remplacer' : 'Uploader'}
+            {logoBusy
+              ? 'Envoi…'
+              : ownerMode
+                ? hasEffectiveLogo
+                  ? 'Remplacer'
+                  : 'Uploader'
+                : hasListingOverride
+                  ? 'Remplacer l’override'
+                  : 'Uploader un override'}
           </Button>
-          {hasLogo ? (
+          {ownerMode && hasEffectiveLogo ? (
             <Button
               size="small"
               variant="outlined"
@@ -401,8 +491,19 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
               Retirer
             </Button>
           ) : null}
+          {!ownerMode && hasListingOverride ? (
+            <Button
+              size="small"
+              variant="outlined"
+              color="inherit"
+              disabled={!doc || logoBusy || saving}
+              onClick={() => void onRemoveLogo()}
+            >
+              Revenir au logo propriétaire
+            </Button>
+          ) : null}
         </Stack>
-        {!resolvedOwnerId ? (
+        {ownerMode && !resolvedOwnerId ? (
           <Typography sx={{ fontSize: 11, color: 'warning.main', mt: 0.75 }}>
             Propriétaire introuvable — logo non modifiable ici.
           </Typography>
@@ -431,7 +532,7 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
             }}
           >
             <ReportLogoPreview
-              canonicalUrl={logoUrl}
+              canonicalUrl={logoPreview.effectiveUrl}
               alt=""
               empty={
                 <Box
@@ -474,7 +575,11 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
             {secondaryName ? (
               <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{secondaryName}</Typography>
             ) : null}
-            <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>Fiche de séjour</Typography>
+            <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+              {hasEffectiveLogo
+                ? `Logo · ${logoChipLabel}`
+                : `Texte · ${displayName}`}
+            </Typography>
           </Box>
         </Stack>
         <Stack spacing={0.35}>
