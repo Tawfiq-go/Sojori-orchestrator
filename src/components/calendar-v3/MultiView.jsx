@@ -260,6 +260,8 @@ function MultiResaOverlay({
       laneEnd[lane] = Math.max(laneEnd[lane] || 0, seg.endIdx);
     });
   const laneCount = Math.max(1, laneEnd.length);
+  /** Même notion de « aujourd'hui » que l'en-tête de colonne (`day.isToday`). */
+  const todayIso = days.find((d) => d.isToday)?.iso || isoDay(new Date());
 
   // ~25 % d’air en haut — si plusieurs barres se chevauchent, on les empile
   const rh = rowHeight || 48;
@@ -294,6 +296,19 @@ function MultiResaOverlay({
           return Math.round((b - a) / 86400000);
         })();
         const pending = String(r.status || '').toLowerCase().includes('pend');
+        /**
+         * Arrivée du jour : le staff doit voir d'un coup d'œil si le client est
+         * enregistré. Rouge = attendu mais pas encore arrivé, vert = check-in fait.
+         * L'arrivée réelle vient du PMS (`mewsState = Started`), pas du statut
+         * Sojori qui reste « Confirmed » pendant tout le séjour.
+         */
+        const arrivesToday = isoDay(r.arrivalDate) === todayIso;
+        const checkedIn = String(r.mewsState || '').toLowerCase() === 'started';
+        const arrivalBadge = arrivesToday
+          ? checkedIn
+            ? { color: T.success, title: 'Arrivée du jour · client enregistré' }
+            : { color: T.error, title: 'Arrivée du jour · check-in à faire' }
+          : null;
         const startsHere = !clippedStart;
         const endsHere = !clippedEnd;
         const pillR = Math.round(barH / 2);
@@ -339,13 +354,14 @@ function MultiResaOverlay({
           >
             {showLabel ? (
               <span
-                title="Arrivée"
+                title={arrivalBadge ? arrivalBadge.title : 'Arrivée'}
                 style={{
                   width: Math.max(18, barH - 8),
                   height: Math.max(18, barH - 8),
                   borderRadius: '50%',
                   flexShrink: 0,
-                  background: ch.color,
+                  background: arrivalBadge ? arrivalBadge.color : ch.color,
+                  boxShadow: arrivalBadge ? `0 0 0 2px ${arrivalBadge.color}33` : undefined,
                   color: '#fff',
                   display: 'flex',
                   alignItems: 'center',
