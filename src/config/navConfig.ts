@@ -199,7 +199,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         label: 'Extra',
         iconType: 'check',
         iconColor: '#93C47D',
-        description: 'Catalogue extras Mews',
+        description: 'Catalogue Mews et stock villas',
         sub: [
           { id: 'tasks/extras/configuration', label: 'Configuration' },
           { id: 'tasks/extras/list', label: 'Liste extra' },

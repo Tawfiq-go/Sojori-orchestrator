@@ -1,38 +1,18 @@
-import { useEffect, useState } from 'react';
-import { toast } from 'react-toastify';
+import { Typography } from '@mui/material';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 import { useFinancesOwnerScope } from '../finances/useFinancesOwnerScope';
 import { ExtraCatalogTable } from './ExtraCatalogTable';
-import { listExtras, type ExtraProduct } from './extrasApi';
 
 export function TasksExtrasListPage() {
   const { ownerId } = useFinancesOwnerScope();
-  const [rows, setRows] = useState<ExtraProduct[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      setRows(await listExtras({}, { ownerId }));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Chargement impossible');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void load();
-  }, [ownerId]);
 
   return (
     <DashboardWrapper breadcrumb={['Task', 'Extra', 'Liste extra']}>
-      <ExtraCatalogTable
-        ownerId={ownerId}
-        rows={rows}
-        loading={loading}
-        onRowsChange={setRows}
-      />
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
+        Stock hôtel → villas : cochez les produits, les villas, puis « Mettre à jour le stock ».
+        L’import Mews est sur Configuration Extra.
+      </Typography>
+      <ExtraCatalogTable ownerId={ownerId} allowApply />
     </DashboardWrapper>
   );
 }
