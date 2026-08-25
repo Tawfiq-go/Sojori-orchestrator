@@ -196,16 +196,26 @@ function VillasTab() {
 /* Onglet Extras séjours                                               */
 /* ------------------------------------------------------------------ */
 
+const remainingOf = (extra: MinibarStayExtra) =>
+  Math.max(0, (extra.totalToBill || 0) - (extra.paidAmount || 0));
+
 const extraStatusLabel = (extra: MinibarStayExtra) => {
-  if (extra.status === 'open') return extra.totalToBill > 0 ? 'Ouverte' : 'Ouverte · 0';
-  if (extra.closedReason === 'sent_reception') return 'Envoyée réception';
-  if (extra.closedReason === 'mews_processed') return 'Clos départ';
+  if (extra.status === 'open') {
+    const left = remainingOf(extra);
+    if (extra.totalToBill <= 0) return 'Ouverte · 0';
+    if (left <= 0) return 'Ouverte · soldée';
+    return `Ouverte · reste ${fmtMoney(left, extra.currency)}`;
+  }
+  if (extra.status === 'paid') return 'Payée';
+  if (extra.status === 'completed') return 'Complétée';
+  if (extra.closedReason === 'mews_processed' || extra.closedReason === 'checkout') return 'Complétée';
+  if (extra.closedReason === 'paid') return 'Payée';
   return 'Clos';
 };
 
-const extraStatusColor = (extra: MinibarStayExtra): 'success' | 'info' | 'default' => {
-  if (extra.status === 'open') return 'success';
-  if (extra.closedReason === 'sent_reception') return 'info';
+const extraStatusColor = (extra: MinibarStayExtra): 'success' | 'warning' | 'default' => {
+  if (extra.status === 'open') return remainingOf(extra) > 0 ? 'warning' : 'success';
+  if (extra.status === 'paid') return 'success';
   return 'default';
 };
 
@@ -223,18 +233,20 @@ function ExtraRow({ extra }: { extra: MinibarStayExtra }) {
           <Chip
             size="small"
             color={extraStatusColor(extra)}
-            label={`${extra.invoiceSeq ? `#${extra.invoiceSeq} · ` : ''}${extraStatusLabel(extra)}`}
+            label={extraStatusLabel(extra)}
           />
         </TableCell>
         <TableCell align="right">{extra.lines.length}</TableCell>
         <TableCell align="right" sx={{ fontWeight: 600 }}>
           {fmtMoney(extra.totalToBill, extra.currency)}
         </TableCell>
+        <TableCell align="right">{fmtMoney(extra.paidAmount || 0, extra.currency)}</TableCell>
+        <TableCell align="right">{fmtMoney(remainingOf(extra), extra.currency)}</TableCell>
         <TableCell>{fmtDate(extra.openedAt)}</TableCell>
         <TableCell>{extra.closedAt ? fmtDate(extra.closedAt) : '—'}</TableCell>
       </TableRow>
       <TableRow>
-        <TableCell colSpan={8} sx={{ py: 0, borderBottom: open ? undefined : 'none' }}>
+        <TableCell colSpan={10} sx={{ py: 0, borderBottom: open ? undefined : 'none' }}>
           <Collapse in={open} unmountOnExit>
             <Box sx={{ py: 1.5, pl: 6 }}>
               {extra.lines.length === 0 ? (
@@ -300,15 +312,15 @@ function ExtrasTab() {
   return (
     <>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        Un extra = une facture. Envoyer à la réception clôt celle-ci ; la prochaine conso ouvre la suivante.
-        Pas encore poussé vers Mews.
+        Un extra = une résa. Ouvert à l’arrivée (started), clos au départ (payé si reste 0, sinon complété).
+        Envoyer à la réception encaisse le reste, sans créer un 2e extra. Pas encore poussé vers Mews.
       </Typography>
       <Stack direction="row" spacing={1} sx={{ mb: 1.5, alignItems: 'center' }}>
         {(['all', 'open', 'closed'] as const).map((s) => (
           <Chip
             key={s}
             size="small"
-            label={s === 'all' ? 'Tous' : s === 'open' ? 'Ouvertes' : 'Envoyées / closes'}
+            label={s === 'all' ? 'Tous' : s === 'open' ? 'Ouvertes' : 'Complétées / payées'}
             color={status === s ? 'primary' : 'default'}
             onClick={() => setStatus(s)}
           />
@@ -325,14 +337,16 @@ function ExtrasTab() {
             <TableCell>Client</TableCell>
             <TableCell>Statut</TableCell>
             <TableCell align="right">Lignes</TableCell>
-            <TableCell align="right">Montant</TableCell>
+            <TableCell align="right">Total</TableCell>
+            <TableCell align="right">Payé</TableCell>
+            <TableCell align="right">Reste</TableCell>
             <TableCell>Ouvert</TableCell>
             <TableCell>Clos</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {rows.map((e) => (
-            <ExtraRow key={e._id || `${e.reservationId}-${e.invoiceSeq || e.openedAt}`} extra={e} />
+            <ExtraRow key={e._id || e.reservationId} extra={e} />
           ))}
         </TableBody>
       </Table>
