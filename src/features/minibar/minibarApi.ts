@@ -79,6 +79,7 @@ export type MinibarExtraLine = {
 };
 
 export type MinibarStayExtra = {
+  _id?: string;
   reservationId: string;
   reservationCode?: string;
   listingId: string;
@@ -86,6 +87,8 @@ export type MinibarStayExtra = {
   roomName?: string;
   guestName?: string;
   status: 'open' | 'closed';
+  closedReason?: 'sent_reception' | 'mews_processed';
+  invoiceSeq?: number;
   currency: string;
   totalToBill: number;
   lines: MinibarExtraLine[];
