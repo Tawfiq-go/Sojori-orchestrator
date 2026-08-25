@@ -196,6 +196,19 @@ function VillasTab() {
 /* Onglet Extras séjours                                               */
 /* ------------------------------------------------------------------ */
 
+const extraStatusLabel = (extra: MinibarStayExtra) => {
+  if (extra.status === 'open') return extra.totalToBill > 0 ? 'Ouverte' : 'Ouverte · 0';
+  if (extra.closedReason === 'sent_reception') return 'Envoyée réception';
+  if (extra.closedReason === 'mews_processed') return 'Clos départ';
+  return 'Clos';
+};
+
+const extraStatusColor = (extra: MinibarStayExtra): 'success' | 'info' | 'default' => {
+  if (extra.status === 'open') return 'success';
+  if (extra.closedReason === 'sent_reception') return 'info';
+  return 'default';
+};
+
 function ExtraRow({ extra }: { extra: MinibarStayExtra }) {
   const [open, setOpen] = useState(false);
   return (
@@ -209,8 +222,8 @@ function ExtraRow({ extra }: { extra: MinibarStayExtra }) {
         <TableCell>
           <Chip
             size="small"
-            color={extra.status === 'open' ? 'success' : 'default'}
-            label={extra.status === 'open' ? 'En séjour' : 'Clos'}
+            color={extraStatusColor(extra)}
+            label={`${extra.invoiceSeq ? `#${extra.invoiceSeq} · ` : ''}${extraStatusLabel(extra)}`}
           />
         </TableCell>
         <TableCell align="right">{extra.lines.length}</TableCell>
@@ -286,12 +299,16 @@ function ExtrasTab() {
 
   return (
     <>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        Un extra = une facture. Envoyer à la réception clôt celle-ci ; la prochaine conso ouvre la suivante.
+        Pas encore poussé vers Mews.
+      </Typography>
       <Stack direction="row" spacing={1} sx={{ mb: 1.5, alignItems: 'center' }}>
         {(['all', 'open', 'closed'] as const).map((s) => (
           <Chip
             key={s}
             size="small"
-            label={s === 'all' ? 'Tous' : s === 'open' ? 'En séjour' : 'Clos'}
+            label={s === 'all' ? 'Tous' : s === 'open' ? 'Ouvertes' : 'Envoyées / closes'}
             color={status === s ? 'primary' : 'default'}
             onClick={() => setStatus(s)}
           />
@@ -308,14 +325,14 @@ function ExtrasTab() {
             <TableCell>Client</TableCell>
             <TableCell>Statut</TableCell>
             <TableCell align="right">Lignes</TableCell>
-            <TableCell align="right">À facturer</TableCell>
+            <TableCell align="right">Montant</TableCell>
             <TableCell>Ouvert</TableCell>
             <TableCell>Clos</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {rows.map((e) => (
-            <ExtraRow key={e.reservationId} extra={e} />
+            <ExtraRow key={e._id || `${e.reservationId}-${e.invoiceSeq || e.openedAt}`} extra={e} />
           ))}
         </TableBody>
       </Table>
