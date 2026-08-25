@@ -242,6 +242,26 @@ export function GuestContractSection({ reservationId, readOnly = false }: Props)
           Le PDF signé est immuable. Une nouvelle génération crée une nouvelle version.
         </Alert>
       ) : null}
+      {current ? (
+        <Typography sx={{ fontSize: 12, color: T.text3, mb: 1 }}>
+          Qui signe (figé sur ce contrat) :{' '}
+          <strong>
+            {current.signerPolicy === 'each_traveler'
+              ? 'chaque voyageur adulte'
+              : 'voyageur principal pour la réservation'}
+          </strong>
+          {current.expectedSignerIds?.length
+            ? ` · ${current.expectedSignerIds.length} signataire(s) attendu(s)`
+            : ''}
+          {current.status !== 'signed' && current.status !== 'superseded' ? (
+            <>
+              {' '}
+              · Pour changer la règle, mettez à jour l’orchestration puis utilisez « Régénérer avant
+              signature ».
+            </>
+          ) : null}
+        </Typography>
+      ) : null}
       {deliveries.length ? (
         <Stack spacing={0.75} sx={{ mb: 1.25 }}>
           {deliveries.map(delivery => (

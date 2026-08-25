@@ -672,9 +672,14 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
           <TextField
             select
             size="small"
-            label="Politique de signataire"
+            label="Qui doit signer ?"
             value={value.signerPolicy}
             disabled={saving || !doc}
+            helperText={
+              value.signerPolicy === 'each_traveler'
+                ? 'Un lien WhatsApp personnel est envoyé à chaque voyageur adulte. Les mineurs sont couverts par le voyageur principal / tuteur.'
+                : 'Un seul lien : le voyageur principal signe pour toute la réservation (y compris les mineurs).'
+            }
             onChange={e =>
               void save({
                 ...value,
@@ -682,10 +687,35 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
               })
             }
           >
-            <MenuItem value="primary_guest">Voyageur principal uniquement</MenuItem>
-            <MenuItem value="each_traveler">Chaque voyageur</MenuItem>
+            <MenuItem value="primary_guest">
+              <Box sx={{ py: 0.5 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+                  Le voyageur principal signe pour toute la réservation
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: 'text.secondary', whiteSpace: 'normal' }}>
+                  Un seul lien de signature. Les fiches voyageurs portent la mention « signature du
+                  voyageur principal pour la réservation ».
+                </Typography>
+              </Box>
+            </MenuItem>
+            <MenuItem value="each_traveler">
+              <Box sx={{ py: 0.5 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+                  Chaque voyageur adulte signe sa propre fiche
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: 'text.secondary', whiteSpace: 'normal' }}>
+                  Un lien unique par adulte, avec son nom. La signature d’un voyageur n’apparaît que
+                  sur sa page.
+                </Typography>
+              </Box>
+            </MenuItem>
           </TextField>
         </FormControl>
+        <Alert severity="info" sx={{ fontSize: 12, py: 0.5 }}>
+          Cette règle est figée dans chaque contrat au moment de la génération. Modifier ici
+          n&apos;affecte que les futurs contrats — régénérez un contrat non signé pour appliquer le
+          nouveau choix. Un contrat déjà signé reste immuable.
+        </Alert>
         <TextField
           size="small"
           multiline
