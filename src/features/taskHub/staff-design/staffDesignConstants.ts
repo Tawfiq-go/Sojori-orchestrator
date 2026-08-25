@@ -36,6 +36,8 @@ const STAFF_PILL_LABEL_OVERRIDES: Partial<Record<FulltaskTaskTypeId, string>> = 
   receive_arrival: 'Accueil client (check-in)',
   receive_departure: 'Départ client (check-out)',
   checkout_cleaning: 'Ménage checkout',
+  cleaning_refresh: 'Rafraîchissement',
+  cleaning_urgent: 'Urgent',
   welcome_package: 'Pack bienvenue',
   minibar_check: 'Contrôle mini-bar',
 };
@@ -51,6 +53,8 @@ const MENAGE_KEYS = [
   'cleaning_paid',
   'cleaning_sojori',
   'checkout_cleaning',
+  'cleaning_refresh',
+  'cleaning_urgent',
   'stay_cleaning',
 ] as const;
 
@@ -75,7 +79,7 @@ export const STAFF_ROLE_PRESETS: StaffRolePreset[] = [
   {
     id: 'fdm',
     label: 'FdM',
-    hint: 'Exécute Recouche / checkout / journalier. Terminer → Clean.',
+    hint: 'Exécute Check-in / Recouche / Rafraîchissement / Urgent. Terminer → Clean.',
     taskTypes: MENAGE_KEYS,
     opsRole: 'agent',
     canInspect: false,
