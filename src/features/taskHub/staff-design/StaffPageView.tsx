@@ -342,6 +342,8 @@ export default function StaffPageView({
         'cleaning_paid',
         'cleaning_sojori',
         'checkout_cleaning',
+        'cleaning_refresh',
+        'cleaning_urgent',
         'stay_cleaning',
       ].includes(key);
       const isAccueil = key === 'receive_arrival' || key === 'receive_departure';
@@ -412,6 +414,8 @@ export default function StaffPageView({
         'cleaning_paid',
         'cleaning_sojori',
         'checkout_cleaning',
+        'cleaning_refresh',
+        'cleaning_urgent',
         'stay_cleaning',
       ].includes(key);
       const prev = modes[key] || {
@@ -1052,6 +1056,8 @@ export default function StaffPageView({
                     'cleaning_paid',
                     'cleaning_sojori',
                     'checkout_cleaning',
+                    'cleaning_refresh',
+                    'cleaning_urgent',
                     'stay_cleaning',
                     'welcome_package',
                     'minibar_check',

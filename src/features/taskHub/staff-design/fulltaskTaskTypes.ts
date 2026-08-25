@@ -15,6 +15,8 @@ export const FULLTASK_TASK_TYPES = [
   'registration',
   'cleaning_paid',
   'checkout_cleaning',
+  'cleaning_refresh',
+  'cleaning_urgent',
   'stay_cleaning',
   'welcome_package',
   'minibar_check',
@@ -38,6 +40,8 @@ export const FULLTASK_TASK_TYPE_LABELS: Record<FulltaskTaskTypeId, string> = {
   registration: 'Enregistrement',
   cleaning_paid: 'Ménage payant',
   checkout_cleaning: 'Ménage checkout',
+  cleaning_refresh: 'Rafraîchissement',
+  cleaning_urgent: 'Urgent',
   stay_cleaning: 'Ménage journalier',
   welcome_package: 'Pack bienvenue',
   minibar_check: 'Contrôle mini-bar',
@@ -59,6 +63,8 @@ export const FULLTASK_TASK_TYPE_EMOJI: Partial<Record<FulltaskTaskTypeId, string
   registration: '📝',
   cleaning_paid: '✨',
   checkout_cleaning: '🧼',
+  cleaning_refresh: '✨',
+  cleaning_urgent: '⚡',
   stay_cleaning: '🧽',
   welcome_package: '🎁',
   minibar_check: '🧊',
@@ -98,6 +104,8 @@ export function defaultOrchestrationReferenceForTaskType(taskType?: string): Ref
     t === 'groceries' ||
     t === 'concierge' ||
     t === 'checkout_cleaning' ||
+    t === 'cleaning_refresh' ||
+    t === 'cleaning_urgent' ||
     t === 'minibar_check' ||
     t === 'welcome_package'
   ) {
