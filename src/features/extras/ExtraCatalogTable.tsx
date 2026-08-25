@@ -400,7 +400,7 @@ export function ExtraCatalogTable({
       {allowApply && listingId ? (
         <Alert severity={receptionLabel ? 'info' : 'warning'} sx={{ mb: 2 }}>
           {receptionLabel
-            ? `Réception (Équipe) : ${receptionLabel}. Le jour J, le contrôleur lui envoie un template WhatsApp + facture.`
+            ? `Réception (Équipe) : ${receptionLabel}. Le contrôleur envoie chaque facture (extra) par WhatsApp — le client peut payer plusieurs fois.`
             : 'Aucun staff type Réception pour cet établissement. Ajoutez-le dans Équipe (activité Réception) — pas ici.'}{' '}
           <Box
             component="a"
