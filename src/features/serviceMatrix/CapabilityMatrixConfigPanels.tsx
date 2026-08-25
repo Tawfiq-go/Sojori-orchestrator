@@ -153,10 +153,9 @@ export function CapabilityGestionPanel({
     return (
       <Box sx={embeddedSx}>
         <Alert severity="info" sx={{ fontSize: 12.5 }}>
-          Formulaire d&apos;enregistrement configurable (voyageur / séjour). Les champs
-          supplémentaires (hors passeport / OCR) apparaissent dans le Flow WhatsApp, jusqu&apos;à 10
-          questions. Les champs requis déterminent le statut Complet. L&apos;onglet réservation
-          Enregistrement sert à saisir les réponses, pas à configurer le formulaire.
+          Choisissez les informations lues sur le passeport et celles que le voyageur doit
+          compléter. Les propriétaires peuvent ajouter jusqu&apos;à 4 questions personnalisées.
+          Les administrateurs disposent d&apos;un mode Avancé pour le diagnostic technique.
         </Alert>
         {(lid || templateMode) && (
           <>
