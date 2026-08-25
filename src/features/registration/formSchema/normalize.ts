@@ -343,6 +343,16 @@ export function parseRegistrationFormSchema(
   }
   const flowCheck = whatsAppFlowRenderCheck(schema)
   if (!flowCheck.ok) errors.push(...flowCheck.errors)
+  if (mode === 'strict') {
+    const enabledCustom = schema.fields.filter((f) => f.kind === 'custom' && f.enabled !== false).length
+    /** Absolute API ceiling — matches ADMIN_CUSTOM_QUESTION_LIMIT in ownerExperience. */
+    const ADMIN_CUSTOM_CEILING = 10
+    if (enabledCustom > ADMIN_CUSTOM_CEILING) {
+      errors.push(
+        `Au plus ${ADMIN_CUSTOM_CEILING} questions personnalisées actives (actuellement ${enabledCustom}).`,
+      )
+    }
+  }
   return { ok: errors.length === 0, schema: errors.length === 0 ? schema : null, errors }
 }
 
