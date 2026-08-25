@@ -245,3 +245,34 @@ export async function applyOwnerStock(
     throwApiError(e, 'Application stock impossible');
   }
 }
+
+export type MinibarNotifySettings = {
+  listingId: string;
+  notifyName: string;
+  notifyPhone: string;
+  staffId?: string;
+  count?: number;
+};
+
+export async function fetchNotifySettings(
+  listingId: string,
+  scope?: OwnerScope,
+): Promise<MinibarNotifySettings> {
+  try {
+    const { data } = await apiClient.get<ApiList<MinibarNotifySettings>>(
+      `${BASE}/extras/notify-settings`,
+      { params: withOwnerParams({ listingId }, scope) },
+    );
+    if (data?.success === false) throw new Error(data.error || data.message || 'Request failed');
+    return (
+      data?.data ?? {
+        listingId,
+        notifyName: '',
+        notifyPhone: '',
+        count: 0,
+      }
+    );
+  } catch (e) {
+    throwApiError(e, 'Réception impossible à charger');
+  }
+}
