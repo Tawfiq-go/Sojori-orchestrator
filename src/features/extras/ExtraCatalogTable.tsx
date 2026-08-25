@@ -26,6 +26,7 @@ import listingsService from '../../services/listingsService';
 import { autocompleteOptionLiProps } from '../../utils/autocompleteOptionLiProps';
 import {
   applyOwnerStock,
+  fetchNotifySettings,
   fetchStockKinds,
   fetchStockRooms,
   listExtras,
@@ -67,6 +68,7 @@ export function ExtraCatalogTable({
   const [selectedRooms, setSelectedRooms] = useState<ExtraStockRoom[]>([]);
   const [applyOpen, setApplyOpen] = useState(false);
   const [applyBusy, setApplyBusy] = useState(false);
+  const [receptionLabel, setReceptionLabel] = useState('');
 
   const kindDef = kinds.find((k) => k.id === kind) || kinds[0];
   const canApplyKind = kind === 'minibar';
@@ -146,6 +148,30 @@ export function ExtraCatalogTable({
       })
       .finally(() => {
         if (!cancelled) setRoomsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [listingId, ownerId, allowApply]);
+
+  useEffect(() => {
+    if (!allowApply || !listingId) {
+      setReceptionLabel('');
+      return;
+    }
+    let cancelled = false;
+    void fetchNotifySettings(listingId, { ownerId })
+      .then((s) => {
+        if (cancelled) return;
+        if (!s.notifyPhone) {
+          setReceptionLabel('');
+          return;
+        }
+        const extra = s.count > 1 ? ` (+${s.count - 1})` : '';
+        setReceptionLabel(`${s.notifyName || 'Réception'} · ${s.notifyPhone}${extra}`);
+      })
+      .catch((e) => {
+        if (!cancelled) toast.error(e instanceof Error ? e.message : 'Réception impossible à charger');
       });
     return () => {
       cancelled = true;
@@ -369,6 +395,21 @@ export function ExtraCatalogTable({
             Mettre à jour le stock
           </Button>
         </Stack>
+      ) : null}
+
+      {allowApply && listingId ? (
+        <Alert severity={receptionLabel ? 'info' : 'warning'} sx={{ mb: 2 }}>
+          {receptionLabel
+            ? `Réception (Équipe) : ${receptionLabel}. Le jour J, le contrôleur lui envoie un template WhatsApp + facture.`
+            : 'Aucun staff type Réception pour cet établissement. Ajoutez-le dans Équipe (activité Réception) — pas ici.'}{' '}
+          <Box
+            component="a"
+            href="/admin/equipe?tab=worker"
+            sx={{ fontWeight: 700, color: 'inherit' }}
+          >
+            Ouvrir Équipe
+          </Box>
+        </Alert>
       ) : null}
 
       <Stack direction="row" spacing={1.5} sx={{ mb: 2, alignItems: 'center', flexWrap: 'wrap' }}>

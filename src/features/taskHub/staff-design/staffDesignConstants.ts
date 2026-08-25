@@ -40,6 +40,7 @@ const STAFF_PILL_LABEL_OVERRIDES: Partial<Record<FulltaskTaskTypeId, string>> = 
   cleaning_urgent: 'Urgent',
   welcome_package: 'Pack bienvenue',
   minibar_check: 'Contrôle mini-bar',
+  reception: 'Réception',
 };
 
 export const STAFF_TASK_PILLS = STAFF_ASSIGNABLE_TASK_TYPES.map((key) => ({
