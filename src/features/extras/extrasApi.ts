@@ -43,10 +43,19 @@ export type ExtraProduct = {
   price: number;
   priceOverride?: number;
   effectivePrice: number;
+  priceHT?: number;
+  taxCode?: string;
+  taxRatePct?: number;
+  taxAmount?: number;
   currency: string;
   serviceId: string;
   serviceName: string;
   isMinibar: boolean;
+  stockKind?: string;
+  soldQty90d?: number;
+  soldQty30d?: number;
+  sortOrder?: number;
+  defaultParQty?: number;
   isActive: boolean;
   missingFromPms: boolean;
   importedAt?: string;
@@ -66,6 +75,32 @@ export type ExtraImportResult = {
   categoriesCreated: number;
   minibar: number;
   total: number;
+};
+
+export type StockKind = {
+  id: string;
+  label: string;
+  staffLetter?: string;
+  isMinibar: boolean;
+};
+
+export const STOCK_KINDS_FALLBACK: StockKind[] = [
+  { id: 'minibar', label: 'Mini-bar', staffLetter: 'N', isMinibar: true },
+  { id: 'activity', label: 'Activités', isMinibar: false },
+  { id: 'towel', label: 'Serviettes', isMinibar: false },
+];
+
+export type ExtraStockRoom = {
+  id: string;
+  name: string;
+};
+
+export type ApplyOwnerStockResult = {
+  kind: string;
+  listingId: string;
+  rooms: number;
+  products: number;
+  written: number;
 };
 
 export async function listExtras(
@@ -124,6 +159,7 @@ export async function patchExtra(
     displayName?: string;
     priceOverride?: number | null;
     isMinibar?: boolean;
+    defaultParQty?: number;
   },
   scope?: OwnerScope,
 ): Promise<ExtraProduct> {
@@ -138,5 +174,74 @@ export async function patchExtra(
     return data.data;
   } catch (e) {
     throwApiError(e, 'Mise à jour extra impossible');
+  }
+}
+
+export async function fetchStockKinds(scope?: OwnerScope): Promise<StockKind[]> {
+  try {
+    const { data } = await apiClient.get<ApiList<StockKind[]>>(`${BASE}/extras/stock/kinds`, {
+      params: withOwnerParams({}, scope),
+    });
+    if (data?.success === false) throw new Error(data.error || data.message || 'Request failed');
+    return data?.data?.length ? data.data : STOCK_KINDS_FALLBACK;
+  } catch (e) {
+    throwApiError(e, 'Types de stock impossibles à charger');
+  }
+}
+
+export async function fetchStockRooms(
+  listingId: string,
+  scope?: OwnerScope,
+): Promise<ExtraStockRoom[]> {
+  try {
+    const { data } = await apiClient.get<ApiList<ExtraStockRoom[]>>(`${BASE}/extras/stock/rooms`, {
+      params: withOwnerParams({ listingId }, scope),
+    });
+    if (data?.success === false) throw new Error(data.error || data.message || 'Request failed');
+    return data?.data ?? [];
+  } catch (e) {
+    throwApiError(e, 'Villas impossibles à charger');
+  }
+}
+
+/** Prix / TVA / ventes Mews sur le catalogue. Ne touche PAS les villas. */
+export async function syncExtraCatalog(
+  scope?: OwnerScope,
+): Promise<{ updated: number }> {
+  try {
+    const { data } = await apiClient.post<ApiList<{ updated: number }>>(
+      `${BASE}/extras/stock/sync-catalog`,
+      {},
+      { params: withOwnerParams({}, scope) },
+    );
+    if (data?.success === false) throw new Error(data.error || data.message || 'Sync failed');
+    return data?.data ?? { updated: 0 };
+  } catch (e) {
+    throwApiError(e, 'Rafraîchissement catalogue impossible');
+  }
+}
+
+/** Articles cochés × villas cochées. Jamais appelé au chargement. */
+export async function applyOwnerStock(
+  body: {
+    listingId: string;
+    kind: string;
+    roomIds: string[];
+    productIds: string[];
+    catalogOrder?: 'smart' | 'sales' | 'alpha';
+  },
+  scope?: OwnerScope,
+): Promise<ApplyOwnerStockResult> {
+  try {
+    const { data } = await apiClient.post<ApiList<ApplyOwnerStockResult>>(
+      `${BASE}/extras/stock/apply`,
+      body,
+      { params: withOwnerParams({}, scope), timeout: 60_000 },
+    );
+    if (data?.success === false) throw new Error(data.error || data.message || 'Apply failed');
+    if (!data?.data) throw new Error('Application sans résultat');
+    return data.data;
+  } catch (e) {
+    throwApiError(e, 'Application stock impossible');
   }
 }
