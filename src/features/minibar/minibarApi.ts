@@ -86,11 +86,12 @@ export type MinibarStayExtra = {
   roomId: string;
   roomName?: string;
   guestName?: string;
-  status: 'open' | 'closed';
-  closedReason?: 'sent_reception' | 'mews_processed';
+  status: 'open' | 'completed' | 'paid' | 'closed';
+  closedReason?: 'checkout' | 'paid' | 'sent_reception' | 'mews_processed';
   invoiceSeq?: number;
   currency: string;
   totalToBill: number;
+  paidAmount?: number;
   lines: MinibarExtraLine[];
   openedAt: string;
   closedAt?: string;
