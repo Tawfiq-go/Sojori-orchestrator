@@ -19,6 +19,7 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   if (path === '/ma-journee' || path.startsWith('/ma-journee/')) return 'ma-journee';
   if (path === '/tasks' || path === '/tasks/list') return 'tasks/list';
   if (path.startsWith('/tasks/extras/list')) return 'tasks/extras/list';
+  if (path.startsWith('/tasks/extras/minibar')) return 'tasks/extras/minibar';
   if (path.startsWith('/tasks/extras')) return 'tasks/extras/configuration';
   if (path === '/planning' || path.startsWith('/planning/')) return 'planning';
   if (path === '/ops-board' || path.startsWith('/ops-board/')) return 'ops-board';

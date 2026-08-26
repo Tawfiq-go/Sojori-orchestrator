@@ -7,7 +7,7 @@ export function TasksExtrasListPage() {
   const { ownerId } = useFinancesOwnerScope();
 
   return (
-    <DashboardWrapper breadcrumb={['Task', 'Extra', 'Liste extra']}>
+    <DashboardWrapper breadcrumb={['Extra', 'Liste extra']}>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
         Stock hôtel → villas : cochez les produits, les villas, puis « Mettre à jour le stock ».
         L’import Mews est sur Configuration Extra.

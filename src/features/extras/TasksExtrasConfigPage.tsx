@@ -56,7 +56,7 @@ export function TasksExtrasConfigPage() {
   };
 
   return (
-    <DashboardWrapper breadcrumb={['Task', 'Extra', 'Configuration']}>
+    <DashboardWrapper breadcrumb={['Extra', 'Configuration']}>
       <Paper sx={{ p: 2.5, mb: 2 }}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
           Catalogue hôtel uniquement : copie les produits Mews (prix, TVA, ventes). Ça ne remplit
