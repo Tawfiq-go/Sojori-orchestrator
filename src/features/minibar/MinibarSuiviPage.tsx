@@ -22,7 +22,6 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { toast } from 'react-toastify';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 import {
-  fetchMinibarExtras,
   fetchMinibarJournal,
   fetchMinibarOverview,
   fetchMinibarSessions,
@@ -31,9 +30,9 @@ import {
   type MinibarJournalEntry,
   type MinibarRoomOverview,
   type MinibarSession,
-  type MinibarStayExtra,
   type MinibarStockLine,
 } from './minibarApi';
+import { MinibarExtrasTable } from './MinibarExtrasTable';
 
 const fmtDate = (d?: string) =>
   d ? new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
@@ -196,162 +195,8 @@ function VillasTab() {
 /* Onglet Extras séjours                                               */
 /* ------------------------------------------------------------------ */
 
-const remainingOf = (extra: MinibarStayExtra) =>
-  Math.max(0, (extra.totalToBill || 0) - (extra.paidAmount || 0));
-
-const extraStatusLabel = (extra: MinibarStayExtra) => {
-  if (extra.status === 'open') {
-    const left = remainingOf(extra);
-    if (extra.totalToBill <= 0) return 'Ouverte · 0';
-    if (left <= 0) return 'Ouverte · soldée';
-    return `Ouverte · reste ${fmtMoney(left, extra.currency)}`;
-  }
-  if (extra.status === 'paid') return 'Payée';
-  if (extra.status === 'completed') return 'Complétée';
-  if (extra.closedReason === 'mews_processed' || extra.closedReason === 'checkout') return 'Complétée';
-  if (extra.closedReason === 'paid') return 'Payée';
-  return 'Clos';
-};
-
-const extraStatusColor = (extra: MinibarStayExtra): 'success' | 'warning' | 'default' => {
-  if (extra.status === 'open') return remainingOf(extra) > 0 ? 'warning' : 'success';
-  if (extra.status === 'paid') return 'success';
-  return 'default';
-};
-
-function ExtraRow({ extra }: { extra: MinibarStayExtra }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <TableRow hover sx={{ cursor: 'pointer' }} onClick={() => setOpen((o) => !o)}>
-        <TableCell padding="checkbox">
-          <IconButton size="small">{open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}</IconButton>
-        </TableCell>
-        <TableCell sx={{ fontWeight: 600 }}>{extra.roomName || extra.roomId}</TableCell>
-        <TableCell>{extra.guestName || '—'}</TableCell>
-        <TableCell>
-          <Chip
-            size="small"
-            color={extraStatusColor(extra)}
-            label={extraStatusLabel(extra)}
-          />
-        </TableCell>
-        <TableCell align="right">{extra.lines.length}</TableCell>
-        <TableCell align="right" sx={{ fontWeight: 600 }}>
-          {fmtMoney(extra.totalToBill, extra.currency)}
-        </TableCell>
-        <TableCell align="right">{fmtMoney(extra.paidAmount || 0, extra.currency)}</TableCell>
-        <TableCell align="right">{fmtMoney(remainingOf(extra), extra.currency)}</TableCell>
-        <TableCell>{fmtDate(extra.openedAt)}</TableCell>
-        <TableCell>{extra.closedAt ? fmtDate(extra.closedAt) : '—'}</TableCell>
-      </TableRow>
-      <TableRow>
-        <TableCell colSpan={10} sx={{ py: 0, borderBottom: open ? undefined : 'none' }}>
-          <Collapse in={open} unmountOnExit>
-            <Box sx={{ py: 1.5, pl: 6 }}>
-              {extra.lines.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">Aucune consommation déclarée.</Typography>
-              ) : (
-                <Table size="small" sx={{ maxWidth: 720 }}>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Produit</TableCell>
-                      <TableCell align="right">Qté</TableCell>
-                      <TableCell align="right">PU</TableCell>
-                      <TableCell align="right">Montant</TableCell>
-                      <TableCell>Déclaré</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {extra.lines.map((l, i) => (
-                      <TableRow key={`${l.productId}-${i}`}>
-                        <TableCell>{l.productName}</TableCell>
-                        <TableCell align="right">{l.qty}</TableCell>
-                        <TableCell align="right">{fmtMoney(l.unitPrice, extra.currency)}</TableCell>
-                        <TableCell align="right">{fmtMoney(l.amount, extra.currency)}</TableCell>
-                        <TableCell>
-                          <Typography variant="caption" color="text.secondary">
-                            {fmtDate(l.declaredAt)}
-                            {l.declaredBy ? ` · ${l.declaredBy}` : ''}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </Box>
-          </Collapse>
-        </TableCell>
-      </TableRow>
-    </>
-  );
-}
-
 function ExtrasTab() {
-  const [status, setStatus] = useState<'all' | 'open' | 'closed'>('all');
-  const [rows, setRows] = useState<MinibarStayExtra[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    fetchMinibarExtras(status)
-      .then((r) => {
-        if (alive) setRows(r);
-      })
-      .catch(loadErr)
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [status]);
-
-  return (
-    <>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        Un extra = une résa. Ouvert à l’arrivée (started), clos au départ (payé si reste 0, sinon complété).
-        Envoyer à la réception encaisse le reste, sans créer un 2e extra. Pas encore poussé vers Mews.
-      </Typography>
-      <Stack direction="row" spacing={1} sx={{ mb: 1.5, alignItems: 'center' }}>
-        {(['all', 'open', 'closed'] as const).map((s) => (
-          <Chip
-            key={s}
-            size="small"
-            label={s === 'all' ? 'Tous' : s === 'open' ? 'Ouvertes' : 'Complétées / payées'}
-            color={status === s ? 'primary' : 'default'}
-            onClick={() => setStatus(s)}
-          />
-        ))}
-        <Typography variant="body2" color="text.secondary">
-          {loading ? 'Chargement…' : `${rows.length} extra${rows.length > 1 ? 's' : ''}`}
-        </Typography>
-      </Stack>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell padding="checkbox" />
-            <TableCell>Villa</TableCell>
-            <TableCell>Client</TableCell>
-            <TableCell>Statut</TableCell>
-            <TableCell align="right">Lignes</TableCell>
-            <TableCell align="right">Total</TableCell>
-            <TableCell align="right">Payé</TableCell>
-            <TableCell align="right">Reste</TableCell>
-            <TableCell>Ouvert</TableCell>
-            <TableCell>Clos</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((e) => (
-            <ExtraRow key={e._id || e.reservationId} extra={e} />
-          ))}
-        </TableBody>
-      </Table>
-    </>
-  );
+  return <MinibarExtrasTable />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -551,15 +396,15 @@ function SessionsTab() {
 export function MinibarSuiviPage() {
   const [tab, setTab] = useState(0);
   return (
-    <DashboardWrapper breadcrumb={['Task', 'Extra', 'Suivi mini-bar']}>
+    <DashboardWrapper breadcrumb={['Extra', 'Suivi mini-bar']}>
       <Tabs value={tab} onChange={(_e, v: number) => setTab(v)} sx={{ mb: 2 }}>
+        <Tab label="Extras" />
         <Tab label="Villas & stock" />
-        <Tab label="Extras séjours" />
         <Tab label="Journal" />
         <Tab label="Sessions" />
       </Tabs>
-      {tab === 0 ? <VillasTab /> : null}
-      {tab === 1 ? <ExtrasTab /> : null}
+      {tab === 0 ? <ExtrasTab /> : null}
+      {tab === 1 ? <VillasTab /> : null}
       {tab === 2 ? <JournalTab /> : null}
       {tab === 3 ? <SessionsTab /> : null}
     </DashboardWrapper>

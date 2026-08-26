@@ -31,6 +31,9 @@ export function useDashboardChrome() {
     if (path.startsWith('/tasks/extras/list')) {
       return 'tasks/extras/list';
     }
+    if (path.startsWith('/tasks/extras/minibar')) {
+      return 'tasks/extras/minibar';
+    }
     if (path.startsWith('/tasks/extras')) {
       return 'tasks/extras/configuration';
     }
