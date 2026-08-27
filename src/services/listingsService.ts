@@ -900,15 +900,38 @@ export const listingsService = {
 
   /**
    * GET /api/v1/admin/country
+   * paged=false → tableau brut ; paged=true → `{ countries, total }`.
    */
   async getCountries(): Promise<{ _id: string; name: string }[]> {
     try {
-      const params = new URLSearchParams({ paged: 'false' });
+      const params = new URLSearchParams({
+        page: '0',
+        limit: '500',
+        paged: 'false',
+        search_text: '',
+      });
       const response = await apiClient.get(
         `${MICROSERVICE_BASE_URL.SRV_ADMIN}/country?${params.toString()}`,
         monitoringAxiosConfig(),
       );
-      return response.data?.data || [];
+      const body = response.data;
+      let rows: unknown[] = [];
+      if (Array.isArray(body)) rows = body;
+      else if (Array.isArray(asRecord(body).countries)) {
+        rows = asRecord(body).countries as unknown[];
+      } else if (Array.isArray(asRecord(body).data)) {
+        rows = asRecord(body).data as unknown[];
+      }
+      return rows
+        .map((row) => {
+          const r = asRecord(row);
+          return {
+            _id: asString(r._id),
+            name: asString(r.name) || asString(r._id),
+          };
+        })
+        .filter((c) => c._id)
+        .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
     } catch {
       return [];
     }

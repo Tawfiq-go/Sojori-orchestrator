@@ -142,8 +142,12 @@ export function MultiListingCreateShell({
       toast.error('Adresse requise');
       return;
     }
-    if (!values.city?.trim() || !values.cityId?.trim() || !values.country?.trim()) {
-      toast.error('Ville (liste) et Pays sont requis');
+    if (!values.city?.trim() || !values.cityId?.trim()) {
+      toast.error('Sélectionnez une ville dans la liste');
+      return;
+    }
+    if (!values.country?.trim()) {
+      toast.error('Sélectionnez un pays');
       return;
     }
     if (!values.roomTypes.length) {

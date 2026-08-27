@@ -13,7 +13,8 @@ import { multiTokens as t, type MultiCreateValues, type MultiListingImage } from
 import ListingOwnerSelect from '../form-v2/components/ListingOwnerSelect';
 import listingsService from '../../../services/listingsService';
 
-type CityOption = { _id: string; name: string };
+type CityOption = { _id: string; name: string; countryId?: string };
+type CountryOption = { _id: string; name: string };
 
 type Props = {
   values: MultiCreateValues;
@@ -22,8 +23,17 @@ type Props = {
   onPickCommonFiles?: (files: FileList) => void;
 };
 
+function countryNameForCity(
+  city: CityOption | undefined,
+  countries: CountryOption[],
+): string {
+  if (!city?.countryId) return '';
+  return countries.find((c) => c._id === city.countryId)?.name || '';
+}
+
 export function MultiBuildingSection({ values, onChange, uploading, onPickCommonFiles }: Props) {
   const [cities, setCities] = useState<CityOption[]>([]);
+  const [countries, setCountries] = useState<CountryOption[]>([]);
   const descValue =
     Array.isArray(values.description) && values.description[0]
       ? String(values.description[0].value || '')
@@ -31,17 +41,41 @@ export function MultiBuildingSection({ values, onChange, uploading, onPickCommon
 
   useEffect(() => {
     let cancelled = false;
-    listingsService.getCities({ allCities: true, limit: 2000 }).then((rows) => {
-      if (!cancelled) setCities(rows || []);
+    Promise.all([
+      listingsService.getCities({ allCities: true, limit: 2000 }),
+      listingsService.getCountries(),
+    ]).then(([cityRows, countryRows]) => {
+      if (cancelled) return;
+      setCities(cityRows || []);
+      setCountries(countryRows || []);
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Même logique que LocationTab (Single) : sélection ville → city + cityId
+  // Resynchronise cityId / pays si la ville est affichée mais l’ID manque (HMR, autofill, etc.)
+  useEffect(() => {
+    if (!cities.length || !values.city?.trim()) return;
+    const selected = cities.find((c) => c.name === values.city);
+    if (!selected) return;
+    const nextCountry =
+      values.country?.trim() || countryNameForCity(selected, countries) || values.country;
+    const needsCityId = !values.cityId || values.cityId !== selected._id;
+    const needsCountry = Boolean(nextCountry) && nextCountry !== values.country;
+    if (!needsCityId && !needsCountry) return;
+    onChange({
+      ...(needsCityId ? { cityId: selected._id } : {}),
+      ...(needsCountry ? { country: nextCountry } : {}),
+    });
+  }, [cities, countries, values.city, values.cityId, values.country, onChange]);
+
   const citySelectValue =
     values.city && cities.some((c) => c.name === values.city) ? values.city : '';
+  const countrySelectValue =
+    values.country && countries.some((c) => c.name === values.country)
+      ? values.country
+      : '';
 
   return (
     <Box
@@ -103,6 +137,7 @@ export function MultiBuildingSection({ values, onChange, uploading, onPickCommon
             value={values.name}
             onChange={(e) => onChange({ name: e.target.value })}
             fullWidth
+            autoComplete="off"
           />
           <TextField
             label="Adresse *"
@@ -110,6 +145,7 @@ export function MultiBuildingSection({ values, onChange, uploading, onPickCommon
             value={values.address}
             onChange={(e) => onChange({ address: e.target.value })}
             fullWidth
+            autoComplete="street-address"
           />
         </Box>
 
@@ -126,7 +162,6 @@ export function MultiBuildingSection({ values, onChange, uploading, onPickCommon
             <Select
               labelId="multi-create-city-label"
               label="Ville"
-              displayEmpty
               value={citySelectValue}
               onChange={(e) => {
                 const name = String(e.target.value || '');
@@ -134,6 +169,8 @@ export function MultiBuildingSection({ values, onChange, uploading, onPickCommon
                 onChange({
                   city: name,
                   cityId: selected?._id || '',
+                  // Pays dérivé de la ville (évite autofill navigateur hors state React)
+                  country: countryNameForCity(selected, countries) || values.country || '',
                 });
               }}
             >
@@ -147,13 +184,24 @@ export function MultiBuildingSection({ values, onChange, uploading, onPickCommon
               ))}
             </Select>
           </FormControl>
-          <TextField
-            label="Pays *"
-            size="small"
-            value={values.country}
-            onChange={(e) => onChange({ country: e.target.value })}
-            fullWidth
-          />
+          <FormControl size="small" fullWidth required>
+            <InputLabel id="multi-create-country-label">Pays</InputLabel>
+            <Select
+              labelId="multi-create-country-label"
+              label="Pays"
+              value={countrySelectValue}
+              onChange={(e) => onChange({ country: String(e.target.value || '') })}
+            >
+              <MenuItem value="" disabled>
+                <em>Sélectionner un pays</em>
+              </MenuItem>
+              {countries.map((c) => (
+                <MenuItem key={c._id} value={c.name}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </Box>
 
         <Box sx={{ mb: 1.5 }}>
