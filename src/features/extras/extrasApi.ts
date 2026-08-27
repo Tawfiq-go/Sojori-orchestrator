@@ -85,7 +85,7 @@ export type StockKind = {
 };
 
 export const STOCK_KINDS_FALLBACK: StockKind[] = [
-  { id: 'minibar', label: 'Mini-bar', staffLetter: 'N', isMinibar: true },
+  { id: 'minibar', label: 'Mini-bar', staffLetter: 'C', isMinibar: true },
   { id: 'activity', label: 'Activités', isMinibar: false },
   { id: 'towel', label: 'Serviettes', isMinibar: false },
 ];
