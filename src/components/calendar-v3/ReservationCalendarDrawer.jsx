@@ -221,7 +221,12 @@ export default function ReservationCalendarDrawer({ reservation, onClose }) {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 18px' }}>
-          <PayBox due={smart.stayDue} paid={smart.paid} />
+          <PayBox
+            due={smart.stayDue}
+            paid={smart.paid}
+            stayTotal={smart.stayTotal}
+            otaLabel={smart.otaChannelLabel}
+          />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
             <MiniStat label="Payé" value={moneyMad(smart.alreadyPaid)} />
@@ -358,33 +363,39 @@ function DateCell({ label, value, time }) {
   );
 }
 
-function PayBox({ due, paid }) {
+function PayBox({ due, paid, stayTotal, otaLabel }) {
+  const ota = Boolean(otaLabel);
   const zero = Number(due) <= 0;
+  const ok = ota || zero;
   return (
     <div
       style={{
         padding: '12px 14px',
         borderRadius: 12,
-        background: zero ? T.successTint : T.warningTint,
-        border: `1px solid ${zero ? 'rgba(10,143,94,0.22)' : 'rgba(196,101,6,0.28)'}`,
+        background: ok ? T.successTint : T.warningTint,
+        border: `1px solid ${ok ? 'rgba(10,143,94,0.22)' : 'rgba(196,101,6,0.28)'}`,
       }}
     >
-      <div style={{ fontSize: 11, fontWeight: 700, color: zero ? T.success : T.warning, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-        {zero ? 'Soldé' : 'À payer'}
+      <div style={{ fontSize: 11, fontWeight: 700, color: ok ? T.success : T.warning, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+        {ota ? `Payé via ${otaLabel}` : zero ? 'Soldé' : 'À payer'}
       </div>
       <div
         style={{
           marginTop: 4,
           fontSize: 22,
           fontWeight: 800,
-          color: zero ? T.success : T.warning,
+          color: ok ? T.success : T.warning,
           fontFamily: '"Geist Mono", monospace',
         }}
       >
-        {moneyMad(due)}
+        {moneyMad(ota ? stayTotal : due)}
       </div>
       <div style={{ marginTop: 2, fontSize: 11, color: T.text3 }}>
-        {paid || zero ? 'Aucune somme due pour le séjour' : 'Reste à encaisser (hors extras non payés)'}
+        {ota
+          ? 'Rien à encaisser à la villa (hors extras)'
+          : paid || zero
+            ? 'Aucune somme due pour le séjour'
+            : 'Reste à encaisser (hors extras non payés)'}
       </div>
     </div>
   );

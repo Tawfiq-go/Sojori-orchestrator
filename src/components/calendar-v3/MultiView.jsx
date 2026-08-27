@@ -87,7 +87,7 @@ function roomResasOnDay(reservations, iso) {
  * - room : OOO HK seulement — résas et CalendarBlocks = barres overlay (pas de hatch cellule)
  */
 function inventoryStatusBackground(state, inv, opts = {}) {
-  const { roomRow = false, roomBlocked = false } = opts;
+  const { roomRow = false, roomBlocked = false, tintChannel = false } = opts;
   if (state === 'out_of_window') return OUT_OF_WINDOW_CELL_BG;
   if (state === 'archive') return ARCHIVE_CELL_BG;
   if (state === 'missing' || !hasInventoryData(inv)) return T.bg2;
@@ -100,12 +100,18 @@ function inventoryStatusBackground(state, inv, opts = {}) {
   const isZero = ar != null && Number(ar) <= 0;
   const isClosed = inv?.available === false;
   if (isStop || isZero || isClosed) return CELL_BG.blocked;
+  if (tintChannel) {
+    const ch = dayChannelColors(inv);
+    if (ch) return ch.bg;
+  }
   return CELL_BG.available;
 }
 
-/** Plus d’accent canal sur la cellule — réservé aux barres / pastilles. */
-function channelAccentShadow() {
-  return undefined;
+function channelAccentShadow(inv, tintChannel) {
+  if (!tintChannel) return undefined;
+  const ch = dayChannelColors(inv);
+  if (!ch) return undefined;
+  return `inset 3px 0 0 ${ch.accent}`;
 }
 
 function isoDay(v) {
@@ -296,29 +302,45 @@ function MultiResaOverlay({
           return Math.round((b - a) / 86400000);
         })();
         const pending = String(r.status || '').toLowerCase().includes('pend');
-        /**
-         * Arrivée du jour : le staff doit voir d'un coup d'œil si le client est
-         * enregistré. Rouge = attendu mais pas encore arrivé, vert = check-in fait.
-         * L'arrivée réelle vient du PMS (`mewsState = Started`), pas du statut
-         * Sojori qui reste « Confirmed » pendant tout le séjour.
-         */
-        const arrivesToday = isoDay(r.arrivalDate) === todayIso;
-        const checkedIn = String(r.mewsState || '').toLowerCase() === 'started';
-        const arrivalBadge = arrivesToday
-          ? checkedIn
-            ? { color: T.success, title: 'Arrivée du jour · client enregistré' }
-            : { color: T.error, title: 'Arrivée du jour · check-in à faire' }
-          : null;
+        const { nameCircle, departureCircle } = calendarTodayStayBadges(r, todayIso);
         const startsHere = !clippedStart;
         const endsHere = !clippedEnd;
         const pillR = Math.round(barH / 2);
+        const initial = (name || '?').charAt(0).toUpperCase();
+        const letterSize = Math.max(18, barH - 8);
+        const arrivalLetter = startsHere && nameCircle;
+        const channelStartLetter = startsHere && !nameCircle;
         const showLabel = startsHere || startIdx === 0;
+        const departureLetter = endsHere && departureCircle;
+        const endChannelDot = endsHere && !departureCircle;
         const barTop = barGapTop + lane * (barH + 1);
+        const letterCircle = (badge, titleFallback) => (
+          <span
+            title={badge ? badge.title : titleFallback}
+            style={{
+              width: letterSize,
+              height: letterSize,
+              borderRadius: '50%',
+              flexShrink: 0,
+              background: badge ? badge.color : ch.color,
+              boxShadow: badge ? `0 0 0 2px ${badge.color}33` : undefined,
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: 0,
+            }}
+          >
+            {initial}
+          </span>
+        );
         return (
           <button
             key={`${String(r._id || r.reservationId || name)}:${isoDay(r.arrivalDate)}:${lane}`}
             type="button"
-            title={`${name} · ${isoDay(r.arrivalDate)} → ${isoDay(r.departureDate)}${r.channelName ? ` · ${r.channelName}` : ''} · arrivée / départ`}
+            title={`${name} · ${isoDay(r.arrivalDate)} → ${isoDay(r.departureDate)}${r.channelName ? ` · ${r.channelName}` : ''}${nameCircle ? ` · ${nameCircle.title}` : ''}${departureCircle ? ` · ${departureCircle.title}` : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               onReservationClick?.(e.currentTarget.getBoundingClientRect(), isoDay(r.arrivalDate), [r]);
@@ -352,28 +374,10 @@ function MultiResaOverlay({
               textAlign: 'left',
             }}
           >
-            {showLabel ? (
-              <span
-                title={arrivalBadge ? arrivalBadge.title : 'Arrivée'}
-                style={{
-                  width: Math.max(18, barH - 8),
-                  height: Math.max(18, barH - 8),
-                  borderRadius: '50%',
-                  flexShrink: 0,
-                  background: arrivalBadge ? arrivalBadge.color : ch.color,
-                  boxShadow: arrivalBadge ? `0 0 0 2px ${arrivalBadge.color}33` : undefined,
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  letterSpacing: 0,
-                }}
-              >
-                {(name || '?').charAt(0).toUpperCase()}
-              </span>
-            ) : null}
+            {arrivalLetter ? letterCircle(nameCircle, 'Arrivée') : null}
+            {channelStartLetter || (showLabel && !startsHere && !departureLetter)
+              ? letterCircle(null, 'Arrivée')
+              : null}
             {pending ? <span style={{ fontSize: 9, color: T.warning, flexShrink: 0 }}>⏳</span> : null}
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
               {showLabel ? name : ''}
@@ -391,7 +395,8 @@ function MultiResaOverlay({
                 </span>
               ) : null}
             </span>
-            {endsHere ? (
+            {departureLetter ? letterCircle(departureCircle, 'Départ') : null}
+            {endChannelDot ? (
               <span
                 title="Départ"
                 style={{
@@ -542,7 +547,7 @@ import TooltipBreakdown from './TooltipBreakdown';
 import PopoverReservations from './PopoverReservations';
 import AuditBlockedDaysModal from './AuditBlockedDaysModal';
 import {
-  isReservationVisibleOnCalendar,
+  calendarTodayStayBadges,
   normalizeCalendarReservations,
 } from './reservationCalendarUtils';
 import { useCalendarBreakpoint } from '../../hooks/useCalendarBreakpoint';
@@ -560,13 +565,11 @@ import {
 import { countReservationsOnDay } from '../../utils/planningMultiExpand';
 import {
   buildRoomTypesForListing,
-  buildSingleUnitResaRows,
   dedupeOverlayReservations,
   filterReservationsForRoom,
   filterReservationsForRoomType,
   groupMultiReservationsByListing,
   isMultiHotelListing,
-  overlayStayKey,
   toIsoDay,
 } from './multiCalendarReservations';
 import {
@@ -651,8 +654,6 @@ export default function MultiView({
   const toggleRoomType = useCallback((key) => {
     setRtExpanded((p) => ({ ...p, [key]: !p[key] }));
   }, []);
-
-  const showResaFilter = selectedColumns.includes('reservations');
 
   const roomTypesByListing = useMemo(() => {
     const map = {};
@@ -1148,13 +1149,11 @@ export default function MultiView({
               || reservationsByListing.get(String(listing.id))
               || [];
             const buildingInventories = inventoriesByListing[listing._id] || {};
-            /* Single : 1 ligne Resa (pas de roomType). Multi : types + rooms inchangés. */
-            const singleResaRows = isMultiHotel
-              ? []
-              : buildSingleUnitResaRows({
-                  listingId: listing._id,
-                  listingResas,
-                });
+            /**
+             * Jamais de barre sur la ligne listing : cellules teintées canal.
+             * Multi hôtel : barres uniquement sur les chambres.
+             */
+            const listingRowShowsResas = false;
             return (
               <div key={listing._id}>
                 <ListingRow
@@ -1164,8 +1163,8 @@ export default function MultiView({
                   }}
                   dpEnabled={dpEnabledByListing[String(listing._id)] !== false}
                   inventories={buildingInventories}
-                  overlayLineReservations={null}
-                  showResaBars={showResaFilter}
+                  overlayLineReservations={isMultiHotel ? null : listingResas}
+                  showResaBars={listingRowShowsResas}
                   days={days}
                   leftW={LEFT_W}
                   cellW={CELL_W}
@@ -1195,44 +1194,6 @@ export default function MultiView({
                   onCalendarImportReviewActivated={onCalendarImportReviewActivated}
                   canActivateCalendarImport={canActivateCalendarImport}
                 />
-                {!isMultiHotel
-                  ? singleResaRows.map(({ room, roomResas }) => (
-                      <ListingRow
-                        key={`${listing._id}-resa-${room.id}`}
-                        listing={{
-                          ...listing,
-                          _id: listing._id,
-                          name: room.name,
-                          roomId: room.id,
-                          propertyUnit: 'Single',
-                          _isRoomTypeRow: false,
-                          _isRoomRow: true,
-                          _isSingleResaRow: true,
-                        }}
-                        dpEnabled={false}
-                        inventories={buildingInventories}
-                        overlayLineReservations={roomResas}
-                        showResaBars={showResaFilter}
-                        days={days}
-                        leftW={LEFT_W}
-                        cellW={CELL_W}
-                        expanded={false}
-                        onToggle={undefined}
-                        forceChevron={false}
-                        hideDetailCollapse
-                        selectedColumns={selectedColumns}
-                        isSelected={isSelected}
-                        onMouseDown={onMouseDown}
-                        onMouseEnter={onMouseEnter}
-                        onPriceClick={onPriceClick}
-                        onReservationClick={handleReservationDayClick}
-                        activeTip={activeTip}
-                        canBlockRooms={canBlockRooms}
-                        onRoomBlockClick={onRoomBlockClick}
-                        onRoomFreeClick={onRoomFreeClick}
-                      />
-                    ))
-                  : null}
                 {isOpen && isMultiHotel
                   ? roomTypes.map((rt) => {
                       const rtKey = `${listing._id}:${rt.id}`;
@@ -1256,7 +1217,7 @@ export default function MultiView({
                         dpEnabled={dpEnabledByListing[String(listing._id)] !== false}
                         inventories={rt.availability || {}}
                         overlayLineReservations={null}
-                        showResaBars={showResaFilter}
+                        showResaBars={false}
                         days={days}
                         leftW={LEFT_W}
                         cellW={CELL_W}
@@ -1277,43 +1238,7 @@ export default function MultiView({
                       />
                       {/* Rooms toujours visibles sous le type (blocage / barres).
                           Chevron rtOpen = détail inventaire (min stay…), pas les villas. */}
-                      {rooms.length === 0 ? (
-                        <ListingRow
-                          key={`${listing._id}-${rt.id}-no-rooms`}
-                          listing={{
-                            ...listing,
-                            _id: listing._id,
-                            name: 'Aucune room configurée',
-                            roomTypeId: rt.id,
-                            roomTypeName: rt.name,
-                            propertyUnit: 'Single',
-                            _isRoomTypeRow: false,
-                            _isRoomRow: true,
-                          }}
-                          dpEnabled={false}
-                          inventories={rt.availability || {}}
-                          overlayLineReservations={rtResas}
-                          showResaBars={showResaFilter}
-                          days={days}
-                          leftW={LEFT_W}
-                          cellW={CELL_W}
-                          expanded={false}
-                          onToggle={undefined}
-                          forceChevron={false}
-                          hideDetailCollapse
-                          selectedColumns={selectedColumns}
-                          isSelected={isSelected}
-                          onMouseDown={onMouseDown}
-                          onMouseEnter={onMouseEnter}
-                          onPriceClick={onPriceClick}
-                          onReservationClick={handleReservationDayClick}
-                          activeTip={activeTip}
-                        />
-                      ) : (
-                        (() => {
-                            const claimed = new Set();
-                            const claimedStay = new Set();
-                            const roomRows = rooms.map((room) => {
+                      {rooms.map((room) => {
                               const roomResas = dedupeOverlayReservations(
                                 filterReservationsForRoom(
                                   rtResas,
@@ -1322,34 +1247,7 @@ export default function MultiView({
                                 ),
                                 listing._id,
                               );
-                              roomResas.forEach((r) => {
-                                claimed.add(String(r._id || r.reservationId || ''));
-                                const stay = overlayStayKey(r, listing._id);
-                                if (stay) claimedStay.add(stay);
-                              });
-                              return { room, roomResas };
-                            });
-                            const leftover = dedupeOverlayReservations(
-                              rtResas.filter((r) => {
-                                if (!isReservationVisibleOnCalendar(r)) return false;
-                                const id = String(r._id || r.reservationId || '');
-                                const stay = overlayStayKey(r, listing._id);
-                                if (id && claimed.has(id)) return false;
-                                if (stay && claimedStay.has(stay)) return false;
-                                return true;
-                              }),
-                              listing._id,
-                            );
-                            if (leftover.length > 0) {
-                              roomRows.push({
-                                room: {
-                                  id: `${rt.id}:unassigned`,
-                                  name: 'Non assignée',
-                                },
-                                roomResas: leftover,
-                              });
-                            }
-                            return roomRows.map(({ room, roomResas }) => (
+                              return (
                               <ListingRow
                                 key={`${listing._id}-${rt.id}-room-${room.id}`}
                                 listing={{
@@ -1368,7 +1266,7 @@ export default function MultiView({
                                 dpEnabled={false}
                                 inventories={rt.availability || {}}
                                 overlayLineReservations={roomResas}
-                                showResaBars={showResaFilter}
+                                showResaBars
                                 days={days}
                                 leftW={LEFT_W}
                                 cellW={CELL_W}
@@ -1387,9 +1285,8 @@ export default function MultiView({
                                 onRoomBlockClick={onRoomBlockClick}
                                 onRoomFreeClick={onRoomFreeClick}
                               />
-                            ));
-                          })()
-                      )}
+                            );
+                          })}
                       </React.Fragment>
                     );
                     })
@@ -2411,11 +2308,13 @@ function PrimaryInventoryCell({
   const dayBlock =
     dayBlockRaw && String(dayBlockRaw.roomId || '').trim() ? null : dayBlockRaw;
   const blockInfo = !isRoomRow && state === 'data' ? blockedNoResaInfo(inv, dayBlock) : null;
+  const tintChannel = !isRoomRow && !isRoomTypeRow && !isMultiHotelParent;
   const background = inventoryStatusBackground(state, inv, {
     roomRow: isRoomRow,
     roomBlocked: Boolean(roomBlocked),
+    tintChannel,
   });
-  const accentShadow = channelAccentShadow(state, inv);
+  const accentShadow = channelAccentShadow(inv, tintChannel && state === 'data');
   // Inventaire en haut, place libre en bas (barres roomType OU pastilles building)
   const stackForBars = rowHeight >= 38;
 
@@ -2607,7 +2506,7 @@ function CollapseCell({ col, day, inv, listing, selected, draggable, onMouseDown
   const archived = state === 'archive';
   // Fond = uniquement canal résa / dispo / bloqué (jamais M/D)
   let background = inventoryStatusBackground(state, inv);
-  const accentShadow = selected ? undefined : channelAccentShadow(state, inv);
+  const accentShadow = selected ? undefined : channelAccentShadow(inv, false);
   if (selected) background = T.primaryTint3;
 
   const dash = '—';

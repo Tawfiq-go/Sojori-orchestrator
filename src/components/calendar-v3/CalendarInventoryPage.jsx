@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { T, resolveSelectionCurrency, sortCalendarColumns, CALENDAR_DEFAULT_COLUMNS } from './_shared';
+import { T, toIso, resolveSelectionCurrency, CALENDAR_DEFAULT_COLUMNS } from './_shared';
 import MultiView from './MultiView';
 import SimpleView from './SimpleView';
 import ColumnFilters from './ColumnFilters';
@@ -16,6 +16,7 @@ import CalendarLandscapeHint from './CalendarLandscapeHint';
 import ReservationCalendarDrawer from './ReservationCalendarDrawer';
 import { useCalendarBreakpoint } from '../../hooks/useCalendarBreakpoint';
 import {
+  isReservationCancelledOnCalendar,
   isReservationVisibleOnCalendar,
   normalizeCalendarReservation,
   reservationDetailFetchId,
@@ -191,7 +192,6 @@ export default function CalendarInventoryPage({
   const overlayCacheRef = useRef(new Map());
   const overlayInflightKeyRef = useRef('');
   const overlayWantedKeyRef = useRef('');
-  const resaFilterOn = view === 'multi' && selectedColumns.includes('reservations');
   const overlayFromInventory = useMemo(
     () => flattenInventoryReservationsForOverlay(inventoryData),
     [inventoryData],
@@ -278,7 +278,8 @@ export default function CalendarInventoryPage({
     const t0 = performance.now();
     (async () => {
       try {
-        const res = await reservationsService.getList({
+        const todayIso = toIso(new Date());
+        const occupyingReq = reservationsService.getList({
           limit: 500,
           status: 'Confirmed,Started,Pending,Inside',
           dateType: 'overlap',
@@ -287,8 +288,41 @@ export default function CalendarInventoryPage({
           listingIds,
           excludeCancelled: true,
         });
-        const next = (Array.isArray(res?.data) ? res.data : []).filter(
-          isReservationVisibleOnCalendar,
+        const todayInWindow = todayIso >= from && todayIso <= to;
+        const completedReq = todayInWindow
+          ? reservationsService.getList({
+              limit: 200,
+              status: 'Completed',
+              dateType: 'departure',
+              startDate: todayIso,
+              endDate: todayIso,
+              listingIds,
+              excludeCancelled: true,
+            })
+          : Promise.resolve({ data: [] });
+        // Annulées : jamais affichées, mais nécessaires pour évincer le seed inventaire
+        // encore Confirmed (SJ-2OW6O0E0 / Villa 03).
+        const cancelledReq = reservationsService.getList({
+          limit: 200,
+          status:
+            'Cancelled,cancelled,CancelledByOta,CancelledByAdmin,CancelledByCustomer,CancelledByHost,CancelledAfterFailedPayment,OtherCancellation',
+          dateType: 'overlap',
+          startDate: from,
+          endDate: to,
+          listingIds,
+        });
+        const [occupying, completed, cancelled] = await Promise.all([
+          occupyingReq,
+          completedReq,
+          cancelledReq,
+        ]);
+        const next = [
+          ...(Array.isArray(occupying?.data) ? occupying.data : []),
+          ...(Array.isArray(completed?.data) ? completed.data : []),
+          ...(Array.isArray(cancelled?.data) ? cancelled.data : []),
+        ].filter(
+          (r) =>
+            isReservationCancelledOnCalendar(r) || isReservationVisibleOnCalendar(r, todayIso),
         );
         overlayCacheRef.current.set(cacheKey, next);
         if (overlayWantedKeyRef.current === cacheKey) {
@@ -539,12 +573,16 @@ export default function CalendarInventoryPage({
 
   const openReservationDrawer = useCallback(async (rawRes) => {
     const shell = normalizeCalendarReservation(rawRes);
-    if (!shell) return;
+    if (!shell || isReservationCancelledOnCalendar(shell)) return;
     setDrawerReservation(shell);
     const id = reservationDetailFetchId(shell);
     if (!id) return;
     try {
       const full = await reservationsService.getByRouteParam(id);
+      if (isReservationCancelledOnCalendar(full)) {
+        setDrawerReservation(null);
+        return;
+      }
       setDrawerReservation((prev) => {
         if (!prev) return prev;
         const sameNumber =
@@ -642,37 +680,6 @@ export default function CalendarInventoryPage({
       >
         {view === 'multi' && (
           <ColumnFilters selectedColumns={selectedColumns} onChange={setSelectedColumns} />
-        )}
-
-        {view === 'multi' && (
-          <button
-            type="button"
-            title="Affiche uniquement les barres de réservation sur les chambres (les rooms restent toujours visibles)"
-            onClick={() => {
-              setSelectedColumns((prev) =>
-                prev.includes('reservations')
-                  ? prev.filter((id) => id !== 'reservations')
-                  : sortCalendarColumns([...prev, 'reservations']),
-              );
-            }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 12px',
-              borderRadius: 9,
-              fontSize: 12,
-              fontWeight: 800,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              border: `1px solid ${resaFilterOn ? T.primary : T.border}`,
-              background: resaFilterOn ? T.primaryTint : T.bg1,
-              color: resaFilterOn ? T.primaryDeep : T.text2,
-              flexShrink: 0,
-            }}
-          >
-            {resaFilterOn ? 'Réservations ✓' : 'Réservations'}
-          </button>
         )}
 
         <div
@@ -953,6 +960,7 @@ export default function CalendarInventoryPage({
       )}
       {view === 'simple' && selectedListing && (
         <SimpleView
+          key={`simple-nobars-v2-${selectedListingId || ''}-${selectedRoomTypeId || ''}`}
           listing={selectedListing}
           listings={simpleRailItems}
           rooms={selectedListing?.rooms || []}

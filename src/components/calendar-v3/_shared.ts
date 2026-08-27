@@ -320,12 +320,12 @@ export const ALL_COLUMNS: ColumnDef[] = [
 export const CALENDAR_PRIMARY_ROW_COLUMNS = ['rate', 'availableRoom'] as const;
 
 /** Sélection colonnes par défaut (vue multi) — Tarif · Dispo · Rés. · Dyn. Min stay opt-in. */
-export const CALENDAR_DEFAULT_COLUMNS = [
-  'rate',
-  'availableRoom',
-  'reservations',
-  'dynamicPrice',
-] as const;
+/**
+ * `reservations` volontairement absent : en Single, la ligne listing porte déjà
+ * les couleurs des réservations. Cocher le filtre déplace ces couleurs sur une
+ * ligne Resa dédiée et rend la ligne listing neutre (cf. MultiView).
+ */
+export const CALENDAR_DEFAULT_COLUMNS = ['rate', 'availableRoom', 'dynamicPrice'] as const;
 
 /** Colonnes prioritaires — ordre filtre + collapse (Dispo avant Min). */
 export const CALENDAR_COLUMN_PRIORITY = [

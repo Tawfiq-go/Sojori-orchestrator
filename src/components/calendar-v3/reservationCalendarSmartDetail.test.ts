@@ -63,6 +63,23 @@ describe('reservationCalendarSmartDetail', () => {
       2250,
     )
     assert.equal(tot.stayDue, 1750)
+    assert.equal(tot.otaChannelLabel, null)
+  })
+
+  it('does not treat Booking UnPaid as cash to collect at the villa', () => {
+    const tot = stayTotalsFromReservation(
+      {
+        channelName: 'Booking.com',
+        alreadyPaid: 0,
+        totalPrice: 12126,
+        paymentStatus: 'UnPaid',
+      },
+      12126,
+    )
+    assert.equal(tot.stayDue, 0)
+    assert.equal(tot.paid, true)
+    assert.equal(tot.alreadyPaid, 12126)
+    assert.equal(tot.otaChannelLabel, 'Booking.com')
   })
 
   it('reads totalEst from overlay notes and hides technical dumps', () => {
