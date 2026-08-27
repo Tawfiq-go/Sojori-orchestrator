@@ -14,6 +14,7 @@ import {
   reservationMatchesRoomType,
 } from '../../utils/planningMultiExpand';
 import {
+  calendarTodayIso,
   normalizeCalendarReservation,
   isReservationCancelledOnCalendar,
   isReservationVisibleOnCalendar,
@@ -55,7 +56,7 @@ export function normalizeMultiOverlayReservation(res) {
   if (isReservationCancelledOnCalendar(shell) || isReservationCancelledOnCalendar(res)) {
     return null;
   }
-  if (!isReservationVisibleOnCalendar(shell) && !isReservationVisibleOnCalendar(res)) {
+  if (!isReservationVisibleOnCalendar(shell, calendarTodayIso()) && !isReservationVisibleOnCalendar(res, calendarTodayIso())) {
     return null;
   }
   const arrivalDate = toIsoDay(shell.arrivalDate || res.arrivalDate);
@@ -77,6 +78,7 @@ export function normalizeMultiOverlayReservation(res) {
     roomName: String(res.roomName || '').trim() || undefined,
     channelName: res.channelName || shell.channelName || 'direct',
     status: res.status || shell.status,
+    mewsState: res.mewsState || shell.mewsState,
     guestName:
       shell.guestName ||
       `${res.guestFirstName || ''} ${res.guestLastName || ''}`.trim() ||
@@ -160,57 +162,13 @@ export function normalizeCatalogRooms(rt) {
 }
 
 /**
- * Rooms pour un roomType inventaire :
- * 1) catalogue (id puis nom)
- * 2) roomId/roomName des résas du type
- * 3) placeholders Chambre 1..N si roomNumber connu
+ * Rooms d’un roomType : uniquement le catalogue listing (BD).
+ * Pas de ligne « Non assignée », pas de Chambre 1..N inventées.
  */
 export function resolveRoomsForRoomType({
   catalogRt,
-  roomTypeId,
-  roomTypeName,
-  roomNumber = 0,
-  reservations = [],
 }) {
-  const fromCatalog = catalogRt ? normalizeCatalogRooms(catalogRt) : [];
-  if (fromCatalog.length > 0) return fromCatalog;
-
-  const rtResas = filterReservationsForRoomType(
-    reservations,
-    roomTypeId,
-    roomTypeName,
-  );
-  const byKey = new Map();
-  rtResas.forEach((r) => {
-    const id = mongoId(r.roomId);
-    const name = String(r.roomName || '').trim();
-    if (id) {
-      if (!byKey.has(id)) {
-        byKey.set(id, { id, name: name || `Chambre ${id.slice(-4)}` });
-      }
-      return;
-    }
-    if (name) {
-      const key = `name:${name.toLowerCase()}`;
-      if (!byKey.has(key)) byKey.set(key, { id: key, name });
-    }
-  });
-  if (byKey.size > 0) return [...byKey.values()];
-
-  const n = Number(roomNumber) || 0;
-  if (n > 0 && roomTypeId) {
-    return Array.from({ length: Math.min(n, 40) }, (_, i) => ({
-      id: `${roomTypeId}:unit:${i + 1}`,
-      name: `Chambre ${i + 1}`,
-      number: i + 1,
-    }));
-  }
-
-  // Au moins une ligne « non assignée » s’il y a des résas du type sans room
-  if (rtResas.length > 0) {
-    return [{ id: `${roomTypeId || 'rt'}:unassigned`, name: 'Non assignée' }];
-  }
-  return [];
+  return catalogRt ? normalizeCatalogRooms(catalogRt) : [];
 }
 
 /**
@@ -381,12 +339,27 @@ function keepOnCalendarOverlay(r) {
   return isReservationVisibleOnCalendar(r);
 }
 
+/** Même villa + dates, sans roomId (seed inventaire vs live Mongo). */
+function overlayRoomNameStayKey(r, listingId = '') {
+  if (!r || typeof r !== 'object') return '';
+  const arr = toIsoDay(r.arrivalDate);
+  const dep = toIsoDay(r.departureDate);
+  if (!arr || !dep) return '';
+  const lid = String(r.listingId || r.sojoriId || listingId || '').trim();
+  const roomName = String(r.roomName || '')
+    .trim()
+    .toLowerCase();
+  if (!lid || !roomName) return '';
+  return `${lid}|${roomName}|${arr}|${dep}`;
+}
+
 /** Seed inventaire + fetch /reservations (le fetch gagne sur le même id). Jamais d’annulées. */
 export function mergeOverlayReservationLists(seed, fetched) {
   const fetchedList = fetched || [];
   const cancelledIds = new Set();
   const cancelledNumbers = new Set();
   const cancelledGuestStays = new Set();
+  const cancelledRoomStays = new Set();
   for (const r of fetchedList) {
     if (!isReservationCancelledOnCalendar(r)) continue;
     const id = overlayResaId(r);
@@ -395,6 +368,8 @@ export function mergeOverlayReservationLists(seed, fetched) {
     if (num) cancelledNumbers.add(num);
     const guestStay = overlayGuestStayKey(r);
     if (guestStay) cancelledGuestStays.add(guestStay);
+    const roomStay = overlayRoomNameStayKey(r);
+    if (roomStay) cancelledRoomStays.add(roomStay);
   }
   const seedKept = (seed || []).filter((r) => {
     if (!keepOnCalendarOverlay(r)) return false;
@@ -403,6 +378,8 @@ export function mergeOverlayReservationLists(seed, fetched) {
     if (num && cancelledNumbers.has(num)) return false;
     const guestStay = overlayGuestStayKey(r);
     if (guestStay && cancelledGuestStays.has(guestStay)) return false;
+    const roomStay = overlayRoomNameStayKey(r);
+    if (roomStay && cancelledRoomStays.has(roomStay)) return false;
     return true;
   });
   const fetchedKept = fetchedList.filter(keepOnCalendarOverlay);

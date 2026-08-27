@@ -127,6 +127,24 @@ export function rateLinesFromReservation(reservation) {
   return lines;
 }
 
+/** Aligné staff WA : Booking/Airbnb UnPaid ≠ cash à encaisser à la villa. */
+const OTA_CHANNEL_RE = /booking|airbnb|vrbo|homeaway|expedia|agoda|tripadvisor|ctrip/i;
+
+export function isOtaChannel(channelName) {
+  return OTA_CHANNEL_RE.test(String(channelName || ''));
+}
+
+export function otaChannelLabel(reservation) {
+  const raw = String(reservation?.channelName || reservation?.source || '').trim();
+  if (!isOtaChannel(raw)) return null;
+  if (/booking/i.test(raw)) return 'Booking.com';
+  if (/airbnb/i.test(raw)) return 'Airbnb';
+  if (/vrbo|homeaway/i.test(raw)) return 'Vrbo';
+  if (/expedia/i.test(raw)) return 'Expedia';
+  if (/agoda/i.test(raw)) return 'Agoda';
+  return raw;
+}
+
 export function stayTotalsFromReservation(reservation, paidAmount) {
   const r = reservation || {};
   const fromNotes = parseTotalEstFromNotes(r.notes || r.comments);
@@ -136,7 +154,9 @@ export function stayTotalsFromReservation(reservation, paidAmount) {
     num(r.totalPrice) ||
     fromNotes;
   const alreadyPaid = num(r.alreadyPaid);
+  const otaLabel = otaChannelLabel(r);
   const paymentPaid =
+    Boolean(otaLabel) ||
     String(r.paymentStatus || '').toLowerCase() === 'paid' ||
     (alreadyPaid > 0 && stayTotal > 0 && alreadyPaid >= stayTotal * 0.95);
   const stayDue = paymentPaid ? 0 : Math.max(0, stayTotal - alreadyPaid);
@@ -145,6 +165,7 @@ export function stayTotalsFromReservation(reservation, paidAmount) {
     alreadyPaid: paymentPaid && alreadyPaid <= 0 ? stayTotal : alreadyPaid,
     stayDue,
     paid: paymentPaid,
+    otaChannelLabel: otaLabel,
   };
 }
 
