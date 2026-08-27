@@ -21,20 +21,47 @@ type Props = {
   onBack?: () => void;
 };
 
-function extractUrls(result: unknown): string[] {
+/** Aligné sur `normalizeUploadResponse` (uploadInBatches) — API renvoie `{ files: [{ url }] }`. */
+function extractUploadedImages(
+  result: unknown,
+  files: File[],
+): MultiListingImage[] {
   if (!result) return [];
-  if (Array.isArray(result)) {
-    return result
-      .map((row) => {
-        if (typeof row === 'string') return row;
-        if (row && typeof row === 'object' && 'url' in row) return String((row as { url: string }).url);
-        return '';
+
+  const fromRows = (rows: unknown[]): MultiListingImage[] =>
+    rows
+      .map((row, i) => {
+        if (typeof row === 'string' && row) {
+          return { url: row, sortOrder: i, fileName: files[i]?.name || null };
+        }
+        if (row && typeof row === 'object' && 'url' in row) {
+          const o = row as { url?: string; fileName?: string };
+          const url = o.url ? String(o.url) : '';
+          if (!url) return null;
+          return {
+            url,
+            sortOrder: i,
+            fileName: o.fileName || files[i]?.name || null,
+          };
+        }
+        return null;
       })
-      .filter(Boolean);
-  }
-  if (typeof result === 'object' && result && 'urls' in result) {
-    const urls = (result as { urls?: unknown }).urls;
-    return Array.isArray(urls) ? urls.map(String) : [];
+      .filter((x): x is MultiListingImage => Boolean(x));
+
+  if (Array.isArray(result)) return fromRows(result);
+
+  if (typeof result === 'object') {
+    const r = result as Record<string, unknown>;
+    if (Array.isArray(r.files)) return fromRows(r.files);
+    if (Array.isArray(r.urls)) {
+      return (r.urls as unknown[])
+        .map((u, i) => {
+          const url = u ? String(u) : '';
+          if (!url) return null;
+          return { url, sortOrder: i, fileName: files[i]?.name || null };
+        })
+        .filter((x): x is MultiListingImage => Boolean(x));
+    }
   }
   return [];
 }
@@ -63,21 +90,23 @@ export function MultiListingCreateShell({
     const list = Array.from(files).slice(0, 12);
     if (list.length === 0) return [];
     const result = await dispatch(
-      uploadMultipleImagesToAPI({ files: list, folder: 'listings' }) as never,
+      uploadMultipleImagesToAPI({ files: list, folder: 'listing' }) as never,
     ).unwrap();
-    const urls = extractUrls(result);
-    return urls.map((url, i) => ({
-      url,
-      sortOrder: i,
-      fileName: list[i]?.name || null,
-    }));
+    const added = extractUploadedImages(result, list);
+    if (added.length === 0) {
+      throw new Error('Upload OK mais aucune URL image dans la réponse');
+    }
+    return added;
   };
 
   const handleCommonFiles = async (files: FileList) => {
     setUploadingCommon(true);
     try {
       const added = await uploadFiles(files);
-      patch({ listingImages: [...values.listingImages, ...added] });
+      setValues((prev) => ({
+        ...prev,
+        listingImages: [...prev.listingImages, ...added],
+      }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload photos communes échoué');
     } finally {
@@ -114,7 +143,7 @@ export function MultiListingCreateShell({
       return;
     }
     if (!values.city?.trim() || !values.cityId?.trim() || !values.country?.trim()) {
-      toast.error('Ville, City ID et Pays sont requis (comme en Single)');
+      toast.error('Ville (liste) et Pays sont requis');
       return;
     }
     if (!values.roomTypes.length) {
