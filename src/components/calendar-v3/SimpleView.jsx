@@ -2,7 +2,8 @@
 // SimpleView.jsx — vue 1 listing façon Airbnb Host
 // · Rail vignettes à gauche — grille 5×N (hover = nom, clic = changer de bien)
 // · Mois empilés en scroll vertical (lazy-load via sentinel)
-// · Réservations en barres qui s'étalent sur les jours (« Prénom + N »)
+// · Défaut : cellules teintées canal (Airbnb / Booking / Direct), clic pour éditer
+// · « Résas » : cellules neutres + barres prénom sur la ligne (comme avant)
 // ════════════════════════════════════════════════════════════════════
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
@@ -13,7 +14,7 @@ import {
 import { INVENTORY_FUTURE_HORIZON_DAYS } from './inventoryCalendarConstants';
 import AuditBlockedDaysModal from './AuditBlockedDaysModal';
 import { TooltipBody } from './TooltipBreakdown';
-import { normalizeCalendarReservations } from './reservationCalendarUtils';
+import { normalizeCalendarReservations, calendarTodayStayBadges, calendarTodayIso } from './reservationCalendarUtils';
 import calendarService from '../../services/calendarService';
 import {
   activateListingCalendarImportReview,
@@ -27,28 +28,30 @@ const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','aoû
 
 /* Aligné sur la vue multi : corail Airbnb, bleu Booking, or brand Sojori, violet autres. */
 const RESA_BAR_COLORS = {
-  airbnb: { bg: '#FF5A5F', text: '#fff', label: 'Airbnb', tint: 'rgba(255,90,95,0.16)' },
-  booking: { bg: '#0071C2', text: '#fff', label: 'Booking.com', tint: 'rgba(0,113,194,0.14)' },
-  vrbo: { bg: '#3B82F6', text: '#fff', label: 'Vrbo', tint: 'rgba(59,130,246,0.14)' },
-  expedia: { bg: '#FEC10D', text: '#1a1a1a', label: 'Expedia', tint: 'rgba(254,193,13,0.18)' },
-  mews: { bg: '#0D9488', text: '#fff', label: 'Mews', tint: 'rgba(13,148,136,0.14)' },
-  direct: { bg: '#b8851a', text: '#fff', label: 'Sojori', tint: 'rgba(184,133,26,0.18)' },
-  pending: { bg: '#D97706', text: '#fff', label: 'En attente', tint: 'rgba(217,119,6,0.15)' },
-  default: { bg: '#7C3AED', text: '#fff', label: 'Autre canal', tint: 'rgba(124,58,237,0.13)' },
+  airbnb: { bg: '#FF5A5F', text: '#fff', label: 'Airbnb', tint: 'rgba(255,90,95,0.28)' },
+  booking: { bg: '#0071C2', text: '#fff', label: 'Booking.com', tint: 'rgba(0,113,194,0.26)' },
+  vrbo: { bg: '#3B82F6', text: '#fff', label: 'Vrbo', tint: 'rgba(59,130,246,0.24)' },
+  expedia: { bg: '#FEC10D', text: '#1a1a1a', label: 'Expedia', tint: 'rgba(254,193,13,0.32)' },
+  mews: { bg: '#0D9488', text: '#fff', label: 'Mews', tint: 'rgba(13,148,136,0.24)' },
+  direct: { bg: '#b8851a', text: '#fff', label: 'Sojori', tint: 'rgba(184,133,26,0.30)' },
+  pending: { bg: '#D97706', text: '#fff', label: 'En attente', tint: 'rgba(217,119,6,0.26)' },
+  default: { bg: '#7C3AED', text: '#fff', label: 'Autre canal', tint: 'rgba(124,58,237,0.22)' },
 };
 
 /* Hachures grises = bloqué (même code visuel que la vue multi / Airbnb). */
 const BLOCKED_HATCH_BG = 'repeating-linear-gradient(-45deg, rgba(136,135,128,0.22), rgba(136,135,128,0.22) 3px, transparent 3px, transparent 6px)';
 
-/** Teinte de fond du jour selon la résa — si départ + arrivée le même jour, suit celle qui arrive. */
-function dayReservationTint(inv) {
-  const resas = inv?.reservations || [];
+/** Canal du jour (arrivée gagne si départ + arrivée le même jour). */
+function dayReservationChannel(inv, filterRoomId) {
+  const resas = normalizeCalendarReservations(inv?.reservations).filter((r) =>
+    reservationMatchesRoomFilter(r, filterRoomId),
+  );
   if (resas.length === 0) return null;
   let pick = resas[0];
   for (const r of resas) {
     if (String(r?.arrivalDate || '') > String(pick?.arrivalDate || '')) pick = r;
   }
-  return reservationBarColors(pick).tint;
+  return reservationBarColors(pick);
 }
 
 function reservationBarColors(res) {
@@ -292,8 +295,8 @@ export default function SimpleView({
 
   const currency = listing.currencyCode || listing.currency || 'MAD';
   const isRoomTypeRail = railMode === 'roomTypes';
-  /** Barres résas ON par défaut — bouton pour masquer. */
-  const [showResas, setShowResas] = useState(true);
+  /** Défaut : cellules colorées canal, sans barre. Clic « Résas » = barres + cellules neutres. */
+  const [showResaLine, setShowResaLine] = useState(false);
   const physicalRooms = useMemo(() => {
     if (Array.isArray(rooms) && rooms.length > 0) return rooms;
     const fromListing = listing?.rooms;
@@ -462,29 +465,24 @@ export default function SimpleView({
             <div style={{ display: 'flex', gap: 14, fontSize: 10.5, color: T.text3, flexShrink: 0, alignItems: 'center', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                title={showResas ? 'Masquer les barres de réservation' : 'Afficher les barres de réservation'}
-                onClick={() => setShowResas((v) => !v)}
+                title={showResaLine ? 'Cellules neutres + barres résa' : 'Cellules colorées canal, sans barre — clic pour éditer'}
+                onClick={() => setShowResaLine((v) => !v)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 5,
                   fontSize: 10.5, fontWeight: 800, lineHeight: 1,
                   padding: '5px 11px', borderRadius: 99, cursor: 'pointer',
-                  background: showResas ? T.primaryTint : 'transparent',
-                  color: showResas ? T.primaryDeep : T.text3,
-                  border: `1px solid ${showResas ? T.primary : T.border}`,
+                  background: showResaLine ? T.primaryTint : 'transparent',
+                  color: showResaLine ? T.primaryDeep : T.text3,
+                  border: `1px solid ${showResaLine ? T.primary : T.border}`,
                   transition: 'all 0.15s',
                 }}
               >
-                {showResas ? 'Résas visibles' : 'Afficher résas'}
+                {showResaLine ? 'Résas ✓' : 'Résas'}
               </button>
-              {showResas ? (
-                <>
-                  <Legend dot={RESA_BAR_COLORS.airbnb.bg} label="Airbnb" />
-                  <Legend dot={RESA_BAR_COLORS.booking.bg} label="Booking" />
-                  <Legend dot={RESA_BAR_COLORS.direct.bg} label="Sojori" />
-                  <Legend dot={RESA_BAR_COLORS.default.bg} label="Autre canal" />
-                  <Legend dot={RESA_BAR_COLORS.pending.bg} label="Attente" />
-                </>
-              ) : null}
+              <Legend dot={RESA_BAR_COLORS.airbnb.bg} label="Airbnb" />
+              <Legend dot={RESA_BAR_COLORS.booking.bg} label="Booking" />
+              <Legend dot={RESA_BAR_COLORS.direct.bg} label="Direct" />
+              <Legend dot={RESA_BAR_COLORS.default.bg} label="Autre" />
               <Legend dot={BLOCKED_HATCH_BG} label="Bloqué (stop sell)" />
               {dpEnabled ? <Legend dot={T.ai} label="Prix dynamique" /> : null}
               {inventoryLoading && <span style={{ fontWeight: 700 }}>Chargement…</span>}
@@ -492,7 +490,7 @@ export default function SimpleView({
           </div>
 
           {/* Chambres physiques du type (multi) — filtre les barres résa */}
-          {showResas && physicalRooms.length > 0 ? (
+          {physicalRooms.length > 0 ? (
             <div
               style={{
                 display: 'flex',
@@ -591,7 +589,7 @@ export default function SimpleView({
               todayIso={todayIso}
               currency={currency}
               selected={selected}
-              showReservations={showResas}
+              showReservations={showResaLine}
               filterRoomId={selectedRoomId}
               rooms={physicalRooms}
               onToggleDay={toggleDay}
@@ -968,7 +966,7 @@ function reservationMatchesRoomFilter(res, filterRoomId) {
 
 function MonthGrid({
   year, month, inventories, todayIso, currency, selected,
-  showReservations = true, filterRoomId = null, rooms = [],
+  showReservations = false, filterRoomId = null, rooms = [],
   onToggleDay, onOpenReservation,
 }) {
   const first = new Date(year, month, 1);
@@ -1010,7 +1008,9 @@ function MonthGrid({
         isArchived: cellState === 'archive',
         noInventory: cellState === 'out_of_window' || cellState === 'missing',
         stopSell: hasInventoryData(inv) && !!inv.stopSell,
-        booked: (inv?.reservations?.length ?? 0) > 0,
+        booked: normalizeCalendarReservations(inv?.reservations).some((r) =>
+          reservationMatchesRoomFilter(r, filterRoomId),
+        ),
         useDynamic: hasInventoryData(inv) && resolvePriceMode(inv) === 'dynamic',
         hasManual: inv?.manualPrice != null,
         priceLabel: rate.main,
@@ -1050,6 +1050,8 @@ function MonthGrid({
           key={wi}
           week={week}
           monthReservations={showReservations ? monthReservations : []}
+          showReservations={showReservations}
+          filterRoomId={filterRoomId}
           roomNameById={roomNameById}
           showRoomOnBar={!filterRoomId && roomNameById.size > 0}
           selected={selected}
@@ -1065,16 +1067,17 @@ function MonthGrid({
 /* ════════════════ Semaine (7 cellules + barres résa en overlay) ════════════════ */
 
 function WeekRow({
-  week, monthReservations, roomNameById, showRoomOnBar = false,
+  week, monthReservations, showReservations = false, filterRoomId = null,
+  roomNameById, showRoomOnBar = false,
   selected, currency, onToggleDay, onOpenReservation,
 }) {
   const dayIsos = week.map((c) => (c ? c.iso : null));
   const firstIso = dayIsos.find(Boolean);
   const lastIso = [...dayIsos].reverse().find(Boolean);
 
-  /* Segments de barres résa sur cette semaine */
+  /* Segments de barres résa sur cette semaine — jamais calculés si « Résas » est off. */
   const segments = useMemo(() => {
-    if (!firstIso || !lastIso) return [];
+    if (!showReservations || !firstIso || !lastIso) return [];
     const out = [];
     monthReservations.forEach((res) => {
       const arr = isoDate(res.arrivalDate);
@@ -1090,7 +1093,7 @@ function WeekRow({
       out.push({ res, startIdx, endIdx, startsHere, endsHere });
     });
     return out;
-  }, [monthReservations, dayIsos.join(','), firstIso, lastIso]);
+  }, [showReservations, monthReservations, dayIsos.join(','), firstIso, lastIso]);
 
   return (
     <div style={{ position: 'relative' }}>
@@ -1102,6 +1105,8 @@ function WeekRow({
               c={c}
               currency={currency}
               selected={selected.includes(c.iso)}
+              tintChannel={!showReservations}
+              filterRoomId={filterRoomId}
               onToggle={(e) => onToggleDay(c.iso, e)}
             />
           ) : (
@@ -1110,8 +1115,8 @@ function WeekRow({
         ))}
       </div>
 
-      {/* Barres réservation façon Airbnb : check-in mi-cellule → check-out mi-cellule */}
-      {segments.map(({ res, startIdx, endIdx, startsHere, endsHere }, si) => {
+      {/* Barres uniquement si « Résas » est coché — sinon cellules teintées, clic pour éditer. */}
+      {showReservations && segments.map(({ res, startIdx, endIdx, startsHere, endsHere }, si) => {
         const left = ((startIdx + (startsHere ? 0.55 : 0)) / 7) * 100;
         const right = ((endIdx + (endsHere ? 0.45 : 1)) / 7) * 100;
         const colors = reservationBarColors(res);
@@ -1126,12 +1131,17 @@ function WeekRow({
         ].filter(Boolean).join(' · ');
         const showLabel = startsHere || startIdx === 0;
         const channelHint = colors.label || res.channelName || '';
+        const { nameCircle, departureCircle } = calendarTodayStayBadges(res, calendarTodayIso());
+        const letterBg = (startsHere && nameCircle?.color)
+          || (endsHere && departureCircle?.color)
+          || 'rgba(255,255,255,0.22)';
+        const letterTitle = nameCircle?.title || departureCircle?.title || '';
         return (
           <button
             key={`${res._id}-${si}`}
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenReservation?.(res); }}
-            title={`${label} · ${isoDate(res.arrivalDate)} → ${isoDate(res.departureDate)}${channelHint ? ` · ${channelHint}` : ''}${res.status ? ` · ${res.status}` : ''}`}
+            title={`${label} · ${isoDate(res.arrivalDate)} → ${isoDate(res.departureDate)}${channelHint ? ` · ${channelHint}` : ''}${res.status ? ` · ${res.status}` : ''}${letterTitle ? ` · ${letterTitle}` : ''}`}
             style={{
               position: 'absolute', top: 48, height: 30,
               left: `${left}%`, width: `${Math.max(right - left, 4)}%`,
@@ -1147,11 +1157,14 @@ function WeekRow({
           >
             {showLabel && (
               <>
-                <span style={{
+                <span
+                  title={letterTitle || undefined}
+                  style={{
                   width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                  background: 'rgba(255,255,255,0.22)', color: colors.text,
+                  background: letterBg, color: colors.text,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 11, fontWeight: 800,
+                  boxShadow: nameCircle || departureCircle ? `0 0 0 2px ${letterBg}55` : undefined,
                 }}>
                   {(name || '?').charAt(0).toUpperCase()}
                 </span>
@@ -1169,8 +1182,9 @@ function WeekRow({
 
 /* ════════════════ Cellule jour ════════════════ */
 
-function DayCell({ c, currency, selected, onToggle }) {
+function DayCell({ c, currency, selected, onToggle, tintChannel = true, filterRoomId = null }) {
   const muted = c.isPast || c.isArchived;
+  const channel = tintChannel && c.booked ? dayReservationChannel(c.inv, filterRoomId) : null;
 
   return (
     <div
@@ -1185,10 +1199,14 @@ function DayCell({ c, currency, selected, onToggle }) {
           c.isArchived ? ARCHIVE_CELL_BG :
           c.noInventory ? T.bg2 :
           selected ? T.primaryTint3 :
-          c.booked ? (dayReservationTint(c.inv) || 'transparent') :
+          channel ? channel.tint :
           c.stopSell ? BLOCKED_HATCH_BG :
           'transparent',
-        boxShadow: selected ? `inset 0 0 0 2px ${T.primary}` : 'none',
+        boxShadow: selected
+          ? `inset 0 0 0 2px ${T.primary}`
+          : channel
+            ? `inset 3px 0 0 ${channel.bg}`
+            : 'none',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
