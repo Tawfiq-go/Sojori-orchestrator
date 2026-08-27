@@ -1132,7 +1132,7 @@ function WeekRow({
         const showLabel = startsHere || startIdx === 0;
         const channelHint = colors.label || res.channelName || '';
         const { nameCircle, departureCircle } = calendarTodayStayBadges(res, calendarTodayIso());
-        const letterBg = (startsHere && nameCircle?.color)
+        const letterBg = (showLabel && nameCircle?.color)
           || (endsHere && departureCircle?.color)
           || 'rgba(255,255,255,0.22)';
         const letterTitle = nameCircle?.title || departureCircle?.title || '';
