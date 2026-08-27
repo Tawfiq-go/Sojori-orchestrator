@@ -74,15 +74,22 @@ function formatDay(value: unknown): string {
   return format(d, 'EEE d MMM', { locale: fr });
 }
 
-function paymentMeta(status: unknown): { label: string; color: string; bg: string } {
-  const s = String(status || '').toLowerCase();
-  if (s === 'paid' || s.includes('payé') || s.includes('paid')) {
+function paymentMeta(
+  status: unknown,
+  otaLabel?: string | null,
+): { label: string; color: string; bg: string } {
+  const raw = String(status || '').trim();
+  const s = raw.toLowerCase();
+  if (s === 'paid' || (s.includes('payé') && !s.includes('non'))) {
     return { label: 'Payé', color: T.success, bg: T.successBg };
+  }
+  if (otaLabel && (/unpaid/i.test(raw) || s === 'pending' || !raw)) {
+    return { label: `Payé via ${otaLabel}`, color: T.success, bg: T.successBg };
   }
   if (s === 'pending' || s.includes('attente')) {
     return { label: 'En attente', color: T.warning, bg: T.warningBg };
   }
-  return { label: status ? String(status) : 'Non payé', color: T.error, bg: T.errorBg };
+  return { label: raw || 'Non payé', color: T.error, bg: T.errorBg };
 }
 
 function channelLabel(r: any): string {
@@ -262,7 +269,6 @@ export function FinancierTab({
   const currency = String(r.currency || 'MAD').toUpperCase();
   const breakdown = r.reservationBreakdown?.normalizedBreakdown;
   const displayPaymentStatus = editedData.paymentStatus ?? r.paymentStatus;
-  const pay = paymentMeta(displayPaymentStatus);
 
   /**
    * Affichage 100 % MAD.
@@ -298,13 +304,31 @@ export function FinancierTab({
         ? { amount: amt(breakdown.otaCommission), currency: cur(breakdown.otaCommission, 'EUR') }
         : null;
 
-  const alreadyPaid = num(r.alreadyPaid) || guestPaidMad;
+  const villaCollected = num(r.alreadyPaid);
   const channelBlob = String(r.channelName || r.source || '');
   const tagBlob = Array.isArray(r.tags) ? r.tags.map(String).join(' ') : '';
   const isWhatsAppDirect =
     /whatsapp|sojori|prolong/i.test(channelBlob) || /whatsapp|prolongation/i.test(tagBlob);
   const isBooking = !isWhatsAppDirect && /booking/i.test(channelBlob);
   const isAirbnb = /airbnb/i.test(channelBlob);
+  const isOta =
+    isBooking ||
+    isAirbnb ||
+    (!isWhatsAppDirect && /vrbo|homeaway|expedia|agoda|tripadvisor|ctrip/i.test(channelBlob));
+  const otaLabel = isOta ? channelLabel(r) : null;
+  const pay = paymentMeta(displayPaymentStatus, otaLabel);
+  const alreadyPaid = isOta
+    ? Math.max(villaCollected, guestPaidMad, num(r.totalPrice))
+    : villaCollected || guestPaidMad;
+  const encaisseBase = Math.max(guestPaidMad, alreadyPaid);
+  const remaining = isOta ? 0 : Math.max(0, encaisseBase - alreadyPaid);
+  const paidPct = isOta
+    ? encaisseBase > 0
+      ? 100
+      : 0
+    : encaisseBase > 0
+      ? Math.min(100, Math.round((alreadyPaid / encaisseBase) * 100))
+      : 0;
   const channelAmountsAlreadyMad =
     channelFinance.source === 'airbnb-comments' ||
     String(channelClient?.currency || breakdown?.totalPaidByCustomer?.currency || '').toUpperCase() ===
@@ -350,11 +374,6 @@ export function FinancierTab({
     }
     return '';
   })();
-
-  const encaisseBase = Math.max(guestPaidMad, alreadyPaid);
-  const remaining = Math.max(0, encaisseBase - alreadyPaid);
-  const paidPct =
-    encaisseBase > 0 ? Math.min(100, Math.round((alreadyPaid / encaisseBase) * 100)) : 0;
 
   const nights =
     num(r.nights) ||
@@ -609,7 +628,7 @@ export function FinancierTab({
         <KpiCard
           label="Reste à encaisser"
           value={moneyMad(remaining)}
-          hint={remaining <= 0 ? 'Soldé' : 'Solde client'}
+          hint={otaLabel ? `Payé via ${otaLabel}` : remaining <= 0 ? 'Soldé' : 'Solde client'}
           accent={remaining > 0 ? T.warning : T.success}
         />
       </Box>
@@ -806,7 +825,12 @@ export function FinancierTab({
           )}
           <Line label="Méthode" value={r.paymentMethod || '—'} />
           <Line label="Type" value={r.paymentType || '—'} />
-          <Line label="Déjà encaissé" value={moneyMad(alreadyPaid)} bold accent={T.success} />
+          <Line
+            label={otaLabel ? `Payé via ${otaLabel}` : 'Déjà encaissé'}
+            value={moneyMad(alreadyPaid)}
+            bold
+            accent={T.success}
+          />
           <Line
             label="Reste à encaisser"
             value={moneyMad(remaining)}

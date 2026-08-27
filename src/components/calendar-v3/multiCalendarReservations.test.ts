@@ -64,6 +64,14 @@ describe('buildRoomTypesForListing', () => {
     assert.equal(tree[0]!.availability['2026-08-14']!.rate, 100)
     assert.equal(tree[0]!.rooms[0]!.id, 'room-a')
   })
+
+  it('does not invent Non assignée or Chambre N when catalog has no rooms', () => {
+    const listing = {
+      roomTypes: [{ _id: 'rt1', roomTypeName: 'Villa Confort' }],
+    }
+    const tree = buildRoomTypesForListing({ listing, inventoryBlock: {} })
+    assert.equal(tree[0]!.rooms.length, 0)
+  })
 })
 
 describe('buildSingleUnitResaRows', () => {
@@ -246,6 +254,35 @@ describe('mergeOverlayReservationLists', () => {
           status: 'Cancelled',
           cancellationAcknowledged: false,
           paymentStatus: 'UnPaid',
+        },
+      ],
+    )
+    assert.equal(merged.length, 0)
+  })
+
+  it('evicts inventory seed by villa + dates when live is cancelled', () => {
+    const merged = mergeOverlayReservationLists(
+      [
+        {
+          _id: 'inv-stale',
+          listingId: 'lid',
+          roomName: 'Villa 03',
+          arrivalDate: '2026-08-25',
+          departureDate: '2026-09-01',
+          guestName: 'A. Mamoune',
+          status: 'Confirmed',
+        },
+      ],
+      [
+        {
+          _id: 'mongo-1',
+          reservationNumber: 'SJ-2OW6O0E0',
+          sojoriId: 'lid',
+          roomName: 'Villa 03',
+          arrivalDate: '2026-08-25',
+          departureDate: '2026-09-01',
+          guestName: 'amar mamoune',
+          status: 'Cancelled',
         },
       ],
     )
