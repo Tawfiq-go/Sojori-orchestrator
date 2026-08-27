@@ -350,13 +350,17 @@ export function cleanListingImagesForPayload(images: unknown): UnknownRecord[] {
       const url = asString(row.url).trim();
       if (!url) return null;
       const sortOrder = asNumber(row.sortOrder);
+      const imageTypeId = asString(row.imageTypeId).trim();
       const out: UnknownRecord = {
-        fileName: asString(row.fileName),
-        imageTypeId: row.imageTypeId ?? '',
+        fileName: asString(row.fileName) || null,
         imageTypeRuId: Array.isArray(row.imageTypeRuId) ? row.imageTypeRuId : [],
         sortOrder: sortOrder ?? 0,
         url,
       };
+      // ObjectId only — never send "" (CastError on create-property)
+      if (isMongoObjectId(imageTypeId)) {
+        out.imageTypeId = imageTypeId;
+      }
       // Multi only — association building → roomType(s) pour PutProperty
       if (Array.isArray(row.roomTypeIds)) {
         out.roomTypeIds = row.roomTypeIds.map((id) => String(id)).filter(Boolean);
@@ -475,6 +479,9 @@ function cleanRoomTypeRowForApi(row: UnknownRecord): UnknownRecord {
     out.active = true;
   } else {
     out.active = true;
+  }
+  if (Array.isArray(out.roomTypeImages)) {
+    out.roomTypeImages = cleanListingImagesForPayload(out.roomTypeImages);
   }
   return out;
 }
@@ -1318,7 +1325,9 @@ function normalizeCreateRoomTypes(values: UnknownRecord, roomTypes: unknown): Un
     active: first.active !== false,
     ratePlanIds: Array.isArray(first.ratePlanIds) ? first.ratePlanIds : [],
     amenitiesIds: cleanAmenitiesIdsForCreate(first.amenitiesIds),
-    roomTypeImages: Array.isArray(first.roomTypeImages) ? first.roomTypeImages : [],
+    roomTypeImages: cleanListingImagesForPayload(
+      Array.isArray(first.roomTypeImages) ? first.roomTypeImages : [],
+    ),
     bedTypes: Array.isArray(first.bedTypes) ? first.bedTypes : [],
     roomAmenities: cleanRoomAmenitiesForCreate(first.roomAmenities),
   };
