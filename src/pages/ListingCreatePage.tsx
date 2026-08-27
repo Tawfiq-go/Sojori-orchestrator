@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
+import { LegacyReduxProvider } from '../components/LegacyReduxBridge';
 import ListingFormV2 from '../components/listing/form-v2/ListingFormV2';
 import {
   ListingTypeChooser,
@@ -95,11 +96,14 @@ export function ListingCreatePage() {
             Création · <strong>Multi</strong> — structure à chambres
           </Typography>
         </Box>
-        <MultiListingCreateShell
-          onSave={(values) => createListing(values)}
-          isSaving={isSaving}
-          onBack={() => setSearchParams({})}
-        />
+        {/* Multi create uses useDispatch for photo uploads — same as PhotosTabReal edit */}
+        <LegacyReduxProvider>
+          <MultiListingCreateShell
+            onSave={(values) => createListing(values)}
+            isSaving={isSaving}
+            onBack={() => setSearchParams({})}
+          />
+        </LegacyReduxProvider>
       </DashboardWrapper>
     );
   }

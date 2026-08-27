@@ -1,7 +1,19 @@
-import { Box, TextField, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
+import {
+  Box,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { PhotoZone } from './PhotoZone';
 import { multiTokens as t, type MultiCreateValues, type MultiListingImage } from './multiTypes';
 import ListingOwnerSelect from '../form-v2/components/ListingOwnerSelect';
+import listingsService from '../../../services/listingsService';
+
+type CityOption = { _id: string; name: string };
 
 type Props = {
   values: MultiCreateValues;
@@ -11,10 +23,25 @@ type Props = {
 };
 
 export function MultiBuildingSection({ values, onChange, uploading, onPickCommonFiles }: Props) {
+  const [cities, setCities] = useState<CityOption[]>([]);
   const descValue =
     Array.isArray(values.description) && values.description[0]
       ? String(values.description[0].value || '')
       : '';
+
+  useEffect(() => {
+    let cancelled = false;
+    listingsService.getCities({ allCities: true, limit: 2000 }).then((rows) => {
+      if (!cancelled) setCities(rows || []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Même logique que LocationTab (Single) : sélection ville → city + cityId
+  const citySelectValue =
+    values.city && cities.some((c) => c.name === values.city) ? values.city : '';
 
   return (
     <Box
@@ -89,26 +116,37 @@ export function MultiBuildingSection({ values, onChange, uploading, onPickCommon
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' },
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
             gap: 1.5,
             mb: 1.5,
           }}
         >
-          <TextField
-            label="Ville *"
-            size="small"
-            value={values.city}
-            onChange={(e) => onChange({ city: e.target.value })}
-            fullWidth
-          />
-          <TextField
-            label="City ID *"
-            size="small"
-            value={values.cityId}
-            onChange={(e) => onChange({ cityId: e.target.value })}
-            helperText="ID Mongo / RU city (comme formulaire Single)"
-            fullWidth
-          />
+          <FormControl size="small" fullWidth required>
+            <InputLabel id="multi-create-city-label">Ville</InputLabel>
+            <Select
+              labelId="multi-create-city-label"
+              label="Ville"
+              displayEmpty
+              value={citySelectValue}
+              onChange={(e) => {
+                const name = String(e.target.value || '');
+                const selected = cities.find((c) => c.name === name);
+                onChange({
+                  city: name,
+                  cityId: selected?._id || '',
+                });
+              }}
+            >
+              <MenuItem value="" disabled>
+                <em>Sélectionner une ville</em>
+              </MenuItem>
+              {cities.map((c) => (
+                <MenuItem key={c._id} value={c.name}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField
             label="Pays *"
             size="small"

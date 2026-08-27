@@ -103,6 +103,8 @@ export function DashboardWrapper({
     return <AdminBusinessScopeUnsetAlert />;
   }
 
+  // overflow auto (pas hidden) : les écrans listing sans scroll interne
+  // (ex. création Multi) doivent pouvoir défiler ; ListingFormV2 garde son overflowY interne.
   const body = listingCompact ? (
     <div
       style={{
@@ -110,7 +112,7 @@ export function DashboardWrapper({
         minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden',
+        overflow: 'auto',
         width: '100%',
       }}
     >
