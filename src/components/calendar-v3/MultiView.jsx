@@ -308,8 +308,10 @@ function MultiResaOverlay({
         const pillR = Math.round(barH / 2);
         const initial = (name || '?').charAt(0).toUpperCase();
         const letterSize = Math.max(18, barH - 8);
-        const arrivalLetter = startsHere && nameCircle;
-        const channelStartLetter = startsHere && !nameCircle;
+        /* Barre coupée à gauche (arrivée avant la fenêtre) : quand même le cercle rouge/vert. */
+        const showStartLetter = startsHere || startIdx === 0;
+        const arrivalLetter = showStartLetter && nameCircle;
+        const channelStartLetter = showStartLetter && !nameCircle;
         const showLabel = startsHere || startIdx === 0;
         const departureLetter = endsHere && departureCircle;
         const endChannelDot = endsHere && !departureCircle;
@@ -375,9 +377,7 @@ function MultiResaOverlay({
             }}
           >
             {arrivalLetter ? letterCircle(nameCircle, 'Arrivée') : null}
-            {channelStartLetter || (showLabel && !startsHere && !departureLetter)
-              ? letterCircle(null, 'Arrivée')
-              : null}
+            {channelStartLetter ? letterCircle(null, 'Arrivée') : null}
             {pending ? <span style={{ fontSize: 9, color: T.warning, flexShrink: 0 }}>⏳</span> : null}
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
               {showLabel ? name : ''}
