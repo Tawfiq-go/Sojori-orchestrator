@@ -59,16 +59,26 @@ function hasLicenceData(raw: Raw): boolean {
   );
 }
 
+function hasRulesListContent(rules: unknown): boolean {
+  if (Array.isArray(rules)) {
+    return rules.some((line) => {
+      if (typeof line === 'string') return line.trim().length > 0;
+      if (isRecord(line)) return hasValue(line.title) || hasValue(line.body) || hasValue(line.titre);
+      return false;
+    });
+  }
+  if (isRecord(rules)) return hasRulesListContent(rules.fr);
+  return false;
+}
+
 function hasRulesAndInfoRules(raw: Raw): boolean {
   if (!isRecord(raw.rulesAndInfo)) return false;
-  const rules = raw.rulesAndInfo.Rules;
-  return Array.isArray(rules) && rules.some((line) => hasValue(line));
+  return hasRulesListContent(raw.rulesAndInfo.Rules);
 }
 
 function hasRulesAndInfoInfoUtils(raw: Raw): boolean {
   if (!isRecord(raw.rulesAndInfo)) return false;
-  const infos = raw.rulesAndInfo.InfoUtils;
-  return Array.isArray(infos) && infos.some((line) => hasValue(line));
+  return hasRulesListContent(raw.rulesAndInfo.InfoUtils);
 }
 
 function hasLocalizedRowsContent(rows: unknown): boolean {

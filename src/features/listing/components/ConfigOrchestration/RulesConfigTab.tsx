@@ -36,28 +36,44 @@ const LANG_LABELS: Record<RulesLang, string> = {
   it: 'IT',
 };
 
-type LocalizedList = Partial<Record<RulesLang, string[]>> & { fr: string[] };
+type RuleEntry = { title: string; body: string };
+type LocalizedList = Partial<Record<RulesLang, RuleEntry[]>> & { fr: RuleEntry[] };
 
 type RulesAndInfoState = {
   Rules: LocalizedList;
   InfoUtils: LocalizedList;
 };
 
+const EMPTY_ENTRY: RuleEntry = { title: '', body: '' };
 const EMPTY: RulesAndInfoState = { Rules: { fr: [] }, InfoUtils: { fr: [] } };
 
-function asStringArray(raw: unknown): string[] {
+function normalizeRuleEntry(raw: unknown): RuleEntry {
+  if (raw == null) return { ...EMPTY_ENTRY };
+  if (typeof raw === 'string') return { title: '', body: raw };
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>;
+    const title = String(o.title ?? o.titre ?? '');
+    const body = String(o.body ?? o.content ?? o.contenu ?? o.text ?? '');
+    if (title.trim() || body.trim()) return { title, body };
+  }
+  const s = String(raw ?? '');
+  if (s === '[object Object]') return { ...EMPTY_ENTRY };
+  return { title: '', body: s };
+}
+
+function asEntryArray(raw: unknown): RuleEntry[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((x) => String(x ?? ''));
+  return raw.map(normalizeRuleEntry);
 }
 
 function normalizeLocalizedList(raw: unknown): LocalizedList {
-  if (Array.isArray(raw)) return { fr: asStringArray(raw) };
+  if (Array.isArray(raw)) return { fr: asEntryArray(raw) };
   if (!raw || typeof raw !== 'object') return { fr: [] };
   const obj = raw as Record<string, unknown>;
-  const out: LocalizedList = { fr: asStringArray(obj.fr) };
+  const out: LocalizedList = { fr: asEntryArray(obj.fr) };
   for (const iso of RULES_LANGS) {
     if (iso === 'fr') continue;
-    if (iso in obj && obj[iso] != null) out[iso] = asStringArray(obj[iso]);
+    if (iso in obj && obj[iso] != null) out[iso] = asEntryArray(obj[iso]);
   }
   return out;
 }
@@ -71,34 +87,51 @@ function normalizeRulesAndInfo(raw: unknown): RulesAndInfoState {
   };
 }
 
-function listForLang(list: LocalizedList, lang: RulesLang): string[] {
+function listForLang(list: LocalizedList, lang: RulesLang): RuleEntry[] {
   const frLen = (list.fr ?? []).length;
   const arr = list[lang] ?? [];
-  if (lang === 'fr') return [...(list.fr ?? [])];
-  // Pad/trim to FR length for editing alignment
-  const next = arr.slice(0, frLen);
-  while (next.length < frLen) next.push('');
+  if (lang === 'fr') return (list.fr ?? []).map((e) => ({ ...e }));
+  const next = arr.slice(0, frLen).map((e) => ({ ...e }));
+  while (next.length < frLen) next.push({ ...EMPTY_ENTRY });
   return next;
 }
 
-function filledCount(items: string[]): number {
-  return items.filter((r) => r.trim()).length;
+function entryFilled(e: RuleEntry): boolean {
+  return Boolean(e.title.trim() || e.body.trim());
+}
+
+function filledCount(items: RuleEntry[]): number {
+  return items.filter(entryFilled).length;
 }
 
 function trimLocalized(list: LocalizedList): LocalizedList {
   const frOriginal = list.fr ?? [];
-  const keptIdx = frOriginal
-    .map((s, i) => (s.trim() ? i : -1))
-    .filter((i) => i >= 0);
-  const fr = keptIdx.map((i) => frOriginal[i].trim());
+  const keptIdx = frOriginal.map((e, i) => (entryFilled(e) ? i : -1)).filter((i) => i >= 0);
+  const fr = keptIdx.map((i) => ({
+    title: frOriginal[i].title.trim(),
+    body: frOriginal[i].body.trim(),
+  }));
   const out: LocalizedList = { fr };
   for (const iso of RULES_LANGS) {
     if (iso === 'fr') continue;
     const arr = list[iso];
     if (!arr) continue;
-    out[iso] = keptIdx.map((i) => String(arr[i] ?? '').trim());
+    out[iso] = keptIdx.map((i) => {
+      const e = arr[i] ?? EMPTY_ENTRY;
+      return { title: String(e.title ?? '').trim(), body: String(e.body ?? '').trim() };
+    });
   }
   return out;
+}
+
+function packEntryForTranslate(e: RuleEntry): string {
+  return `TITLE: ${e.title}\nBODY: ${e.body}`;
+}
+
+function unpackEntryFromTranslate(raw: string): RuleEntry {
+  const m = String(raw ?? '').match(/^TITLE:\s*(.*)\nBODY:\s*([\s\S]*)$/);
+  if (m) return { title: m[1].trim(), body: m[2].trim() };
+  return { title: '', body: String(raw ?? '').trim() };
 }
 
 interface Props {
@@ -172,7 +205,8 @@ function StringListEditor({
   title,
   list,
   lang,
-  placeholder,
+  titlePlaceholder,
+  bodyPlaceholder,
   translating,
   onLangChange,
   onTranslate,
@@ -181,7 +215,8 @@ function StringListEditor({
   title: string;
   list: LocalizedList;
   lang: RulesLang;
-  placeholder: string;
+  titlePlaceholder: string;
+  bodyPlaceholder: string;
   translating: boolean;
   onLangChange: (next: RulesLang) => void;
   onTranslate: () => void;
@@ -190,15 +225,16 @@ function StringListEditor({
   const items = useMemo(() => listForLang(list, lang), [list, lang]);
   const canTranslate = lang !== 'fr' && filledCount(list.fr ?? []) > 0;
 
-  const updateItem = (index: number, value: string) => {
-    const fr = [...(list.fr ?? [])];
+  const updateItem = (index: number, patch: Partial<RuleEntry>) => {
+    const apply = (row: RuleEntry): RuleEntry => ({ ...row, ...patch });
     if (lang === 'fr') {
-      fr[index] = value;
+      const fr = [...(list.fr ?? [])];
+      fr[index] = apply(fr[index] ?? EMPTY_ENTRY);
       onChangeList({ ...list, fr });
       return;
     }
     const current = listForLang(list, lang);
-    current[index] = value;
+    current[index] = apply(current[index] ?? EMPTY_ENTRY);
     onChangeList({ ...list, [lang]: current });
   };
 
@@ -213,10 +249,10 @@ function StringListEditor({
   };
 
   const addItem = () => {
-    const next: LocalizedList = { fr: [...(list.fr ?? []), ''] };
+    const next: LocalizedList = { fr: [...(list.fr ?? []), { ...EMPTY_ENTRY }] };
     for (const iso of RULES_LANGS) {
       if (iso === 'fr') continue;
-      if (list[iso]) next[iso] = [...(list[iso] ?? []), ''];
+      if (list[iso]) next[iso] = [...(list[iso] ?? []), { ...EMPTY_ENTRY }];
     }
     onChangeList(next);
   };
@@ -252,24 +288,47 @@ function StringListEditor({
         </Stack>
       }
     >
-      <Stack spacing={1.25}>
+      <Stack spacing={1.5}>
         {items.length === 0 && (
           <Typography sx={{ fontSize: 12, color: T.text3 }}>
-            Aucune entrée — ajoutez une règle ou une info utile.
+            Aucune entrée — ajoutez un titre et son contenu.
           </Typography>
         )}
         {items.map((item, index) => (
-          <Stack key={index} direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-            <TextField
-              fullWidth
-              size="small"
-              multiline
-              minRows={1}
-              value={item}
-              placeholder={lang === 'fr' ? placeholder : `${placeholder} (${LANG_LABELS[lang]})`}
-              onChange={(e) => updateItem(index, e.target.value)}
-              sx={{ '& .MuiInputBase-root': { fontSize: 13 } }}
-            />
+          <Stack
+            key={index}
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'flex-start',
+              p: 1.25,
+              border: `1px solid ${T.border}`,
+              borderRadius: 1,
+              bgcolor: T.bg2,
+            }}
+          >
+            <Stack spacing={1} sx={{ flex: 1 }}>
+              <TextField
+                fullWidth
+                size="small"
+                value={item.title}
+                placeholder={lang === 'fr' ? titlePlaceholder : `${titlePlaceholder} (${LANG_LABELS[lang]})`}
+                onChange={(e) => updateItem(index, { title: e.target.value })}
+                inputProps={{ 'aria-label': 'Titre' }}
+                sx={{ '& .MuiInputBase-root': { fontSize: 13, fontWeight: 700 } }}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                multiline
+                minRows={2}
+                value={item.body}
+                placeholder={lang === 'fr' ? bodyPlaceholder : `${bodyPlaceholder} (${LANG_LABELS[lang]})`}
+                onChange={(e) => updateItem(index, { body: e.target.value })}
+                inputProps={{ 'aria-label': 'Contenu' }}
+                sx={{ '& .MuiInputBase-root': { fontSize: 13 } }}
+              />
+            </Stack>
             <IconButton
               size="small"
               aria-label="Supprimer"
@@ -366,27 +425,27 @@ export default function RulesConfigTab({
   const translateSection = useCallback(
     async (section: 'Rules' | 'InfoUtils', targetLang: RulesLang) => {
       if (targetLang === 'fr') return;
-      const source = (rulesAndInfo[section].fr ?? []).map((s) => s.trim());
-      if (!source.some(Boolean)) {
+      const sourceEntries = rulesAndInfo[section].fr ?? [];
+      if (!sourceEntries.some(entryFilled)) {
         toast.info('Ajoutez d’abord des entrées en français.');
         return;
       }
       setTranslatingSection(section);
       try {
         const result = await listingsService.translateRulesAndInfo({
-          texts: source,
+          texts: sourceEntries.map(packEntryForTranslate),
           targetLang,
           sourceLang: 'fr',
         });
         if (result.error) throw new Error(result.error);
-        if (result.texts.length !== source.length) {
+        if (result.texts.length !== sourceEntries.length) {
           throw new Error('Réponse de traduction invalide');
         }
         patchRulesAndInfo((prev) => ({
           ...prev,
           [section]: {
             ...prev[section],
-            [targetLang]: result.texts,
+            [targetLang]: result.texts.map(unpackEntryFromTranslate),
           },
         }));
         toast.success(`Traduit en ${LANG_LABELS[targetLang]}`);
@@ -466,8 +525,9 @@ export default function RulesConfigTab({
       )}
 
       <Typography sx={{ ...TYPO.caption, mb: 2 }}>
-        Ajoutez vos règles en français, traduisez via l&apos;icône IA, puis cliquez{' '}
-        <b>Enregistrer</b> en bas de l&apos;onglet.
+        Chaque règle a un <b>titre</b> et un <b>contenu</b>. Rédigez en français, traduisez via
+        l&apos;icône IA, puis cliquez <b>Enregistrer</b> en bas de l&apos;onglet. Les voyageurs les
+        voient dans le menu WhatsApp, juste après Réservation.
       </Typography>
 
       <Stack spacing={2}>
@@ -475,7 +535,8 @@ export default function RulesConfigTab({
           title="Règles de la propriété"
           list={rulesAndInfo.Rules}
           lang={rulesLang}
-          placeholder="Ex. Les couples non mariés ne sont pas acceptés"
+          titlePlaceholder="Titre — ex. Petit-déjeuner"
+          bodyPlaceholder="Contenu — ex. En villa jusqu’à 11h00."
           translating={translatingSection === 'Rules'}
           onLangChange={setRulesLang}
           onTranslate={() => void translateSection('Rules', rulesLang)}
@@ -485,7 +546,8 @@ export default function RulesConfigTab({
           title="Infos utiles"
           list={rulesAndInfo.InfoUtils}
           lang={infoLang}
-          placeholder="Ex. Numéro d'urgence conciergerie : +212 …"
+          titlePlaceholder="Titre — ex. Urgence"
+          bodyPlaceholder="Contenu — ex. Conciergerie : +212 …"
           translating={translatingSection === 'InfoUtils'}
           onLangChange={setInfoLang}
           onTranslate={() => void translateSection('InfoUtils', infoLang)}
