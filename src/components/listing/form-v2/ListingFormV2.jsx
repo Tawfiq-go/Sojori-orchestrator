@@ -23,6 +23,7 @@ import { DistributionTab, DirectBookingTab, RoomsTab, LicenseTab } from './tabs/
 import { RuImportDataTab } from './tabs/DetailTabsRuImport';
 import PostImportOnboardingTab from './tabs/PostImportOnboardingTab';
 import ListingExperiencesTab from './tabs/ListingExperiencesTab';
+import ListingMenageTab from './tabs/ListingMenageTab';
 import ListingOrchestrationV3Embed from '../../../features/orchestrationListingV3/ListingOrchestrationV3Embed';
 
 export default function ListingFormV2({
@@ -241,6 +242,9 @@ export default function ListingFormV2({
             listingOwnerId={values.ownerId}
           />
         );
+      }
+      if (tabKey === 'menage') {
+        return <ListingMenageTab listingId={listingId} />;
       }
       if (tabKey === 'license')      return <LicenseTab     {...common} />;
     }
