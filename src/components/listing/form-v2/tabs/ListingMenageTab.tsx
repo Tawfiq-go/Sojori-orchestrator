@@ -4,19 +4,29 @@ import listingsService from '../../../../services/listingsService';
 import V3HousekeepingPolicyPanel, {
   type HousekeepingPolicyConfig,
 } from '../../../../features/orchestrationListingV3/V3HousekeepingPolicyPanel';
+import MenageOpsPanel from '../../../../features/listing/components/ConfigOrchestration/MenageOpsPanel';
+import V3MenageBaremePanel from '../../../../features/orchestrationListingV3/V3MenageBaremePanel';
+import { V3 } from '../../../../features/orchestrationListingV3/theme';
 
 type Props = {
   listingId?: string | null;
 };
 
+const sectionSx = {
+  border: `1px solid ${V3.b}`,
+  borderRadius: '12px',
+  bgcolor: V3.card,
+  overflow: 'hidden',
+};
+
 /**
- * Onglet listing « Ménage » — première pierre de la page ménage listing.
- * Cette itération : uniquement la politique (création / assignation / notification).
- * Les panneaux suivants (types de ménage, barème…) s'empileront dans la même Stack.
+ * Onglet listing « Ménage » — page ménage listing.
+ * Panneaux : Politique (qui crée/assigne/notifie), Types & durées (menageOps).
  */
 export default function ListingMenageTab({ listingId }: Props) {
   const [loading, setLoading] = useState(true);
   const [policy, setPolicy] = useState<HousekeepingPolicyConfig | null>(null);
+  const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -26,22 +36,35 @@ export default function ListingMenageTab({ listingId }: Props) {
         return;
       }
       setLoading(true);
-      try {
-        const res = await listingsService.getListingOrchestration(String(listingId));
-        const doc = (res as { data?: Record<string, unknown> })?.data ?? res;
-        const rules =
-          doc && typeof doc === 'object'
-            ? ((doc as Record<string, unknown>).cleaningRules as
-                | Record<string, unknown>
-                | undefined)
-            : undefined;
-        const hp = rules?.housekeepingPolicy as HousekeepingPolicyConfig | undefined;
-        if (!cancelled) setPolicy(hp ?? null);
-      } catch {
-        // 404 = listing non migré orchestration → politique non configurée (défauts backend).
-        if (!cancelled) setPolicy(null);
-      } finally {
-        if (!cancelled) setLoading(false);
+      const loadPolicy = async () => {
+        try {
+          const res = await listingsService.getListingOrchestration(String(listingId));
+          const doc = (res as { data?: Record<string, unknown> })?.data ?? res;
+          const rules =
+            doc && typeof doc === 'object'
+              ? ((doc as Record<string, unknown>).cleaningRules as
+                  | Record<string, unknown>
+                  | undefined)
+              : undefined;
+          return (rules?.housekeepingPolicy as HousekeepingPolicyConfig | undefined) ?? null;
+        } catch {
+          // 404 = listing non migré orchestration → politique non configurée (défauts backend).
+          return null;
+        }
+      };
+      const loadListing = async () => {
+        try {
+          const doc = await listingsService.getListingDocument(String(listingId));
+          return (doc ?? {}) as Record<string, unknown>;
+        } catch {
+          return {};
+        }
+      };
+      const [hp, vals] = await Promise.all([loadPolicy(), loadListing()]);
+      if (!cancelled) {
+        setPolicy(hp);
+        setListingValues(vals);
+        setLoading(false);
       }
     })();
     return () => {
@@ -81,7 +104,29 @@ export default function ListingMenageTab({ listingId }: Props) {
           policy={policy}
           onSaved={next => setPolicy(next)}
         />
-        {/* Prochains panneaux ménage (types, barème…) s'empilent ici. */}
+
+        <Box sx={sectionSx}>
+          <Box sx={{ px: 2, py: 1.25, borderBottom: `1px solid ${V3.b}`, bgcolor: V3.alt }}>
+            <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t }}>
+              Types &amp; durées
+            </Typography>
+            <Typography sx={{ fontSize: 11, color: V3.t3 }}>
+              Durée / prix par niveau (Normal / Grand) sur chaque piste, compléments et flexibilité
+            </Typography>
+          </Box>
+          <Box sx={{ px: 2, py: 1.5 }}>
+            <MenageOpsPanel
+              listingId={String(listingId)}
+              listingValues={listingValues}
+              focusTrack="all"
+              onListingPatch={patch =>
+                setListingValues(prev => ({ ...prev, ...patch }))
+              }
+            />
+          </Box>
+        </Box>
+
+        <V3MenageBaremePanel listingId={String(listingId)} />
       </Stack>
     </Box>
   );
