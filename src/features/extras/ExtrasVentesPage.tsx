@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Box,
+  Button,
   Chip,
+  Divider,
+  Drawer,
   Paper,
   Stack,
   Table,
@@ -16,8 +19,13 @@ import {
 } from '@mui/material';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 import {
+  fetchBillLines,
+  fetchRevenueBills,
   fetchRevenueLines,
   fetchRevenueSummary,
+  type RevenueBillRow,
+  type RevenueBillsPage,
+  type RevenueLineRow,
   type RevenueLinesPage,
   type RevenueSummary,
 } from '../../services/revenueApi';
@@ -34,14 +42,123 @@ import {
  */
 
 const T = {
+  primary: '#b8851a',
   primaryDeep: '#876119',
-  primaryTint: 'rgba(184,133,26,0.12)',
+  bg1: '#ffffff',
   bg2: '#fafaf7',
+  bg3: '#f0eee8',
   text: '#14110a',
   text2: '#55504a',
   text3: '#7a756c',
   border: 'rgba(20,17,10,0.08)',
+  success: '#0a8f5e',
+  info: '#0673b3',
 };
+
+/** Couleur par département — reprise des accents du suivi mini-bar. */
+const DEPT_COLOR: Record<string, string> = {
+  '': T.primary,
+  fnb: T.success,
+  other_operated: T.info,
+  misc: T.text3,
+};
+
+/**
+ * Vignette chiffrée, reprise du suivi mini-bar : même hauteur, même
+ * typographie, même comportement au survol quand elle est cliquable.
+ */
+const Kpi = ({
+  label,
+  value,
+  accent,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number | string;
+  accent: string;
+  active?: boolean;
+  onClick?: () => void;
+}) => (
+  <Paper
+    onClick={onClick}
+    sx={{
+      px: 1.25,
+      py: 0.75,
+      minWidth: 96,
+      border: `1px solid ${active ? accent : T.border}`,
+      borderRadius: 1,
+      bgcolor: active ? `${accent}14` : T.bg1,
+      cursor: onClick ? 'pointer' : 'default',
+      '&:hover': onClick ? { bgcolor: T.bg2, borderColor: accent } : {},
+    }}
+  >
+    <Typography
+      sx={{
+        fontSize: 9.5,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.06em',
+        color: T.text3,
+      }}
+    >
+      {label}
+    </Typography>
+    <Typography sx={{ fontSize: 18, fontWeight: 700, color: accent, lineHeight: 1.15 }}>
+      {value}
+    </Typography>
+  </Paper>
+);
+
+/** Pastille de filtre — même forme que celles du suivi mini-bar. */
+const Pill = ({
+  label,
+  count,
+  active,
+  color,
+  onClick,
+}: {
+  label: string;
+  count: string;
+  active: boolean;
+  color: string;
+  onClick: () => void;
+}) => (
+  <Button
+    size="small"
+    onClick={onClick}
+    sx={{
+      textTransform: 'none',
+      fontSize: 12,
+      fontWeight: 600,
+      px: 1.25,
+      py: 0.5,
+      minHeight: 28,
+      borderRadius: 999,
+      border: '1px solid',
+      borderColor: active ? color : T.border,
+      bgcolor: active ? `${color}18` : T.bg1,
+      color: active ? color : T.text2,
+    }}
+  >
+    {label}
+    <Box
+      component="span"
+      sx={{
+        ml: 0.75,
+        fontSize: 10.5,
+        fontWeight: 700,
+        bgcolor: active ? `${color}28` : T.bg3,
+        color: active ? color : T.text3,
+        borderRadius: 999,
+        px: 0.75,
+        py: 0.25,
+      }}
+    >
+      {count}
+    </Box>
+  </Button>
+);
 
 /** L'hébergement n'est pas un extra : il a ses propres écrans. */
 const DEPARTMENTS = [
@@ -165,25 +282,42 @@ export function ExtrasVentesPage() {
   const [periodId, setPeriodId] = useState('last7');
   const [department, setDepartment] = useState('');
   const [search, setSearch] = useState('');
+  /** Vue facture par défaut : une note porte en moyenne 5,8 articles. */
+  const [view, setView] = useState<'bills' | 'lines'>('bills');
   const [summary, setSummary] = useState<RevenueSummary | null>(null);
+  const [bills, setBills] = useState<RevenueBillsPage | null>(null);
   const [lines, setLines] = useState<RevenueLinesPage | null>(null);
   const [loading, setLoading] = useState(true);
 
+  /** Note ouverte dans le panneau latéral, avec ses articles. */
+  const [openBill, setOpenBill] = useState<RevenueBillRow | null>(null);
+  const [billLines, setBillLines] = useState<RevenueLineRow[]>([]);
+  const [billLoading, setBillLoading] = useState(false);
+
   const period = PERIODS.find((p) => p.id === periodId) ?? PERIODS[2];
+  const range = useMemo(() => {
+    const { from, to } = period.range();
+    return { from: ymd(from), to: ymd(to) };
+  }, [periodId]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const { from, to } = period.range();
-    const range = { from: ymd(from), to: ymd(to) };
+    const common = { ...range, department, search };
 
     Promise.all([
       fetchRevenueSummary(range),
-      fetchRevenueLines({ ...range, department, search, limit: 200 }),
+      view === 'bills'
+        ? fetchRevenueBills({ ...common, limit: 200 })
+        : Promise.resolve(null),
+      view === 'lines'
+        ? fetchRevenueLines({ ...common, limit: 200 })
+        : Promise.resolve(null),
     ])
-      .then(([s, l]) => {
+      .then(([s, b, l]) => {
         if (cancelled) return;
         setSummary(s);
+        setBills(b);
         setLines(l);
       })
       .finally(() => {
@@ -192,9 +326,29 @@ export function ExtrasVentesPage() {
     return () => {
       cancelled = true;
     };
-  }, [periodId, department, search]);
+  }, [range, department, search, view]);
 
-  /** Montant par type — affiché sur chaque filtre pour situer les parts. */
+  /** Charge les articles à l'ouverture d'une note. */
+  useEffect(() => {
+    if (!openBill?.billRef) {
+      setBillLines([]);
+      return;
+    }
+    let cancelled = false;
+    setBillLoading(true);
+    fetchBillLines({ ...range, billRef: openBill.billRef })
+      .then((rows) => {
+        if (!cancelled) setBillLines(rows);
+      })
+      .finally(() => {
+        if (!cancelled) setBillLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [openBill, range]);
+
+  /** Montant par type — affiché sur chaque pastille pour situer les parts. */
   const totalsByDepartment = useMemo(() => {
     const by = summary?.byDepartment ?? {};
     const out: Record<string, number> = { '': 0 };
@@ -206,9 +360,10 @@ export function ExtrasVentesPage() {
     return out;
   }, [summary]);
 
-  const headline = department
-    ? `${DEPARTMENTS.find((d) => d.id === department)?.label.toUpperCase()} · ${period.label.toUpperCase()}`
-    : `TOTAL EXTRAS · ${period.label.toUpperCase()}`;
+  const active = view === 'bills' ? bills : lines;
+  const totalGross = active?.totalGross ?? 0;
+  const totalNet = active?.totalNet ?? 0;
+  const count = active?.total ?? 0;
 
   return (
     <DashboardWrapper breadcrumb={['Extra', 'Ventes']}>
@@ -232,34 +387,39 @@ export function ExtrasVentesPage() {
         </ToggleButtonGroup>
       </Stack>
 
-      <Paper
-        sx={{ p: 2.5, mb: 2, border: `1px solid ${T.border}`, borderRadius: 1.75, bgcolor: T.bg2 }}
-      >
-        <Typography sx={{ fontSize: 11, fontWeight: 800, color: T.text3, letterSpacing: '0.06em' }}>
-          {headline}
-        </Typography>
-        <Typography sx={{ fontSize: 28, fontWeight: 800, color: T.primaryDeep, mt: 0.5 }}>
-          {money(lines?.totalGross ?? 0)}
-        </Typography>
-        <Typography sx={{ fontSize: 11.5, color: T.text3, mt: 0.5 }}>
-          {lines?.total ?? 0} ligne{(lines?.total ?? 0) > 1 ? 's' : ''} · HT{' '}
-          {money(lines?.totalNet ?? 0)}
-        </Typography>
-      </Paper>
+      <Stack direction="row" sx={{ gap: 1, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Kpi label="Total TTC" value={money(totalGross)} accent={T.primary} />
+        <Kpi label="Total HT" value={money(totalNet)} accent={T.text2} />
+        <Kpi
+          label={view === 'bills' ? 'Factures' : 'Articles'}
+          value={count}
+          accent={T.info}
+        />
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={view}
+          onChange={(_e, v: 'bills' | 'lines' | null) => v && setView(v)}
+          sx={{ ml: 'auto' }}
+        >
+          <ToggleButton value="bills" sx={{ px: 1.5, fontSize: 12 }}>
+            Factures
+          </ToggleButton>
+          <ToggleButton value="lines" sx={{ px: 1.5, fontSize: 12 }}>
+            Articles
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
 
       <Stack direction="row" sx={{ gap: 1, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         {DEPARTMENTS.map((d) => (
-          <Chip
+          <Pill
             key={d.id || 'all'}
-            label={`${d.label} · ${money(totalsByDepartment[d.id] ?? 0)}`}
+            label={d.label}
+            count={money(totalsByDepartment[d.id] ?? 0)}
+            active={department === d.id}
+            color={DEPT_COLOR[d.id] ?? T.primary}
             onClick={() => setDepartment(d.id)}
-            variant={department === d.id ? 'filled' : 'outlined'}
-            sx={{
-              fontWeight: department === d.id ? 700 : 500,
-              bgcolor: department === d.id ? T.primaryTint : undefined,
-              color: department === d.id ? T.primaryDeep : T.text2,
-              borderColor: T.border,
-            }}
           />
         ))}
         <TextField
@@ -276,38 +436,57 @@ export function ExtrasVentesPage() {
           <Box sx={{ p: 3 }}>
             <Typography variant="body2">Chargement…</Typography>
           </Box>
-        ) : !lines?.data?.length ? (
-          <Box sx={{ p: 3 }}>
-            <Typography variant="body2" color="text.secondary">
-              Aucune vente sur cette période.
-            </Typography>
-          </Box>
+        ) : view === 'bills' ? (
+          <BillsTable rows={bills?.data ?? []} onOpen={setOpenBill} />
         ) : (
-          <Box sx={{ overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: T.bg2 }}>
-                  <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Produit</TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Catégorie</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11.5 }}>
-                    TTC
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11.5 }}>
-                    HT
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {lines.data.map((r) => (
-                  <TableRow key={r.id} hover>
-                    <TableCell sx={{ fontSize: 12, color: T.text3, whiteSpace: 'nowrap' }}>
-                      {shortDate(r.consumedAt)}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: 12.5, color: T.text }}>
-                      {r.name}
-                      {r.source === 'minibar' ? (
+          <LinesTable rows={lines?.data ?? []} />
+        )}
+      </Paper>
+
+      <Drawer anchor="right" open={!!openBill} onClose={() => setOpenBill(null)}>
+        {openBill ? (
+          <Box sx={{ width: { xs: 340, sm: 460 }, p: 2.5 }}>
+            <Typography sx={{ fontSize: 15, fontWeight: 800, color: T.text }}>
+              Facture · {openBill.items} article{openBill.items > 1 ? 's' : ''}
+            </Typography>
+            <Typography sx={{ fontSize: 11.5, color: T.text3, mt: 0.25 }}>
+              {shortDate(openBill.lastAt)} ·{' '}
+              {openBill.isClosed ? 'Clôturée' : 'Ouverte'}
+              {openBill.reservationId ? ' · rattachée à un séjour' : ' · sans séjour'}
+            </Typography>
+
+            <Stack direction="row" sx={{ gap: 1, my: 2 }}>
+              <Kpi label="TTC" value={money(openBill.gross)} accent={T.primary} />
+              <Kpi label="HT" value={money(openBill.net)} accent={T.text2} />
+              <Kpi label="TVA" value={money(openBill.tax)} accent={T.text3} />
+            </Stack>
+
+            <Divider sx={{ mb: 1.5 }} />
+
+            {billLoading ? (
+              <Typography variant="body2">Chargement des articles…</Typography>
+            ) : billLines.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                Aucun article sur cette période.
+              </Typography>
+            ) : (
+              billLines.map((l) => (
+                <Stack
+                  key={l.id}
+                  direction="row"
+                  sx={{
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    py: 0.6,
+                    gap: 1,
+                    borderBottom: `1px solid ${T.border}`,
+                    '&:last-of-type': { borderBottom: 0 },
+                  }}
+                >
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography sx={{ fontSize: 12.5, color: T.text }}>
+                      {l.name}
+                      {l.source === 'minibar' ? (
                         <Chip
                           size="small"
                           label="Sojori"
@@ -316,38 +495,196 @@ export function ExtrasVentesPage() {
                             height: 16,
                             fontSize: 9,
                             fontWeight: 700,
-                            bgcolor: T.primaryTint,
+                            bgcolor: `${T.primary}20`,
                             color: T.primaryDeep,
                             '& .MuiChip-label': { px: 0.75 },
                           }}
                         />
                       ) : null}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: 12, color: T.text2 }}>{r.departmentLabel}</TableCell>
-                    <TableCell sx={{ fontSize: 12, color: T.text3 }}>
-                      {r.categoryName || '—'}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12.5, fontWeight: 600 }}>
-                      {money(r.gross)}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12, color: T.text3 }}>
-                      {money(r.net)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {lines.total > lines.data.length ? (
-              <Box sx={{ p: 1.5, borderTop: `1px solid ${T.border}`, bgcolor: T.bg2 }}>
-                <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
-                  {lines.data.length} lignes affichées sur {lines.total} — affinez la période ou
-                  la recherche.
-                </Typography>
-              </Box>
-            ) : null}
+                    </Typography>
+                    <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+                      {shortDate(l.consumedAt)} · {l.departmentLabel}
+                      {l.categoryName ? ` · ${l.categoryName}` : ''}
+                    </Typography>
+                  </Box>
+                  <Typography sx={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {money(l.gross)}
+                  </Typography>
+                </Stack>
+              ))
+            )}
           </Box>
-        )}
-      </Paper>
+        ) : null}
+      </Drawer>
     </DashboardWrapper>
+  );
+}
+
+/** Vue par note — le regroupement que voit le client. */
+function BillsTable({
+  rows,
+  onOpen,
+}: {
+  rows: RevenueBillRow[];
+  onOpen: (b: RevenueBillRow) => void;
+}) {
+  if (!rows.length) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography variant="body2" color="text.secondary">
+          Aucune vente sur cette période.
+        </Typography>
+      </Box>
+    );
+  }
+  return (
+    <Box sx={{ overflowX: 'auto' }}>
+      <Table size="small">
+        <TableHead>
+          <TableRow sx={{ bgcolor: T.bg2 }}>
+            <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Date</TableCell>
+            <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Facture</TableCell>
+            <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>État</TableCell>
+            <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11.5 }}>
+              Articles
+            </TableCell>
+            <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11.5 }}>
+              HT
+            </TableCell>
+            <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11.5 }}>
+              TVA
+            </TableCell>
+            <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11.5 }}>
+              TTC
+            </TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((b) => (
+            <TableRow
+              key={b.billRef ?? 'none'}
+              hover
+              onClick={() => onOpen(b)}
+              sx={{ cursor: 'pointer' }}
+            >
+              <TableCell sx={{ fontSize: 12, color: T.text3, whiteSpace: 'nowrap' }}>
+                {shortDate(b.lastAt)}
+              </TableCell>
+              <TableCell sx={{ fontSize: 12, color: T.text2, fontFamily: 'monospace' }}>
+                {b.billRef ? b.billRef.slice(0, 8) : '—'}
+                {b.sources.includes('minibar') ? (
+                  <Chip
+                    size="small"
+                    label="Sojori"
+                    sx={{
+                      ml: 0.75,
+                      height: 16,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      bgcolor: `${T.primary}20`,
+                      color: T.primaryDeep,
+                      '& .MuiChip-label': { px: 0.75 },
+                    }}
+                  />
+                ) : null}
+              </TableCell>
+              <TableCell>
+                <Chip
+                  size="small"
+                  label={b.isClosed ? 'Clôturée' : 'Ouverte'}
+                  sx={{
+                    height: 20,
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                    bgcolor: b.isClosed ? T.bg3 : `${T.success}18`,
+                    color: b.isClosed ? T.text3 : T.success,
+                  }}
+                />
+              </TableCell>
+              <TableCell align="right" sx={{ fontSize: 12.5, fontWeight: 600 }}>
+                {b.items}
+              </TableCell>
+              <TableCell align="right" sx={{ fontSize: 12, color: T.text3 }}>
+                {money(b.net)}
+              </TableCell>
+              <TableCell align="right" sx={{ fontSize: 12, color: T.text3 }}>
+                {money(b.tax)}
+              </TableCell>
+              <TableCell align="right" sx={{ fontSize: 12.5, fontWeight: 700 }}>
+                {money(b.gross)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
+  );
+}
+
+/** Vue à plat — utile pour chercher un produit précis. */
+function LinesTable({ rows }: { rows: RevenueLineRow[] }) {
+  if (!rows.length) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography variant="body2" color="text.secondary">
+          Aucune vente sur cette période.
+        </Typography>
+      </Box>
+    );
+  }
+  return (
+    <Box sx={{ overflowX: 'auto' }}>
+      <Table size="small">
+        <TableHead>
+          <TableRow sx={{ bgcolor: T.bg2 }}>
+            <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Date</TableCell>
+            <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Produit</TableCell>
+            <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Type</TableCell>
+            <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Catégorie</TableCell>
+            <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11.5 }}>
+              TTC
+            </TableCell>
+            <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11.5 }}>
+              HT
+            </TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.id} hover>
+              <TableCell sx={{ fontSize: 12, color: T.text3, whiteSpace: 'nowrap' }}>
+                {shortDate(r.consumedAt)}
+              </TableCell>
+              <TableCell sx={{ fontSize: 12.5, color: T.text }}>
+                {r.name}
+                {r.source === 'minibar' ? (
+                  <Chip
+                    size="small"
+                    label="Sojori"
+                    sx={{
+                      ml: 0.75,
+                      height: 16,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      bgcolor: `${T.primary}20`,
+                      color: T.primaryDeep,
+                      '& .MuiChip-label': { px: 0.75 },
+                    }}
+                  />
+                ) : null}
+              </TableCell>
+              <TableCell sx={{ fontSize: 12, color: T.text2 }}>{r.departmentLabel}</TableCell>
+              <TableCell sx={{ fontSize: 12, color: T.text3 }}>{r.categoryName || '—'}</TableCell>
+              <TableCell align="right" sx={{ fontSize: 12.5, fontWeight: 600 }}>
+                {money(r.gross)}
+              </TableCell>
+              <TableCell align="right" sx={{ fontSize: 12, color: T.text3 }}>
+                {money(r.net)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
   );
 }
