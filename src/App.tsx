@@ -75,6 +75,9 @@ const MenageRepartitionPage = lazyWithReload(() =>
 const MenageSemainePage = lazyWithReload(() =>
   import('./pages/MenageSemainePage').then((module) => ({ default: module.default }))
 );
+const MenageEquipePage = lazyWithReload(() =>
+  import('./pages/MenageEquipePage').then((module) => ({ default: module.default }))
+);
 const OrchestrationPlansPageV2 = lazyWithReload(() =>
   import("./pages/OrchestrationPlansPageV2").then((module) => ({ default: module.default }))
 );
@@ -396,6 +399,7 @@ function App() {
               <Route path="/menage/rack" element={<LazyRoute><MenageRackPage /></LazyRoute>} />
               <Route path="/menage/repartition" element={<LazyRoute><MenageRepartitionPage /></LazyRoute>} />
               <Route path="/menage/semaine" element={<LazyRoute><MenageSemainePage /></LazyRoute>} />
+              <Route path="/menage/equipe" element={<LazyRoute><MenageEquipePage /></LazyRoute>} />
               <Route path="/orchestration/config" element={<LazyRoute><TasksOrchestrationFulltaskPage /></LazyRoute>} />
               <Route path="/orchestration/whatsapp-messages" element={<LazyRoute><TasksWhatsAppMessagesPage /></LazyRoute>} />
               <Route path="/orchestration/mockup" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />

@@ -165,6 +165,9 @@ export function SemaineMenage() {
             <button type="button" className="rks-lnk" onClick={() => navigate('/menage/repartition')}>
               Répartition
             </button>
+            <button type="button" className="rks-lnk" onClick={() => navigate('/menage/equipe')}>
+              Équipe
+            </button>
             <button type="button" className="rks-btn" onClick={() => setStart((s) => shiftDay(s, -7))}>
               ◀
             </button>

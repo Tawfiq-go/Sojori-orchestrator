@@ -273,6 +273,10 @@ export function useDashboardChrome() {
       return 'menage/semaine';
     }
 
+    if (path === '/menage/equipe' || path.startsWith('/menage/equipe/')) {
+      return 'menage/equipe';
+    }
+
     if (
       path.startsWith('/orchestration/ops') ||
       path.startsWith('/tasks/ops') ||

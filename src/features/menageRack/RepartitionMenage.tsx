@@ -165,6 +165,9 @@ export function RepartitionMenage() {
             <button type="button" className="rkr-lnk" onClick={() => navigate('/menage/semaine')}>
               Semaine
             </button>
+            <button type="button" className="rkr-lnk" onClick={() => navigate('/menage/equipe')}>
+              Équipe
+            </button>
             <button type="button" className="rkr-btn" onClick={() => setDate((d) => shiftDay(d, -1))}>
               ◀
             </button>

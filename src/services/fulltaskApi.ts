@@ -1359,3 +1359,57 @@ export async function getMenageSemaine(
   });
   return data as MenageSemaineResponse;
 }
+
+/* ── Équipe ménage — GET /tasks/menage/equipe + PATCH capacity ───────────── */
+
+export type MenageEquipeResponse = {
+  success: boolean;
+  data?: {
+    ymds: string[];
+    rows: Array<{
+      id: string;
+      name: string;
+      phone: string;
+      lang: string;
+      taskTypes: string[];
+      workDays: number[];
+      hourStart: string;
+      hourEnd: string;
+      payMode: 'per_task' | 'hourly' | 'monthly' | 'unknown';
+      amount: number;
+      capacityMin: number;
+      presence: boolean[];
+    }>;
+    days: Array<{ ymd: string; fdmCount: number; capacityMin: number }>;
+  };
+  error?: string;
+};
+
+/**
+ * Équipe ménage d'un listing (personnes, jours travaillés, plafonds de
+ * crédits, capacité jour par jour) — srv-fulltask GET /tasks/menage/equipe.
+ * 404 = endpoint pas encore déployé.
+ */
+export async function getMenageEquipe(
+  listingId: string,
+  ownerId?: string | null,
+): Promise<MenageEquipeResponse> {
+  const { data } = await apiClient.get(`${BASE}/tasks/menage/equipe`, {
+    params: { listingId, ...(ownerId ? { ownerId } : {}) },
+  });
+  return data as MenageEquipeResponse;
+}
+
+/** Plafond de crédits d'une personne — borné 30–720 côté serveur. */
+export async function patchMenageEquipeCapacity(
+  staffId: string,
+  capacityMin: number,
+  ownerId?: string | null,
+): Promise<{ success: boolean; data?: { capacityMin: number }; error?: string }> {
+  const { data } = await apiClient.patch(
+    `${BASE}/tasks/menage/equipe/${encodeURIComponent(staffId)}/capacity`,
+    { capacityMin },
+    { params: { ...(ownerId ? { ownerId } : {}) } },
+  );
+  return data as { success: boolean; data?: { capacityMin: number }; error?: string };
+}

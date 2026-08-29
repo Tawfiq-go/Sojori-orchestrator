@@ -134,6 +134,14 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         badge: 'NEW',
         description: 'Villas × 7 jours, crédits par jour vs capacité — quel jour va déborder ?',
       },
+      {
+        id: 'menage/equipe',
+        label: 'Équipe ménage',
+        iconType: 'calendar',
+        iconColor: '#B8881A',
+        badge: 'NEW',
+        description: 'Qui travaille quand, capacité, plafonds de crédits — jamais de score',
+      },
     ],
   },
   {
