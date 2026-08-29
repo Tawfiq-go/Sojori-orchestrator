@@ -126,6 +126,14 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         badge: 'NEW',
         description: 'Répartition ménage — colonnes par femme de ménage, crédits (lecture seule)',
       },
+      {
+        id: 'menage/semaine',
+        label: 'Semaine ménage',
+        iconType: 'calendar',
+        iconColor: '#B8881A',
+        badge: 'NEW',
+        description: 'Villas × 7 jours, crédits par jour vs capacité — quel jour va déborder ?',
+      },
     ],
   },
   {

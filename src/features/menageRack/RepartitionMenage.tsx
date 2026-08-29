@@ -12,6 +12,7 @@
  * Source : GET /tasks/menage/repartition (srv-fulltask) — 404 = pas déployé.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { listingsService } from '../../services/listingsService';
 import { getMenageRepartition } from '../../services/fulltaskApi';
@@ -34,6 +35,7 @@ const POLL_MS = 60_000;
 const FETCH_CONCURRENCY = 6;
 
 export function RepartitionMenage() {
+  const navigate = useNavigate();
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [date, setDate] = useState<string>(() => toIsoDay(new Date()));
   const [listings, setListings] = useState<ListingOption[] | null>(null);
@@ -157,6 +159,12 @@ export function RepartitionMenage() {
             <h3>Répartition — {dayTitle(date)}</h3>
           </div>
           <span className="rkr-rt">
+            <button type="button" className="rkr-lnk" onClick={() => navigate('/menage/rack')}>
+              Rack
+            </button>
+            <button type="button" className="rkr-lnk" onClick={() => navigate('/menage/semaine')}>
+              Semaine
+            </button>
             <button type="button" className="rkr-btn" onClick={() => setDate((d) => shiftDay(d, -1))}>
               ◀
             </button>
