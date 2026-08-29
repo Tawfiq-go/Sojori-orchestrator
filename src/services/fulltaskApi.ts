@@ -1223,3 +1223,51 @@ export async function getMenageBareme(listingId: string) {
   });
   return data;
 }
+
+/* ── Rack ménage — GET /tasks/menage/rack (dédié hôtel Mews/NOMMOS) ──────── */
+
+export type MenageRackTask = {
+  label: string;
+  status: 'todo' | 'doing' | 'done' | 'unassigned';
+  hm: string | null;
+  durationMin: number | null;
+  staffName: string | null;
+  startedHm?: string | null;
+  completedHm?: string | null;
+};
+
+export type MenageRackRow = {
+  id: string;
+  roomName: string;
+  kind: 'turnover' | 'arrival' | 'departure' | 'stay' | 'empty';
+  occLabel?: string | null;
+  window?: { startHm: string | null; endHm: string | null } | null;
+  tasks?: MenageRackTask[];
+};
+
+export type MenageRackResponse = {
+  success: boolean;
+  data?: {
+    date: string;
+    checkInTime: string | null;
+    checkOutTime: string | null;
+    rows: MenageRackRow[];
+  };
+  error?: string;
+};
+
+/**
+ * Rack ménage d'un listing (chambres, fenêtres, tâches, chrono réel) —
+ * srv-fulltask GET /tasks/menage/rack. ownerId ajouté par le scope BFF,
+ * sinon passé en query. 404 = endpoint pas encore déployé → repli day-plan.
+ */
+export async function getMenageRack(
+  listingId: string,
+  date?: string,
+  ownerId?: string | null,
+): Promise<MenageRackResponse> {
+  const { data } = await apiClient.get(`${BASE}/tasks/menage/rack`, {
+    params: { listingId, ...(date ? { date } : {}), ...(ownerId ? { ownerId } : {}) },
+  });
+  return data as MenageRackResponse;
+}
