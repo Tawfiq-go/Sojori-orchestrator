@@ -619,17 +619,37 @@ function BillsTable({
                 </Stack>
               </TableCell>
               <TableCell>
-                <Chip
-                  size="small"
-                  label={b.isClosed ? 'Clôturée' : 'Ouverte'}
-                  sx={{
-                    height: 20,
-                    fontSize: 10.5,
-                    fontWeight: 600,
-                    bgcolor: b.isClosed ? T.bg3 : `${T.success}18`,
-                    color: b.isClosed ? T.text3 : T.success,
-                  }}
-                />
+                <Stack direction="row" sx={{ gap: 0.5, alignItems: 'center' }}>
+                  <Chip
+                    size="small"
+                    label={b.isClosed ? 'Clôturée' : 'Ouverte'}
+                    sx={{
+                      height: 20,
+                      fontSize: 10.5,
+                      fontWeight: 600,
+                      bgcolor: b.isClosed ? T.bg3 : `${T.success}18`,
+                      color: b.isClosed ? T.text3 : T.success,
+                    }}
+                  />
+                  {/*
+                    Le type dit l'état de paiement à la clôture : « Reçu »
+                    = soldé, « Facture » = reste dû. Seul le second mérite
+                    d'attirer l'œil.
+                  */}
+                  {b.billType === 'invoice' ? (
+                    <Chip
+                      size="small"
+                      label="Facture · reste dû"
+                      sx={{
+                        height: 20,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        bgcolor: 'rgba(200,30,30,0.12)',
+                        color: '#c81e1e',
+                      }}
+                    />
+                  ) : null}
+                </Stack>
               </TableCell>
               <TableCell align="right" sx={{ fontSize: 12.5, fontWeight: 600 }}>
                 {b.items}
