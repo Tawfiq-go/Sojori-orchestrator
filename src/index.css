@@ -448,6 +448,33 @@ a:hover {
   min-height: 48px;
 }
 
+/* Rack ménage — scroll horizontal de la timeline (barre visible + colonne biens sticky) */
+.menage-rack-scroll {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin !important;
+  scrollbar-color: #e6b022 #f0eee8 !important;
+}
+
+.menage-rack-scroll::-webkit-scrollbar {
+  height: 12px;
+  width: 10px;
+  -webkit-appearance: none;
+}
+
+.menage-rack-scroll::-webkit-scrollbar-track {
+  background: #f0eee8 !important;
+  border-radius: 8px;
+}
+
+.menage-rack-scroll::-webkit-scrollbar-thumb {
+  background: #e6b022 !important;
+  border-radius: 8px;
+  border: 2px solid #f0eee8 !important;
+  min-width: 48px;
+  min-height: 48px;
+}
+
 /* Calendrier V3 simple — scroll vertical des mois */
 .calendar-simple-vscroll {
   overscroll-behavior-y: contain;

@@ -18,6 +18,9 @@ import {
   parseHm,
   pctOf,
   primaryBlock,
+  RAIL_LABEL_PX,
+  RAIL_PX_PER_HOUR,
+  railMinWidthPx,
   type RackEndpointRow,
 } from './rackLogic';
 
@@ -350,6 +353,19 @@ describe('axe horaire', () => {
     const { axis } = buildRackModel({ steps: [], chains: [] }, NOON);
     assert.equal(axis.startMin, AXIS_DEFAULT_START_MIN);
     assert.equal(axis.endMin, AXIS_DEFAULT_END_MIN);
+  });
+
+  it('railMinWidthPx : colonne biens + ~72px/heure, jamais moins d’une heure', () => {
+    // Axe par défaut 8h→17h = 9 heures.
+    assert.equal(
+      railMinWidthPx({ startMin: AXIS_DEFAULT_START_MIN, endMin: AXIS_DEFAULT_END_MIN }),
+      RAIL_LABEL_PX + 9 * RAIL_PX_PER_HOUR,
+    );
+    // Axe étendu 8h→20h = 12 heures.
+    assert.equal(railMinWidthPx({ startMin: 480, endMin: 1200 }), RAIL_LABEL_PX + 12 * RAIL_PX_PER_HOUR);
+    // Heure partielle arrondie au-dessus ; axe dégénéré → 1 heure minimum.
+    assert.equal(railMinWidthPx({ startMin: 480, endMin: 510 }), RAIL_LABEL_PX + RAIL_PX_PER_HOUR);
+    assert.equal(railMinWidthPx({ startMin: 480, endMin: 480 }), RAIL_LABEL_PX + RAIL_PX_PER_HOUR);
   });
 
   it('étendu (vers 20h) si les données le justifient', () => {
