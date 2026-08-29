@@ -95,3 +95,55 @@ export async function fetchRevenueSummary(params: {
     return null;
   }
 }
+
+export type RevenueLineRow = {
+  id: string;
+  name: string;
+  department: string | null;
+  departmentLabel: string;
+  gross: number;
+  net: number;
+  tax: number;
+  currency: string;
+  consumedAt: string | null;
+  isClosed: boolean;
+  source: string;
+  reservationId: string | null;
+  categoryName: string | null;
+};
+
+export type RevenueLinesPage = {
+  success: boolean;
+  total: number;
+  page: number;
+  limit: number;
+  totalGross: number;
+  totalNet: number;
+  data: RevenueLineRow[];
+};
+
+/** Détail ligne par ligne des ventes d'extras — filtrable par département. */
+export async function fetchRevenueLines(params: {
+  from: string;
+  to: string;
+  department?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<RevenueLinesPage | null> {
+  try {
+    const search = new URLSearchParams({ from: params.from, to: params.to });
+    if (params.department) search.set('department', params.department);
+    if (params.search?.trim()) search.set('search', params.search.trim());
+    if (params.page) search.set('page', String(params.page));
+    if (params.limit) search.set('limit', String(params.limit));
+    const res = await apiClient.get(`${REVENUE_BASE}/revenue/lines?${search.toString()}`, {
+      timeout: 20000,
+    });
+    const data = res?.data;
+    if (!data?.success) return null;
+    return data as RevenueLinesPage;
+  } catch {
+    return null;
+  }
+}
