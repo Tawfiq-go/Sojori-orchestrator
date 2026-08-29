@@ -217,10 +217,10 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
       },
       {
         id: 'tasks/extras/minibar',
-        label: 'Mini-bar',
+        label: 'Stock',
         iconType: 'check',
         iconColor: '#E6B022',
-        description: 'Stock et relevés par villa — le seul extra suivi en stock',
+        description: 'Stocks suivis par villa — mini-bar, linge, consommables',
       },
       {
         id: 'tasks/extras/configuration',
