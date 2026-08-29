@@ -1215,3 +1215,11 @@ export async function copyOrchestrationConfigToAllOwners(sourceOwnerId: string) 
   );
   return data;
 }
+
+/** Barème ménage configuré vs réel (fenêtre 30 j) — srv-fulltask GET /tasks/menage/bareme. */
+export async function getMenageBareme(listingId: string) {
+  const { data } = await apiClient.get(`${BASE}/tasks/menage/bareme`, {
+    params: { listingId },
+  });
+  return data;
+}

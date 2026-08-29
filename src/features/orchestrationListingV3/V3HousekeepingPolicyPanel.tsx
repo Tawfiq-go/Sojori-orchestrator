@@ -3,19 +3,14 @@ import { Box, Button, Stack, TextField, Typography } from '@mui/material';
 import { toast } from 'react-toastify';
 import listingsService from '../../services/listingsService';
 import { V3 } from './theme';
+import {
+  DIGEST_TIME_DEFAULT,
+  HOUSEKEEPING_TIME_RE as TIME_RE,
+  normalizeHousekeepingPolicy as normalizePolicy,
+  type HousekeepingPolicyConfig,
+} from './housekeepingPolicy';
 
-/** Miroir srv-listing utils/cleaningRules — HousekeepingPolicyConfig. */
-export type HousekeepingPolicyConfig = {
-  creation?: 'auto' | 'manual';
-  assignment?: 'auto' | 'manual' | 'supervisor';
-  notification?: 'immediate' | 'digest' | 'none';
-  /** HH:mm, heure Africa/Casablanca. */
-  digestTime?: string;
-};
-
-
-const DIGEST_TIME_DEFAULT = '08:00';
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+export type { HousekeepingPolicyConfig };
 
 type Props = {
   listingId: string;
@@ -31,21 +26,6 @@ const sectionSx = {
   bgcolor: V3.card,
   overflow: 'hidden',
 };
-
-function normalizePolicy(raw: unknown): HousekeepingPolicyConfig | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const r = raw as Record<string, unknown>;
-  const out: HousekeepingPolicyConfig = {};
-  if (r.creation === 'auto' || r.creation === 'manual') out.creation = r.creation;
-  if (r.assignment === 'auto' || r.assignment === 'manual' || r.assignment === 'supervisor') {
-    out.assignment = r.assignment;
-  }
-  if (r.notification === 'immediate' || r.notification === 'digest' || r.notification === 'none') {
-    out.notification = r.notification;
-  }
-  if (typeof r.digestTime === 'string' && TIME_RE.test(r.digestTime)) out.digestTime = r.digestTime;
-  return Object.keys(out).length ? out : null;
-}
 
 export default function V3HousekeepingPolicyPanel({ listingId, policy, onSaved }: Props) {
   const [state, setState] = useState<HousekeepingPolicyConfig | null>(() =>
@@ -67,7 +47,7 @@ export default function V3HousekeepingPolicyPanel({ listingId, policy, onSaved }
     const prev = state;
     // null = unset explicite (le backend efface la clé → retour aux défauts
     // système résolus par profil : hôtel → manuel, single → auto).
-    const optimistic = patch === null ? undefined : { ...(state ?? {}), ...patch };
+    const optimistic = patch === null ? null : { ...(state ?? {}), ...patch };
     setState(optimistic);
     try {
       await listingsService.putListingOrchestration(listingId, {
