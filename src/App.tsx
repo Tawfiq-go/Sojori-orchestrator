@@ -109,6 +109,11 @@ const TasksPlanningPageV2 = lazyWithReload(() =>
 const TasksStaffFulltaskPage = lazyWithReload(() =>
   import('./pages/TasksStaffFulltaskPage').then((module) => ({ default: module.default }))
 );
+const ExtrasVentesPage = lazyWithReload(() =>
+  import('./features/extras/ExtrasVentesPage').then((module) => ({
+    default: module.ExtrasVentesPage,
+  }))
+);
 const TasksExtrasCataloguePage = lazyWithReload(() =>
   import('./features/extras/TasksExtrasCataloguePage').then((module) => ({
     default: module.TasksExtrasCataloguePage,
@@ -409,11 +414,12 @@ function App() {
 
               {/* Claude Design V2 - Remplace les anciennes vues */}
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
+              <Route path="/tasks/extras/ventes" element={<LazyRoute><ExtrasVentesPage /></LazyRoute>} />
               <Route path="/tasks/extras/configuration" element={<LazyRoute><TasksExtrasCataloguePage /></LazyRoute>} />
               {/* Ancienne entree « Liste extra » : fusionnee dans le catalogue. */}
               <Route path="/tasks/extras/list" element={<Navigate to="/tasks/extras/configuration" replace />} />
               <Route path="/tasks/extras/minibar" element={<LazyRoute><MinibarSuiviPage /></LazyRoute>} />
-              <Route path="/tasks/extras" element={<Navigate to="/tasks/extras/configuration" replace />} />
+              <Route path="/tasks/extras" element={<Navigate to="/tasks/extras/ventes" replace />} />
               <Route path="/tasks/planning" element={<LazyRoute><TasksPlanningPageV2 /></LazyRoute>} />
               <Route path="/tasks/kanban" element={<Navigate to="/tasks" replace />} />
 
