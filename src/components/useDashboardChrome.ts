@@ -261,6 +261,10 @@ export function useDashboardChrome() {
       return 'ops-board';
     }
 
+    if (path === '/menage/rack' || path.startsWith('/menage/rack/')) {
+      return 'menage/rack';
+    }
+
     if (
       path.startsWith('/orchestration/ops') ||
       path.startsWith('/tasks/ops') ||

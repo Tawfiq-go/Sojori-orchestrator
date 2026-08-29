@@ -110,6 +110,14 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         badge: 'Live',
         description: 'Suivi unités · ménage · arrivées — Nommos (kanban HK)',
       },
+      {
+        id: 'menage/rack',
+        label: 'Rack ménage',
+        iconType: 'calendar',
+        iconColor: '#B8881A',
+        badge: 'Live',
+        description: 'La journée ménage — fenêtres départ→arrivée, blocs, retards (Nommos)',
+      },
     ],
   },
   {

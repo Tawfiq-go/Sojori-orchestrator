@@ -11,6 +11,8 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   planning: '/planning',
   /** Ops Board Nommos — suivi HK / arrivées (design Claude). */
   'ops-board': '/ops-board',
+  /** Rack ménage — la journée (fenêtres départ→arrivée, spec Housekeeping écran 1). */
+  'menage/rack': '/menage/rack',
 
   // Opérations
   reservations: '/reservations',
