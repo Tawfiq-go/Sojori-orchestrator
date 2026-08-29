@@ -6,9 +6,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  applyAssign,
+  applyUnassign,
   creditsLabel,
   gaugePct,
+  listingIdOfVilla,
   mergeRepartitionData,
+  REPARTITION_CANCEL_REASONS,
   minutesLabel,
   resolveRepartitionFetch,
   sortColumnTasks,
@@ -148,5 +152,91 @@ describe('les 3 chemins réseau', () => {
   it('échec non-404 → error ; aucun résultat → error', () => {
     assert.equal(resolveRepartitionFetch([{ ok: false, notFound: false }]).state, 'error');
     assert.equal(resolveRepartitionFetch([]).state, 'error');
+  });
+});
+
+/* ── Actions tap-tap : applyAssign / applyUnassign (optimiste + rollback) ── */
+
+describe('applyAssign : transitions optimistes', () => {
+  function board(): RepartitionData {
+    return data({
+      columns: [
+        col({ id: 'f1', name: 'Amina', assignedMin: 100, remainingMin: 200,
+          tasks: [{ roomName: 'V2', label: 'Recouche', status: 'todo', hm: '11:00', durationMin: 40, villaId: 'L:V2' }] }),
+        col({ id: 'f2', name: 'Fatima', assignedMin: 280, remainingMin: 20, tasks: [] }),
+      ],
+      unassigned: [{ id: 'L:V7', roomName: 'V7', label: 'À blanc', durationMin: 60 }],
+      totals: { assignedMin: 140, unassignedMin: 60, doneMin: 0 },
+    });
+  }
+
+  it('depuis « À assigner » : carte déplacée, jauge et totaux màj, original INTACT (rollback)', () => {
+    const before = board();
+    const next = applyAssign(before, 'L:V7', 'f2');
+    assert.ok(next);
+    assert.notEqual(next, before);
+    // Original intact — c'est lui le rollback.
+    assert.equal(before.unassigned.length, 1);
+    assert.equal(before.columns[1].assignedMin, 280);
+    // Optimiste appliqué.
+    assert.equal(next?.unassigned.length, 0);
+    const f2 = next?.columns.find((c) => c.id === 'f2');
+    assert.equal(f2?.assignedMin, 340);
+    assert.equal(f2?.overCapacity, true); // 340 > 300 — la jauge passe rouge
+    assert.equal(f2?.tasks[0]?.villaId, 'L:V7');
+    assert.equal(next?.totals.assignedMin, 200);
+    assert.equal(next?.totals.unassignedMin, 0);
+  });
+
+  it('réassigner (colonne → colonne) : minutes transférées, totaux inchangés', () => {
+    const next = applyAssign(board(), 'L:V2', 'f2');
+    assert.ok(next);
+    const f1 = next?.columns.find((c) => c.id === 'f1');
+    const f2 = next?.columns.find((c) => c.id === 'f2');
+    assert.equal(f1?.assignedMin, 60);
+    assert.equal(f1?.tasks.length, 0);
+    assert.equal(f2?.assignedMin, 320);
+    assert.equal(f2?.tasks.length, 1);
+    assert.equal(next?.totals.assignedMin, 140); // assigné → assigné : total stable
+  });
+
+  it('no-op : villa inconnue, colonne inconnue, même colonne, tâche done', () => {
+    const b = board();
+    assert.equal(applyAssign(b, 'L:V99', 'f2'), null);
+    assert.equal(applyAssign(b, 'L:V7', 'f99'), null);
+    assert.equal(applyAssign(b, 'L:V2', 'f1'), null);
+    const withDone = data({
+      columns: [col({ id: 'f1', name: 'A', tasks: [{ roomName: 'V1', label: 'X', status: 'done', hm: null, durationMin: 30, villaId: 'L:V1' }] })],
+    });
+    assert.equal(applyAssign(withDone, 'L:V1', 'f1'), null);
+  });
+
+  it('applyUnassign : la tâche revient dans « À assigner », original intact', () => {
+    const before = board();
+    const next = applyUnassign(before, 'L:V2');
+    assert.ok(next);
+    assert.equal(before.columns[0].tasks.length, 1); // rollback préservé
+    const f1 = next?.columns.find((c) => c.id === 'f1');
+    assert.equal(f1?.tasks.length, 0);
+    assert.equal(f1?.assignedMin, 60);
+    assert.deepEqual(next?.unassigned.at(-1), { id: 'L:V2', roomName: 'V2', label: 'Recouche', durationMin: 40 });
+    assert.equal(next?.totals.assignedMin, 100);
+    assert.equal(next?.totals.unassignedMin, 100);
+    // Une orpheline ne s'« unassign » pas.
+    assert.equal(applyUnassign(before, 'L:V7'), null);
+  });
+});
+
+describe('helpers actions', () => {
+  it('listingIdOfVilla : préfixe avant « : »', () => {
+    assert.equal(listingIdOfVilla('abc123:Villa 07'), 'abc123');
+    assert.equal(listingIdOfVilla('sansprefixe'), 'sansprefixe');
+  });
+
+  it('REPARTITION_CANCEL_REASONS : mêmes ids que SM', () => {
+    assert.deepEqual(
+      REPARTITION_CANCEL_REASONS.map((r) => r.id),
+      ['reservation', 'planning', 'staff', 'other'],
+    );
   });
 });

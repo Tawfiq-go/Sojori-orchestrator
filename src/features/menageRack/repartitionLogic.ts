@@ -17,6 +17,8 @@ export type RepartitionTask = {
   status: RepartitionTaskStatus;
   hm: string | null;
   durationMin: number;
+  /** « listing:room » — actionnable (assign/réassign/annulation). Absent = lecture seule. */
+  villaId?: string;
 };
 export type RepartitionColumn = {
   id: string;
@@ -86,6 +88,151 @@ export function sortColumnTasks(tasks: RepartitionTask[]): RepartitionTask[] {
     if (b.hm == null) return -1;
     return a.hm.localeCompare(b.hm) || a.roomName.localeCompare(b.roomName);
   });
+}
+
+/* ── Actions : assigner / réassigner / annuler (tap-tap) ───────────────── */
+
+/**
+ * Motifs d'annulation — MÊMES ids/libellés que SM
+ * (backend srv-fulltask src/staffWa/utils/staffSmLogic.ts · SM_CANCEL_REASONS).
+ */
+export const REPARTITION_CANCEL_REASONS = [
+  { id: 'reservation', title: 'Réservation annulée' },
+  { id: 'planning', title: 'Erreur planning' },
+  { id: 'staff', title: 'Manque femme de ménage' },
+  { id: 'other', title: 'Autre' },
+] as const;
+export type RepartitionCancelReasonId = (typeof REPARTITION_CANCEL_REASONS)[number]['id'];
+
+/** « listing:room » → listingId (préfixe avant le premier « : »). */
+export function listingIdOfVilla(villaId: string): string {
+  const idx = String(villaId || '').indexOf(':');
+  return idx > 0 ? villaId.slice(0, idx) : String(villaId || '');
+}
+
+function recomputeColumn(col: RepartitionColumn): RepartitionColumn {
+  const next = { ...col };
+  next.remainingMin = next.capacityMin - next.assignedMin;
+  next.overCapacity = next.assignedMin > next.capacityMin;
+  return next;
+}
+
+type FoundSource =
+  | { kind: 'unassigned'; item: RepartitionUnassigned }
+  | { kind: 'column'; column: RepartitionColumn; task: RepartitionTask };
+
+function findVilla(data: RepartitionData, villaId: string): FoundSource | null {
+  const orphan = (data.unassigned ?? []).find((u) => u.id === villaId);
+  if (orphan) return { kind: 'unassigned', item: orphan };
+  for (const column of data.columns ?? []) {
+    const task = (column.tasks ?? []).find((t) => t.villaId === villaId && t.status !== 'done');
+    if (task) return { kind: 'column', column, task };
+  }
+  return null;
+}
+
+/**
+ * Transition OPTIMISTE « assigner villaId → fdmId » : retourne un NOUVEL
+ * objet (l'ancien sert de rollback si le POST échoue), null si la villa est
+ * introuvable, déjà faite, ou déjà dans cette colonne.
+ */
+export function applyAssign(
+  data: RepartitionData,
+  villaId: string,
+  fdmId: string,
+): RepartitionData | null {
+  const source = findVilla(data, villaId);
+  if (!source) return null;
+  const target = data.columns.find((c) => c.id === fdmId);
+  if (!target) return null;
+  if (source.kind === 'column' && source.column.id === fdmId) return null;
+
+  const moved: RepartitionTask =
+    source.kind === 'unassigned'
+      ? {
+          roomName: source.item.roomName,
+          label: source.item.label,
+          status: 'todo',
+          hm: null,
+          durationMin: source.item.durationMin,
+          villaId,
+        }
+      : { ...source.task, status: 'todo', villaId };
+  const dur = moved.durationMin || 0;
+
+  const columns = data.columns.map((col) => {
+    if (col.id === fdmId) {
+      return recomputeColumn({
+        ...col,
+        assignedMin: col.assignedMin + dur,
+        tasks: [...col.tasks, moved],
+      });
+    }
+    if (source.kind === 'column' && col.id === source.column.id) {
+      return recomputeColumn({
+        ...col,
+        assignedMin: Math.max(0, col.assignedMin - dur),
+        tasks: col.tasks.filter((t) => t !== source.task),
+      });
+    }
+    return col;
+  });
+
+  const totals = { ...data.totals };
+  if (source.kind === 'unassigned') {
+    totals.unassignedMin = Math.max(0, totals.unassignedMin - dur);
+    totals.assignedMin += dur;
+  }
+
+  return {
+    ...data,
+    columns,
+    unassigned:
+      source.kind === 'unassigned'
+        ? data.unassigned.filter((u) => u.id !== villaId)
+        : data.unassigned,
+    totals,
+  };
+}
+
+/**
+ * Transition OPTIMISTE « annuler / renvoyer à assigner » : la tâche quitte sa
+ * colonne et revient dans « À assigner » (le refetch de fond corrige si le
+ * serveur l'a supprimée). null si introuvable ou déjà faite.
+ */
+export function applyUnassign(data: RepartitionData, villaId: string): RepartitionData | null {
+  const source = findVilla(data, villaId);
+  if (!source || source.kind !== 'column') return null;
+  const dur = source.task.durationMin || 0;
+
+  const columns = data.columns.map((col) =>
+    col.id === source.column.id
+      ? recomputeColumn({
+          ...col,
+          assignedMin: Math.max(0, col.assignedMin - dur),
+          tasks: col.tasks.filter((t) => t !== source.task),
+        })
+      : col,
+  );
+
+  return {
+    ...data,
+    columns,
+    unassigned: [
+      ...data.unassigned,
+      {
+        id: villaId,
+        roomName: source.task.roomName,
+        label: source.task.label,
+        durationMin: dur,
+      },
+    ],
+    totals: {
+      ...data.totals,
+      assignedMin: Math.max(0, data.totals.assignedMin - dur),
+      unassignedMin: data.totals.unassignedMin + dur,
+    },
+  };
 }
 
 /* ── Fusion multi-listings & résolution réseau ─────────────────────────── */

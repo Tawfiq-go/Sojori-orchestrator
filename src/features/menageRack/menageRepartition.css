@@ -94,6 +94,31 @@
 .rkr-none { font-size: 11px; color: var(--t3); padding: 4px 2px; }
 .rkr-col.unassigned .rkr-none { color: var(--ok); font-weight: 650; }
 
+/* ── Interactions tap-tap (geste principal) + drag bonus ── */
+.rkr-hint { align-self: center; font-size: 11px; color: var(--t3); font-weight: 600; padding: 0 4px; }
+.rkr-task.pickable { cursor: pointer; position: relative; }
+.rkr-task.pickable:hover { border-color: var(--gold-deep); }
+.rkr-task.picked { outline: 2px solid var(--gold); border-color: var(--gold-deep); background: var(--gold-tint); }
+.rkr-col.targetable { cursor: pointer; outline: 2px dashed var(--gold); outline-offset: -3px; background: #fffdf4; }
+.rkr-col.targetable:hover { background: var(--gold-tint); }
+.rkr-col.unassigned.targetable { outline-color: var(--err); background: #fdf6f5; }
+.assign-chip { display: inline-block; font-size: 10.5px; font-weight: 750; color: var(--gold-deep); background: var(--gold-tint); border: 1px solid rgba(230, 176, 34, 0.45); border-radius: 6px; padding: 2px 7px; }
+.rkr-col.unassigned .assign-chip { color: var(--err); background: var(--err-bg); border-color: rgba(200, 30, 30, 0.35); }
+.rkr-x { position: absolute; top: 4px; right: 4px; width: 17px; height: 17px; border-radius: 5px; border: 1px solid var(--bd2); background: var(--bg1); color: var(--t3); font-size: 9px; line-height: 1; cursor: pointer; display: none; place-items: center; }
+.rkr-task.pickable:hover .rkr-x { display: grid; }
+.rkr-x:hover { color: var(--err); border-color: var(--err); }
+
+/* Menu des motifs d'annulation (mêmes libellés que SM) */
+.rkr-reasons-backdrop { position: fixed; inset: 0; background: rgba(20, 17, 10, 0.25); z-index: 60; display: grid; place-items: center; }
+.rkr-reasons { background: var(--bg1); border: 1px solid var(--bd2); border-radius: 12px; box-shadow: var(--sh); padding: 14px 16px; display: grid; gap: 7px; min-width: 250px; }
+.rkr-reasons .t { margin: 0 0 3px; font-size: 12.5px; font-weight: 750; }
+.rkr-reasons .rkr-btn.reason { text-align: left; }
+.rkr-reasons .rkr-btn.reason:hover { border-color: var(--err); color: var(--err); background: var(--err-bg); }
+
+.rkr-toast { position: fixed; bottom: 22px; right: 22px; z-index: 70; padding: 9px 14px; border-radius: 9px; font-size: 12px; font-weight: 650; box-shadow: var(--sh); }
+.rkr-toast.ok { background: var(--ok-bg); color: #07724b; border: 1px solid rgba(10, 143, 94, 0.35); }
+.rkr-toast.err { background: var(--err-bg); color: var(--err); border: 1px solid rgba(200, 30, 30, 0.4); }
+
 /* ── Pied / états ── */
 .rkr-foot { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
 .rkr-note { font-size: 11px; color: var(--t3); margin-right: auto; }
