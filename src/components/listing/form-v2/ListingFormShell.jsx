@@ -48,6 +48,7 @@ export const DETAIL_TABS = [
   { group: 'Inventaire', items: [
     { id: 'rooms',        icon: '🛏️', label: 'Rooms & Beds' },
     { id: 'experiences',  icon: '✨', label: 'Expériences' },
+    { id: 'menage',       icon: '🧹', label: 'Ménage' },
     { id: 'license',      icon: '📄', label: 'License' },
     { id: 'ru-import',    icon: '🗄️', label: 'Trace import RU' },
   ]},
@@ -77,6 +78,7 @@ export const DETAIL_TABS_MULTI = [
   ]},
   { group: 'Admin', items: [
     { id: 'experiences',  icon: '✨', label: 'Expériences' },
+    { id: 'menage',       icon: '🧹', label: 'Ménage' },
     { id: 'license',      icon: '📄', label: 'License' },
     { id: 'ru-import',    icon: '🗄️', label: 'Trace import RU' },
   ]},
