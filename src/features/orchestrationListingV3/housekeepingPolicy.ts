@@ -13,6 +13,35 @@ export const HOUSEKEEPING_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const DIGEST_TIME_DEFAULT = '08:00';
 
+/** Politique effective en toutes lettres (card « En un coup d'œil »).
+ *  Champ non configuré → défaut système hôtel, marqué « (défaut) ». */
+export function describeHousekeepingPolicy(policy: HousekeepingPolicyConfig | null): string[] {
+  const p = policy ?? {};
+  const creation =
+    p.creation === 'auto'
+      ? 'Création automatique'
+      : p.creation === 'manual'
+        ? 'Création manuelle (SM)'
+        : 'Création manuelle (défaut hôtel)';
+  const assignment =
+    p.assignment === 'auto'
+      ? 'Assignation auto'
+      : p.assignment === 'manual'
+        ? 'Assignation manuelle'
+        : p.assignment === 'supervisor'
+          ? 'Assignation superviseur'
+          : 'Assignation superviseur (défaut)';
+  const notification =
+    p.notification === 'immediate'
+      ? 'Notification immédiate'
+      : p.notification === 'none'
+        ? 'Sans notification'
+        : p.notification === 'digest'
+          ? `Digest ${p.digestTime ?? '17:00'}`
+          : 'Digest 17:00 (défaut)';
+  return [creation, assignment, notification];
+}
+
 /** Ne garde que les valeurs valides ; null si rien de configuré. */
 export function normalizeHousekeepingPolicy(raw: unknown): HousekeepingPolicyConfig | null {
   if (!raw || typeof raw !== 'object') return null;

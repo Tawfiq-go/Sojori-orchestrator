@@ -108,6 +108,27 @@ export function baremeScaleMax(row: BaremeRow): number {
   return Math.max(...candidates) * 1.15;
 }
 
+/** Nombre total de ménages observés sur la fenêtre. */
+export function baremeTotalCount(rows: BaremeRow[]): number {
+  return rows.reduce((n, r) => n + r.count, 0);
+}
+
+/** Écart global % (moyenne des écarts pondérée par count, lignes comparables
+ *  uniquement) — null si aucune ligne n'a configuré + réel. */
+export function baremeGlobalDeltaPct(rows: BaremeRow[]): number | null {
+  let weighted = 0;
+  let total = 0;
+  for (const r of rows) {
+    if (r.configuredMin == null || r.configuredMin <= 0 || r.avgRealMin == null || r.count <= 0) {
+      continue;
+    }
+    weighted += baremeDeltaPct(r.configuredMin, r.avgRealMin) * r.count;
+    total += r.count;
+  }
+  if (!total) return null;
+  return Math.round(weighted / total);
+}
+
 export type BaremeViewState =
   /** Backend sans la route (404) — « disponible après la prochaine mise à jour ». */
   | { kind: 'unavailable' }
