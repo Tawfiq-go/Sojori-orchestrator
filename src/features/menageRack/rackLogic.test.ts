@@ -21,7 +21,9 @@ import {
   RAIL_LABEL_PX,
   RAIL_PX_PER_HOUR,
   railMinWidthPx,
+  rowBadge,
   type RackEndpointRow,
+  type RackEndpointTask,
 } from './rackLogic';
 
 /* ── Fabriques ─────────────────────────────────────────────────────────── */
@@ -651,5 +653,126 @@ describe('endpoint rack : unassigned, retard, tri, multi-tâches', () => {
     assert.equal(primaryBlock(out[0])?.taskLabel, 'Inspection');
     assert.equal(counters.termines, 1);
     assert.equal(counters.aFaire, 1);
+  });
+});
+
+/* ── Badges de ligne & compteurs enrichis (revue doc de conception) ────── */
+
+describe('rowBadge : typographie du doc (✓ ● ⚠ ＋ ○)', () => {
+  function endpointRow(task: Partial<RackEndpointTask>, kind: RackEndpointRow['kind'] = 'turnover'): RackEndpointRow {
+    return {
+      id: 'r',
+      roomName: 'Villa X',
+      kind,
+      window: kind === 'turnover' ? { startHm: '11:00', endHm: '16:00' } : null,
+      tasks: [
+        {
+          label: 'À blanc',
+          status: 'todo',
+          hm: '11:00',
+          durationMin: 60,
+          staffName: 'Amina',
+          ...task,
+        } as RackEndpointTask,
+      ],
+    };
+  }
+
+  it('done → « ✓ Amina · à blanc »', () => {
+    const { rows } = buildRackModelFromEndpoint([endpointRow({ status: 'done' })], 9 * 60);
+    assert.deepEqual(rowBadge(rows[0]), { icon: '✓', who: 'Amina', detail: 'à blanc' });
+  });
+
+  it('doing → « ● Amina · à blanc · en cours »', () => {
+    const { rows } = buildRackModelFromEndpoint([endpointRow({ status: 'doing' })], 11 * 60);
+    assert.deepEqual(rowBadge(rows[0]), { icon: '●', who: 'Amina', detail: 'à blanc · en cours' });
+  });
+
+  it('todo en retard de départ → « ⚠ Fatima · pas commencé »', () => {
+    const { rows } = buildRackModelFromEndpoint(
+      [endpointRow({ staffName: 'Fatima' })],
+      11 * 60 + 40,
+    );
+    assert.deepEqual(rowBadge(rows[0]), { icon: '⚠', who: 'Fatima', detail: 'pas commencé' });
+  });
+
+  it('unassigned → « ＋ à assigner · à blanc » (avant l’heure)', () => {
+    const { rows } = buildRackModelFromEndpoint(
+      [endpointRow({ status: 'unassigned', staffName: null })],
+      9 * 60,
+    );
+    assert.deepEqual(rowBadge(rows[0]), { icon: '＋', who: 'à assigner', detail: 'à blanc' });
+  });
+
+  it('prévu assigné → « ○ Amina · recouche 12h » (heure prévue)', () => {
+    const { rows } = buildRackModelFromEndpoint(
+      [endpointRow({ label: 'Recouche', hm: '12:00' }, 'stay')],
+      9 * 60,
+    );
+    assert.deepEqual(rowBadge(rows[0]), { icon: '○', who: 'Amina', detail: 'recouche 12h' });
+  });
+
+  it('ligne sans tâche → pas de badge', () => {
+    const { rows } = buildRackModelFromEndpoint(
+      [{ id: 'r', roomName: 'V', kind: 'empty', tasks: [] }],
+      9 * 60,
+    );
+    assert.equal(rowBadge(rows[0]), null);
+  });
+});
+
+describe('compteurs enrichis : sans personne & fenêtres en danger', () => {
+  it('sans personne = unassigned OU fenêtre sans aucune tâche', () => {
+    const rows: RackEndpointRow[] = [
+      // Fenêtre avec tâche non assignée.
+      { id: 'a', roomName: 'A', kind: 'turnover', window: { startHm: '11:00', endHm: '16:00' },
+        tasks: [{ label: 'À blanc', status: 'unassigned', hm: '11:00', durationMin: 60, staffName: null }] },
+      // Fenêtre SANS aucune tâche.
+      { id: 'b', roomName: 'B', kind: 'turnover', window: { startHm: '12:00', endHm: '17:00' }, tasks: [] },
+      // Fenêtre normale assignée — pas comptée.
+      { id: 'c', roomName: 'C', kind: 'turnover', window: { startHm: '10:00', endHm: '17:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '10:00', durationMin: 60, staffName: 'Amina' }] },
+    ];
+    const { counters } = buildRackModelFromEndpoint(rows, 9 * 60);
+    assert.equal(counters.sansPersonne, 2);
+  });
+
+  it('fenêtres en danger = serrées (marge < 30 min) + retards', () => {
+    const rows: RackEndpointRow[] = [
+      // Serrée : 3h de fenêtre pour 2h40 de ménage.
+      { id: 'tight', roomName: 'T', kind: 'turnover', window: { startHm: '11:00', endHm: '14:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '11:00', durationMin: 160, staffName: 'A' }] },
+      // En retard : pas commencé après le départ.
+      { id: 'late', roomName: 'L', kind: 'turnover', window: { startHm: '09:00', endHm: '16:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '09:00', durationMin: 60, staffName: 'B' }] },
+      // Large et saine — pas comptée.
+      { id: 'okr', roomName: 'O', kind: 'turnover', window: { startHm: '13:00', endHm: '18:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '13:00', durationMin: 60, staffName: 'C' }] },
+      // Serrée mais TERMINÉE — plus en danger.
+      { id: 'done', roomName: 'D', kind: 'turnover', window: { startHm: '11:00', endHm: '13:00' },
+        tasks: [{ label: 'À blanc', status: 'done', hm: '11:00', durationMin: 110, staffName: 'E', completedHm: '12:50' }] },
+    ];
+    // 10h : la serrée n'a pas encore atteint son heure (sinon elle serait AUSSI en retard).
+    const { counters } = buildRackModelFromEndpoint(rows, 10 * 60);
+    assert.equal(counters.fenetresEnDanger, 2);
+    assert.equal(counters.enRetard, 1);
+  });
+
+  it('tri du doc : retard < sans personne < serré < large', () => {
+    const rows: RackEndpointRow[] = [
+      { id: 'large', roomName: 'A-large', kind: 'turnover', window: { startHm: '10:00', endHm: '17:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '15:00', durationMin: 60, staffName: 'A' }] },
+      { id: 'tight', roomName: 'B-tight', kind: 'turnover', window: { startHm: '13:00', endHm: '15:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '13:00', durationMin: 100, staffName: 'B' }] },
+      { id: 'perso', roomName: 'C-perso', kind: 'turnover', window: { startHm: '12:00', endHm: '18:00' },
+        tasks: [{ label: 'À blanc', status: 'unassigned', hm: '12:00', durationMin: 60, staffName: null }] },
+      { id: 'late', roomName: 'D-late', kind: 'turnover', window: { startHm: '09:00', endHm: '17:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '09:00', durationMin: 60, staffName: 'D' }] },
+    ];
+    const { rows: out } = buildRackModelFromEndpoint(rows, 11 * 60);
+    assert.deepEqual(
+      out.map((r) => r.listingId),
+      ['late', 'perso', 'tight', 'large'],
+    );
   });
 });

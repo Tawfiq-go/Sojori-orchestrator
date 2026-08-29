@@ -15,6 +15,7 @@
  * Toute la logique de mapping vit dans rackLogic.ts (pure, testée node:test).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { listingsService } from '../../services/listingsService';
 import {
@@ -31,63 +32,31 @@ import {
   pctOf,
   primaryBlock,
   railMinWidthPx,
+  rowBadge,
   type RackAxis,
   type RackRow,
 } from './rackLogic';
+import {
+  dayTitle,
+  is404,
+  nowMinutes,
+  pooled,
+  shiftDay,
+  toIsoDay,
+  type ListingOption,
+} from './menageShared';
 import './menageRack.css';
-
-/* ── Dates ─────────────────────────────────────────────────────────────── */
-
-function toIsoDay(d: Date): string {
-  const z = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
-}
-
-function shiftDay(iso: string, delta: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + delta);
-  return toIsoDay(d);
-}
-
-function dayTitle(iso: string): string {
-  const d = new Date(`${iso}T12:00:00`);
-  const s = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function nowMinutes(): number {
-  const d = new Date();
-  return d.getHours() * 60 + d.getMinutes();
-}
 
 const POLL_MS = 60_000;
 const TICK_MS = 30_000;
 const RACK_FETCH_CONCURRENCY = 6;
 
-/** Exécution en parallèle bornée (max `limit` promesses à la fois). */
-async function pooled<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
-function is404(err: unknown): boolean {
-  return (err as { response?: { status?: number } })?.response?.status === 404;
-}
-
-type ListingOption = { id: string; name: string };
 type RackSource = 'rack' | 'dayplan' | 'dayplan-fallback';
 
 /* ── Composant ─────────────────────────────────────────────────────────── */
 
 export function RackMenage() {
+  const navigate = useNavigate();
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [date, setDate] = useState<string>(() => toIsoDay(new Date()));
   const [listings, setListings] = useState<ListingOption[] | null>(null);
@@ -291,6 +260,13 @@ export function RackMenage() {
             >
               Aujourd'hui
             </button>
+            <button
+              type="button"
+              className={`rkm-btn${date === shiftDay(toIsoDay(new Date()), 1) ? ' on' : ''}`}
+              onClick={() => setDate(shiftDay(toIsoDay(new Date()), 1))}
+            >
+              Demain
+            </button>
             <button type="button" className="rkm-btn" onClick={() => setDate((d) => shiftDay(d, 1))}>
               ▶
             </button>
@@ -307,6 +283,14 @@ export function RackMenage() {
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              className="rkm-btn pri"
+              title="Répartition du jour — colonnes par femme de ménage"
+              onClick={() => navigate('/menage/repartition')}
+            >
+              Répartir
+            </button>
           </span>
         </div>
 
@@ -320,21 +304,25 @@ export function RackMenage() {
           )}
 
           <div className="rkm-strip">
-            <span className="rkm-st">
-              <b>{counters.aFaire}</b>
-              <span>à faire</span>
+            <span className="rkm-st ok">
+              <b>{counters.termines}</b>
+              <span>terminés</span>
             </span>
             <span className="rkm-st gd">
               <b>{counters.enCours}</b>
               <span>en cours</span>
             </span>
-            <span className="rkm-st ok">
-              <b>{counters.termines}</b>
-              <span>terminés</span>
+            <span className="rkm-st">
+              <b>{counters.aFaire}</b>
+              <span>à venir</span>
             </span>
-            <span className={`rkm-st${counters.enRetard ? ' al' : ''}`}>
-              <b>{counters.enRetard}</b>
-              <span>en retard</span>
+            <span className={`rkm-st${counters.sansPersonne ? ' al' : ''}`}>
+              <b>{counters.sansPersonne}</b>
+              <span>sans personne</span>
+            </span>
+            <span className={`rkm-st${counters.fenetresEnDanger ? ' al' : ''}`}>
+              <b>{counters.fenetresEnDanger}</b>
+              <span>{counters.fenetresEnDanger > 1 ? 'fenêtres en danger' : 'fenêtre en danger'}</span>
             </span>
             <span className="rkm-st">
               <b>
@@ -437,19 +425,33 @@ export function RackMenage() {
 
 function RackRowView({ row, axis }: { row: RackRow; axis: RackAxis }) {
   const primary = primaryBlock(row);
+  const badge = rowBadge(row);
   const winLeft = row.window ? (row.window.openStart ? 0 : pctOf(row.window.startMin, axis)) : 0;
   const winRight = row.window ? (row.window.openEnd ? 100 : pctOf(row.window.endMin, axis)) : 0;
+  // Pastille façon doc : « personne » prime sur « serré ».
+  const noOnePlanned = row.window != null && row.blocks.length === 0;
+  const pill =
+    noOnePlanned || (primary && primary.unassigned && primary.status !== 'done')
+      ? 'personne'
+      : row.window?.tight && primary != null && primary.status !== 'done'
+        ? 'serré'
+        : null;
 
   return (
     <div className={`rkm-row${row.critical ? ' crit' : ''}`}>
       <span className="rkm-lb">
         <span className="v">
           {row.listingName}
-          {row.critical && (
-            <span className="rkm-pill err">{primary?.unassigned ? 'personne' : 'serré'}</span>
-          )}
+          {pill && <span className="rkm-pill err">{pill}</span>}
         </span>
         <span className="w">{row.subtitle}</span>
+        {badge && (
+          <span
+            className={`sb sb-${primary && primary.unassigned && primary.status !== 'done' ? 'late' : (primary?.status ?? 'plan')}`}
+          >
+            {badge.icon} <b>{badge.who}</b> · {badge.detail}
+          </span>
+        )}
       </span>
       <span className="rkm-tl">
         {row.window && (

@@ -13,6 +13,8 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'ops-board': '/ops-board',
   /** Rack ménage — la journée (fenêtres départ→arrivée, spec Housekeeping écran 1). */
   'menage/rack': '/menage/rack',
+  /** Répartition ménage — colonnes par FdM, crédits (écran 3 Housekeeping). */
+  'menage/repartition': '/menage/repartition',
 
   // Opérations
   reservations: '/reservations',

@@ -1271,3 +1271,48 @@ export async function getMenageRack(
   });
   return data as MenageRackResponse;
 }
+
+/* ── Répartition ménage — GET /tasks/menage/repartition ──────────────────── */
+
+export type MenageRepartitionResponse = {
+  success: boolean;
+  data?: {
+    date: string;
+    capacityMin: number;
+    columns: Array<{
+      id: string;
+      name: string;
+      worksToday: boolean;
+      capacityMin: number;
+      assignedMin: number;
+      remainingMin: number;
+      overCapacity: boolean;
+      tasks: Array<{
+        roomName: string;
+        label: string;
+        status: 'todo' | 'doing' | 'done';
+        hm: string | null;
+        durationMin: number;
+      }>;
+    }>;
+    unassigned: Array<{ id: string; roomName: string; label: string; durationMin: number }>;
+    totals: { assignedMin: number; unassignedMin: number; doneMin: number };
+  };
+  error?: string;
+};
+
+/**
+ * Répartition ménage d'un listing (colonnes par femme de ménage, jauges de
+ * crédits, non-assignés) — srv-fulltask GET /tasks/menage/repartition.
+ * 404 = endpoint pas encore déployé.
+ */
+export async function getMenageRepartition(
+  listingId: string,
+  date?: string,
+  ownerId?: string | null,
+): Promise<MenageRepartitionResponse> {
+  const { data } = await apiClient.get(`${BASE}/tasks/menage/repartition`, {
+    params: { listingId, ...(date ? { date } : {}), ...(ownerId ? { ownerId } : {}) },
+  });
+  return data as MenageRepartitionResponse;
+}
