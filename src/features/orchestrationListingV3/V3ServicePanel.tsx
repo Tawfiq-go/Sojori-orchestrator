@@ -12,11 +12,10 @@ import type { ListingOrchestrationDoc } from './listingOrchestrationApi';
 import type { OwnerOrchestrationDoc } from './ownerOrchestrationApi';
 import { saveListingGestion } from './listingOrchestrationApi';
 import { saveOwnerGestion } from './ownerOrchestrationApi';
-import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
+import MenageContentRedirectCard from '../serviceMatrix/MenageContentRedirectCard';
 import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
 import V3InformSyndicPanel from './V3InformSyndicPanel';
 import V3TaskBehaviorPanel from './V3TaskBehaviorPanel';
-import MenageOpsPanel from '../listing/components/ConfigOrchestration/MenageOpsPanel';
 import { V3 } from './theme';
 import { V3Badge, V3DecisionPill } from './V3Primitives';
 import { logV3Orch } from './v3OrchestrationDebugLog';
@@ -194,77 +193,12 @@ export default function V3ServicePanel({
 
     switch (activePanel) {
       case 'gestion':
-        if (def.key === 'cleaning_free') {
-          const freeGestion = (orchestrationDoc.capabilities?.cleaning_free?.gestion ??
-            {}) as Record<string, unknown>;
-          const saveGestion = async (nextGestion: Record<string, unknown>) => {
-            if (ownerTemplateMode) {
-              await saveOwnerGestion({
-                ownerKey,
-                capabilityKey: 'cleaning_free',
-                gestion: nextGestion,
-                doc: orchestrationDoc as OwnerOrchestrationDoc,
-              });
-            } else {
-              await saveListingGestion({
-                listingId,
-                capabilityKey: 'cleaning_free',
-                gestion: nextGestion,
-                doc: orchestrationDoc as ListingOrchestrationDoc,
-              });
-            }
-            onReload();
-          };
+        if (def.key === 'cleaning_free' || def.key === 'cleaning_paid') {
+          // Contenu ménage (durées, prix, niveaux, linge) → onglet Ménage du listing.
           return (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <MenageOpsPanel
-                listingId={listingId}
-                listingValues={listingValues}
-                gestion={freeGestion}
-                focusTrack="included"templateMode={Boolean(ownerTemplateMode)}
-                onListingPatch={async patch => {
-                  await saveGestion({ ...freeGestion, ...patch });
-                }}
-              />
-              <V3CleaningIncludedPanel
-                gestion={freeGestion}
-                listingValues={listingValues}
-                hideExtras
-                onSave={async nextGestion => {
-                  await saveGestion({ ...freeGestion, ...nextGestion });
-                }}
-              />
-            </Box>
-          );
-        }
-        if (def.key === 'cleaning_paid') {
-          const paidGestion = (orchestrationDoc.capabilities?.cleaning_paid?.gestion ??
-            {}) as Record<string, unknown>;
-          return (
-            <MenageOpsPanel
-              listingId={listingId}
-              listingValues={listingValues}
-              gestion={paidGestion}
-              focusTrack="paid"templateMode={Boolean(ownerTemplateMode)}
-              onListingPatch={async patch => {
-                const nextGestion = { ...paidGestion, ...patch };
-                if (ownerTemplateMode) {
-                  await saveOwnerGestion({
-                    ownerKey,
-                    capabilityKey: 'cleaning_paid',
-                    gestion: nextGestion,
-                    doc: orchestrationDoc as OwnerOrchestrationDoc,
-                  });
-                } else {
-                  await saveListingGestion({
-                    listingId,
-                    capabilityKey: 'cleaning_paid',
-                    gestion: nextGestion,
-                    doc: orchestrationDoc as ListingOrchestrationDoc,
-                  });
-                }
-                onReload();
-              }}
+            <MenageContentRedirectCard
+              listingId={ownerTemplateMode ? undefined : listingId}
+              templateMode={Boolean(ownerTemplateMode)}
             />
           );
         }
@@ -291,15 +225,8 @@ export default function V3ServicePanel({
           };
           return (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <MenageOpsPanel
-                listingId={listingId}
-                listingValues={listingValues}
-                gestion={sojoriGestion}
-                focusTrack="checkout"templateMode={Boolean(ownerTemplateMode)}
-                onListingPatch={async patch => {
-                  await saveSojori({ ...sojoriGestion, ...patch });
-                }}
-              />
+              {/* Contenu ménage → onglet Ménage du listing ; ci-dessous l'activation
+                  du déclenchement checkout (CleaningSojoriConfigTab via CapabilityGestionPanel). */}
               <CapabilityGestionPanel
                 def={def}
                 scope={matrixScope}
