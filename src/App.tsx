@@ -109,20 +109,15 @@ const TasksPlanningPageV2 = lazyWithReload(() =>
 const TasksStaffFulltaskPage = lazyWithReload(() =>
   import('./pages/TasksStaffFulltaskPage').then((module) => ({ default: module.default }))
 );
-const TasksExtrasConfigPage = lazyWithReload(() =>
-  import('./features/extras/TasksExtrasConfigPage').then((module) => ({
-    default: module.TasksExtrasConfigPage,
+const TasksExtrasCataloguePage = lazyWithReload(() =>
+  import('./features/extras/TasksExtrasCataloguePage').then((module) => ({
+    default: module.TasksExtrasCataloguePage,
   }))
 );
 const MinibarSuiviPage = lazyWithReload(() =>
   import('./features/minibar/MinibarSuiviPage').then((module) => ({
     default: module.MinibarSuiviPage,
   })),
-);
-const TasksExtrasListPage = lazyWithReload(() =>
-  import('./features/extras/TasksExtrasListPage').then((module) => ({
-    default: module.TasksExtrasListPage,
-  }))
 );
 const CustomersPage = lazyWithReload(() =>
   import('./pages/CustomersPage').then((module) => ({ default: module.default }))
@@ -414,8 +409,9 @@ function App() {
 
               {/* Claude Design V2 - Remplace les anciennes vues */}
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
-              <Route path="/tasks/extras/configuration" element={<LazyRoute><TasksExtrasConfigPage /></LazyRoute>} />
-              <Route path="/tasks/extras/list" element={<LazyRoute><TasksExtrasListPage /></LazyRoute>} />
+              <Route path="/tasks/extras/configuration" element={<LazyRoute><TasksExtrasCataloguePage /></LazyRoute>} />
+              {/* Ancienne entree « Liste extra » : fusionnee dans le catalogue. */}
+              <Route path="/tasks/extras/list" element={<Navigate to="/tasks/extras/configuration" replace />} />
               <Route path="/tasks/extras/minibar" element={<LazyRoute><MinibarSuiviPage /></LazyRoute>} />
               <Route path="/tasks/extras" element={<Navigate to="/tasks/extras/configuration" replace />} />
               <Route path="/tasks/planning" element={<LazyRoute><TasksPlanningPageV2 /></LazyRoute>} />
