@@ -66,6 +66,9 @@ const AiCockpitPage = lazyWithReload(() =>
 const OpsBoardPage = lazyWithReload(() =>
   import('./pages/OpsBoardPage').then((module) => ({ default: module.default }))
 );
+const MenageRackPage = lazyWithReload(() =>
+  import('./pages/MenageRackPage').then((module) => ({ default: module.default }))
+);
 const OrchestrationPlansPageV2 = lazyWithReload(() =>
   import("./pages/OrchestrationPlansPageV2").then((module) => ({ default: module.default }))
 );
@@ -384,6 +387,7 @@ function App() {
               <Route path="/orchestration/day-plan" element={<Navigate to="/orchestration/cockpit" replace />} />
               <Route path="/orchestration/cockpit" element={<LazyRoute><AiCockpitPage /></LazyRoute>} />
               <Route path="/ops-board" element={<LazyRoute><OpsBoardPage /></LazyRoute>} />
+              <Route path="/menage/rack" element={<LazyRoute><MenageRackPage /></LazyRoute>} />
               <Route path="/orchestration/config" element={<LazyRoute><TasksOrchestrationFulltaskPage /></LazyRoute>} />
               <Route path="/orchestration/whatsapp-messages" element={<LazyRoute><TasksWhatsAppMessagesPage /></LazyRoute>} />
               <Route path="/orchestration/mockup" element={<LazyRoute><OrchestrationPage /></LazyRoute>} />
