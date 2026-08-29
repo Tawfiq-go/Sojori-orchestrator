@@ -520,6 +520,12 @@ export function ExtrasVentesPage() {
   );
 }
 
+const DEPT_LABEL: Record<string, string> = {
+  fnb: 'Restauration',
+  other_operated: 'Prestations',
+  misc: 'Divers',
+};
+
 /** Vue par note — le regroupement que voit le client. */
 function BillsTable({
   rows,
@@ -544,6 +550,7 @@ function BillsTable({
           <TableRow sx={{ bgcolor: T.bg2 }}>
             <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Date</TableCell>
             <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Facture</TableCell>
+            <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Type</TableCell>
             <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>État</TableCell>
             <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11.5 }}>
               Articles
@@ -571,7 +578,12 @@ function BillsTable({
                 {shortDate(b.lastAt)}
               </TableCell>
               <TableCell sx={{ fontSize: 12, color: T.text2, fontFamily: 'monospace' }}>
-                {b.billRef ? b.billRef.slice(0, 8) : '—'}
+                {b.billCode ?? (b.billRef ? b.billRef.slice(0, 8) : '—')}
+                {b.billNumber ? (
+                  <Typography component="span" sx={{ ml: 0.75, fontSize: 10.5, color: T.text3 }}>
+                    n° {b.billNumber}
+                  </Typography>
+                ) : null}
                 {b.sources.includes('minibar') ? (
                   <Chip
                     size="small"
@@ -587,6 +599,24 @@ function BillsTable({
                     }}
                   />
                 ) : null}
+              </TableCell>
+              <TableCell>
+                <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
+                  {b.departments.map((d) => (
+                    <Chip
+                      key={d}
+                      size="small"
+                      label={DEPT_LABEL[d] ?? d}
+                      sx={{
+                        height: 20,
+                        fontSize: 10.5,
+                        fontWeight: 600,
+                        bgcolor: `${DEPT_COLOR[d] ?? T.text3}18`,
+                        color: DEPT_COLOR[d] ?? T.text3,
+                      }}
+                    />
+                  ))}
+                </Stack>
               </TableCell>
               <TableCell>
                 <Chip

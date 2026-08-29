@@ -161,6 +161,11 @@ export type RevenueBillRow = {
   isClosed: boolean;
   departments: string[];
   sources: string[];
+  /** Renseignés dès que les notes du PMS sont importées. */
+  billCode: string | null;
+  billNumber: string | null;
+  billType: 'receipt' | 'invoice' | null;
+  paidAmount: number;
 };
 
 export type RevenueBillsPage = {
