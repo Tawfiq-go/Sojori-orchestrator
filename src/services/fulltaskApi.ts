@@ -1316,3 +1316,46 @@ export async function getMenageRepartition(
   });
   return data as MenageRepartitionResponse;
 }
+
+/* ── Semaine ménage — GET /tasks/menage/semaine ──────────────────────────── */
+
+export type MenageSemaineResponse = {
+  success: boolean;
+  data?: {
+    start: string;
+    villas: Array<{ id: string; title: string }>;
+    days: Array<{
+      ymd: string;
+      capacityMin: number;
+      fdmCount: number;
+      chargeMin: number;
+      assignedMin: number;
+      doneMin: number;
+      loadRatio: number | null;
+      tension: boolean;
+      cells: Array<{
+        villaId: string;
+        kind: 'turnover' | 'arrival' | 'departure' | 'stay' | 'empty';
+        menage: { label: string; creditsMin: number; state: 'a_assigner' | 'assigne' | 'fait' } | null;
+        blocked: boolean;
+      }>;
+    }>;
+    totals: { chargeMin: number; capacityMin: number; tensionDays: number };
+  };
+  error?: string;
+};
+
+/**
+ * Semaine ménage d'un listing (villas × 7 jours, crédits par jour vs capacité)
+ * — srv-fulltask GET /tasks/menage/semaine. 404 = endpoint pas encore déployé.
+ */
+export async function getMenageSemaine(
+  listingId: string,
+  start?: string,
+  ownerId?: string | null,
+): Promise<MenageSemaineResponse> {
+  const { data } = await apiClient.get(`${BASE}/tasks/menage/semaine`, {
+    params: { listingId, ...(start ? { start } : {}), ...(ownerId ? { ownerId } : {}) },
+  });
+  return data as MenageSemaineResponse;
+}

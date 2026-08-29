@@ -28,7 +28,10 @@ export const TIGHT_SLACK_MINUTES = 30;
 /** Marge avant de déclarer « en retard » un ménage pas commencé après son heure. */
 export const LATE_GRACE_MINUTES = 15;
 /** Largeur mini d'une heure sur le rail (px) — l'axe ne s'écrase jamais : on scrolle. */
-export const RAIL_PX_PER_HOUR = 72;
+// 48 px/h (Tawfiq 31/08 : « réduire l'horizontalité ») — la journée entière
+// et les badges FdM tiennent sans scroll sur un laptop ; le scroll ne sert
+// que sous ~800 px utiles.
+export const RAIL_PX_PER_HOUR = 48;
 /** Largeur de la colonne « Bien · fenêtre » (px) — alignée sur le CSS (.rkm). */
 export const RAIL_LABEL_PX = 168;
 

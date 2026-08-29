@@ -357,7 +357,7 @@ describe('axe horaire', () => {
     assert.equal(axis.endMin, AXIS_DEFAULT_END_MIN);
   });
 
-  it('railMinWidthPx : colonne biens + ~72px/heure, jamais moins d’une heure', () => {
+  it('railMinWidthPx : colonne biens + RAIL_PX_PER_HOUR/heure, jamais moins d’une heure', () => {
     // Axe par défaut 8h→17h = 9 heures.
     assert.equal(
       railMinWidthPx({ startMin: AXIS_DEFAULT_START_MIN, endMin: AXIS_DEFAULT_END_MIN }),

@@ -43,6 +43,9 @@
 .rkr-btn.on { background: var(--bg2); color: var(--t1); }
 .rkr-btn.pri { background: var(--gold); border-color: var(--gold-deep); color: #3c2c05; }
 .rkr-btn:disabled { opacity: 0.45; cursor: default; }
+/* Liens croisés Rack ↔ Répartition ↔ Semaine (petits, en en-tête). */
+.rkr-lnk { border: none; background: none; font: 650 11px var(--sans); color: var(--gold-deep); cursor: pointer; padding: 4px 2px; text-decoration: underline; text-underline-offset: 2px; }
+.rkr-lnk:hover { color: #8a6512; }
 .rkr-select { border: 1px solid var(--bd2); background: var(--bg1); border-radius: 8px; font: 650 11.5px var(--sans); color: var(--t2); padding: 6px 8px; cursor: pointer; max-width: 220px; }
 
 /* ── Bandeau totaux ── */

@@ -244,6 +244,9 @@ export function RackMenage() {
             <h3>Le rack — {dayTitle(date)}</h3>
           </div>
           <span className="rkm-rt">
+            <button type="button" className="rkm-lnk" onClick={() => navigate('/menage/semaine')}>
+              Semaine
+            </button>
             {isToday && (
               <span className="rkm-live">
                 <i />

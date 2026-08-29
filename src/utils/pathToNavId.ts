@@ -27,6 +27,7 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   if (path === '/menage/repartition' || path.startsWith('/menage/repartition/')) {
     return 'menage/repartition';
   }
+  if (path === '/menage/semaine' || path.startsWith('/menage/semaine/')) return 'menage/semaine';
   // Deep-links planning → highlight l’entrée unique « Planning »
   if (path.startsWith('/tasks/planning')) return 'planning';
   if (path.startsWith('/tasks/team')) return 'tasks/team';

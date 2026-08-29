@@ -15,6 +15,8 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'menage/rack': '/menage/rack',
   /** Répartition ménage — colonnes par FdM, crédits (écran 3 Housekeeping). */
   'menage/repartition': '/menage/repartition',
+  /** Semaine ménage — villas × 7 jours, crédits vs capacité. */
+  'menage/semaine': '/menage/semaine',
 
   // Opérations
   reservations: '/reservations',
