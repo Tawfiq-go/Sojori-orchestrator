@@ -17,6 +17,8 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'menage/repartition': '/menage/repartition',
   /** Semaine ménage — villas × 7 jours, crédits vs capacité. */
   'menage/semaine': '/menage/semaine',
+  /** Équipe ménage — personnes, jours travaillés, plafonds de crédits. */
+  'menage/equipe': '/menage/equipe',
 
   // Opérations
   reservations: '/reservations',
