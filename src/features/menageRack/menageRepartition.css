@@ -1,0 +1,104 @@
+/* Répartition ménage — écran 3 (version crédits), scoped .rkr — mêmes tokens que le Rack */
+
+.rkr {
+  --bg0: #f6f5f1;
+  --bg1: #fff;
+  --bg2: #f0eee8;
+  --bg3: #e7e4dc;
+  --t1: #14110a;
+  --t2: #55504a;
+  --t3: #7a756c;
+  --t4: #a8a299;
+  --bd: rgba(20, 17, 10, 0.07);
+  --bd2: rgba(20, 17, 10, 0.14);
+  --gold: #e6b022;
+  --gold-deep: #b8881a;
+  --gold-tint: rgba(230, 176, 34, 0.12);
+  --ok: #0a8f5e;
+  --ok-bg: #e8f5ef;
+  --err: #c81e1e;
+  --err-bg: #fbeeee;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --sans: 'Geist', -apple-system, system-ui, sans-serif;
+  --sh: 0 1px 3px rgba(20, 17, 10, 0.05), 0 5px 18px rgba(20, 17, 10, 0.05);
+
+  background: var(--bg0);
+  color: var(--t1);
+  font: 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100%;
+  padding: 16px 18px 40px;
+}
+
+/* ── Châssis (identique au Rack) ── */
+.rkr-app { border: 1px solid var(--bd2); border-radius: 12px; overflow: hidden; background: var(--bg1); box-shadow: var(--sh); }
+.rkr-hd { border-bottom: 1px solid var(--bd); padding: 11px 15px; display: flex; align-items: center; gap: 11px; flex-wrap: wrap; }
+.rkr-hd .rkr-cr { font-size: 10.5px; color: var(--t4); margin: 0; }
+.rkr-hd h3 { font-size: 15px; font-weight: 800; margin: 0; letter-spacing: -0.02em; line-height: 1.2; }
+.rkr-hd .rkr-rt { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.rkr-bd { padding: 14px 15px; display: grid; gap: 12px; }
+
+.rkr-btn { border: 1px solid var(--bd2); background: var(--bg1); border-radius: 8px; font: 650 11.5px var(--sans); color: var(--t2); padding: 6px 11px; cursor: pointer; }
+.rkr-btn:hover { background: var(--bg2); }
+.rkr-btn.on { background: var(--bg2); color: var(--t1); }
+.rkr-btn.pri { background: var(--gold); border-color: var(--gold-deep); color: #3c2c05; }
+.rkr-btn:disabled { opacity: 0.45; cursor: default; }
+.rkr-select { border: 1px solid var(--bd2); background: var(--bg1); border-radius: 8px; font: 650 11.5px var(--sans); color: var(--t2); padding: 6px 8px; cursor: pointer; max-width: 220px; }
+
+/* ── Bandeau totaux ── */
+.rkr-strip { display: flex; gap: 7px; flex-wrap: wrap; }
+.rkr-st { border: 1px solid var(--bd); border-radius: 9px; padding: 7px 12px; background: var(--bg0); min-width: 84px; }
+.rkr-st b { display: block; font: 700 17px var(--mono); letter-spacing: -0.02em; }
+.rkr-st span { font-size: 10px; color: var(--t3); }
+.rkr-st.al { background: var(--err-bg); border-color: rgba(200, 30, 30, 0.25); }
+.rkr-st.al b { color: var(--err); }
+.rkr-st.gd { background: var(--gold-tint); border-color: rgba(230, 176, 34, 0.35); }
+.rkr-st.gd b { color: var(--gold-deep); }
+.rkr-st.ok { background: var(--ok-bg); border-color: rgba(10, 143, 94, 0.25); }
+.rkr-st.ok b { color: var(--ok); }
+
+/* ── Colonnes (scroll horizontal pattern maison, « À assigner » sticky) ── */
+.rkr-board { border: 1px solid var(--bd); border-radius: 10px; overflow: hidden; }
+.rkr-scroll { overflow: auto; max-height: max(340px, calc(100vh - 280px)); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; min-width: 0; }
+.rkr-cols { display: flex; align-items: stretch; min-width: max-content; }
+.rkr-col { width: 218px; flex: 0 0 218px; border-right: 1px solid var(--bd); background: var(--bg1); display: flex; flex-direction: column; }
+.rkr-col:last-child { border-right: none; }
+/* Colonne « À assigner » : en tête de lecture, sticky à gauche, fond rouge doux. */
+.rkr-col.unassigned { position: sticky; left: 0; z-index: 5; background: #fdf6f5; border-right: 1.5px solid rgba(200, 30, 30, 0.25); box-shadow: 2px 0 6px rgba(20, 17, 10, 0.05); }
+
+.rkr-colhd { padding: 9px 11px 7px; border-bottom: 1px solid var(--bd); display: grid; gap: 5px; }
+.rkr-colhd .nm { font-size: 12.5px; font-weight: 750; display: flex; align-items: baseline; gap: 6px; }
+.rkr-colhd .nm .off { font-size: 10px; font-weight: 600; color: var(--t3); }
+.rkr-col.unassigned .rkr-colhd .nm { color: var(--err); }
+.rkr-colhd .cred { font: 600 10.5px var(--mono); color: var(--t3); display: flex; justify-content: space-between; align-items: baseline; }
+.rkr-colhd .cred b { font-weight: 700; color: var(--t2); }
+.rkr-colhd .cred.over b { color: var(--err); }
+/* Jauge de crédits : barre or, rouge si dépassement. */
+.rkr-gauge { height: 6px; border-radius: 3px; background: var(--bg3); overflow: hidden; }
+.rkr-gauge i { display: block; height: 100%; background: var(--gold); border-radius: 3px; }
+.rkr-gauge.over i { background: var(--err); }
+
+.rkr-tasks { padding: 7px 8px 9px; display: grid; gap: 5px; align-content: start; flex: 1; }
+.rkr-task { border: 1px solid var(--bd); border-radius: 8px; background: var(--bg0); padding: 6px 9px; display: grid; gap: 1px; }
+.rkr-task .r1 { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; font-weight: 700; }
+.rkr-task .r1 .dur { font: 600 10px var(--mono); color: var(--t3); white-space: nowrap; }
+.rkr-task .r2 { font-size: 10.5px; color: var(--t3); }
+.rkr-task.doing { background: var(--gold-tint); border-color: rgba(230, 176, 34, 0.4); }
+.rkr-task.done { opacity: 0.55; }
+.rkr-task.done .r1 { color: #07724b; }
+.rkr-col.unassigned .rkr-task { background: #fff; border-color: rgba(200, 30, 30, 0.3); border-style: dashed; }
+.rkr-col.unassigned .rkr-task .r1 { color: var(--err); }
+.rkr-none { font-size: 11px; color: var(--t3); padding: 4px 2px; }
+.rkr-col.unassigned .rkr-none { color: var(--ok); font-weight: 650; }
+
+/* ── Pied / états ── */
+.rkr-foot { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+.rkr-note { font-size: 11px; color: var(--t3); margin-right: auto; }
+.rkr-empty { padding: 28px 15px; text-align: center; color: var(--t3); font-size: 12.5px; }
+.rkr-err { padding: 10px 13px; border: 1px solid rgba(200, 30, 30, 0.3); background: var(--err-bg); color: var(--err); border-radius: 9px; font-size: 12px; }
+.rkr-warn { padding: 10px 13px; border: 1px solid rgba(184, 136, 26, 0.35); background: var(--gold-tint); color: var(--gold-deep); border-radius: 9px; font-size: 12px; font-weight: 600; }
+
+@media (max-width: 760px) {
+  .rkr { padding: 10px 8px 30px; }
+  .rkr-col { width: 190px; flex-basis: 190px; }
+}

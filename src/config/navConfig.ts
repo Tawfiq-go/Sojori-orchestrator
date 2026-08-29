@@ -118,6 +118,14 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         badge: 'Live',
         description: 'La journée ménage — fenêtres départ→arrivée, blocs, retards (Nommos)',
       },
+      {
+        id: 'menage/repartition',
+        label: 'Répartition',
+        iconType: 'calendar',
+        iconColor: '#B8881A',
+        badge: 'NEW',
+        description: 'Répartition ménage — colonnes par femme de ménage, crédits (lecture seule)',
+      },
     ],
   },
   {

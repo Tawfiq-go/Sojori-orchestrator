@@ -74,10 +74,15 @@ export type RackRow = {
 };
 
 export type RackCounters = {
+  /** À venir : planifiés, ni en cours ni en retard. */
   aFaire: number;
   enCours: number;
   termines: number;
   enRetard: number;
+  /** Lignes sans personne : tâche non assignée, ou fenêtre sans aucune tâche. */
+  sansPersonne: number;
+  /** Fenêtres en danger : serrées (marge < 30 min) ou déjà en retard. */
+  fenetresEnDanger: number;
   departs: number;
   arrivees: number;
 };
@@ -213,6 +218,35 @@ export function primaryBlock(row: RackRow): RackBlock | null {
   return best;
 }
 
+export type RackRowBadge = {
+  /** ✓ terminé · ● en cours · ⚠ retard · ＋ à assigner · ○ prévu (typographie du doc). */
+  icon: '✓' | '●' | '⚠' | '＋' | '○';
+  /** Nom en gras : staff, ou « à assigner ». */
+  who: string;
+  /** Suite du libellé : tâche, état, heure prévue. */
+  detail: string;
+};
+
+/**
+ * Badge d'état de la ligne (typographie du doc de conception) :
+ * « ✓ Amina · à blanc », « ● Amina · recouche · en cours »,
+ * « ⚠ Fatima · pas commencé », « ＋ à assigner · ménage », « ○ Amina · recouche 12h ».
+ */
+export function rowBadge(row: RackRow): RackRowBadge | null {
+  const b = primaryBlock(row);
+  if (!b) return null;
+  const task = b.taskLabel.toLowerCase();
+  if (b.status === 'done') return { icon: '✓', who: b.staffName ?? '—', detail: task };
+  if (b.status === 'doing') {
+    return { icon: '●', who: b.staffName ?? '—', detail: `${task} · en cours` };
+  }
+  if (b.status === 'late') {
+    return { icon: '⚠', who: b.staffName ?? 'à assigner', detail: b.statusLabel };
+  }
+  if (b.unassigned) return { icon: '＋', who: 'à assigner', detail: task };
+  return { icon: '○', who: b.staffName ?? '—', detail: `${task} ${hmLabel(b.startMin)}` };
+}
+
 function computeCritical(row: Pick<RackRow, 'blocks' | 'window'>): boolean {
   if (!row.window || row.window.openEnd) return false;
   return row.blocks.some((b) => b.status !== 'done' && (b.status === 'late' || b.unassigned));
@@ -230,6 +264,8 @@ function finalizeModel(
     enCours: 0,
     termines: 0,
     enRetard: 0,
+    sansPersonne: 0,
+    fenetresEnDanger: 0,
     departs: stats?.departures ?? rows.filter((r) => r.departure).length,
     arrivees: stats?.arrivals ?? rows.filter((r) => r.arrival).length,
   };
@@ -240,6 +276,16 @@ function finalizeModel(
       else if (b.status === 'late') counters.enRetard += 1;
       else counters.aFaire += 1;
     }
+    // Sans personne : tâche non assignée pas finie, OU fenêtre sans aucune tâche.
+    const unassigned =
+      row.blocks.some((b) => b.unassigned && b.status !== 'done') ||
+      (row.window != null && row.blocks.length === 0);
+    if (unassigned) counters.sansPersonne += 1;
+    // Fenêtre en danger : serrée (marge < 30 min) ou déjà en retard.
+    const danger =
+      (row.window != null && row.window.tight && row.blocks.some((b) => b.status !== 'done')) ||
+      row.blocks.some((b) => b.status === 'late');
+    if (danger) counters.fenetresEnDanger += 1;
   }
 
   /* Axe : 8h→17h par défaut, étendu si les données le justifient.
@@ -547,9 +593,9 @@ export function urgencyKey(row: RackRow): number {
   const closedWindow = row.window && !row.window.openEnd ? row.window : null;
   if (closedWindow && b && b.status !== 'done') {
     const slack = closedWindow.endMin - closedWindow.startMin - (b.endMin - b.startMin);
-    // late avant tight avant large — offset garde le groupe en tête.
-    const lateBoost = b.status === 'late' ? -10_000 : 0;
-    return 0 + (lateBoost + slack + 20_000) / 100_000; // ∈ (0, 1)
+    // Ordre du doc : retards, puis sans personne, puis fenêtres serrées, puis larges.
+    const boost = b.status === 'late' ? -10_000 : b.unassigned ? -5_000 : 0;
+    return 0 + (boost + slack + 20_000) / 100_000; // ∈ (0, 1)
   }
   if (b && b.status !== 'done') {
     const doingBoost = b.status === 'doing' ? 0 : b.status === 'late' ? -500 : 1_000;

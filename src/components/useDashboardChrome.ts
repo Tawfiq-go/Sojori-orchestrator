@@ -265,6 +265,10 @@ export function useDashboardChrome() {
       return 'menage/rack';
     }
 
+    if (path === '/menage/repartition' || path.startsWith('/menage/repartition/')) {
+      return 'menage/repartition';
+    }
+
     if (
       path.startsWith('/orchestration/ops') ||
       path.startsWith('/tasks/ops') ||
