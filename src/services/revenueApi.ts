@@ -147,3 +147,76 @@ export async function fetchRevenueLines(params: {
     return null;
   }
 }
+
+export type RevenueBillRow = {
+  billRef: string | null;
+  items: number;
+  gross: number;
+  net: number;
+  tax: number;
+  currency: string;
+  lastAt: string | null;
+  reservationId: string | null;
+  listingId: string | null;
+  isClosed: boolean;
+  departments: string[];
+  sources: string[];
+};
+
+export type RevenueBillsPage = {
+  success: boolean;
+  total: number;
+  page: number;
+  limit: number;
+  totalGross: number;
+  totalNet: number;
+  data: RevenueBillRow[];
+};
+
+/** Ventes regroupées par note client — une ligne par facture. */
+export async function fetchRevenueBills(params: {
+  from: string;
+  to: string;
+  department?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<RevenueBillsPage | null> {
+  try {
+    const search = new URLSearchParams({ from: params.from, to: params.to });
+    if (params.department) search.set('department', params.department);
+    if (params.search?.trim()) search.set('search', params.search.trim());
+    if (params.page) search.set('page', String(params.page));
+    if (params.limit) search.set('limit', String(params.limit));
+    const res = await apiClient.get(`${REVENUE_BASE}/revenue/bills?${search.toString()}`, {
+      timeout: 20000,
+    });
+    const data = res?.data;
+    if (!data?.success) return null;
+    return data as RevenueBillsPage;
+  } catch {
+    return null;
+  }
+}
+
+/** Articles d'une note — alimente le panneau de détail. */
+export async function fetchBillLines(params: {
+  from: string;
+  to: string;
+  billRef: string;
+}): Promise<RevenueLineRow[]> {
+  try {
+    const search = new URLSearchParams({
+      from: params.from,
+      to: params.to,
+      billRef: params.billRef,
+      limit: '300',
+    });
+    const res = await apiClient.get(`${REVENUE_BASE}/revenue/lines?${search.toString()}`, {
+      timeout: 20000,
+    });
+    return res?.data?.success ? ((res.data.data ?? []) as RevenueLineRow[]) : [];
+  } catch {
+    return [];
+  }
+}
