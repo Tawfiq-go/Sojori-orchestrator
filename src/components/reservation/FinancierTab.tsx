@@ -9,6 +9,7 @@ import { format, isValid, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { resolveChannelStayFinance } from '../../utils/reservationChannelFinance';
 import { useEurMadAdminRate } from '../../utils/eurMadAdminRate';
+import { ReservationExtrasPanel } from './ReservationExtrasPanel';
 
 interface FinancierTabProps {
   reservationDetails: any;
@@ -756,6 +757,10 @@ export function FinancierTab({
           ) : null}
         </Paper>
       )}
+
+      {/* Extras du séjour — PMS + saisies Sojori, groupés par département USALI.
+          Se masque de lui-même quand la réservation n'en a aucun. */}
+      <ReservationExtrasPanel reservationId={String(r.id || r._id || '')} />
 
       {/* 2 columns */}
       <Box

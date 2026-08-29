@@ -201,11 +201,18 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
     items: [
       {
-        id: 'tasks/extras/minibar',
-        label: 'Mini-bar',
+        id: 'tasks/extras/ventes',
+        label: 'Ventes',
         iconType: 'chart',
         iconColor: '#E6B022',
-        description: 'Consommations, stock, encaissement',
+        description: 'Tous les extras vendus — restauration, prestations, mini-bar',
+      },
+      {
+        id: 'tasks/extras/minibar',
+        label: 'Mini-bar',
+        iconType: 'check',
+        iconColor: '#E6B022',
+        description: 'Stock et relevés par villa — le seul extra suivi en stock',
       },
       {
         id: 'tasks/extras/configuration',
