@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import { FULLTASK_ADMIN_BASE } from '../config/microserviceBases';
 
 /**
  * Revenu ventilé USALI — lecture seule.
@@ -8,7 +9,8 @@ import apiClient from './apiClient';
  * Other Operated, Miscellaneous.
  */
 
-const CHANNELS_DASHBOARD = '/api/v1/admin/channels-dashboard';
+/** `revenue_lines` appartient à srv-fulltask, aux côtés du grand livre et du catalogue. */
+const REVENUE_BASE = FULLTASK_ADMIN_BASE;
 
 export type RevenueLine = {
   id: string;
@@ -48,7 +50,7 @@ export async function fetchReservationRevenue(
 ): Promise<ReservationRevenue | null> {
   try {
     const res = await apiClient.get(
-      `${CHANNELS_DASHBOARD}/revenue/by-reservation/${encodeURIComponent(reservationId)}`,
+      `${REVENUE_BASE}/revenue/by-reservation/${encodeURIComponent(reservationId)}`,
       { timeout: 20000 },
     );
     const data = res?.data;
@@ -83,7 +85,7 @@ export async function fetchRevenueSummary(params: {
     const search = new URLSearchParams({ from: params.from, to: params.to });
     if (params.listingId) search.set('listingId', params.listingId);
     const res = await apiClient.get(
-      `${CHANNELS_DASHBOARD}/revenue/summary?${search.toString()}`,
+      `${REVENUE_BASE}/revenue/summary?${search.toString()}`,
       { timeout: 20000 },
     );
     const data = res?.data;
