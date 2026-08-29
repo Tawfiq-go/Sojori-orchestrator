@@ -23,6 +23,8 @@
   --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --sans: 'Geist', -apple-system, system-ui, sans-serif;
   --sh: 0 1px 3px rgba(20, 17, 10, 0.05), 0 5px 18px rgba(20, 17, 10, 0.05);
+  /* Largeur colonne « Bien · fenêtre » — alignée sur RAIL_LABEL_PX (rackLogic). */
+  --rkm-label-w: 168px;
 
   background: var(--bg0);
   color: var(--t1);
@@ -64,17 +66,38 @@
 
 /* ── Le rack ── */
 .rkm-rack { border: 1px solid var(--bd); border-radius: 10px; overflow: hidden; position: relative; }
-.rkm-rkhd { display: grid; grid-template-columns: 168px 1fr; background: var(--bg2); border-bottom: 1px solid var(--bd); }
-.rkm-rkhd .rkm-lft { padding: 7px 11px; font: 750 10px var(--mono); letter-spacing: 0.08em; color: var(--t3); text-transform: uppercase; }
+/* Conteneur scroll dédié (pattern docs/scroll) : X toujours, Y si liste longue.
+   minWidth/minHeight: 0 posés côté parents grid/flex via le layout du composant. */
+.rkm-scroll { overflow: auto; max-height: max(340px, calc(100vh - 260px)); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; min-width: 0; }
+/* Rail intérieur : largeur mini généreuse (inline style railMinWidthPx) — tout
+   ce qui est positionné en % (fenêtres, blocs, trait maintenant) l'est par
+   rapport au rail, donc reste aligné pendant le scroll. */
+.rkm-rail { position: relative; min-width: 100%; }
+/* Grille des heures + trait « maintenant » : calques absolus du rail (pas du
+   viewport), à droite de la colonne sticky. */
+.rkm-grid-overlay { position: absolute; top: 0; bottom: 0; left: var(--rkm-label-w); right: 0; pointer-events: none; z-index: 0; }
+.rkm-grid-overlay i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--bd); }
+.rkm-now-overlay { position: absolute; top: 0; bottom: 0; left: var(--rkm-label-w); right: 0; pointer-events: none; z-index: 6; }
+.rkm-nowline { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--err); }
+
+.rkm-rkhd { display: grid; grid-template-columns: var(--rkm-label-w) 1fr; background: var(--bg2); border-bottom: 1px solid var(--bd); position: sticky; top: 0; z-index: 8; }
+.rkm-rkhd .rkm-lft { padding: 7px 11px; font: 750 10px var(--mono); letter-spacing: 0.08em; color: var(--t3); text-transform: uppercase; position: sticky; left: 0; background: var(--bg2); z-index: 9; }
 .rkm-hours { position: relative; height: 26px; }
 .rkm-hours span { position: absolute; top: 6px; font: 600 10px var(--mono); color: var(--t3); transform: translateX(-50%); }
-.rkm-hours i { position: absolute; top: 0; bottom: -3000px; width: 1px; background: var(--bd); z-index: 0; }
+/* Première graduation (bord gauche de l'axe) : ne pas la centrer sous la colonne sticky. */
+.rkm-hours span:first-of-type { transform: none; margin-left: 3px; }
+.rkm-nowbadge { position: absolute; top: 4px; transform: translateX(-100%); margin-left: -5px; font: 700 9px var(--mono); background: var(--err); color: #fff; padding: 1px 5px; border-radius: 3px; white-space: nowrap; box-shadow: 0 0 0 2px var(--bg2); z-index: 7; }
+.rkm-nowbadge.flip { transform: translateX(0); margin-left: 5px; }
 
-.rkm-row { display: grid; grid-template-columns: 168px 1fr; border-bottom: 1px solid var(--bd); background: var(--bg1); }
+.rkm-row { display: grid; grid-template-columns: var(--rkm-label-w) 1fr; border-bottom: 1px solid var(--bd); background: var(--bg1); }
 .rkm-row:last-child { border-bottom: none; }
 .rkm-row:hover { background: var(--bg0); }
 .rkm-row.crit { background: linear-gradient(90deg, rgba(200, 30, 30, 0.05), transparent 40%); }
-.rkm-lb { padding: 8px 11px; border-right: 1px solid var(--bd); display: grid; gap: 1px; align-content: center; position: relative; z-index: 2; background: inherit; min-width: 0; }
+/* Colonne biens STICKY à gauche : fond opaque + léger ombrage, au-dessus des
+   fenêtres/blocs/trait pour rester lisible pendant le scroll des heures. */
+.rkm-lb { padding: 8px 11px; border-right: 1px solid var(--bd); display: grid; gap: 1px; align-content: center; position: sticky; left: 0; z-index: 7; background: var(--bg1); box-shadow: 2px 0 6px rgba(20, 17, 10, 0.05); min-width: 0; }
+.rkm-row:hover .rkm-lb { background: var(--bg0); }
+.rkm-row.crit .rkm-lb { background: #fbf2f1; }
 .rkm-lb .v { font-size: 12.5px; font-weight: 750; display: flex; gap: 6px; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rkm-lb .w { font-size: 10.5px; color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rkm-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 750; border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
@@ -106,10 +129,6 @@
 .rkm-mk.out b { background: var(--bg3); color: var(--t2); }
 .rkm-mk.in b { background: var(--info-bg); color: var(--info); }
 
-.rkm-now { position: absolute; top: 0; bottom: -3000px; width: 2px; background: var(--err); z-index: 6; }
-.rkm-now b { position: absolute; top: 5px; left: 0; transform: translateX(-100%); margin-left: -5px; font: 700 9px var(--mono); background: var(--err); color: #fff; padding: 1px 5px; border-radius: 3px; white-space: nowrap; box-shadow: 0 0 0 2px var(--bg2); }
-.rkm-now.flip b { transform: translateX(0); margin-left: 5px; }
-
 /* ── Légende / états vides ── */
 .rkm-lgd { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--t3); align-items: center; }
 .rkm-lgd span { display: inline-flex; align-items: center; gap: 5px; }
@@ -120,7 +139,6 @@
 .rkm-warn { padding: 10px 13px; border: 1px solid rgba(184, 136, 26, 0.35); background: var(--gold-tint); color: var(--gold-deep); border-radius: 9px; font-size: 12px; font-weight: 600; }
 
 @media (max-width: 760px) {
-  .rkm { padding: 10px 8px 30px; }
-  .rkm-rkhd, .rkm-row { grid-template-columns: 118px 1fr; }
+  .rkm { padding: 10px 8px 30px; --rkm-label-w: 118px; }
   .rkm-blk .lbl { display: none; }
 }

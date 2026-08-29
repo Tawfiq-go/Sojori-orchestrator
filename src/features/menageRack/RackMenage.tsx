@@ -14,7 +14,7 @@
  *     limitées ».
  * Toute la logique de mapping vit dans rackLogic.ts (pure, testée node:test).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { listingsService } from '../../services/listingsService';
 import {
@@ -30,6 +30,7 @@ import {
   hoursOf,
   pctOf,
   primaryBlock,
+  railMinWidthPx,
   type RackAxis,
   type RackRow,
 } from './rackLogic';
@@ -211,6 +212,33 @@ export function RackMenage() {
     return () => window.clearInterval(id);
   }, [isToday]);
 
+  /* Scroll horizontal de la timeline — pattern docs/scroll/README.md adapté en
+     version « row » : listener wheel NON-PASSIF en capture sur le conteneur,
+     qui consomme le geste tant qu'il peut défiler (indispensable Mac/React 19 ;
+     couvre aussi molette verticale + Shift et trackpads récalcitrants). */
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      let dx = Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
+      if (dx === 0) return;
+      if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) dx *= 16;
+      else if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) dx *= el.clientWidth;
+      const max = el.scrollWidth - el.clientWidth;
+      if (max <= 1) return;
+      const canRight = dx > 0 && el.scrollLeft < max - 1;
+      const canLeft = dx < 0 && el.scrollLeft > 0;
+      if (canRight || canLeft) {
+        el.scrollLeft = Math.min(max, Math.max(0, el.scrollLeft + dx));
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false, capture: true });
+    return () => el.removeEventListener('wheel', onWheel, { capture: true });
+  }, []);
+
   const model = useMemo(() => {
     const now = isToday ? nowMin : null;
     if (source === 'rack' && rackRows) return buildRackModelFromEndpoint(rackRows, now);
@@ -317,32 +345,50 @@ export function RackMenage() {
           </div>
 
           <div className="rkm-rack">
-            <div className="rkm-rkhd">
-              <span className="rkm-lft">Bien · fenêtre</span>
-              <span className="rkm-hours">
-                {ticks.map((t) => (
-                  <i key={`l${t.min}`} style={{ left: `${t.pct}%` }} />
-                ))}
-                {ticks.map((t) => (
-                  <span key={`t${t.min}`} style={{ left: `${t.pct}%` }}>
-                    {t.label}
-                  </span>
-                ))}
+            <div className="rkm-scroll menage-rack-scroll" ref={scrollRef}>
+              <div className="rkm-rail" style={{ minWidth: `${railMinWidthPx(axis)}px` }}>
+                {/* Calques du rail : grille des heures (sous les blocs) et trait
+                    « maintenant » (au-dessus) — positions en % du rail, donc
+                    alignés avec fenêtres et blocs pendant le scroll. */}
+                <span className="rkm-grid-overlay" aria-hidden="true">
+                  {ticks.map((t) => (
+                    <i key={`l${t.min}`} style={{ left: `${t.pct}%` }} />
+                  ))}
+                </span>
                 {nowPct != null && nowPct > 0 && nowPct < 100 && (
-                  <span className={`rkm-now${nowPct < 12 ? ' flip' : ''}`} style={{ left: `${nowPct}%` }}>
-                    <b>{hmLabel(nowMin)}</b>
+                  <span className="rkm-now-overlay" aria-hidden="true">
+                    <span className="rkm-nowline" style={{ left: `${nowPct}%` }} />
                   </span>
                 )}
-              </span>
-            </div>
 
-            {loading && rows.length === 0 ? (
-              <div className="rkm-empty">Chargement du rack…</div>
-            ) : rows.length === 0 ? (
-              <div className="rkm-empty">Aucun mouvement ni ménage ce jour-là.</div>
-            ) : (
-              rows.map((row) => <RackRowView key={row.listingId} row={row} axis={axis} />)
-            )}
+                <div className="rkm-rkhd">
+                  <span className="rkm-lft">Bien · fenêtre</span>
+                  <span className="rkm-hours">
+                    {ticks.map((t) => (
+                      <span key={`t${t.min}`} style={{ left: `${t.pct}%` }}>
+                        {t.label}
+                      </span>
+                    ))}
+                    {nowPct != null && nowPct > 0 && nowPct < 100 && (
+                      <span
+                        className={`rkm-nowbadge${nowPct < 12 ? ' flip' : ''}`}
+                        style={{ left: `${nowPct}%` }}
+                      >
+                        {hmLabel(nowMin)}
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                {loading && rows.length === 0 ? (
+                  <div className="rkm-empty">Chargement du rack…</div>
+                ) : rows.length === 0 ? (
+                  <div className="rkm-empty">Aucun mouvement ni ménage ce jour-là.</div>
+                ) : (
+                  rows.map((row) => <RackRowView key={row.listingId} row={row} axis={axis} />)
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="rkm-lgd">

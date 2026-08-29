@@ -27,6 +27,10 @@ export const DEFAULT_CLEANING_MINUTES = 120;
 export const TIGHT_SLACK_MINUTES = 30;
 /** Marge avant de déclarer « en retard » un ménage pas commencé après son heure. */
 export const LATE_GRACE_MINUTES = 15;
+/** Largeur mini d'une heure sur le rail (px) — l'axe ne s'écrase jamais : on scrolle. */
+export const RAIL_PX_PER_HOUR = 72;
+/** Largeur de la colonne « Bien · fenêtre » (px) — alignée sur le CSS (.rkm). */
+export const RAIL_LABEL_PX = 168;
 
 export type RackAxis = { startMin: number; endMin: number };
 export type RackBlockStatus = 'plan' | 'doing' | 'done' | 'late';
@@ -139,6 +143,20 @@ export function pctOf(min: number, axis: RackAxis): number {
   if (span <= 0) return 0;
   const p = ((min - axis.startMin) / span) * 100;
   return Math.max(0, Math.min(100, p));
+}
+
+/**
+ * Largeur intérieure minimale du rail scrollable (px) : colonne des biens +
+ * ~72 px par heure d'axe. Sur petit écran on scrolle horizontalement, on ne
+ * compresse pas l'axe.
+ */
+export function railMinWidthPx(
+  axis: RackAxis,
+  labelPx = RAIL_LABEL_PX,
+  pxPerHour = RAIL_PX_PER_HOUR,
+): number {
+  const hours = Math.max(1, Math.ceil((axis.endMin - axis.startMin) / 60));
+  return labelPx + hours * pxPerHour;
 }
 
 /** Graduations horaires de l'axe (heures rondes). */
