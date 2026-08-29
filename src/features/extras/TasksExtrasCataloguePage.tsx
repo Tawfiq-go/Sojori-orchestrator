@@ -6,6 +6,14 @@ import { useFinancesOwnerScope } from '../finances/useFinancesOwnerScope';
 import { ExtraCatalogTable } from './ExtraCatalogTable';
 import { fetchExtraStats, importExtrasFromPms, type ExtraCatalogStats } from './extrasApi';
 
+/**
+ * Catalogue des extras — page unique.
+ *
+ * Remplace les deux anciennes entrées « Configuration » et « Liste extra »,
+ * qui affichaient le même `ExtraCatalogTable` à un booléen près. La dotation
+ * des villas y est intégrée : c'est le même tableau, avec les colonnes de
+ * sélection actives.
+ */
 function formatWhen(iso: string | null): string {
   if (!iso) return 'jamais';
   const d = new Date(iso);
@@ -13,7 +21,7 @@ function formatWhen(iso: string | null): string {
   return d.toLocaleString('fr-FR');
 }
 
-export function TasksExtrasConfigPage() {
+export function TasksExtrasCataloguePage() {
   const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
   const [stats, setStats] = useState<ExtraCatalogStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +52,7 @@ export function TasksExtrasConfigPage() {
     try {
       const result = await importExtrasFromPms({ ownerId });
       toast.success(
-        `Import Mews : ${result.total} produits (${result.minibar} mini-bar), ${result.categoriesCreated} catégories ledger.`,
+        `Import : ${result.total} produits (${result.minibar} mini-bar), ${result.categoriesCreated} catégories.`,
       );
       await load();
       setReloadToken((n) => n + 1);
@@ -56,20 +64,19 @@ export function TasksExtrasConfigPage() {
   };
 
   return (
-    <DashboardWrapper breadcrumb={['Extra', 'Configuration']}>
+    <DashboardWrapper breadcrumb={['Extra', 'Catalogue']}>
       <Paper sx={{ p: 2.5, mb: 2 }}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
-          Catalogue hôtel uniquement : copie les produits Mews (prix, TVA, ventes). Ça ne remplit
-          jamais les frigos. Pour pousser le par dans les villas, ouvrir Liste extra.
+          Produits vendables : prix, TVA, dotation par villa. L’import récupère le catalogue
+          depuis le PMS — il ne remplit pas les frigos. Pour définir la dotation cible, cochez
+          les produits et les villas dans le tableau ci-dessous.
         </Typography>
         {needsOwnerPick ? (
           <Alert severity="warning" sx={{ mb: 2 }}>
-            Sélectionnez un propriétaire PM pour importer les catégories ledger.
+            Sélectionnez un propriétaire PM pour importer les catégories.
           </Alert>
         ) : null}
-        {loading && !stats ? (
-          <Typography variant="body2">Chargement…</Typography>
-        ) : null}
+        {loading && !stats ? <Typography variant="body2">Chargement…</Typography> : null}
         {stats ? (
           <Box component="ul" sx={{ pl: 2, mb: 2, lineHeight: 1.9 }}>
             <li>
@@ -83,11 +90,11 @@ export function TasksExtrasConfigPage() {
         ) : null}
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <Button variant="contained" disabled={importing} onClick={() => void onImport()}>
-            {importing ? 'Import Mews…' : 'Importer depuis Mews'}
+            {importing ? 'Import en cours…' : 'Importer depuis le PMS'}
           </Button>
         </Stack>
       </Paper>
-      <ExtraCatalogTable ownerId={ownerId} reloadToken={reloadToken} allowApply={false} />
+      <ExtraCatalogTable ownerId={ownerId} reloadToken={reloadToken} allowApply />
     </DashboardWrapper>
   );
 }

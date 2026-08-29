@@ -453,7 +453,6 @@ export function ExtraCatalogTable({
               ) : null}
               <TableCell>#</TableCell>
               <TableCell>Extra</TableCell>
-              <TableCell>ID Mews</TableCell>
               <TableCell align="right">TTC</TableCell>
               <TableCell align="right">HT</TableCell>
               <TableCell align="right">TVA</TableCell>
@@ -483,7 +482,6 @@ export function ExtraCatalogTable({
                     </Typography>
                   ) : null}
                 </TableCell>
-                <TableCell sx={{ fontFamily: 'monospace', fontSize: 11 }}>{row.productId}</TableCell>
                 <TableCell align="right">{money(row.effectivePrice, row.currency)}</TableCell>
                 <TableCell align="right">{money(row.priceHT, row.currency)}</TableCell>
                 <TableCell align="right">

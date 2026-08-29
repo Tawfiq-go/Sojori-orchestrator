@@ -396,12 +396,17 @@ function SessionsTab() {
 export function MinibarSuiviPage() {
   const [tab, setTab] = useState(0);
   return (
-    <DashboardWrapper breadcrumb={['Extra', 'Suivi mini-bar']}>
+    <DashboardWrapper breadcrumb={['Extra', 'Mini-bar']}>
+      {/*
+        Ordre = priorité d'usage quotidien : ce qui reste à encaisser d'abord,
+        l'état des frigos ensuite, l'historique en dernier. « État des stocks »
+        montre le stock constaté ; la dotation cible se règle dans Catalogue.
+      */}
       <Tabs value={tab} onChange={(_e, v: number) => setTab(v)} sx={{ mb: 2 }}>
-        <Tab label="Extras" />
-        <Tab label="Villas & stock" />
+        <Tab label="Séjours" />
+        <Tab label="État des stocks" />
         <Tab label="Journal" />
-        <Tab label="Sessions" />
+        <Tab label="Contrôles" />
       </Tabs>
       {tab === 0 ? <ExtrasTab /> : null}
       {tab === 1 ? <VillasTab /> : null}
