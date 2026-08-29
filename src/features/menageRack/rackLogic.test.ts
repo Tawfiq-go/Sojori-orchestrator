@@ -11,11 +11,14 @@ import {
   AXIS_DEFAULT_START_MIN,
   DEFAULT_CLEANING_MINUTES,
   buildRackModel,
+  buildRackModelFromEndpoint,
   durationLabel,
   hmLabel,
   hoursOf,
   parseHm,
   pctOf,
+  primaryBlock,
+  type RackEndpointRow,
 } from './rackLogic';
 
 /* ── Fabriques ─────────────────────────────────────────────────────────── */
@@ -113,9 +116,9 @@ describe('fenêtre normale (départ → arrivée, ménage dedans)', () => {
     assert.equal(row.window?.startMin, 660);
     assert.equal(row.window?.endMin, 900);
     assert.equal(row.window?.tight, false);
-    assert.equal(row.block?.status, 'plan');
-    assert.equal(row.block?.startMin, 660);
-    assert.equal(row.block?.endMin, 660 + 120);
+    assert.equal(row.blocks[0]?.status, 'plan');
+    assert.equal(row.blocks[0]?.startMin, 660);
+    assert.equal(row.blocks[0]?.endMin, 660 + 120);
     assert.equal(row.critical, false);
     assert.equal(row.subtitle, '11h → 15h · 4h');
   });
@@ -128,7 +131,7 @@ describe('fenêtre normale (départ → arrivée, ménage dedans)', () => {
       ),
     };
     const { rows, counters } = buildRackModel(donePlan, 16 * 60);
-    assert.equal(rows[0].block?.status, 'done');
+    assert.equal(rows[0].blocks[0]?.status, 'done');
     assert.equal(counters.termines, 1);
     assert.equal(counters.enRetard, 0);
   });
@@ -163,7 +166,7 @@ describe('retard géométrique', () => {
     };
     const now = 11 * 60 + 40; // 11h40 — 40 min après le départ, rien n'a commencé
     const { rows, counters } = buildRackModel(plan, now);
-    const block = rows[0].block;
+    const block = rows[0].blocks[0];
     assert.equal(block?.status, 'late');
     assert.equal(block?.statusLabel, 'pas commencé');
     // Géométrie : ancré au départ, fin projetée = maintenant + durée.
@@ -190,7 +193,7 @@ describe('retard géométrique', () => {
       chains: [chain({ listingId: 'v3', cleaningDurationMinutes: 120, slackMinutes: -60, status: 'broken' as const })],
     };
     const { rows } = buildRackModel(plan, 9 * 60); // 9h : futur, mais impossible géométriquement
-    const block = rows[0].block;
+    const block = rows[0].blocks[0];
     assert.equal(block?.status, 'late');
     assert.equal(block?.statusLabel, 'déborde la fenêtre');
     assert.ok(block && rows[0].window && block.endMin > rows[0].window.endMin);
@@ -213,8 +216,8 @@ describe('retard géométrique', () => {
     };
     const now = 13 * 60 + 30; // 13h30 — l'arrivée était à 13h
     const { rows } = buildRackModel(plan, now);
-    assert.equal(rows[0].block?.status, 'late');
-    assert.equal(rows[0].block?.endMin, now);
+    assert.equal(rows[0].blocks[0]?.status, 'late');
+    assert.equal(rows[0].blocks[0]?.endMin, now);
   });
 
   it('autre jour (nowMin=null) : aucun retard projeté', () => {
@@ -227,7 +230,7 @@ describe('retard géométrique', () => {
       chains: [chain({ listingId: 'v8' })],
     };
     const { rows } = buildRackModel(plan, null);
-    assert.equal(rows[0].block?.status, 'plan');
+    assert.equal(rows[0].blocks[0]?.status, 'plan');
   });
 });
 
@@ -250,8 +253,8 @@ describe('villa sans fenêtre', () => {
     };
     const { rows } = buildRackModel(plan, 10 * 60);
     assert.equal(rows[0].window, null);
-    assert.equal(rows[0].block?.status, 'plan');
-    assert.equal(rows[0].block?.endMin, 12 * 60 + DEFAULT_CLEANING_MINUTES);
+    assert.equal(rows[0].blocks[0]?.status, 'plan');
+    assert.equal(rows[0].blocks[0]?.endMin, 12 * 60 + DEFAULT_CLEANING_MINUTES);
     assert.equal(rows[0].subtitle, 'client sur place');
     assert.equal(rows[0].critical, false);
   });
@@ -267,7 +270,7 @@ describe('villa sans fenêtre', () => {
     const { rows } = buildRackModel(plan, 14 * 60);
     assert.equal(rows[0].window, null);
     assert.equal(rows[0].subtitle, 'départ 10h → libre');
-    assert.equal(rows[0].block?.status, 'done');
+    assert.equal(rows[0].blocks[0]?.status, 'done');
   });
 
   it('heure estimée (hourUnknown) : marqueur ≈ dans le sous-titre', () => {
@@ -336,7 +339,7 @@ describe('tri par urgence (fenêtre la plus serrée d’abord, jamais par numér
     };
     const { rows } = buildRackModel(plan, 12 * 60); // midi
     assert.equal(rows[0].listingId, 'vB');
-    assert.equal(rows[0].block?.status, 'late');
+    assert.equal(rows[0].blocks[0]?.status, 'late');
   });
 });
 
@@ -387,7 +390,250 @@ describe('compteurs & sans personne', () => {
     assert.equal(counters.departs, 2);
     assert.equal(counters.arrivees, 1);
     const rowD = rows.find((r) => r.listingId === 'd');
-    assert.equal(rowD?.block?.unassigned, true);
+    assert.equal(rowD?.blocks[0]?.unassigned, true);
     assert.equal(rowD?.critical, true);
+  });
+});
+
+/* ── Source endpoint rack (GET /tasks/menage/rack) ─────────────────────── */
+
+describe('endpoint rack : fenêtres et kinds', () => {
+  it('turnover : fenêtre fermée [checkOut, checkIn], marqueurs départ/arrivée', () => {
+    const rows: RackEndpointRow[] = [
+      {
+        id: 'l1:r1',
+        roomName: 'Villa 01',
+        kind: 'turnover',
+        window: { startHm: '11:00', endHm: '15:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '11:00', durationMin: 90, staffName: 'Amina' }],
+      },
+    ];
+    const { rows: out } = buildRackModelFromEndpoint(rows, 9 * 60);
+    const row = out[0];
+    assert.deepEqual(row.window, { startMin: 660, endMin: 900, tight: false });
+    assert.equal(row.departure?.min, 660);
+    assert.equal(row.arrival?.min, 900);
+    assert.equal(row.blocks[0]?.status, 'plan');
+    assert.equal(row.blocks[0]?.taskLabel, 'À blanc');
+    assert.equal(row.subtitle, '11h → 15h · 4h');
+  });
+
+  it('départ seul : fenêtre OUVERTE à droite — jamais de retard géométrique par la fenêtre', () => {
+    const rows: RackEndpointRow[] = [
+      {
+        id: 'l1:r2',
+        roomName: 'Villa 02',
+        kind: 'departure',
+        window: { startHm: '11:00', endHm: null },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '14:00', durationMin: 60, staffName: 'Fatima' }],
+      },
+    ];
+    const { rows: out, axis } = buildRackModelFromEndpoint(rows, 12 * 60);
+    const row = out[0];
+    assert.equal(row.window?.openEnd, true);
+    assert.equal(row.window?.startMin, 660);
+    assert.equal(row.departure?.min, 660);
+    assert.equal(row.arrival, null);
+    // Ménage prévu 14h, il est midi : pas en retard (fenêtre ouverte, heure pas passée).
+    assert.equal(row.blocks[0]?.status, 'plan');
+    assert.equal(row.subtitle, 'départ 11h → libre');
+    // Le bord ouvert n'étend PAS l'axe.
+    assert.equal(axis.endMin, AXIS_DEFAULT_END_MIN);
+    assert.equal(row.critical, false);
+  });
+
+  it('arrivée seule : fenêtre OUVERTE à gauche, le retard reste possible côté arrivée', () => {
+    const rows: RackEndpointRow[] = [
+      {
+        id: 'l1:r3',
+        roomName: 'Villa 03',
+        kind: 'arrival',
+        window: { startHm: null, endHm: '15:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '14:30', durationMin: 120, staffName: 'Amina' }],
+      },
+    ];
+    const { rows: out } = buildRackModelFromEndpoint(rows, 9 * 60);
+    const row = out[0];
+    assert.equal(row.window?.openStart, true);
+    assert.equal(row.window?.endMin, 900);
+    assert.equal(row.departure, null);
+    assert.equal(row.arrival?.min, 900);
+    // 14h30 + 2h = 16h30 > arrivée 15h → déborde la fenêtre, même à 9h du matin.
+    assert.equal(row.blocks[0]?.status, 'late');
+    assert.equal(row.blocks[0]?.statusLabel, 'déborde la fenêtre');
+    assert.equal(row.subtitle, 'arrivée 15h');
+  });
+
+  it('stay / empty : window null, ligne sans hachure, occLabel en sous-titre', () => {
+    const rows: RackEndpointRow[] = [
+      { id: 'l1:r4', roomName: 'Villa 04', kind: 'stay', occLabel: 'Séjour · du 27 au 31', tasks: [] },
+      { id: 'l1:r5', roomName: 'Villa 05', kind: 'empty', tasks: [] },
+    ];
+    const { rows: out, counters } = buildRackModelFromEndpoint(rows, 12 * 60);
+    const stay = out.find((r) => r.listingId === 'l1:r4');
+    const empty = out.find((r) => r.listingId === 'l1:r5');
+    assert.equal(stay?.window, null);
+    assert.equal(stay?.subtitle, 'Séjour · du 27 au 31');
+    assert.equal(empty?.window, null);
+    assert.equal(empty?.subtitle, 'libre');
+    assert.equal(counters.aFaire + counters.enCours + counters.termines + counters.enRetard, 0);
+  });
+});
+
+describe('endpoint rack : chrono réel vs prévu', () => {
+  it('done avec startedHm/completedHm : le bloc dessine le réel', () => {
+    const rows: RackEndpointRow[] = [
+      {
+        id: 'r',
+        roomName: 'Villa 06',
+        kind: 'turnover',
+        window: { startHm: '11:00', endHm: '16:00' },
+        tasks: [
+          {
+            label: 'À blanc',
+            status: 'done',
+            hm: '11:00',
+            durationMin: 120,
+            staffName: 'Amina',
+            startedHm: '11:40',
+            completedHm: '13:05',
+          },
+        ],
+      },
+    ];
+    const { rows: out } = buildRackModelFromEndpoint(rows, 14 * 60);
+    const b = out[0].blocks[0];
+    assert.equal(b?.status, 'done');
+    assert.equal(b?.startMin, 700); // 11h40 réel, pas 11h prévu
+    assert.equal(b?.endMin, 785); // 13h05 réel, pas 11h + 2h
+  });
+
+  it('doing avec startedHm : démarre au réel et s’étire jusqu’à maintenant', () => {
+    const rows: RackEndpointRow[] = [
+      {
+        id: 'r',
+        roomName: 'Villa 07',
+        kind: 'turnover',
+        window: { startHm: '11:00', endHm: '17:00' },
+        tasks: [
+          { label: 'Recouche', status: 'doing', hm: '11:00', durationMin: 60, staffName: 'Khadija', startedHm: '12:15' },
+        ],
+      },
+    ];
+    const now = 14 * 60; // 14h — 60 min prévues, démarré 12h15
+    const { rows: out } = buildRackModelFromEndpoint(rows, now);
+    const b = out[0].blocks[0];
+    assert.equal(b?.status, 'doing');
+    assert.equal(b?.startMin, 735); // 12h15 réel
+    assert.equal(b?.endMin, now); // s'étire jusqu'à maintenant
+  });
+
+  it('todo sans chrono : heure prévue hm + durationMin (repli 120)', () => {
+    const rows: RackEndpointRow[] = [
+      {
+        id: 'r',
+        roomName: 'Villa 08',
+        kind: 'stay',
+        tasks: [{ label: 'Recouche', status: 'todo', hm: '12:00', durationMin: null, staffName: 'Amina' }],
+      },
+    ];
+    const { rows: out } = buildRackModelFromEndpoint(rows, 10 * 60);
+    assert.equal(out[0].blocks[0]?.startMin, 720);
+    assert.equal(out[0].blocks[0]?.endMin, 720 + DEFAULT_CLEANING_MINUTES);
+  });
+});
+
+describe('endpoint rack : unassigned, retard, tri, multi-tâches', () => {
+  it('unassigned dans une fenêtre fermée → ligne critique « personne »', () => {
+    const rows: RackEndpointRow[] = [
+      {
+        id: 'r',
+        roomName: 'Villa 09',
+        kind: 'turnover',
+        window: { startHm: '11:00', endHm: '16:00' },
+        tasks: [{ label: 'À blanc', status: 'unassigned', hm: '11:00', durationMin: 120, staffName: null }],
+      },
+    ];
+    const { rows: out } = buildRackModelFromEndpoint(rows, 9 * 60);
+    assert.equal(out[0].blocks[0]?.unassigned, true);
+    assert.equal(out[0].critical, true);
+  });
+
+  it('pas commencé après le départ (fenêtre fermée) → late géométrique, compté en retard', () => {
+    const rows: RackEndpointRow[] = [
+      {
+        id: 'r',
+        roomName: 'Villa 10',
+        kind: 'turnover',
+        window: { startHm: '11:00', endHm: '15:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '11:00', durationMin: 120, staffName: 'Fatima' }],
+      },
+    ];
+    const now = 11 * 60 + 40;
+    const { rows: out, counters } = buildRackModelFromEndpoint(rows, now);
+    const b = out[0].blocks[0];
+    assert.equal(b?.status, 'late');
+    assert.equal(b?.statusLabel, 'pas commencé');
+    assert.equal(b?.endMin, now + 120);
+    assert.equal(counters.enRetard, 1);
+  });
+
+  it('tri : turnover serré < turnover large < départ seul (fenêtre ouverte) < stay done', () => {
+    const rows: RackEndpointRow[] = [
+      {
+        id: 'done',
+        roomName: 'A-done',
+        kind: 'stay',
+        tasks: [{ label: 'Recouche', status: 'done', hm: '09:00', durationMin: 60, staffName: 'A' }],
+      },
+      {
+        id: 'open',
+        roomName: 'B-open',
+        kind: 'departure',
+        window: { startHm: '10:00', endHm: null },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '10:00', durationMin: 60, staffName: 'B' }],
+      },
+      {
+        id: 'large',
+        roomName: 'C-large',
+        kind: 'turnover',
+        window: { startHm: '10:00', endHm: '17:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '10:00', durationMin: 120, staffName: 'C' }],
+      },
+      {
+        id: 'serre',
+        roomName: 'D-serre',
+        kind: 'turnover',
+        window: { startHm: '11:00', endHm: '14:00' },
+        tasks: [{ label: 'À blanc', status: 'todo', hm: '11:00', durationMin: 160, staffName: 'D' }],
+      },
+    ];
+    const { rows: out } = buildRackModelFromEndpoint(rows, 8 * 60);
+    assert.deepEqual(
+      out.map((r) => r.listingId),
+      ['serre', 'large', 'open', 'done'],
+    );
+    // Fenêtre serrée : 3h de fenêtre pour 2h40 de ménage (marge 20 < 30) → tight.
+    assert.equal(out[0].window?.tight, true);
+  });
+
+  it('plusieurs tâches sur une ligne : primaryBlock prend la plus urgente', () => {
+    const rows: RackEndpointRow[] = [
+      {
+        id: 'r',
+        roomName: 'Villa 11',
+        kind: 'turnover',
+        window: { startHm: '10:00', endHm: '16:00' },
+        tasks: [
+          { label: 'À blanc', status: 'done', hm: '10:00', durationMin: 60, staffName: 'A', completedHm: '11:00' },
+          { label: 'Inspection', status: 'todo', hm: '11:30', durationMin: 30, staffName: 'B' },
+        ],
+      },
+    ];
+    const { rows: out, counters } = buildRackModelFromEndpoint(rows, 10 * 60);
+    assert.equal(out[0].blocks.length, 2);
+    assert.equal(primaryBlock(out[0])?.taskLabel, 'Inspection');
+    assert.equal(counters.termines, 1);
+    assert.equal(counters.aFaire, 1);
   });
 });

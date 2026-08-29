@@ -1,22 +1,36 @@
 /**
  * Rack ménage — « la journée » (spec Sojori Housekeeping, écran 1).
  *
- * L'écran que la gouvernante garde ouvert : une ligne par bien, l'axe horaire,
- * la fenêtre départ→arrivée en hachuré, le bloc de ménage posé dedans, le trait
- * rouge « maintenant ». Le retard est géométrique : le bloc dépasse la fenêtre.
+ * L'écran que la gouvernante garde ouvert : une ligne par chambre/villa, l'axe
+ * horaire, la fenêtre départ→arrivée en hachuré, le bloc de ménage posé dedans,
+ * le trait rouge « maintenant ». Le retard est géométrique : le bloc dépasse la
+ * fenêtre.
  *
- * Source de données : GET /plans/day-plan (srv-fulltask) via getDayPlan —
- * chains (fenêtres + durée ménage) et steps departure/arrival/cleaning.
+ * Sources de données :
+ *  1. GET /tasks/menage/rack (srv-fulltask, dédié hôtel Mews/NOMMOS) — un bien
+ *     précis choisi, ou « Tous les biens » = un appel par listing (6 en //).
+ *  2. REPLI : GET /plans/day-plan (orchestration) quand l'endpoint rack n'est
+ *     pas déployé (404) ou qu'aucun listing n'est connu — bandeau « données
+ *     limitées ».
  * Toute la logique de mapping vit dans rackLogic.ts (pure, testée node:test).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
-import { getDayPlan, type DayPlanResponse } from '../../services/fulltaskApi';
+import { listingsService } from '../../services/listingsService';
+import {
+  getDayPlan,
+  getMenageRack,
+  type DayPlanResponse,
+  type MenageRackRow,
+} from '../../services/fulltaskApi';
 import {
   buildRackModel,
+  buildRackModelFromEndpoint,
   hmLabel,
   hoursOf,
   pctOf,
+  primaryBlock,
+  type RackAxis,
   type RackRow,
 } from './rackLogic';
 import './menageRack.css';
@@ -47,26 +61,130 @@ function nowMinutes(): number {
 
 const POLL_MS = 60_000;
 const TICK_MS = 30_000;
+const RACK_FETCH_CONCURRENCY = 6;
+
+/** Exécution en parallèle bornée (max `limit` promesses à la fois). */
+async function pooled<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+function is404(err: unknown): boolean {
+  return (err as { response?: { status?: number } })?.response?.status === 404;
+}
+
+type ListingOption = { id: string; name: string };
+type RackSource = 'rack' | 'dayplan' | 'dayplan-fallback';
 
 /* ── Composant ─────────────────────────────────────────────────────────── */
 
 export function RackMenage() {
   const { scopeFetchReady, requestOwnerId } = useAdminOwnerApiScope();
   const [date, setDate] = useState<string>(() => toIsoDay(new Date()));
+  const [listings, setListings] = useState<ListingOption[] | null>(null);
+  const [listingFilter, setListingFilter] = useState<string>('all');
+  const [rackRows, setRackRows] = useState<MenageRackRow[] | null>(null);
   const [plan, setPlan] = useState<DayPlanResponse | null>(null);
+  const [source, setSource] = useState<RackSource>('dayplan');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [listingFilter, setListingFilter] = useState<string>('all');
   const [nowMin, setNowMin] = useState<number>(() => nowMinutes());
 
   const isToday = date === toIsoDay(new Date());
 
+  /* ── Listings du scope (sélecteur + cibles endpoint rack) ── */
+  useEffect(() => {
+    if (!scopeFetchReady) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await listingsService.getListings({
+          page: 0,
+          limit: 500,
+          compact: true,
+          useActiveFilter: true,
+          active: true,
+          filterOwnerId: requestOwnerId || undefined,
+        });
+        if (cancelled) return;
+        const items = (res?.data?.items || [])
+          .map((l: { id?: string; _id?: string; name?: string }) => ({
+            id: String(l.id || l._id || ''),
+            name: String(l.name || l.id || ''),
+          }))
+          .filter((l: ListingOption) => l.id);
+        setListings(items);
+        // Owner mono-listing (cas Ali/NOMMOS) : auto-sélection du bien.
+        if (items.length === 1) setListingFilter(items[0].id);
+      } catch {
+        if (!cancelled) setListings([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scopeFetchReady, requestOwnerId]);
+
+  /* ── Chargement des données ── */
   const load = useCallback(
     async (silent = false) => {
+      if (listings == null) return; // attend la liste des biens
       if (!silent) setLoading(true);
+
+      const targets: ListingOption[] =
+        listingFilter !== 'all'
+          ? [listings.find((l) => l.id === listingFilter) ?? { id: listingFilter, name: '' }]
+          : listings;
+
       try {
+        if (targets.length >= 1) {
+          // Endpoint rack dédié — un appel par listing, 6 en parallèle max.
+          const results = await pooled(targets, RACK_FETCH_CONCURRENCY, async (l) => {
+            try {
+              const res = await getMenageRack(l.id, date, requestOwnerId || undefined);
+              return { ok: true as const, listing: l, rows: res?.data?.rows ?? [] };
+            } catch (err) {
+              return { ok: false as const, listing: l, notFound: is404(err) };
+            }
+          });
+          const successes = results.filter((r) => r.ok);
+          if (successes.length > 0) {
+            const multi = targets.length > 1;
+            const merged: MenageRackRow[] = successes.flatMap((r) =>
+              r.rows.map((row) => ({
+                ...row,
+                id: `${r.listing.id}:${row.id}`,
+                roomName:
+                  multi && r.listing.name ? `${r.listing.name} — ${row.roomName}` : row.roomName,
+              })),
+            );
+            setRackRows(merged);
+            setSource('rack');
+            setError(null);
+            return;
+          }
+          if (results.every((r) => !r.ok && r.notFound)) {
+            // Endpoint pas encore déployé → repli day-plan, bandeau « données limitées ».
+            const res = await getDayPlan(date, requestOwnerId || undefined);
+            setPlan(res);
+            setSource('dayplan-fallback');
+            setError(null);
+            return;
+          }
+          throw new Error('rack fetch failed');
+        }
+        // Aucun listing connu : day-plan direct.
         const res = await getDayPlan(date, requestOwnerId || undefined);
         setPlan(res);
+        setSource('dayplan');
         setError(null);
       } catch {
         if (!silent) setError('Impossible de charger le plan de la journée.');
@@ -74,17 +192,17 @@ export function RackMenage() {
         if (!silent) setLoading(false);
       }
     },
-    [date, requestOwnerId],
+    [listings, listingFilter, date, requestOwnerId],
   );
 
   // Chargement + rafraîchissement « en direct » (aujourd'hui seulement).
   useEffect(() => {
-    if (!scopeFetchReady) return;
+    if (!scopeFetchReady || listings == null) return;
     void load();
     if (!isToday) return;
     const id = window.setInterval(() => void load(true), POLL_MS);
     return () => window.clearInterval(id);
-  }, [scopeFetchReady, load, isToday]);
+  }, [scopeFetchReady, listings, load, isToday]);
 
   // Trait « maintenant » : tick 30 s.
   useEffect(() => {
@@ -93,23 +211,28 @@ export function RackMenage() {
     return () => window.clearInterval(id);
   }, [isToday]);
 
-  const model = useMemo(
-    () => buildRackModel(plan ?? { steps: [], chains: [] }, isToday ? nowMin : null),
-    [plan, isToday, nowMin],
-  );
+  const model = useMemo(() => {
+    const now = isToday ? nowMin : null;
+    if (source === 'rack' && rackRows) return buildRackModelFromEndpoint(rackRows, now);
+    return buildRackModel(plan ?? { steps: [], chains: [] }, now);
+  }, [source, rackRows, plan, isToday, nowMin]);
 
-  const listingOptions = useMemo(() => {
+  const listingOptions = useMemo<ListingOption[]>(() => {
+    if (listings?.length) return [...listings].sort((a, b) => a.name.localeCompare(b.name));
+    // Repli : biens présents dans le day-plan.
     const seen = new Map<string, string>();
     for (const row of model.rows) {
       if (!seen.has(row.listingId)) seen.set(row.listingId, row.listingName);
     }
-    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [model.rows]);
+    return [...seen.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [listings, model.rows]);
 
-  const rows = useMemo(
-    () => (listingFilter === 'all' ? model.rows : model.rows.filter((r) => r.listingId === listingFilter)),
-    [model.rows, listingFilter],
-  );
+  const rows = useMemo(() => {
+    if (listingFilter === 'all' || source === 'rack') return model.rows;
+    return model.rows.filter((r) => r.listingId === listingFilter);
+  }, [model.rows, listingFilter, source]);
 
   const { axis, counters } = model;
   const ticks = hoursOf(axis);
@@ -150,9 +273,9 @@ export function RackMenage() {
               aria-label="Filtrer par bien"
             >
               <option value="all">Tous les biens</option>
-              {listingOptions.map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
+              {listingOptions.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
                 </option>
               ))}
             </select>
@@ -161,6 +284,12 @@ export function RackMenage() {
 
         <div className="rkm-bd">
           {error && <div className="rkm-err">{error}</div>}
+          {source === 'dayplan-fallback' && (
+            <div className="rkm-warn">
+              Données limitées — le service rack ménage n'est pas encore disponible, affichage
+              depuis le plan d'orchestration.
+            </div>
+          )}
 
           <div className="rkm-strip">
             <span className="rkm-st">
@@ -207,7 +336,7 @@ export function RackMenage() {
               </span>
             </div>
 
-            {loading && !plan ? (
+            {loading && rows.length === 0 ? (
               <div className="rkm-empty">Chargement du rack…</div>
             ) : rows.length === 0 ? (
               <div className="rkm-empty">Aucun mouvement ni ménage ce jour-là.</div>
@@ -260,14 +389,10 @@ export function RackMenage() {
 
 /* ── Une ligne du rack ─────────────────────────────────────────────────── */
 
-function RackRowView({ row, axis }: { row: RackRow; axis: { startMin: number; endMin: number } }) {
-  const b = row.block;
-  const blkLeft = b ? pctOf(b.startMin, axis) : 0;
-  const blkWidth = b ? Math.max(1.2, pctOf(b.endMin, axis) - blkLeft) : 0;
-  const blkClass = b ? (b.unassigned && b.status !== 'doing' ? 'none' : b.status) : '';
-  const icon =
-    b == null ? '' : b.status === 'done' ? '✓' : b.status === 'doing' ? '●' : b.status === 'late' ? '⚠' : b.unassigned ? '＋' : '○';
-  const who = b ? (b.staffName ?? 'à assigner') : '';
+function RackRowView({ row, axis }: { row: RackRow; axis: RackAxis }) {
+  const primary = primaryBlock(row);
+  const winLeft = row.window ? (row.window.openStart ? 0 : pctOf(row.window.startMin, axis)) : 0;
+  const winRight = row.window ? (row.window.openEnd ? 100 : pctOf(row.window.endMin, axis)) : 0;
 
   return (
     <div className={`rkm-row${row.critical ? ' crit' : ''}`}>
@@ -275,7 +400,7 @@ function RackRowView({ row, axis }: { row: RackRow; axis: { startMin: number; en
         <span className="v">
           {row.listingName}
           {row.critical && (
-            <span className="rkm-pill err">{b?.unassigned ? 'personne' : 'serré'}</span>
+            <span className="rkm-pill err">{primary?.unassigned ? 'personne' : 'serré'}</span>
           )}
         </span>
         <span className="w">{row.subtitle}</span>
@@ -283,11 +408,8 @@ function RackRowView({ row, axis }: { row: RackRow; axis: { startMin: number; en
       <span className="rkm-tl">
         {row.window && (
           <span
-            className={`win${row.window.tight ? ' tight' : ''}`}
-            style={{
-              left: `${pctOf(row.window.startMin, axis)}%`,
-              width: `${pctOf(row.window.endMin, axis) - pctOf(row.window.startMin, axis)}%`,
-            }}
+            className={`win${row.window.tight ? ' tight' : ''}${row.window.openEnd ? ' open-end' : ''}${row.window.openStart ? ' open-start' : ''}`}
+            style={{ left: `${winLeft}%`, width: `${winRight - winLeft}%` }}
           />
         )}
         {row.departure && (
@@ -300,19 +422,31 @@ function RackRowView({ row, axis }: { row: RackRow; axis: { startMin: number; en
             <b>{row.arrival.estimated ? '≈ arrivée' : 'arrivée'}</b>
           </span>
         )}
-        {b && (
-          <span
-            className={`rkm-blk ${blkClass}`}
-            style={{ left: `${blkLeft}%`, width: `${blkWidth}%` }}
-            title={`${who} · ${b.taskLabel} · ${b.statusLabel} (${hmLabel(b.startMin)} → ${hmLabel(b.endMin)})`}
-          >
-            {icon}
-            <span className="lbl">
-              <b>{who}</b> · {b.taskLabel.toLowerCase()}
-              {b.status !== 'plan' ? ` · ${b.statusLabel}` : ''}
+        {row.blocks.map((b, i) => {
+          const left = pctOf(b.startMin, axis);
+          const width = Math.max(1.2, pctOf(b.endMin, axis) - left);
+          const cls = b.unassigned && b.status !== 'doing' ? 'none' : b.status;
+          const icon =
+            b.status === 'done' ? '✓' : b.status === 'doing' ? '●' : b.status === 'late' ? '⚠' : b.unassigned ? '＋' : '○';
+          const who = b.staffName ?? 'à assigner';
+          const showLbl = i === row.blocks.length - 1;
+          return (
+            <span
+              key={`${b.taskLabel}:${b.startMin}:${i}`}
+              className={`rkm-blk ${cls}`}
+              style={{ left: `${left}%`, width: `${width}%` }}
+              title={`${who} · ${b.taskLabel} · ${b.statusLabel} (${hmLabel(b.startMin)} → ${hmLabel(b.endMin)})`}
+            >
+              {icon}
+              {showLbl && (
+                <span className="lbl">
+                  <b>{who}</b> · {b.taskLabel.toLowerCase()}
+                  {b.status !== 'plan' ? ` · ${b.statusLabel}` : ''}
+                </span>
+              )}
             </span>
-          </span>
-        )}
+          );
+        })}
       </span>
     </div>
   );
