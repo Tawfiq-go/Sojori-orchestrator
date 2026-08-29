@@ -14,6 +14,8 @@ import {
 
 type Props = {
   listingId: string;
+  /** État déjà chargé par le parent (évite un double fetch) — sinon le panneau charge seul. */
+  view?: BaremeViewState | null;
 };
 
 const sectionSx = {
@@ -23,12 +25,14 @@ const sectionSx = {
   overflow: 'hidden',
 };
 
-/** Barème ménage — configuré vs réel 30 j (lecture seule). */
-export default function V3MenageBaremePanel({ listingId }: Props) {
+/** Charge le barème ménage et résout l'état d'affichage (null = chargement). */
+export function useMenageBareme(listingId: string | null): BaremeViewState | null {
   const [view, setView] = useState<BaremeViewState | null>(null);
 
   useEffect(() => {
+    if (!listingId) return;
     let cancelled = false;
+    setView(null);
     (async () => {
       try {
         const body = await getMenageBareme(listingId);
@@ -43,6 +47,14 @@ export default function V3MenageBaremePanel({ listingId }: Props) {
       cancelled = true;
     };
   }, [listingId]);
+
+  return view;
+}
+
+/** Barème ménage — configuré vs réel 30 j (lecture seule). */
+export default function V3MenageBaremePanel({ listingId, view: viewProp }: Props) {
+  const ownView = useMenageBareme(viewProp === undefined ? listingId : null);
+  const view = viewProp === undefined ? ownView : viewProp;
 
   const windowDays = view && 'windowDays' in view ? view.windowDays : 30;
 

@@ -4,8 +4,15 @@ import listingsService from '../../../../services/listingsService';
 import V3HousekeepingPolicyPanel, {
   type HousekeepingPolicyConfig,
 } from '../../../../features/orchestrationListingV3/V3HousekeepingPolicyPanel';
-import MenageOpsPanel from '../../../../features/listing/components/ConfigOrchestration/MenageOpsPanel';
-import V3MenageBaremePanel from '../../../../features/orchestrationListingV3/V3MenageBaremePanel';
+import V3MenageBaremePanel, {
+  useMenageBareme,
+} from '../../../../features/orchestrationListingV3/V3MenageBaremePanel';
+import V3MenageTypeCards from '../../../../features/orchestrationListingV3/V3MenageTypeCards';
+import { describeHousekeepingPolicy } from '../../../../features/orchestrationListingV3/housekeepingPolicy';
+import {
+  baremeGlobalDeltaPct,
+  baremeTotalCount,
+} from '../../../../features/orchestrationListingV3/menageBareme';
 import { V3 } from '../../../../features/orchestrationListingV3/theme';
 
 type Props = {
@@ -21,12 +28,14 @@ const sectionSx = {
 
 /**
  * Onglet listing « Ménage » — page ménage listing.
- * Panneaux : Politique (qui crée/assigne/notifie), Types & durées (menageOps).
+ * Desktop (≥1100px) : rail gauche 340px (Politique + En un coup d'œil),
+ * colonne droite large (Types de ménage + Barème). En dessous : empilement.
  */
 export default function ListingMenageTab({ listingId }: Props) {
   const [loading, setLoading] = useState(true);
   const [policy, setPolicy] = useState<HousekeepingPolicyConfig | null>(null);
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
+  const baremeView = useMenageBareme(listingId ? String(listingId) : null);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,44 +99,109 @@ export default function ListingMenageTab({ listingId }: Props) {
     );
   }
 
+  const policyLine = describeHousekeepingPolicy(policy).join(' · ');
+  const totalCount = baremeView?.kind === 'rows' ? baremeTotalCount(baremeView.rows) : null;
+  const globalDelta = baremeView?.kind === 'rows' ? baremeGlobalDeltaPct(baremeView.rows) : null;
+  const windowDays = baremeView && 'windowDays' in baremeView ? baremeView.windowDays : 30;
+
   return (
     <Box sx={{ p: { xs: 1.5, md: 2 }, width: '100%' }}>
       <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: 'text.secondary', mb: 0.5 }}>
         LISTING
       </Typography>
-      <Typography sx={{ fontSize: 22, fontWeight: 750, mb: 0.75, lineHeight: 1.2 }}>
+      <Typography sx={{ fontSize: 22, fontWeight: 750, mb: 1.25, lineHeight: 1.2 }}>
         Ménage
       </Typography>
-      <Stack sx={{ gap: 2, maxWidth: 680 }}>
-        <V3HousekeepingPolicyPanel
-          listingId={String(listingId)}
-          policy={policy}
-          onSaved={next => setPolicy(next)}
-        />
 
-        <Box sx={sectionSx}>
-          <Box sx={{ px: 2, py: 1.25, borderBottom: `1px solid ${V3.b}`, bgcolor: V3.alt }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t }}>
-              Types &amp; durées
-            </Typography>
-            <Typography sx={{ fontSize: 11, color: V3.t3 }}>
-              Durée / prix par niveau (Normal / Grand) sur chaque piste, compléments et flexibilité
-            </Typography>
-          </Box>
-          <Box sx={{ px: 2, py: 1.5 }}>
-            <MenageOpsPanel
-              listingId={String(listingId)}
-              listingValues={listingValues}
-              focusTrack="all"
-              onListingPatch={patch =>
-                setListingValues(prev => ({ ...prev, ...patch }))
-              }
-            />
-          </Box>
-        </Box>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gap: 2.5,
+          alignItems: 'start',
+          width: '100%',
+          maxWidth: 1440,
+          '@media (min-width:1100px)': {
+            gridTemplateColumns: '340px minmax(0, 1fr)',
+          },
+        }}
+      >
+        {/* Rail gauche */}
+        <Stack sx={{ gap: 2, minWidth: 0 }}>
+          <V3HousekeepingPolicyPanel
+            listingId={String(listingId)}
+            policy={policy}
+            onSaved={next => setPolicy(next)}
+          />
 
-        <V3MenageBaremePanel listingId={String(listingId)} />
-      </Stack>
+          <Box sx={sectionSx}>
+            <Box sx={{ px: 2, py: 1.25, borderBottom: `1px solid ${V3.b}`, bgcolor: V3.alt }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t }}>
+                En un coup d’œil
+              </Typography>
+            </Box>
+            <Stack sx={{ px: 2, py: 1.5, gap: 1 }}>
+              <Typography sx={{ fontSize: 12, color: V3.t2, lineHeight: 1.6 }}>
+                {policyLine}
+              </Typography>
+              {totalCount != null && (
+                <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
+                  <GlanceStat label={`ménages ${windowDays} j`} value={String(totalCount)} />
+                  {globalDelta != null && (
+                    <GlanceStat
+                      label="écart global"
+                      value={`${globalDelta > 0 ? '+' : ''}${globalDelta} %`}
+                      tone={Math.abs(globalDelta) <= 15 ? 'ok' : 'warn'}
+                    />
+                  )}
+                </Stack>
+              )}
+            </Stack>
+          </Box>
+        </Stack>
+
+        {/* Colonne principale */}
+        <Stack sx={{ gap: 2.5, minWidth: 0 }}>
+          <V3MenageTypeCards
+            listingId={String(listingId)}
+            listingValues={listingValues}
+            baremeView={baremeView}
+            onListingPatch={patch => setListingValues(prev => ({ ...prev, ...patch }))}
+          />
+          <V3MenageBaremePanel listingId={String(listingId)} view={baremeView} />
+        </Stack>
+      </Box>
+    </Box>
+  );
+}
+
+function GlanceStat({
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  label: string;
+  value: string;
+  tone?: 'neutral' | 'ok' | 'warn';
+}) {
+  const color = tone === 'ok' ? V3.task : tone === 'warn' ? V3.pd : V3.t;
+  return (
+    <Box
+      sx={{
+        px: 1.25,
+        py: 0.75,
+        borderRadius: '10px',
+        border: `1px solid ${V3.b}`,
+        bgcolor: V3.alt,
+        minWidth: 96,
+      }}
+    >
+      <Typography sx={{ fontSize: 15, fontWeight: 800, color, fontFamily: 'monospace', lineHeight: 1.2 }}>
+        {value}
+      </Typography>
+      <Typography sx={{ fontSize: 10, color: V3.t4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {label}
+      </Typography>
     </Box>
   );
 }

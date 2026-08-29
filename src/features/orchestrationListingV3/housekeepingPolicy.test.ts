@@ -1,6 +1,36 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { normalizeHousekeepingPolicy } from './housekeepingPolicy';
+import { describeHousekeepingPolicy, normalizeHousekeepingPolicy } from './housekeepingPolicy';
+
+describe('describeHousekeepingPolicy', () => {
+  it('non configurée → défauts système marqués', () => {
+    assert.deepEqual(describeHousekeepingPolicy(null), [
+      'Création manuelle (défaut hôtel)',
+      'Assignation superviseur (défaut)',
+      'Digest 17:00 (défaut)',
+    ]);
+  });
+
+  it('configurée en toutes lettres', () => {
+    assert.deepEqual(
+      describeHousekeepingPolicy({
+        creation: 'auto',
+        assignment: 'supervisor',
+        notification: 'digest',
+        digestTime: '08:30',
+      }),
+      ['Création automatique', 'Assignation superviseur', 'Digest 08:30'],
+    );
+  });
+
+  it('partielle : configuré + défauts mélangés', () => {
+    assert.deepEqual(describeHousekeepingPolicy({ notification: 'immediate' }), [
+      'Création manuelle (défaut hôtel)',
+      'Assignation superviseur (défaut)',
+      'Notification immédiate',
+    ]);
+  });
+});
 
 describe('normalizeHousekeepingPolicy', () => {
   it('policy nominale conservée', () => {

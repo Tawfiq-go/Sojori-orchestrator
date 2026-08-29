@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   baremeDeltaPct,
+  baremeGlobalDeltaPct,
+  baremeTotalCount,
   baremeScaleMax,
   baremeVerdict,
   parseBaremeResponse,
@@ -158,5 +160,30 @@ describe('resolveBaremeView (3 chemins réseau)', () => {
 
   it('corps illisible → error', () => {
     assert.deepEqual(resolveBaremeView({ ok: true, body: { nope: true } }), { kind: 'error' });
+  });
+});
+describe('baremeTotalCount / baremeGlobalDeltaPct', () => {
+  it('total = somme des counts', () => {
+    assert.equal(baremeTotalCount([row(), row({ count: 5 })]), 30);
+    assert.equal(baremeTotalCount([]), 0);
+  });
+
+  it('ecart global pondere par count', () => {
+    // poids egaux : +27 % et -27 % -> 0 %
+    assert.equal(
+      baremeGlobalDeltaPct([row({ avgRealMin: 18 }), row({ avgRealMin: 12 })]),
+      0,
+    );
+    // pondere par count : 30 x +20 % et 10 x -20 % -> +10 %
+    assert.equal(
+      baremeGlobalDeltaPct([row({ avgRealMin: 18, count: 30 }), row({ avgRealMin: 12, count: 10 })]),
+      10,
+    );
+  });
+
+  it('null si aucune ligne comparable', () => {
+    assert.equal(baremeGlobalDeltaPct([]), null);
+    assert.equal(baremeGlobalDeltaPct([row({ configuredMin: null })]), null);
+    assert.equal(baremeGlobalDeltaPct([row({ avgRealMin: null }), row({ count: 0 })]), null);
   });
 });
