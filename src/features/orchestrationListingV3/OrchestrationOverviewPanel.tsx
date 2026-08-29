@@ -66,12 +66,11 @@ import {
   saveOwnerScheduledMessages,
 } from './ownerScheduledMessagesApi';
 import type { CatalogMessage, ScheduledOrchestrationMessage } from '../taskHub/staff-design/types';
-import V3CleaningIncludedPanel from './V3CleaningIncludedPanel';
 import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
 import V3InformSyndicPanel from './V3InformSyndicPanel';
 import CleaningChecklistPanel from '../listing/components/ConfigOrchestration/CleaningChecklistPanel';
 import CleaningDeclarePanel from '../listing/components/ConfigOrchestration/CleaningDeclarePanel';
-import MenageOpsPanel from '../listing/components/ConfigOrchestration/MenageOpsPanel';
+import MenageContentRedirectCard from '../serviceMatrix/MenageContentRedirectCard';
 import OrchestrationGlobalSwitch from './OrchestrationGlobalSwitch';
 import CapabilityAuditStrip from './CapabilityAuditStrip';
 import { V3Section } from './V3Primitives';
@@ -3563,59 +3562,16 @@ export default function OrchestrationOverviewPanel({
             </DialogTitle>
             <DialogContent dividers sx={{ pt: 1.5 }}>
               <Box key={`gestion-${configDef.key}-${listingId ?? ownerKey}`}>
-                  {configDef.key === 'cleaning_free' ? (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <MenageOpsPanel
-                        listingId={listingId || ''}
-                        listingValues={listingValues}
-                        gestion={configGestionValues}
-                        focusTrack="included"templateMode={!isListingScope}
-                        onListingPatch={async (patch) => {
-                          await onGestionPatch(configDef.key, {
-                            ...configGestionValues,
-                            ...patch,
-                          });
-                        }}
-                      />
-                      <V3CleaningIncludedPanel
-                        gestion={configGestionValues}
-                        listingValues={listingValues}
-                        hideExtras
-                        onSave={async (nextGestion) => {
-                          await onGestionPatch(configDef.key, {
-                            ...configGestionValues,
-                            ...nextGestion,
-                          });
-                        }}
-                      />
-                    </Box>
-                  ) : configDef.key === 'cleaning_paid' ? (
-                    <MenageOpsPanel
-                      listingId={listingId || ''}
-                      listingValues={listingValues}
-                      gestion={configGestionValues}
-                      focusTrack="paid"templateMode={!isListingScope}
-                      onListingPatch={async (patch) => {
-                        await onGestionPatch(configDef.key, {
-                          ...configGestionValues,
-                          ...patch,
-                        });
-                      }}
+                  {configDef.key === 'cleaning_free' || configDef.key === 'cleaning_paid' ? (
+                    /* Contenu ménage (durées, prix, niveaux, linge) → onglet Ménage du listing. */
+                    <MenageContentRedirectCard
+                      listingId={isListingScope ? listingId || undefined : undefined}
+                      templateMode={!isListingScope}
                     />
                   ) : configDef.key === 'cleaning_sojori' ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <MenageOpsPanel
-                        listingId={listingId || ''}
-                        listingValues={listingValues}
-                        gestion={configGestionValues}
-                        focusTrack="checkout"templateMode={!isListingScope}
-                        onListingPatch={async (patch) => {
-                          await onGestionPatch(configDef.key, {
-                            ...configGestionValues,
-                            ...patch,
-                          });
-                        }}
-                      />
+                      {/* Contenu → onglet Ménage du listing ; l'activation du déclenchement
+                          checkout reste ici (CleaningSojoriConfigTab via CapabilityGestionPanel). */}
                       <CapabilityGestionPanel
                         def={configDef}
                         scope={isListingScope ? 'listing' : 'owner'}

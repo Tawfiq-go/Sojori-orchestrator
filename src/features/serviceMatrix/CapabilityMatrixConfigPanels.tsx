@@ -20,9 +20,8 @@ import {
 } from '../orchestrationListingV3/ownerOrchestrationApi';
 import AccessConfigTab from '../listing/components/ConfigOrchestration/AccessConfigTab';
 import ArrivalDepartureConfigTab from '../listing/components/ConfigOrchestration/ArrivalDepartureConfigTab';
-import CleaningConfigTab from '../listing/components/ConfigOrchestration/CleaningConfigTab';
+import MenageContentRedirectCard from './MenageContentRedirectCard';
 import CleaningSojoriConfigTab from '../listing/components/ConfigOrchestration/CleaningSojoriConfigTab';
-import MenageOpsPanel from '../listing/components/ConfigOrchestration/MenageOpsPanel';
 import GroceryConfigTab from '../listing/components/ConfigOrchestration/GroceryConfigTab';
 import PropertyWifiConfigTab from '../listing/components/ConfigOrchestration/PropertyWifiConfigTab';
 import RulesConfigTab from '../listing/components/ConfigOrchestration/RulesConfigTab';
@@ -88,36 +87,20 @@ export function CapabilityGestionPanel({
     return null;
   }
 
-  if (key === 'cleaning_free') {
+  if (key === 'cleaning_free' || key === 'cleaning_paid') {
+    // Contenu ménage (durées, prix, niveaux, linge) → onglet Ménage du listing.
     return (
       <Box sx={embeddedSx}>
-        <MenageOpsPanel
-          {...commonListing}
-          gestion={listingValues}
-          focusTrack="included"/>
-        <Box sx={{ mt: 2 }}>
-          <CleaningConfigTab {...commonListing} forcedSub="included" hideSubNav />
-        </Box>
-      </Box>
-    );
-  }
-  if (key === 'cleaning_paid') {
-    return (
-      <Box sx={embeddedSx}>
-        <MenageOpsPanel
-          {...commonListing}
-          gestion={listingValues}
-          focusTrack="paid"/>
+        <MenageContentRedirectCard listingId={lid || undefined} templateMode={templateMode} />
       </Box>
     );
   }
   if (key === 'cleaning_sojori') {
+    // Contenu → onglet Ménage du listing ; ici on garde l'ACTIVATION
+    // (déclenchement auto checkout + filet DIRTY) via CleaningSojoriConfigTab.
     return (
       <Box sx={embeddedSx}>
-        <MenageOpsPanel
-          {...commonListing}
-          gestion={listingValues}
-          focusTrack="checkout"/>
+        <MenageContentRedirectCard listingId={lid || undefined} templateMode={templateMode} />
         <Box sx={{ mt: 2 }}>
           <CleaningSojoriConfigTab {...commonListing} showChecklist={false} />
         </Box>
