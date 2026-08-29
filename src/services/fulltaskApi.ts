@@ -1293,6 +1293,8 @@ export type MenageRepartitionResponse = {
         status: 'todo' | 'doing' | 'done';
         hm: string | null;
         durationMin: number;
+        /** « listing:room » — actionnable (assign/réassign/annulation). */
+        villaId?: string;
       }>;
     }>;
     unassigned: Array<{ id: string; roomName: string; label: string; durationMin: number }>;
@@ -1315,6 +1317,31 @@ export async function getMenageRepartition(
     params: { listingId, ...(date ? { date } : {}), ...(ownerId ? { ownerId } : {}) },
   });
   return data as MenageRepartitionResponse;
+}
+
+/**
+ * Action de répartition (tap-tap) — brique savePlan de SM : idempotence,
+ * tâche née à l'assignation, annulation motivée, notifications policy.
+ * 422 = refus métier : la réponse est RETOURNÉE (pas levée), son
+ * data.message se toaste tel quel.
+ */
+export async function postMenageRepartitionAction(body: {
+  listingId: string;
+  ownerId?: string | null;
+  date: string;
+  villaId: string;
+  fdmId: string; // id FdM, ou 'unassign'
+  type?: string;
+  hour?: string;
+  reason?: string;
+}): Promise<{ success: boolean; data?: { message?: string }; error?: string }> {
+  const { ownerId, ...rest } = body;
+  const { data } = await apiClient.post(
+    `${BASE}/tasks/menage/repartition/action`,
+    { ...rest, ...(ownerId ? { ownerId } : {}) },
+    { validateStatus: (s: number) => (s >= 200 && s < 300) || s === 422 },
+  );
+  return data as { success: boolean; data?: { message?: string }; error?: string };
 }
 
 /* ── Semaine ménage — GET /tasks/menage/semaine ──────────────────────────── */
