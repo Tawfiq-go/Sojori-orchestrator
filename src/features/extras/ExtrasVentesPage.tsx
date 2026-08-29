@@ -18,6 +18,7 @@ import {
   Typography,
 } from '@mui/material';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
+import GlobalPaginationCompact from '../../components/GlobalPaginationCompact/GlobalPaginationCompact';
 import {
   fetchBillLines,
   fetchRevenueBills,
@@ -284,6 +285,8 @@ export function ExtrasVentesPage() {
   const [search, setSearch] = useState('');
   /** Vue facture par défaut : une note porte en moyenne 5,8 articles. */
   const [view, setView] = useState<'bills' | 'lines'>('bills');
+  const [page, setPage] = useState(0);
+  const [perPage, setPerPage] = useState(100);
   const [summary, setSummary] = useState<RevenueSummary | null>(null);
   const [bills, setBills] = useState<RevenueBillsPage | null>(null);
   const [lines, setLines] = useState<RevenueLinesPage | null>(null);
@@ -295,6 +298,12 @@ export function ExtrasVentesPage() {
   const [billLoading, setBillLoading] = useState(false);
 
   const period = PERIODS.find((p) => p.id === periodId) ?? PERIODS[2];
+
+  // Un changement de filtre remet en première page : rester en page 5 d'un
+  // résultat qui n'en a plus que 2 afficherait un tableau vide.
+  useEffect(() => {
+    setPage(0);
+  }, [periodId, department, search, view]);
   const range = useMemo(() => {
     const { from, to } = period.range();
     return { from: ymd(from), to: ymd(to) };
@@ -308,10 +317,10 @@ export function ExtrasVentesPage() {
     Promise.all([
       fetchRevenueSummary(range),
       view === 'bills'
-        ? fetchRevenueBills({ ...common, limit: 200 })
+        ? fetchRevenueBills({ ...common, page, limit: perPage })
         : Promise.resolve(null),
       view === 'lines'
-        ? fetchRevenueLines({ ...common, limit: 200 })
+        ? fetchRevenueLines({ ...common, page, limit: perPage })
         : Promise.resolve(null),
     ])
       .then(([s, b, l]) => {
@@ -326,7 +335,7 @@ export function ExtrasVentesPage() {
     return () => {
       cancelled = true;
     };
-  }, [range, department, search, view]);
+  }, [range, department, search, view, page, perPage]);
 
   /** Charge les articles à l'ouverture d'une note. */
   useEffect(() => {
@@ -368,10 +377,7 @@ export function ExtrasVentesPage() {
   return (
     <DashboardWrapper breadcrumb={['Extra', 'Ventes']}>
       <Stack direction="row" sx={{ alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6, flex: 1 }}>
-          Tout ce qui est vendu en dehors de l’hébergement. Le mini-bar y figure comme les
-          autres — son suivi de stock est dans l’onglet Stock.
-        </Typography>
+        <Box sx={{ flex: 1 }} />
         <ToggleButtonGroup
           size="small"
           exclusive
@@ -442,6 +448,21 @@ export function ExtrasVentesPage() {
           <LinesTable rows={lines?.data ?? []} />
         )}
       </Paper>
+
+      <Box sx={{ mt: 1.5 }}>
+        <GlobalPaginationCompact
+          currentPage={page + 1}
+          totalItems={count}
+          itemsPerPage={perPage}
+          onPageChange={(p: number) => setPage(Math.max(0, p - 1))}
+          onItemsPerPageChange={(n: number) => {
+            setPerPage(n);
+            setPage(0);
+          }}
+          loading={loading}
+          itemType={view === 'bills' ? 'factures' : 'articles'}
+        />
+      </Box>
 
       <Drawer anchor="right" open={!!openBill} onClose={() => setOpenBill(null)}>
         {openBill ? (
