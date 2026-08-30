@@ -27,6 +27,7 @@ const ORCH_FLAGS = [
   { key: 'orchestration_minibar_check', label: 'Contrôle mini-bar' },
   { key: 'orchestration_transport', label: 'Transport' },
   { key: 'orchestration_grocery', label: 'Courses' },
+  { key: 'orchestration_room_service', label: 'Room Service' },
   { key: 'orchestration_custom', label: 'Conciergerie / custom' },
   { key: 'orchestration_support', label: 'Support' },
   { key: 'orchestration_service_client', label: 'Service client' },

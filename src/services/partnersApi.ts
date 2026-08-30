@@ -27,6 +27,23 @@ export type Partner = {
  *  city : grille de prix PAR VILLE (navette) — vide = valable partout. */
 export type PartnerServiceFormule = { label: string; priceMad: number | null; city?: string };
 
+export type PartnerServiceOptionChoice = {
+  id: string;
+  label: string;
+  priceDeltaMad?: number;
+};
+
+export type PartnerServiceOptionGroup = {
+  id: string;
+  label: string;
+  required: boolean;
+  min?: number;
+  max?: number;
+  choices: PartnerServiceOptionChoice[];
+};
+
+export type PartnerServiceKind = 'experience' | 'transport' | 'room_service';
+
 export type PartnerServiceSlot = { time: string; label?: string };
 
 export type PartnerServiceSchedule = {
@@ -131,8 +148,8 @@ export type PartnerService = {
   providerKind?: 'owner' | 'partner' | null;
   category: string;
   subCategory?: string;
-  /** 'transport' = navette : les formules sont des DESTINATIONS depuis le logement. */
-  kind?: 'experience' | 'transport';
+  /** experience | transport (navette) | room_service (plat + optionGroups). */
+  kind?: PartnerServiceKind;
   /** Sens proposés (navette) — les deux par défaut, même prix dans les deux sens. */
   transportDirections?: { toDestination: boolean; fromDestination: boolean };
   title: string;
@@ -143,6 +160,8 @@ export type PartnerService = {
   cityIds?: 'all' | string[];
   photos: string[];
   formules: PartnerServiceFormule[];
+  /** Room Service : groupes d’options (café, lait…). */
+  optionGroups?: PartnerServiceOptionGroup[];
   schedule?: PartnerServiceSchedule;
   payment?: PartnerServicePayment;
   contact?: PartnerServiceContact;
