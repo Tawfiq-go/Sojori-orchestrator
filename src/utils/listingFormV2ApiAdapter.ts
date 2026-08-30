@@ -999,6 +999,7 @@ export function mergeFormV2ToUpdatePropertyPayload(
     'orchestration_minibar_check',
     'orchestration_transport',
     'orchestration_grocery',
+    'orchestration_room_service',
     'orchestration_custom',
     'orchestration_support',
     'orchestration_service_client',
