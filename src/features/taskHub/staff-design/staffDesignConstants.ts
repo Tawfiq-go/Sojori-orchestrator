@@ -41,6 +41,7 @@ const STAFF_PILL_LABEL_OVERRIDES: Partial<Record<FulltaskTaskTypeId, string>> = 
   welcome_package: 'Pack bienvenue',
   minibar_check: 'Contrôle mini-bar',
   reception: 'Réception',
+  room_service: 'Room service',
 };
 
 export const STAFF_TASK_PILLS = STAFF_ASSIGNABLE_TASK_TYPES.map((key) => ({
@@ -64,7 +65,8 @@ export type StaffRolePresetId =
   | 'sup_stay'
   | 'sup_housekeeping'
   | 'sup_checkout'
-  | 'inspector';
+  | 'inspector'
+  | 'room_service';
 
 export type StaffRolePreset = {
   id: StaffRolePresetId;
@@ -116,6 +118,14 @@ export const STAFF_ROLE_PRESETS: StaffRolePreset[] = [
     taskTypes: MENAGE_KEYS,
     opsRole: 'agent',
     canInspect: true,
+  },
+  {
+    id: 'room_service',
+    label: 'Room Service',
+    hint: 'Petit déjeuner / room service (lettre R).',
+    taskTypes: ['room_service'],
+    opsRole: 'agent',
+    canInspect: false,
   },
 ];
 

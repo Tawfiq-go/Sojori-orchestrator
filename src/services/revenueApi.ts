@@ -73,6 +73,9 @@ export type RevenueSummary = {
     { label: string; gross: number; net: number; tax: number; lines: number }
   >;
   order: string[];
+  /** Taxes de séjour — hors chiffre d'affaires, reversées à l'État. */
+  cityTaxTotal: number;
+  cityTaxes: Array<{ name: string; gross: number; lines: number }>;
 };
 
 /** Ventilation USALI sur une période. */
@@ -223,5 +226,100 @@ export async function fetchBillLines(params: {
     return res?.data?.success ? ((res.data.data ?? []) as RevenueLineRow[]) : [];
   } catch {
     return [];
+  }
+}
+
+export type CustomerReportRow = {
+  customerId: string;
+  gross: number;
+  items: number;
+  bills: number;
+  firstAt: string | null;
+  lastAt: string | null;
+  byDepartment: { fnb: number; other_operated: number; misc: number };
+};
+
+export type CustomersReport = {
+  success: boolean;
+  customers: number;
+  totalGross: number;
+  averageGross: number;
+  data: CustomerReportRow[];
+};
+
+/** Classement des clients par consommation d'extras. */
+export async function fetchCustomersReport(params: {
+  from: string;
+  to: string;
+  limit?: number;
+}): Promise<CustomersReport | null> {
+  try {
+    const search = new URLSearchParams({ from: params.from, to: params.to });
+    if (params.limit) search.set('limit', String(params.limit));
+    const res = await apiClient.get(`${REVENUE_BASE}/reports/customers?${search.toString()}`, {
+      timeout: 20000,
+    });
+    return res?.data?.success ? (res.data as CustomersReport) : null;
+  } catch {
+    return null;
+  }
+}
+
+export type NationalityReport = {
+  success: boolean;
+  countries: Array<{ code: string; customers: number; gross: number }>;
+  customers: number;
+  totalGross: number;
+  /** Clients dont la nationalité n'est pas exploitable — à afficher. */
+  unknownCustomers: number;
+  /** Ce qu'ils pèsent : une saisie manquante, pas un montant perdu. */
+  unknownGross: number;
+};
+
+/** Répartition géographique des clients ayant consommé sur la période. */
+export async function fetchNationalityReport(params: {
+  from: string;
+  to: string;
+}): Promise<NationalityReport | null> {
+  try {
+    const search = new URLSearchParams({ from: params.from, to: params.to });
+    const res = await apiClient.get(
+      `${REVENUE_BASE}/reports/nationalities?${search.toString()}`,
+      { timeout: 20000 },
+    );
+    return res?.data?.success ? (res.data as NationalityReport) : null;
+  } catch {
+    return null;
+  }
+}
+
+export type CustomerDetail = {
+  success: boolean;
+  customerId: string;
+  gross: number;
+  items: number;
+  bills: number;
+  reservations: number;
+  firstAt: string | null;
+  lastAt: string | null;
+  favourites: Array<{ name: string; times: number; gross: number }>;
+  byDepartment: Array<{ department: string; label: string; gross: number; items: number }>;
+  timeline: Array<{ day: string; gross: number; items: number }>;
+};
+
+/** Fiche d'un client — produits favoris, répartition, chronologie. */
+export async function fetchCustomerDetail(
+  customerId: string,
+  params: { from: string; to: string },
+): Promise<CustomerDetail | null> {
+  try {
+    const search = new URLSearchParams({ from: params.from, to: params.to });
+    const res = await apiClient.get(
+      `${REVENUE_BASE}/reports/customer/${encodeURIComponent(customerId)}?${search.toString()}`,
+      { timeout: 20000 },
+    );
+    return res?.data?.success ? (res.data as CustomerDetail) : null;
+  } catch {
+    return null;
   }
 }
