@@ -37,6 +37,15 @@ type Report = {
 
 const REPORTS: Report[] = [
   {
+    id: 'operations',
+    title: 'Exploitation',
+    pitch: 'Occupation, revenu et encaissements',
+    detail:
+      'Six blocs de gestion sur quatre périodes. Ventile les nuitées retirées de la vente par motif — ce que le PMS range sous un type unique.',
+    accent: T.primary,
+    route: '/reports/exploitation',
+  },
+  {
     id: 'clients',
     title: 'Client 360',
     pitch: 'Qui consomme quoi, sur tous ses séjours',
@@ -47,21 +56,21 @@ const REPORTS: Report[] = [
   },
   {
     id: 'revenue',
-    title: 'Revenue overview',
+    title: 'Ventes d’extras',
     pitch: 'Ventilation USALI du chiffre d’affaires',
     detail:
-      'Restauration, prestations, divers — par période et par service. Disponible dès maintenant dans Extra › Ventes.',
+      'Restauration, prestations, divers — vue facture ou vue ligne, avec le détail des articles.',
     accent: T.primary,
     route: '/tasks/extras/ventes',
   },
   {
-    id: 'daily',
-    title: 'Journée',
-    pitch: 'Arrivées, départs, occupation, revenu du jour',
+    id: 'arrivals',
+    title: 'Arrivées et départs',
+    pitch: 'Le mouvement du jour, villa par villa',
     detail:
-      'Le rapport que l’hôtelier lit chaque matin. Demande de trancher le dénominateur de l’occupation : chambres déclarées ou chambres actives.',
+      'Qui arrive, qui part, quelles villas se libèrent. Complète Exploitation, qui donne les volumes mais pas le détail nominatif de la journée.',
     accent: T.green,
-    blocked: 'dénominateur de l’occupation à définir',
+    blocked: 'à construire',
   },
   {
     id: 'products',
