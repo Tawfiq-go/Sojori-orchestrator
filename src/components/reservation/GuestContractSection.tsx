@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -19,6 +19,7 @@ import guestContractsService, {
   type GuestContractStatus,
   type GuestContractSummary,
 } from '../../services/guestContractsService';
+import { documentTypeLabel } from '../../features/guestDocuments';
 
 const T = {
   primaryDeep: '#876119',
@@ -44,6 +45,8 @@ const STATUS_LABEL: Record<GuestContractStatus, string> = {
   failed: 'Échec',
 };
 
+const TYPE_ORDER = ['moroccan_police_form', 'stay_contract'];
+
 function statusColor(status: GuestContractStatus) {
   if (status === 'signed') return T.success;
   if (status === 'failed') return T.error;
@@ -51,8 +54,19 @@ function statusColor(status: GuestContractStatus) {
   return T.text2;
 }
 
-function currentContract(list: GuestContractSummary[]): GuestContractSummary | null {
-  return list.find(c => c.status !== 'superseded') ?? list[0] ?? null;
+/** Latest non-superseded contract per documentType (police + disclaimer). */
+function currentContractsByType(list: GuestContractSummary[]): GuestContractSummary[] {
+  const byType = new Map<string, GuestContractSummary>();
+  for (const c of list) {
+    if (c.status === 'superseded') continue;
+    const prev = byType.get(c.documentType);
+    if (!prev || (c.version ?? 0) > (prev.version ?? 0)) byType.set(c.documentType, c);
+  }
+  return [...byType.values()].sort(
+    (a, b) =>
+      (TYPE_ORDER.indexOf(a.documentType) === -1 ? 99 : TYPE_ORDER.indexOf(a.documentType)) -
+      (TYPE_ORDER.indexOf(b.documentType) === -1 ? 99 : TYPE_ORDER.indexOf(b.documentType)),
+  );
 }
 
 type Props = {
@@ -66,7 +80,7 @@ export function GuestContractSection({ reservationId, readOnly = false }: Props)
   const [contracts, setContracts] = useState<GuestContractSummary[]>([]);
   const [evidence, setEvidence] = useState<GuestContractEvidenceSummary | null>(null);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
-  const [link, setLink] = useState('');
+  const [links, setLinks] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     if (!reservationId) return;
@@ -85,9 +99,7 @@ export function GuestContractSection({ reservationId, readOnly = false }: Props)
     void load();
   }, [load]);
 
-  const current = currentContract(contracts);
-  const signed = current?.status === 'signed';
-  const generated = Boolean(current) && current?.status !== 'failed';
+  const currentList = useMemo(() => currentContractsByType(contracts), [contracts]);
 
   const run = async (fn: () => Promise<void>) => {
     if (busy) return;
@@ -100,98 +112,15 @@ export function GuestContractSection({ reservationId, readOnly = false }: Props)
     }
   };
 
-  const handleGenerate = () =>
+  const handleGenerateAll = () =>
     void run(async () => {
-      const res = await guestContractsService.ensure(reservationId, true);
+      const res = await guestContractsService.ensure(reservationId, true, { ensureAll: true });
       if (!res.success) {
         toast.error(res.message || 'Génération impossible');
         return;
       }
-      toast.success('Contrat généré');
-    });
-
-  const handleRegenerate = () =>
-    void run(async () => {
-      if (!current) return;
-      const res = await guestContractsService.regenerate(current.id, signed);
-      if (!res.success) {
-        toast.error(res.message || 'Régénération impossible');
-        return;
-      }
-      toast.success(signed ? 'Nouvelle version créée' : 'Contrat régénéré');
-    });
-
-  const handleLink = (signerId?: string) =>
-    void run(async () => {
-      if (!current) return;
-      const res = await guestContractsService.createAccessToken(current.id, signerId);
-      if (!res.success || !res.data?.url) {
-        toast.error(res.message || 'Lien impossible');
-        return;
-      }
-      setLink(res.data.url);
-      try {
-        await navigator.clipboard.writeText(res.data.url);
-        toast.success('Lien de signature copié');
-      } catch {
-        toast.success('Lien de signature créé');
-      }
-    });
-
-  const openPdf = (variant: 'unsigned' | 'signed') =>
-    void run(async () => {
-      if (!current) return;
-      const res = await guestContractsService.documentUrl(current.id, variant);
-      if (!res.success || !res.data?.url) {
-        toast.error(res.message || 'Document indisponible');
-        return;
-      }
-      window.open(res.data.url, '_blank', 'noopener,noreferrer');
-    });
-
-  const openEvidence = () =>
-    void run(async () => {
-      if (!current) return;
-      const res = await guestContractsService.evidence(current.id);
-      if (!res.success || !res.data) {
-        toast.error(res.message || 'Dossier de preuve indisponible');
-        return;
-      }
-      setEvidence(res.data);
-      setEvidenceOpen(true);
-    });
-
-  const pendingSigners = current && !signed ? missingSigners(current) : [];
-  const uiStatus: GuestContractStatus | 'none' = current?.status ?? 'none';
-  const deliveries = current?.linkDeliveries ?? [];
-
-  const deliveryLabel = (status: string) => {
-    if (status === 'sent') return 'Lien envoyé';
-    if (status === 'failed') return 'Échec d’envoi';
-    if (status === 'sending') return 'Envoi en cours';
-    return 'Envoi automatique en attente';
-  };
-
-  const formatSentAt = (value?: string | Date | null) => {
-    if (!value) return '';
-    const d = value instanceof Date ? value : new Date(value);
-    if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
-  };
-
-  const handleRetryDelivery = (deliveryId: string) =>
-    void run(async () => {
-      if (!current) return;
-      const res = await guestContractsService.retryLinkDelivery(current.id, deliveryId);
-      if (!res.success) {
-        toast.error(res.message || 'Nouvel envoi impossible');
-        return;
-      }
-      if (res.data?.status === 'sent') {
-        toast.success('Lien renvoyé');
-        return;
-      }
-      toast.error(res.data?.lastError || 'Nouvel envoi impossible');
+      const n = res.data?.contracts?.length ?? (res.data?.contract ? 1 : 0);
+      toast.success(n > 1 ? `${n} documents générés` : 'Contrat généré');
     });
 
   return (
@@ -214,56 +143,233 @@ export function GuestContractSection({ reservationId, readOnly = false }: Props)
           mb: 0.75,
         }}
       >
-        Contrat et signature
+        Contrats et signature
       </Typography>
       <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 1.25, flexWrap: 'wrap' }}>
-        {loading ? (
-          <CircularProgress size={16} />
-        ) : (
-          <Chip
-            size="small"
-            label={uiStatus === 'none' ? 'Non généré' : STATUS_LABEL[uiStatus]}
-            sx={{
-              fontWeight: 700,
-              fontSize: 11,
-              height: 22,
-              bgcolor: T.bg3,
-              color: uiStatus === 'none' ? T.text2 : statusColor(uiStatus),
-            }}
-          />
-        )}
+        {loading ? <CircularProgress size={16} /> : null}
         <Typography sx={{ fontSize: 12, color: T.text3 }}>
           Signature électronique simple
-          {current?.version ? ` · v${current.version}` : ''}
+          {currentList.length
+            ? ` · ${currentList.length} document${currentList.length > 1 ? 's' : ''}`
+            : ''}
         </Typography>
       </Stack>
+
+      {currentList.length === 0 && !loading ? (
+        <Stack spacing={1.25}>
+          <Typography sx={{ fontSize: 12.5, color: T.text3 }}>
+            Aucun document généré. La fiche de police et le disclaimer (si Actif + Signature web sur
+            le listing) seront créés ensemble.
+          </Typography>
+          <Button
+            size="small"
+            variant="contained"
+            disabled={busy || readOnly || !reservationId}
+            onClick={handleGenerateAll}
+            sx={{ textTransform: 'none', fontWeight: 700, bgcolor: T.primaryDeep, alignSelf: 'flex-start' }}
+          >
+            Générer les documents à signer
+          </Button>
+        </Stack>
+      ) : null}
+
+      {currentList.map(current => (
+        <ContractCard
+          key={current.id}
+          current={current}
+          busy={busy}
+          readOnly={readOnly}
+          link={links[current.id] || ''}
+          onBusy={run}
+          onLink={url => setLinks(prev => ({ ...prev, [current.id]: url }))}
+          onEvidence={ev => {
+            setEvidence(ev);
+            setEvidenceOpen(true);
+          }}
+        />
+      ))}
+
+      {currentList.length > 0 && currentList.length < 2 && !readOnly ? (
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={busy}
+          onClick={handleGenerateAll}
+          sx={{ textTransform: 'none', fontWeight: 700, mt: 1 }}
+        >
+          Générer / compléter les documents manquants
+        </Button>
+      ) : null}
+
+      <Dialog open={evidenceOpen} onClose={() => setEvidenceOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Dossier de preuve</DialogTitle>
+        <DialogContent>
+          {evidence ? (
+            <Stack spacing={0.75} sx={{ fontSize: 13, mt: 1 }}>
+              <div>Contrat : {evidence.contractId}</div>
+              <div>Type : {evidence.documentType}</div>
+              <div>Template : {evidence.templateVersion}</div>
+              <div>Hash snapshot : {evidence.sourceSnapshotHash}</div>
+              <div>Hash PDF présenté : {evidence.unsignedSha256}</div>
+              <div>Hash PDF signé : {evidence.signedSha256}</div>
+              <div>Hash preuve : {evidence.evidenceSha256}</div>
+              {(evidence.signers ?? []).map(signer => (
+                <div key={signer.signerId}>
+                  Signataire {signer.declaredName} ({signer.signerId}) · {signer.signedAt} · consent{' '}
+                  {signer.consentVersion}
+                </div>
+              ))}
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEvidenceOpen(false)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
+
+function deliveryLabel(status: string) {
+  if (status === 'sent') return 'Envoyé';
+  if (status === 'failed') return 'Échec envoi';
+  if (status === 'sending') return 'Envoi…';
+  return 'En attente';
+}
+
+function formatSentAt(value: string | Date) {
+  try {
+    return new Date(value).toLocaleString('fr-MA');
+  } catch {
+    return String(value);
+  }
+}
+
+function ContractCard({
+  current,
+  busy,
+  readOnly,
+  link,
+  onBusy,
+  onLink,
+  onEvidence,
+}: {
+  current: GuestContractSummary;
+  busy: boolean;
+  readOnly: boolean;
+  link: string;
+  onBusy: (fn: () => Promise<void>) => Promise<void>;
+  onLink: (url: string) => void;
+  onEvidence: (ev: GuestContractEvidenceSummary) => void;
+}) {
+  const signed = current.status === 'signed';
+  const generated = current.status !== 'failed';
+  const pendingSigners = !signed ? missingSigners(current) : [];
+  const deliveries = current.linkDeliveries ?? [];
+  const title = documentTypeLabel(current.documentType);
+
+  const handleRegenerate = () =>
+    void onBusy(async () => {
+      const res = await guestContractsService.regenerate(current.id, signed);
+      if (!res.success) {
+        toast.error(res.message || 'Régénération impossible');
+        return;
+      }
+      toast.success(signed ? 'Nouvelle version créée' : 'Document régénéré');
+    });
+
+  const handleLink = (signerId?: string) =>
+    void onBusy(async () => {
+      const res = await guestContractsService.createAccessToken(current.id, signerId);
+      if (!res.success || !res.data?.url) {
+        toast.error(res.message || 'Lien impossible');
+        return;
+      }
+      onLink(res.data.url);
+      try {
+        await navigator.clipboard.writeText(res.data.url);
+        toast.success(`Lien « ${title} » copié`);
+      } catch {
+        toast.success(`Lien « ${title} » créé`);
+      }
+    });
+
+  const openPdf = (variant: 'unsigned' | 'signed') =>
+    void onBusy(async () => {
+      const res = await guestContractsService.documentUrl(current.id, variant);
+      if (!res.success || !res.data?.url) {
+        toast.error(res.message || 'PDF indisponible');
+        return;
+      }
+      window.open(res.data.url, '_blank', 'noopener,noreferrer');
+    });
+
+  const openEvidence = () =>
+    void onBusy(async () => {
+      const res = await guestContractsService.evidence(current.id);
+      if (!res.success || !res.data) {
+        toast.error(res.message || 'Preuve indisponible');
+        return;
+      }
+      onEvidence(res.data);
+    });
+
+  const handleRetryDelivery = (deliveryId: string) =>
+    void onBusy(async () => {
+      const res = await guestContractsService.retryLinkDelivery(current.id, deliveryId);
+      if (!res.success) {
+        toast.error(res.message || 'Nouvel envoi impossible');
+        return;
+      }
+      toast.success('Envoi relancé');
+    });
+
+  return (
+    <Box
+      sx={{
+        border: `1px solid ${T.border}`,
+        borderRadius: 1.25,
+        p: 1.5,
+        mb: 1.25,
+        bgcolor: T.bg3,
+      }}
+    >
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+        <Typography sx={{ fontSize: 13.5, fontWeight: 800 }}>{title}</Typography>
+        <Chip
+          size="small"
+          label={STATUS_LABEL[current.status]}
+          sx={{
+            fontWeight: 700,
+            fontSize: 11,
+            height: 22,
+            bgcolor: T.bg1,
+            color: statusColor(current.status),
+          }}
+        />
+        <Typography sx={{ fontSize: 11.5, color: T.text3 }}>v{current.version}</Typography>
+      </Stack>
+
       {signed ? (
-        <Alert severity="info" sx={{ mb: 1.25, py: 0.5, fontSize: 12.5 }}>
-          Le PDF signé est immuable. Une nouvelle génération crée une nouvelle version.
+        <Alert severity="info" sx={{ mb: 1, py: 0.5, fontSize: 12.5 }}>
+          PDF signé immuable. « Nouvelle version » crée un nouveau document.
         </Alert>
       ) : null}
-      {current ? (
-        <Typography sx={{ fontSize: 12, color: T.text3, mb: 1 }}>
-          Qui signe (figé sur ce contrat) :{' '}
-          <strong>
-            {current.signerPolicy === 'each_traveler'
-              ? 'chaque voyageur adulte'
-              : 'voyageur principal pour la réservation'}
-          </strong>
-          {current.expectedSignerIds?.length
-            ? ` · ${current.expectedSignerIds.length} signataire(s) attendu(s)`
-            : ''}
-          {current.status !== 'signed' && current.status !== 'superseded' ? (
-            <>
-              {' '}
-              · Pour changer la règle, mettez à jour l’orchestration puis utilisez « Régénérer avant
-              signature ».
-            </>
-          ) : null}
-        </Typography>
-      ) : null}
+
+      <Typography sx={{ fontSize: 12, color: T.text3, mb: 1 }}>
+        Qui signe :{' '}
+        <strong>
+          {current.signerPolicy === 'each_traveler'
+            ? 'chaque voyageur adulte'
+            : 'voyageur principal'}
+        </strong>
+        {current.expectedSignerIds?.length
+          ? ` · ${current.expectedSignerIds.length} signataire(s)`
+          : ''}
+      </Typography>
+
       {deliveries.length ? (
-        <Stack spacing={0.75} sx={{ mb: 1.25 }}>
+        <Stack spacing={0.75} sx={{ mb: 1 }}>
           {deliveries.map(delivery => (
             <Stack
               key={delivery.id}
@@ -277,7 +383,7 @@ export function GuestContractSection({ reservationId, readOnly = false }: Props)
                   fontWeight: 700,
                   fontSize: 11,
                   height: 22,
-                  bgcolor: T.bg3,
+                  bgcolor: T.bg1,
                   color:
                     delivery.status === 'failed'
                       ? T.error
@@ -300,38 +406,44 @@ export function GuestContractSection({ reservationId, readOnly = false }: Props)
                   onClick={() => handleRetryDelivery(delivery.id)}
                   sx={{ textTransform: 'none', fontWeight: 700, minWidth: 0 }}
                 >
-                  Réessayer l’envoi
+                  Réessayer
                 </Button>
               ) : null}
             </Stack>
           ))}
         </Stack>
       ) : null}
+
       {link ? (
-        <Typography sx={{ fontSize: 12, color: T.text3, mb: 1, wordBreak: 'break-all' }}>{link}</Typography>
+        <Typography sx={{ fontSize: 12, color: T.text3, mb: 1, wordBreak: 'break-all' }}>
+          {link}
+        </Typography>
       ) : null}
+
       <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
-        {!generated ? (
-          <Button size="small" variant="contained" disabled={busy || readOnly || !reservationId} onClick={handleGenerate} sx={{ textTransform: 'none', fontWeight: 700, bgcolor: T.primaryDeep }}>
-            Générer
+        {generated && !signed && current.status !== 'finalizing' ? (
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={busy || readOnly}
+            onClick={handleRegenerate}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            Régénérer
           </Button>
         ) : null}
-        {generated && !signed && current?.status !== 'finalizing' ? (
-          <Button size="small" variant="outlined" disabled={busy || readOnly} onClick={handleRegenerate} sx={{ textTransform: 'none', fontWeight: 700 }}>
-            Régénérer avant signature
+        {current.status === 'finalizing' || signed ? (
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={busy || readOnly}
+            onClick={handleRegenerate}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            {signed ? 'Nouvelle version' : 'Relancer finalisation'}
           </Button>
         ) : null}
-        {current?.status === 'finalizing' ? (
-          <Button size="small" variant="outlined" disabled={busy || readOnly} onClick={handleRegenerate} sx={{ textTransform: 'none', fontWeight: 700 }}>
-            Relancer la finalisation
-          </Button>
-        ) : null}
-        {signed ? (
-          <Button size="small" variant="outlined" disabled={busy || readOnly} onClick={handleRegenerate} sx={{ textTransform: 'none', fontWeight: 700 }}>
-            Nouvelle version
-          </Button>
-        ) : null}
-        {generated && !signed && current?.status !== 'finalizing' ? (
+        {generated && !signed && current.status !== 'finalizing' ? (
           pendingSigners.length > 1 ? (
             pendingSigners.map(signer => (
               <Button
@@ -342,55 +454,56 @@ export function GuestContractSection({ reservationId, readOnly = false }: Props)
                 onClick={() => handleLink(signer.signerId)}
                 sx={{ textTransform: 'none', fontWeight: 700 }}
               >
-                Lien {[signer.firstName, signer.lastName].filter(Boolean).join(' ') || signer.signerId}
+                Lien{' '}
+                {[signer.firstName, signer.lastName].filter(Boolean).join(' ') || signer.signerId}
               </Button>
             ))
           ) : (
-            <Button size="small" variant="outlined" disabled={busy || readOnly} onClick={() => handleLink(pendingSigners[0]?.signerId)} sx={{ textTransform: 'none', fontWeight: 700 }}>
-              Créer / copier le lien de signature
+            <Button
+              size="small"
+              variant="contained"
+              disabled={busy || readOnly}
+              onClick={() => handleLink(pendingSigners[0]?.signerId)}
+              sx={{ textTransform: 'none', fontWeight: 700, bgcolor: T.primaryDeep }}
+            >
+              Lien de signature
             </Button>
           )
         ) : null}
         {generated ? (
-          <Button size="small" variant="outlined" disabled={busy} onClick={() => openPdf('unsigned')} sx={{ textTransform: 'none', fontWeight: 700 }}>
-            PDF non signé
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={busy}
+            onClick={() => openPdf('unsigned')}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            PDF
           </Button>
         ) : null}
         {signed ? (
-          <Button size="small" variant="outlined" disabled={busy} onClick={() => openPdf('signed')} sx={{ textTransform: 'none', fontWeight: 700 }}>
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={busy}
+            onClick={() => openPdf('signed')}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
             PDF signé
           </Button>
         ) : null}
         {signed ? (
-          <Button size="small" variant="outlined" disabled={busy} onClick={openEvidence} sx={{ textTransform: 'none', fontWeight: 700 }}>
-            Dossier de preuve
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={busy}
+            onClick={openEvidence}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            Preuve
           </Button>
         ) : null}
       </Stack>
-      <Dialog open={evidenceOpen} onClose={() => setEvidenceOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Dossier de preuve</DialogTitle>
-        <DialogContent>
-          {evidence ? (
-            <Stack spacing={0.75} sx={{ fontSize: 13, mt: 1 }}>
-              <div>Contrat : {evidence.contractId}</div>
-              <div>Type : {evidence.documentType}</div>
-              <div>Template : {evidence.templateVersion}</div>
-              <div>Hash snapshot : {evidence.sourceSnapshotHash}</div>
-              <div>Hash PDF présenté : {evidence.unsignedSha256}</div>
-              <div>Hash PDF signé : {evidence.signedSha256}</div>
-              <div>Hash preuve : {evidence.evidenceSha256}</div>
-              {(evidence.signers ?? []).map(signer => (
-                <div key={signer.signerId}>
-                  Signataire {signer.declaredName} ({signer.signerId}) · {signer.signedAt} · consent {signer.consentVersion}
-                </div>
-              ))}
-            </Stack>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEvidenceOpen(false)}>Fermer</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }

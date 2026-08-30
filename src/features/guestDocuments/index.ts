@@ -24,6 +24,8 @@ export {
   blankContract,
   defaultGuestDocuments,
   disclaimerContract,
+  documentTypeForGuestDocument,
+  documentTypeLabel,
   fieldDef,
   fieldsInGroup,
   groupsUsed,
@@ -36,5 +38,6 @@ export {
   firstSignedContract,
   parseGuestDocument,
   parseGuestDocuments,
+  signableDocuments,
   syncContractSignatureFromDocuments,
 } from './parse';

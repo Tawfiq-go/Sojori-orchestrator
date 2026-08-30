@@ -245,7 +245,7 @@ export function defaultGuestDocuments(): GuestDocument[] {
       closing: DEFAULT_POLICE_CLOSING,
       notice: DEFAULT_POLICE_NOTICE,
       enabled: true,
-      requiresSignature: false,
+      requiresSignature: true,
       autoSendAfterRegistration: false,
       signerPolicy: 'primary_guest',
       fieldKeys: [...POLICE_FORM_FIELD_KEYS],
@@ -259,13 +259,26 @@ export function defaultGuestDocuments(): GuestDocument[] {
       clauses: DEFAULT_DISCLAIMER_CLAUSES.map((c) => ({ ...c })),
       closing: DEFAULT_DISCLAIMER_CLOSING,
       notice: '',
-      enabled: false,
+      enabled: true,
       requiresSignature: true,
       autoSendAfterRegistration: false,
       signerPolicy: 'primary_guest',
       fieldKeys: [...DISCLAIMER_FIELD_KEYS],
     }),
   ];
+}
+
+/** Maps listing guestDocuments → Mouad GuestContract.documentType (max 1 police + 1 stay). */
+export type GuestContractDocumentType = 'stay_contract' | 'moroccan_police_form';
+
+export function documentTypeForGuestDocument(doc: Pick<GuestDocument, 'kind'>): GuestContractDocumentType {
+  return doc.kind === 'police_form' ? 'moroccan_police_form' : 'stay_contract';
+}
+
+export function documentTypeLabel(documentType: string): string {
+  if (documentType === 'moroccan_police_form') return 'Fiche de police';
+  if (documentType === 'stay_contract') return 'Guest Disclaimer';
+  return documentType;
 }
 
 export function blankContract(partial?: Partial<GuestDocument>): GuestDocument {
