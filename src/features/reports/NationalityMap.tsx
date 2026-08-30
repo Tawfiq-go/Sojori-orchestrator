@@ -209,9 +209,20 @@ export function NationalityMap({ countries, unknownCustomers = 0 }: Props) {
         <Typography sx={{ fontSize: 10.5, color: T.text3, fontWeight: 600 }}>Plus</Typography>
         <Box sx={{ flex: 1 }} />
         {unknownCustomers > 0 ? (
-          <Typography sx={{ fontSize: 10.5, color: T.text3, fontStyle: 'italic' }}>
-            {unknownCustomers} client{unknownCustomers > 1 ? 's' : ''} sans nationalité renseignée
-          </Typography>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
+            <Box
+              sx={{
+                width: 26,
+                height: 9,
+                borderRadius: 0.4,
+                backgroundImage: `repeating-linear-gradient(45deg, ${T.text3}, ${T.text3} 3px, transparent 3px, transparent 6px)`,
+                opacity: 0.55,
+              }}
+            />
+            <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+              {unknownCustomers} hors carte — pays non saisi
+            </Typography>
+          </Stack>
         ) : null}
       </Stack>
     </Box>
