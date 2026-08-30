@@ -272,6 +272,8 @@ export type NationalityReport = {
   totalGross: number;
   /** Clients dont la nationalité n'est pas exploitable — à afficher. */
   unknownCustomers: number;
+  /** Ce qu'ils pèsent : une saisie manquante, pas un montant perdu. */
+  unknownGross: number;
 };
 
 /** Répartition géographique des clients ayant consommé sur la période. */

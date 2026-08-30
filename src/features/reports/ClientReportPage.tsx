@@ -359,7 +359,8 @@ export function ClientReportPage() {
                   D'où viennent vos clients
                 </Typography>
                 <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
-                  {geo.countries.length} pays · {geo.customers} clients
+                  {geo.countries.length} pays ·{' '}
+                  {geo.customers - geo.unknownCustomers}/{geo.customers} clients situés
                 </Typography>
               </Stack>
 
@@ -427,6 +428,69 @@ export function ClientReportPage() {
                       </Box>
                     );
                   })}
+
+                  {/* Non renseigné : ce sont des réservations directes dont la
+                      réception n'a pas saisi le pays. Le montant est réel, la
+                      donnée manque — le distinguer d'un pays évite de le lire
+                      comme une destination. */}
+                  {geo.unknownCustomers > 0 ? (
+                    <Box sx={{ mt: 0.5, pt: 1, borderTop: `1px dashed ${T.border}` }}>
+                      <Stack
+                        direction="row"
+                        sx={{ alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}
+                      >
+                        <Typography
+                          sx={{ fontSize: 12, color: T.text2, fontWeight: 600, minWidth: 0 }}
+                          noWrap
+                        >
+                          Non renseigné
+                        </Typography>
+                        <Typography
+                          sx={{ fontSize: 11.5, color: T.text2, fontWeight: 700, flexShrink: 0 }}
+                        >
+                          {geo.unknownGross.toLocaleString('fr-FR')}
+                        </Typography>
+                      </Stack>
+                      <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, mt: 0.25 }}>
+                        <Box
+                          sx={{
+                            flex: 1,
+                            height: 5,
+                            bgcolor: T.bg2,
+                            borderRadius: 3,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              width: `${
+                                geo.totalGross
+                                  ? Math.round((geo.unknownGross / geo.totalGross) * 100)
+                                  : 0
+                              }%`,
+                              height: '100%',
+                              // Hachuré et gris : lisible comme une lacune,
+                              // jamais confondu avec un marché.
+                              backgroundImage: `repeating-linear-gradient(45deg, ${T.text3}, ${T.text3} 3px, transparent 3px, transparent 6px)`,
+                              opacity: 0.55,
+                              borderRadius: 3,
+                            }}
+                          />
+                        </Box>
+                        <Typography
+                          sx={{ fontSize: 10.5, color: T.text3, minWidth: 52, textAlign: 'right' }}
+                        >
+                          {geo.totalGross
+                            ? Math.round((geo.unknownGross / geo.totalGross) * 100)
+                            : 0}{' '}
+                          % · {geo.unknownCustomers}
+                        </Typography>
+                      </Stack>
+                      <Typography sx={{ fontSize: 10.5, color: T.text3, mt: 0.5, lineHeight: 1.5 }}>
+                        Réservations directes : la nationalité n'a pas été saisie à la réception.
+                      </Typography>
+                    </Box>
+                  ) : null}
                 </Stack>
               </Box>
             </Paper>
