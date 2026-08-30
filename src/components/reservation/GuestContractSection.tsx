@@ -157,12 +157,19 @@ function buildWhoSignsMatrix(
   const combo =
     parts.length === 0
       ? 'Aucun document signature web'
-      : `Combinaison prévue : ${parts.join(' + ')} → 1 lien web · 1 signature (${principal})`;
+      : hasPolice &&
+          hasDisclaimer &&
+          configured.every(c => c.signerPolicy === 'primary_guest')
+        ? `Bundle Airbnb : ${parts.join(' + ')} → 1 PDF · 1 lien WhatsApp · 1 signature (${principal})`
+        : `Combinaison prévue : ${parts.join(' + ')} → liens selon config · signataire ${principal}`;
 
   const airbnbNote =
-    hasPolice && configured.some(c => c.documentType === 'moroccan_police_form' && c.signerPolicy === 'primary_guest')
-      ? 'Mode Airbnb : toutes les fiches sont récupérées ; seuls le principal signe (pas chaque client).'
-      : hasPolice
+    hasPolice &&
+    hasDisclaimer &&
+    configured.every(c => c.signerPolicy === 'primary_guest')
+      ? 'Mode Airbnb : toutes les fiches sont dans le même document web que le disclaimer ; le principal signe une seule fois.'
+      : hasPolice &&
+          configured.some(c => c.documentType === 'moroccan_police_form' && c.signerPolicy === 'each_traveler')
         ? 'Mode hôtel : chaque adulte peut être requis pour sa fiche (policy listing).'
         : '';
 
@@ -246,6 +253,15 @@ export function GuestContractSection({
     [configured, contracts],
   );
 
+  const isAirbnbBundle = useMemo(
+    () =>
+      configured.length >= 2 &&
+      configured.some(c => c.documentType === 'moroccan_police_form') &&
+      configured.some(c => c.documentType === 'stay_contract') &&
+      configured.every(c => c.signerPolicy === 'primary_guest'),
+    [configured],
+  );
+
   const ensureOne = async (documentType: GuestContractDocumentType) => {
     let contract = byType.get(documentType) ?? null;
     if (contract && contract.status !== 'failed') return contract;
@@ -278,7 +294,9 @@ export function GuestContractSection({
 
   const openWeb = (documentType: GuestContractDocumentType) =>
     void withBusy(`${documentType}:web`, async () => {
-      const contract = await ensureOne(documentType);
+      // Airbnb: web opens the bundle (stay_contract = police pages + disclaimer)
+      const targetType = isAirbnbBundle ? 'stay_contract' : documentType;
+      const contract = await ensureOne(targetType);
       if (!contract) return;
       if (contract.status === 'signed') {
         toast.info('Déjà signé — utilisez PDF');
