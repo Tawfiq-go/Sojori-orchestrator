@@ -166,6 +166,9 @@ export type RevenueBillRow = {
   billNumber: string | null;
   billType: 'receipt' | 'invoice' | null;
   paidAmount: number;
+  /** Extrait du libellé de la note — `null` si non exploitable. */
+  customerName: string | null;
+  customerId: string | null;
 };
 
 export type RevenueBillsPage = {

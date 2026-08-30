@@ -571,6 +571,7 @@ function BillsTable({
           <TableRow sx={{ bgcolor: T.bg2 }}>
             <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Date</TableCell>
             <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Facture</TableCell>
+            <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Client</TableCell>
             <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Type</TableCell>
             <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>État</TableCell>
             <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11.5 }}>
@@ -620,6 +621,9 @@ function BillsTable({
                     }}
                   />
                 ) : null}
+              </TableCell>
+              <TableCell sx={{ fontSize: 12.5, color: T.text }}>
+                {b.customerName ?? '—'}
               </TableCell>
               <TableCell>
                 <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
