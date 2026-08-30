@@ -21,6 +21,7 @@ import {
 import AccessConfigTab from '../listing/components/ConfigOrchestration/AccessConfigTab';
 import ArrivalDepartureConfigTab from '../listing/components/ConfigOrchestration/ArrivalDepartureConfigTab';
 import MenageContentRedirectCard from './MenageContentRedirectCard';
+import DocumentsContentRedirectCard from './DocumentsContentRedirectCard';
 import CleaningSojoriConfigTab from '../listing/components/ConfigOrchestration/CleaningSojoriConfigTab';
 import GroceryConfigTab from '../listing/components/ConfigOrchestration/GroceryConfigTab';
 import PropertyWifiConfigTab from '../listing/components/ConfigOrchestration/PropertyWifiConfigTab';
@@ -135,30 +136,29 @@ export function CapabilityGestionPanel({
   if (key === 'registration') {
     return (
       <Box sx={embeddedSx}>
-        <Alert severity="info" sx={{ fontSize: 12.5 }}>
-          Choisissez les informations lues sur le passeport et celles que le voyageur doit
-          compléter. Les propriétaires peuvent ajouter jusqu&apos;à 4 questions personnalisées.
-          Les administrateurs disposent d&apos;un mode Avancé pour le diagnostic technique.
-        </Alert>
         {(lid || templateMode) && (
+          <PreArrivalRequiredToggle
+            listingId={lid || undefined}
+            ownerKey={templateMode ? templateOwnerKey : undefined}
+            capabilityKey="registration"
+            title="Enregistrement voyageurs"
+            helpRequired="Les codes d'accès (menu F) restent verrouillés tant que l'enregistrement n'est pas complété, et l'assistant WhatsApp l'explique au voyageur : l'enregistrement sur place ne suffit pas."
+            helpOptional="Le voyageur peut aussi s'enregistrer sur place à l'arrivée — le menu F (Accès & codes) n'exige plus l'enregistrement, et l'assistant le confirme si on lui demande."
+          />
+        )}
+        {templateMode ? (
           <>
-            <PreArrivalRequiredToggle
-              listingId={lid || undefined}
-              ownerKey={templateMode ? templateOwnerKey : undefined}
-              capabilityKey="registration"
-              title="Enregistrement voyageurs"
-              helpRequired="Les codes d'accès (menu F) restent verrouillés tant que l'enregistrement n'est pas complété, et l'assistant WhatsApp l'explique au voyageur : l'enregistrement sur place ne suffit pas."
-              helpOptional="Le voyageur peut aussi s'enregistrer sur place à l'arrivée — le menu F (Accès & codes) n'exige plus l'enregistrement, et l'assistant le confirme si on lui demande."
-            />
-            <RegistrationFormEditor
-              listingId={lid || undefined}
-              ownerKey={templateMode ? templateOwnerKey : undefined}
-            />
-            <ContractSignatureConfig
-              listingId={lid || undefined}
-              ownerKey={templateMode ? templateOwnerKey : undefined}
-            />
+            <Alert severity="info" sx={{ fontSize: 12.5, mt: 1.5 }}>
+              Modèle propriétaire : fiche et contrats par défaut. Chaque listing peut les
+              surcharger dans l&apos;onglet Documents.
+            </Alert>
+            <RegistrationFormEditor ownerKey={templateOwnerKey} />
+            <ContractSignatureConfig ownerKey={templateOwnerKey} />
           </>
+        ) : (
+          <Box sx={{ mt: 1.5 }}>
+            <DocumentsContentRedirectCard listingId={lid || undefined} />
+          </Box>
         )}
       </Box>
     );
