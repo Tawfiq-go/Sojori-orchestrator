@@ -106,8 +106,17 @@ export function parseGuestDocuments(raw: unknown): GuestDocument[] | null {
   return out;
 }
 
+/** Any enabled document with web signature (police or disclaimer). */
+export function signableDocuments(docs: GuestDocument[]): GuestDocument[] {
+  return docs.filter((d) => d.enabled && d.requiresSignature);
+}
+
+/** Prefer disclaimer, else first signable (legacy sync → single contractSignature). */
 export function firstSignedContract(docs: GuestDocument[]): GuestDocument | undefined {
-  return docs.find((d) => d.kind === 'contract' && d.enabled && d.requiresSignature);
+  return (
+    docs.find((d) => d.kind === 'contract' && d.enabled && d.requiresSignature) ??
+    docs.find((d) => d.enabled && d.requiresSignature)
+  );
 }
 
 /** Hydrate UI from stored guestDocuments, or seed from legacy contractSignature. */
@@ -141,6 +150,7 @@ export function syncContractSignatureFromDocuments(
   documents: GuestDocument[],
   existing: ContractSignatureConfigValue,
 ): ContractSignatureConfigValue {
+  const signable = signableDocuments(documents);
   const signed = firstSignedContract(documents);
   const police = documents.find((d) => d.kind === 'police_form');
   const rawNotice = police?.notice?.trim() || police?.content?.trim() || '';
@@ -151,10 +161,11 @@ export function syncContractSignatureFromDocuments(
       : rawNotice);
   return {
     ...existing,
-    enabled: Boolean(signed),
+    enabled: signable.length > 0,
     autoSendAfterRegistration: signed?.autoSendAfterRegistration === true,
     signerPolicy: signed?.signerPolicy ?? existing.signerPolicy,
-    documentType: 'stay_contract',
+    documentType:
+      signed?.kind === 'police_form' ? 'moroccan_police_form' : existing.documentType || 'stay_contract',
     establishmentNotice,
   };
 }

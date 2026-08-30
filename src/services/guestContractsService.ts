@@ -47,10 +47,23 @@ class GuestContractsService {
     return unwrap<GuestContractSummary[]>(response.data);
   }
 
-  async ensure(reservationId: string, force = false) {
+  async ensure(
+    reservationId: string,
+    force = false,
+    opts?: { ensureAll?: boolean; documentType?: 'stay_contract' | 'moroccan_police_form' },
+  ) {
     const url = `${RESERVATIONS_API}/${encodeURIComponent(reservationId)}/guest-contracts/ensure`;
-    const response = await apiClient.post(url, { force, actorType: 'staff' });
-    return unwrap<{ skipped?: boolean; contract?: GuestContractSummary }>(response.data);
+    const response = await apiClient.post(url, {
+      force,
+      actorType: 'staff',
+      ensureAll: opts?.ensureAll === true,
+      ...(opts?.documentType ? { documentType: opts.documentType } : {}),
+    });
+    return unwrap<{
+      skipped?: boolean;
+      contract?: GuestContractSummary;
+      contracts?: GuestContractSummary[];
+    }>(response.data);
   }
 
   async regenerate(contractId: string, forceNewVersion = false) {
