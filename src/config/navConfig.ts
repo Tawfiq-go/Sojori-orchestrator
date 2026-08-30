@@ -395,6 +395,20 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         description: 'Le rapport du matin — mouvement, semaine, rythme de prise',
       },
       {
+        id: 'reports/arrivees',
+        label: 'Arrivées et départs',
+        iconType: 'calendar',
+        iconColor: '#93C47D',
+        description: 'Qui arrive, qui part, et ce qui reste à faire',
+      },
+      {
+        id: 'reports/produits',
+        label: 'Produits',
+        iconType: 'document',
+        iconColor: '#C81E1E',
+        description: 'Ce qui se vend, ce qui dort',
+      },
+      {
         id: 'reports/annuel',
         label: 'Tendance annuelle',
         iconType: 'chart',

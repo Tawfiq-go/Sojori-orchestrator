@@ -125,6 +125,16 @@ const ReportsHubPage = lazyWithReload(() =>
     default: module.ReportsHubPage,
   }))
 );
+const ArrivalsPage = lazyWithReload(() =>
+  import('./features/reports/ArrivalsPage').then((module) => ({
+    default: module.ArrivalsPage,
+  })),
+);
+const ProductsPage = lazyWithReload(() =>
+  import('./features/reports/ProductsPage').then((module) => ({
+    default: module.ProductsPage,
+  })),
+);
 const AnnualTrendPage = lazyWithReload(() =>
   import('./features/reports/AnnualTrendPage').then((module) => ({
     default: module.AnnualTrendPage,
@@ -456,6 +466,8 @@ function App() {
               <Route path="/reports" element={<LazyRoute><ReportsHubPage /></LazyRoute>} />
               <Route path="/reports/clients" element={<LazyRoute><ClientOriginPage /></LazyRoute>} />
               <Route path="/reports/quotidien" element={<LazyRoute><DailySummaryPage /></LazyRoute>} />
+              <Route path="/reports/arrivees" element={<LazyRoute><ArrivalsPage /></LazyRoute>} />
+              <Route path="/reports/produits" element={<LazyRoute><ProductsPage /></LazyRoute>} />
               <Route path="/reports/annuel" element={<LazyRoute><AnnualTrendPage /></LazyRoute>} />
               <Route path="/reports/exploitation" element={<LazyRoute><OperationsReportPage /></LazyRoute>} />
               <Route path="/reports/origine" element={<Navigate to="/reports/clients" replace />} />

@@ -86,18 +86,18 @@ const REPORTS: Report[] = [
     title: 'Arrivées et départs',
     pitch: 'Le mouvement du jour, villa par villa',
     detail:
-      'Qui arrive, qui part, quelles villas se libèrent. Complète Exploitation, qui donne les volumes mais pas le détail nominatif de la journée.',
+      'Qui arrive, qui part, et ce qui reste à faire : fiche de police à signer, séjour non soldé. La liste que la réception prépare le matin.',
     accent: T.green,
-    blocked: 'à construire',
+    route: '/reports/arrivees',
   },
   {
     id: 'products',
     title: 'Produits',
     pitch: 'Ce qui se vend, ce qui dort',
     detail:
-      'Rotation par article, marge, produits jamais vendus. Utile pour arbitrer le catalogue et la dotation des villas.',
+      'Rotation par article et articles jamais vendus. Révèle l’écart entre le catalogue déclaré et ce qui sort réellement.',
     accent: T.red,
-    blocked: 'à construire',
+    route: '/reports/produits',
   },
 ];
 

@@ -616,3 +616,117 @@ export async function fetchAnnualTrend(params?: {
     return null;
   }
 }
+
+export type ProductRow = {
+  name: string;
+  lines: number;
+  gross: number;
+  averageLine: number;
+  department: string;
+  category: string | null;
+  firstAt: string | null;
+  lastAt: string | null;
+  inCatalogue: boolean;
+  cataloguePrice: number | null;
+};
+
+export type ProductsReport = {
+  success: boolean;
+  items: ProductRow[];
+  dormant: Array<{
+    name: string;
+    price: number | null;
+    isActive: boolean;
+    isMinibar: boolean;
+    service: string | null;
+  }>;
+  totals: {
+    catalogueSize: number;
+    soldDistinct: number;
+    totalGross: number;
+    totalLines: number;
+    dormantCount: number;
+    offCatalogueCount: number;
+    offCatalogueGross: number;
+    offCataloguePct: number;
+  };
+};
+
+/** Rotation du catalogue — ce qui se vend, ce qui dort. */
+export async function fetchProductsReport(params?: {
+  from?: string;
+  to?: string;
+}): Promise<ProductsReport | null> {
+  try {
+    const search = new URLSearchParams();
+    if (params?.from && params?.to) {
+      search.set('from', params.from);
+      search.set('to', params.to);
+    }
+    const qs = search.toString();
+    const res = await apiClient.get(
+      `${REVENUE_BASE}/reports/products${qs ? `?${qs}` : ''}`,
+      { timeout: 30000 },
+    );
+    return res?.data?.success ? (res.data as ProductsReport) : null;
+  } catch {
+    return null;
+  }
+}
+
+export type MovementEntry = {
+  kind: 'arrival' | 'departure';
+  guestName: string;
+  unit: string | null;
+  channel: string;
+  guests: number;
+  nights: number;
+  arrivalDate: string | null;
+  departureDate: string | null;
+  time: string | null;
+  amount: number;
+  /** Fiche de police signée. */
+  registrationDone: boolean;
+  paid: boolean;
+  notes: string | null;
+};
+
+export type ArrivalsReport = {
+  success: boolean;
+  asOf: string;
+  days: Array<{
+    day: string;
+    arrivals: MovementEntry[];
+    departures: MovementEntry[];
+    guestsIn: number;
+    guestsOut: number;
+    pendingRegistration: number;
+    unpaid: number;
+  }>;
+  totals: {
+    arrivals: number;
+    departures: number;
+    pendingRegistration: number;
+    unpaid: number;
+  };
+};
+
+/** Arrivées et départs nominatifs — la liste de la réception. */
+export async function fetchArrivalsReport(params?: {
+  asOf?: string;
+  days?: number;
+}): Promise<ArrivalsReport | null> {
+  try {
+    const search = new URLSearchParams();
+    if (params?.asOf) search.set('asOf', params.asOf);
+    if (params?.days) search.set('days', String(params.days));
+    const qs = search.toString();
+    const res = await apiClient.get(
+      `${REVENUE_BASE}/reports/arrivals-departures${qs ? `?${qs}` : ''}`,
+      { timeout: 30000 },
+    );
+    return res?.data?.success ? (res.data as ArrivalsReport) : null;
+  } catch {
+    return null;
+  }
+}
