@@ -95,12 +95,20 @@ describe('old simple configuration', () => {
 })
 
 describe('old complete configuration', () => {
-  it('requires police extras on top of passport', () => {
-    const required = requiredEnabledFields(completePresetSchema()).map((f) => f.id)
-    for (const key of ['profession', 'coming_from', 'going_to', 'phone', 'passport_photo']) {
+  it('keeps police extras enabled but optional (do not block enregistrement)', () => {
+    const schema = completePresetSchema()
+    const required = requiredEnabledFields(schema).map((f) => f.id)
+    for (const key of ['passport_photo', 'first_name', 'last_name', 'document_number']) {
       assert.ok(required.includes(key), key)
     }
-    assert.equal(needsWebCheckin(completePresetSchema()), false)
+    for (const key of ['profession', 'coming_from', 'going_to', 'phone']) {
+      const field = schema.fields.find((f) => f.id === key)
+      assert.ok(field, key)
+      assert.equal(field!.enabled, true)
+      assert.equal(field!.required, false)
+      assert.equal(required.includes(key), false)
+    }
+    assert.equal(needsWebCheckin(schema), false)
   })
 
   it('marks Jane+police complete without issued place', () => {
@@ -156,7 +164,10 @@ describe('owner inheritance and listing override', () => {
       ownerGestion: { registrationLevel: 'simple' },
     })
     assert.equal(effective.registrationLevel, 'complete')
-    assert.ok(requiredEnabledFields(effective.schema).some((f) => f.id === 'profession'))
+    const profession = effective.schema.fields.find((f) => f.id === 'profession')
+    assert.ok(profession)
+    assert.equal(profession!.enabled, true)
+    assert.equal(profession!.required, false)
   })
 })
 

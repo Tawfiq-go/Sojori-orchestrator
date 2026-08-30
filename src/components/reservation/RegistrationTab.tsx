@@ -540,19 +540,6 @@ export function RegistrationTab({
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: T.bg0, minHeight: 320 }}>
-      {stats.missingLabels.length ? (
-        <Alert
-          severity="error"
-          sx={{
-            mb: 1.5,
-            py: 0.75,
-            '& .MuiAlert-message': { fontSize: 13, fontWeight: 700 },
-          }}
-        >
-          Champs requis manquants : {stats.missingLabels.slice(0, 8).join(', ')}
-          {stats.missingLabels.length > 8 ? '…' : ''}
-        </Alert>
-      ) : null}
       {enabledFields(formSchema).some((f) => f.scope === 'per_stay') ? (
         <Paper
           sx={{
@@ -672,20 +659,12 @@ export function RegistrationTab({
               </Typography>
             </Stack>
             {!complete && stats.missingLabels.length > 0 ? (
-              <Alert
-                severity="error"
-                sx={{
-                  mt: 1.25,
-                  py: 0.5,
-                  alignItems: 'center',
-                  '& .MuiAlert-message': { fontSize: 12.5, fontWeight: 600 },
-                }}
-              >
-                Champs manquants : {stats.missingLabels.slice(0, 10).join(', ')}
-                {stats.missingLabels.length > 10
-                  ? ` (+${stats.missingLabels.length - 10})`
+              <Typography sx={{ mt: 0.75, fontSize: 12, color: T.text3, lineHeight: 1.35 }}>
+                À compléter : {stats.missingLabels.slice(0, 5).join(', ')}
+                {stats.missingLabels.length > 5
+                  ? ` (+${stats.missingLabels.length - 5})`
                   : ''}
-              </Alert>
+              </Typography>
             ) : null}
           </Box>
           <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
@@ -1139,12 +1118,6 @@ export function RegistrationTab({
                 fullWidth
                 value={form.phone}
                 onChange={(e) => setField('phone', e.target.value)}
-                error={registrationLevel === 'complete' && !form.phone.trim()}
-                helperText={
-                  registrationLevel === 'complete' && !form.phone.trim()
-                    ? 'Requis en mode complet'
-                    : undefined
-                }
               />
             </Stack>
 
@@ -1179,8 +1152,8 @@ export function RegistrationTab({
 
             {registrationLevel === 'complete' ? (
               <>
-                <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.error, pt: 0.5 }}>
-                  Fiche de police — champs complémentaires
+                <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, pt: 0.5 }}>
+                  Fiche de police — champs complémentaires (optionnels)
                 </Typography>
                 <TextField
                   label="Profession"
@@ -1188,7 +1161,6 @@ export function RegistrationTab({
                   fullWidth
                   value={form.profession}
                   onChange={(e) => setField('profession', e.target.value)}
-                  error={!form.profession.trim()}
                 />
                 <TextField
                   label="Domicile habituel"
@@ -1211,7 +1183,6 @@ export function RegistrationTab({
                     fullWidth
                     value={form.coming_from}
                     onChange={(e) => setField('coming_from', e.target.value)}
-                    error={!form.coming_from.trim()}
                   />
                   <TextField
                     label="Allant à"
@@ -1219,7 +1190,6 @@ export function RegistrationTab({
                     fullWidth
                     value={form.going_to}
                     onChange={(e) => setField('going_to', e.target.value)}
-                    error={!form.going_to.trim()}
                   />
                 </Stack>
               </>
