@@ -8,16 +8,22 @@ export {
   type GuestDocumentFieldSource,
   type GuestDocumentKind,
   type GuestDocumentSignerPolicy,
+  type SigningFormat,
   DEFAULT_DISCLAIMER_CLAUSES,
   DEFAULT_DISCLAIMER_CLOSING,
   DEFAULT_DISCLAIMER_DOCUMENT_ID,
   DEFAULT_POLICE_CLOSING,
   DEFAULT_POLICE_NOTICE,
+  DEFAULT_SHORT_TERM_RENTAL_CLAUSES,
+  DEFAULT_SHORT_TERM_RENTAL_CLOSING,
+  DEFAULT_SHORT_TERM_RENTAL_DOCUMENT_ID,
   DISCLAIMER_FIELD_KEYS,
   DOCUMENT_FIELD_CATALOG,
   MAX_GUEST_DOCUMENTS,
   POLICE_FORM_DOCUMENT_ID,
   POLICE_FORM_FIELD_KEYS,
+  SHORT_TERM_RENTAL_FIELD_KEYS,
+  SIGNING_FORMATS,
   SOURCE_GROUPS,
   SOURCE_HINT,
   SOURCE_LABEL,
@@ -33,6 +39,7 @@ export {
   insertPlaceholder,
   newClause,
   placeholderFor,
+  shortTermRentalContract,
 } from './catalog';
 export {
   documentsFromGestion,
@@ -42,3 +49,11 @@ export {
   signableDocuments,
   syncContractSignatureFromDocuments,
 } from './parse';
+export {
+  SIGNING_FORMAT_META,
+  applySigningFormat,
+  inferSigningFormat,
+  parseSigningFormat,
+  previewSigningCount,
+  type SigningFormatMeta,
+} from './signingFormat';

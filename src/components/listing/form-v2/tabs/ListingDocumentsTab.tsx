@@ -30,7 +30,6 @@ import {
   MAX_GUEST_DOCUMENTS,
   POLICE_FORM_DOCUMENT_ID,
   SOURCE_GROUPS,
-  blankContract,
   disclaimerContract,
   documentsFromGestion,
   fieldDef,
@@ -38,6 +37,7 @@ import {
   assembleContent,
   groupsUsed,
   newClause,
+  shortTermRentalContract,
   syncContractSignatureFromDocuments,
 } from '../../../../features/guestDocuments';
 
@@ -45,7 +45,7 @@ type Props = {
   listingId?: string | null;
 };
 
-type Starter = 'blank' | 'disclaimer';
+type Starter = 'disclaimer' | 'short_term_rental';
 
 const CHIP: Record<(typeof SOURCE_GROUPS)[number]['color'], { bg: string; fg: string; bd: string }> = {
   or: { bg: V3.pt, fg: V3.pd, bd: V3.pt2 },
@@ -161,15 +161,23 @@ export default function ListingDocumentsTab({ listingId }: Props) {
       toast.error(`Maximum ${MAX_GUEST_DOCUMENTS} documents.`);
       return;
     }
+    if (kind === 'disclaimer' && documents.some((d) => d.kind === 'contract')) {
+      toast.error('Disclaimer déjà présent.');
+      return;
+    }
+    if (kind === 'short_term_rental' && documents.some((d) => d.kind === 'short_term_rental')) {
+      toast.error('Contrat LCD déjà présent.');
+      return;
+    }
     setStarter(kind);
-    setDraft(kind === 'disclaimer' ? disclaimerContract() : blankContract());
+    setDraft(kind === 'short_term_rental' ? shortTermRentalContract() : disclaimerContract());
     setExpandedId(null);
     setDrawerOpen(true);
   };
 
   const applyStarter = (kind: Starter) => {
     setStarter(kind);
-    setDraft(kind === 'disclaimer' ? disclaimerContract() : blankContract());
+    setDraft(kind === 'short_term_rental' ? shortTermRentalContract() : disclaimerContract());
   };
 
   const createContract = async () => {
@@ -218,6 +226,9 @@ export default function ListingDocumentsTab({ listingId }: Props) {
 
   const police = documents.find((d) => d.kind === 'police_form');
   const contracts = documents.filter((d) => d.kind === 'contract');
+  const rentals = documents.filter((d) => d.kind === 'short_term_rental');
+  const hasDisclaimer = contracts.length > 0;
+  const hasRental = rentals.length > 0;
   const maxed = documents.length >= MAX_GUEST_DOCUMENTS;
 
   if (!listingId) {
@@ -343,16 +354,20 @@ export default function ListingDocumentsTab({ listingId }: Props) {
             )}
             <Button
               size="small"
-              disabled={maxed || saving}
-              onClick={() => openCreate('disclaimer')}
+              disabled={maxed || saving || (hasDisclaimer && hasRental)}
+              onClick={() => openCreate(hasDisclaimer ? 'short_term_rental' : 'disclaimer')}
               sx={{ ...priBtnSx, ml: 'auto', display: { xs: 'none', md: 'inline-flex' } }}
             >
-              ＋ Nouveau contrat
+              {!hasDisclaimer
+                ? '＋ Disclaimer'
+                : !hasRental
+                  ? '＋ Contrat LCD'
+                  : 'Types complets'}
             </Button>
           </Box>
           {maxed && (
             <Typography sx={{ fontSize: 11.5, color: V3.t4, mb: 1 }}>
-              Maximum 12 documents atteint.
+              Maximum {MAX_GUEST_DOCUMENTS} documents (fiche police, disclaimer, contrat LCD).
             </Typography>
           )}
 
@@ -384,7 +399,7 @@ export default function ListingDocumentsTab({ listingId }: Props) {
                     mt: 1,
                   }}
                 >
-                  Vos contrats
+                  Disclaimer
                 </Typography>
                 {contracts.map((item) => (
                   <DocumentCard
@@ -408,7 +423,7 @@ export default function ListingDocumentsTab({ listingId }: Props) {
                   border: `1.5px dashed ${V3.bs}`,
                   borderRadius: '12px',
                   px: 2.75,
-                  py: 4.25,
+                  py: 3,
                   textAlign: 'center',
                   bgcolor: V3.alt,
                   display: 'grid',
@@ -416,26 +431,68 @@ export default function ListingDocumentsTab({ listingId }: Props) {
                   justifyItems: 'center',
                 }}
               >
-                <Box
-                  sx={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: '14px',
-                    bgcolor: V3.pt,
-                    display: 'grid',
-                    placeItems: 'center',
-                    fontSize: 22,
-                  }}
-                >
-                  ✍️
-                </Box>
-                <Typography sx={{ fontSize: 14.5, fontWeight: 800 }}>Vos contrats</Typography>
+                <Typography sx={{ fontSize: 14.5, fontWeight: 800 }}>Disclaimer</Typography>
                 <Typography sx={{ fontSize: 12.5, color: V3.t3, maxWidth: '46ch', lineHeight: 1.55 }}>
-                  Créez un contrat : nom, titre, contenu. Chaque champ vient de la pièce, de WhatsApp
-                  ou de la réservation.
+                  Règles villa / responsabilité (piscine, coffre, parking…).
                 </Typography>
                 <Button size="small" onClick={() => openCreate('disclaimer')} sx={priBtnSx}>
-                  ＋ Nouveau contrat
+                  ＋ Ajouter le disclaimer
+                </Button>
+              </Box>
+            )}
+
+            {rentals.length > 0 ? (
+              <>
+                <Typography
+                  sx={{
+                    fontSize: 10.5,
+                    fontWeight: 750,
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    color: V3.t4,
+                    mt: 1,
+                  }}
+                >
+                  Location courte durée (Maroc)
+                </Typography>
+                {rentals.map((item) => (
+                  <DocumentCard
+                    key={item.id}
+                    document={item}
+                    expanded={expandedId === item.id}
+                    listingId={String(listingId)}
+                    onToggleExpand={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                    onChange={(patch) => updateDoc(item.id, patch)}
+                    onRemove={() => void removeContract(item.id)}
+                    onDone={() => {
+                      setExpandedId(null);
+                      if (dirty) void persist(documents);
+                    }}
+                  />
+                ))}
+              </>
+            ) : (
+              <Box
+                sx={{
+                  border: `1.5px dashed ${V3.bs}`,
+                  borderRadius: '12px',
+                  px: 2.75,
+                  py: 3,
+                  textAlign: 'center',
+                  bgcolor: V3.alt,
+                  display: 'grid',
+                  gap: 1.1,
+                  justifyItems: 'center',
+                }}
+              >
+                <Typography sx={{ fontSize: 14.5, fontWeight: 800 }}>
+                  Contrat location courte durée
+                </Typography>
+                <Typography sx={{ fontSize: 12.5, color: V3.t3, maxWidth: '46ch', lineHeight: 1.55 }}>
+                  Modèle type Maroc (Loi 80-14) : parties, durée, caution, occupation, fiche de police.
+                </Typography>
+                <Button size="small" onClick={() => openCreate('short_term_rental')} sx={priBtnSx}>
+                  ＋ Ajouter le contrat LCD
                 </Button>
               </Box>
             )}
@@ -444,8 +501,8 @@ export default function ListingDocumentsTab({ listingId }: Props) {
       </Box>
 
       <Button
-        onClick={() => openCreate('disclaimer')}
-        disabled={maxed}
+        onClick={() => openCreate(hasDisclaimer ? 'short_term_rental' : 'disclaimer')}
+        disabled={maxed || (hasDisclaimer && hasRental)}
         sx={{
           display: { xs: 'block', md: 'none' },
           position: 'fixed',
@@ -465,7 +522,7 @@ export default function ListingDocumentsTab({ listingId }: Props) {
           '&:hover': { bgcolor: V3.pd },
         }}
       >
-        ＋ Contrat
+        {!hasDisclaimer ? '＋ Disclaimer' : !hasRental ? '＋ Contrat LCD' : 'Types complets'}
       </Button>
 
       <Drawer
@@ -506,8 +563,16 @@ export default function ListingDocumentsTab({ listingId }: Props) {
             <>
               <SectionLabel>Identité du document</SectionLabel>
               <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
-                <StarterChip label="Vierge" on={starter === 'blank'} onClick={() => applyStarter('blank')} />
-                <StarterChip label="Disclaimer" on={starter === 'disclaimer'} onClick={() => applyStarter('disclaimer')} />
+                <StarterChip
+                  label="Disclaimer"
+                  on={starter === 'disclaimer'}
+                  onClick={() => applyStarter('disclaimer')}
+                />
+                <StarterChip
+                  label="Contrat LCD (Maroc)"
+                  on={starter === 'short_term_rental'}
+                  onClick={() => applyStarter('short_term_rental')}
+                />
                 <StarterChip label="Fiche de police · déjà présente" on={false} disabled />
               </Stack>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.4 }}>

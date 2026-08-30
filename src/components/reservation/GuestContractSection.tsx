@@ -42,7 +42,11 @@ const STATUS_LABEL: Record<GuestContractStatus, string> = {
   failed: 'Échec',
 };
 
-const TYPE_ORDER: GuestContractDocumentType[] = ['moroccan_police_form', 'stay_contract'];
+const TYPE_ORDER: GuestContractDocumentType[] = [
+  'moroccan_police_form',
+  'stay_contract',
+  'short_term_rental',
+];
 
 type ConfiguredContract = {
   documentType: GuestContractDocumentType;
