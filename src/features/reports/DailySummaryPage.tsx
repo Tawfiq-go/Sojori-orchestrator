@@ -74,8 +74,9 @@ function Section({
 
 /** La colonne d'un des trois jours pivots. */
 function DayCard({ label, d, highlight }: { label: string; d: DailyStats; highlight?: boolean }) {
-  // Des villas occupées sans recette : le séjour n'est pas encore facturé.
-  // Afficher « 0 » laisserait croire à une journée blanche.
+  // La recette vient du prix négocié tant que le séjour n'est pas clôturé.
+  const forecast = Boolean(d.isForecast);
+  // Reste vide seulement si même la projection manque.
   const pending = d.soldUnits > 0 && d.roomRevenue === 0;
   return (
     <Box
@@ -129,9 +130,13 @@ function DayCard({ label, d, highlight }: { label: string; d: DailyStats; highli
           </Typography>
         </Box>
       </Stack>
-      {pending ? (
+      {forecast ? (
+        <Typography sx={{ fontSize: 10.5, color: T.gold, mt: 0.75, fontWeight: 600 }}>
+          Prévisionnel · prix négocié
+        </Typography>
+      ) : pending ? (
         <Typography sx={{ fontSize: 10.5, color: T.ink3, mt: 0.75, fontStyle: 'italic' }}>
-          Recette facturée à la clôture du séjour
+          Aucun prix enregistré
         </Typography>
       ) : null}
     </Box>
@@ -270,6 +275,48 @@ export function DailySummaryPage() {
         <DayCard label="Aujourd’hui" d={days.today} highlight />
         <DayCard label="Demain" d={days.tomorrow} />
       </Box>
+
+      {/* Arrivées et départs sur trois jours — six cases, comme le rapport
+          de référence : c'est le premier coup d'œil du matin. */}
+      {report.movement.length ? (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'repeat(3, 1fr)', md: 'repeat(6, 1fr)' },
+            gap: '1px',
+            bgcolor: T.rule,
+            border: `1px solid ${T.rule}`,
+            borderRadius: 0.5,
+            overflow: 'hidden',
+            mb: 3,
+          }}
+        >
+          {(() => {
+            const idx = report.movement.findIndex((m) => m.day === report.asOf);
+            const pick = [idx - 1, idx, idx + 1].filter((i) => i >= 0 && i < report.movement.length);
+            const labels = ['Hier', 'Aujourd’hui', 'Demain'];
+            const cells: Array<{ label: string; value: number; strong: boolean }> = [];
+            pick.forEach((i, k) => {
+              const m = report.movement[i];
+              const lab = labels[k + (3 - pick.length)] ?? fmtDay(m.day);
+              cells.push({ label: `Arrivées ${lab.toLowerCase()}`, value: m.arrivals, strong: lab === 'Aujourd’hui' });
+              cells.push({ label: `Départs ${lab.toLowerCase()}`, value: m.departures, strong: lab === 'Aujourd’hui' });
+            });
+            return cells.map((c) => (
+              <Box key={c.label} sx={{ bgcolor: T.sheet, p: 1.75, textAlign: 'center' }}>
+                <Typography
+                  sx={{ fontSize: 10, color: c.strong ? T.gold : T.ink3, lineHeight: 1.3, mb: 0.5 }}
+                >
+                  {c.label}
+                </Typography>
+                <Typography sx={{ fontSize: 24, fontWeight: 800, color: T.ink, lineHeight: 1 }}>
+                  {c.value}
+                </Typography>
+              </Box>
+            ));
+          })()}
+        </Box>
+      ) : null}
 
       {/* Le mouvement du jour — ce que l'équipe regarde en premier */}
       <Section
@@ -505,6 +552,146 @@ export function DailySummaryPage() {
             l'occupation.
           </Typography>
         </Paper>
+
+        {/* Pour quand on a vendu : le rythme dit combien, ceci dit quand. */}
+        {report.pickup.length ? (
+          <Paper
+            variant="outlined"
+            sx={{ border: `1px solid ${T.rule}`, borderRadius: 0.5, mt: 2, overflowX: 'auto' }}
+          >
+            {(() => {
+              const months = [...new Set(report.pickup.map((p) => p.stayMonth))].sort();
+              const days = [...new Set(report.pickup.map((p) => p.takenOn))].sort();
+              const cell = new Map(
+                report.pickup.map((p) => [`${p.takenOn}|${p.stayMonth}`, p]),
+              );
+              const colTotal = (mo: string) =>
+                report.pickup.filter((p) => p.stayMonth === mo).reduce((s, p) => s + p.revenue, 0);
+              return (
+                <Box
+                  component="table"
+                  sx={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    fontSize: 12.5,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  <thead>
+                    <Box component="tr" sx={{ bgcolor: T.sheetAlt }}>
+                      <Box
+                        component="th"
+                        sx={{
+                          p: '9px 12px',
+                          textAlign: 'left',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: '.08em',
+                          textTransform: 'uppercase',
+                          color: T.ink3,
+                          borderBottom: `1px solid ${T.rule}`,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Pris le
+                      </Box>
+                      {months.map((mo) => (
+                        <Box
+                          component="th"
+                          key={mo}
+                          sx={{
+                            p: '9px 12px',
+                            textAlign: 'right',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            letterSpacing: '.08em',
+                            textTransform: 'uppercase',
+                            color: T.ink3,
+                            borderBottom: `1px solid ${T.rule}`,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {fmtMonth(mo)}
+                        </Box>
+                      ))}
+                    </Box>
+                  </thead>
+                  <tbody>
+                    {days.map((d) => (
+                      <Box component="tr" key={d} sx={{ '&:hover td': { bgcolor: T.sheetAlt } }}>
+                        <Box
+                          component="td"
+                          sx={{
+                            p: '8px 12px',
+                            borderBottom: `1px solid ${T.ruleSoft}`,
+                            color: T.ink2,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {fmtDay(d)}
+                        </Box>
+                        {months.map((mo) => {
+                          const c = cell.get(`${d}|${mo}`);
+                          return (
+                            <Box
+                              component="td"
+                              key={`${d}-${mo}`}
+                              sx={{
+                                p: '8px 12px',
+                                textAlign: 'right',
+                                borderBottom: `1px solid ${T.ruleSoft}`,
+                                color: c ? T.ink2 : T.ink3,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {c ? (
+                                <>
+                                  {n(c.revenue)}
+                                  <Box component="span" sx={{ color: T.ink3, ml: 0.6, fontSize: 10.5 }}>
+                                    {c.reservations}r
+                                  </Box>
+                                </>
+                              ) : (
+                                '—'
+                              )}
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    ))}
+                    <Box component="tr" sx={{ bgcolor: T.sheetAlt }}>
+                      <Box
+                        component="td"
+                        sx={{ p: '9px 12px', fontWeight: 700, borderTop: `1px solid ${T.rule}` }}
+                      >
+                        Cumul
+                      </Box>
+                      {months.map((mo) => (
+                        <Box
+                          component="td"
+                          key={`t-${mo}`}
+                          sx={{
+                            p: '9px 12px',
+                            textAlign: 'right',
+                            fontWeight: 700,
+                            borderTop: `1px solid ${T.rule}`,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {n(colTotal(mo))}
+                        </Box>
+                      ))}
+                    </Box>
+                  </tbody>
+                </Box>
+              );
+            })()}
+          </Paper>
+        ) : null}
+        <Typography sx={{ fontSize: 11.5, color: T.ink3, mt: 1, lineHeight: 1.6 }}>
+          Ce qui a été vendu ces sept jours, <b>ventilé par mois de séjour</b>. Le rythme dit
+          combien ; ce tableau dit pour quand.
+        </Typography>
       </Section>
 
       {/* Extras du jour */}
@@ -536,6 +723,69 @@ export function DailySummaryPage() {
           </Paper>
         </Section>
       ) : null}
+
+      {/* Revenu par mois : réalisé, puis carnet pour le mois à venir */}
+      <Section title="Le revenu" aside="Toutes prestations confondues">
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+            gap: '1px',
+            bgcolor: T.rule,
+            border: `1px solid ${T.rule}`,
+            borderRadius: 0.5,
+            overflow: 'hidden',
+          }}
+        >
+          {[
+            { k: report.revenuePerformance.previous, l: 'Mois précédent', hi: false },
+            { k: report.revenuePerformance.current, l: 'Mois en cours', hi: true },
+            { k: report.revenuePerformance.next, l: 'Mois prochain', hi: false },
+          ].map((c) => (
+            <Box key={c.l} sx={{ bgcolor: T.sheet, p: 2 }}>
+              <Typography
+                sx={{
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: '.1em',
+                  textTransform: 'uppercase',
+                  color: c.hi ? T.gold : T.ink3,
+                  mb: 0.75,
+                }}
+              >
+                {c.l} · {fmtMonth(c.k.month)}
+              </Typography>
+              <Typography sx={{ fontSize: 25, fontWeight: 800, color: T.ink, lineHeight: 1 }}>
+                {n(c.k.total)}
+              </Typography>
+              <Stack direction="row" sx={{ gap: 1, mt: 0.75, alignItems: 'baseline' }}>
+                <Typography sx={{ fontSize: 11, color: T.ink3 }}>MAD</Typography>
+                {c.k.booked ? (
+                  <Typography sx={{ fontSize: 10.5, color: T.gold, fontWeight: 600 }}>
+                    carnet à ce jour
+                  </Typography>
+                ) : null}
+                {c.hi && report.revenuePerformance.variationPct != null ? (
+                  <Typography
+                    sx={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: report.revenuePerformance.variationPct >= 0 ? T.pos : T.neg,
+                    }}
+                  >
+                    {report.revenuePerformance.variationPct >= 0 ? '↗' : '↘'}{' '}
+                    {Math.abs(report.revenuePerformance.variationPct)} %
+                  </Typography>
+                ) : null}
+              </Stack>
+            </Box>
+          ))}
+        </Box>
+        <Typography sx={{ fontSize: 11.5, color: T.ink3, mt: 1, lineHeight: 1.6 }}>
+          Le mois prochain n'a aucune ligne facturée : sa valeur est le <b>carnet à ce jour</b>,
+          au prix négocié. Il montera d'ici la fin du mois.
+        </Typography>
+      </Section>
 
       {/* Performance mensuelle */}
       <Section title="Mois par mois" aside="Depuis le début de l’exercice">
