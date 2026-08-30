@@ -35,6 +35,8 @@ const TITLE_OVERRIDES: Record<string, string> = {
   reports: 'Rapports',
   'reports/quotidien': 'Résumé quotidien',
   'reports/annuel': 'Tendance annuelle',
+  'reports/arrivees': 'Arrivées et départs',
+  'reports/produits': 'Produits',
   'reports/clients': 'Clients',
   'reports/exploitation': "Rapport d'exploitation",
   'tasks/extras/ventes': 'Ventes',
