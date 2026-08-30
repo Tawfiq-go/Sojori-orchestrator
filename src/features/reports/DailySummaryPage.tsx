@@ -30,9 +30,13 @@ const NF = new Intl.NumberFormat('fr-FR');
 const n = (v: number | null | undefined) => (v == null ? '—' : NF.format(Math.round(v)));
 
 const DAY_FMT = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+/** Jour + mois, sans le jour de semaine : suffisant sous une barre. */
+const DAY_SHORT = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
 const MONTH_FMT = new Intl.DateTimeFormat('fr-FR', { month: 'short', year: '2-digit' });
 
 const fmtDay = (iso: string) => DAY_FMT.format(new Date(`${iso}T00:00:00Z`));
+const fmtDayShort = (iso: string) =>
+  DAY_SHORT.format(new Date(`${iso}T00:00:00Z`)).replace('.', '');
 const fmtMonth = (ym: string) => MONTH_FMT.format(new Date(`${ym}-01T00:00:00Z`));
 
 /** Motif de blocage, en mots que l'équipe emploie. */
@@ -173,10 +177,10 @@ export function DailySummaryPage() {
     const w = report?.week ?? [];
     if (!w.length) return null;
     const W = 900;
-    const H = 200;
+    const H = 210;
     const pl = 34;
     const pr = 34;
-    const pt = 14;
+    const pt = 26;
     const pb = 28;
     const maxAdr = Math.max(...w.map((d) => d.adr ?? 0), 1);
     const slot = (W - pl - pr) / w.length;
@@ -476,7 +480,9 @@ export function DailySummaryPage() {
                   stroke={T.gold}
                   strokeWidth="1.75"
                   points={chart.w
-                    .map((d, i) => {
+                    .map((d, i) => ({ d, i }))
+                    .filter(({ d }) => d.adr != null)
+                    .map(({ d, i }) => {
                       const cx = chart.pl + chart.slot * i + chart.slot / 2;
                       const h = chart.H - chart.pt - chart.pb;
                       const y = chart.pt + h * (1 - (d.adr ?? 0) / chart.maxAdr);
@@ -488,7 +494,25 @@ export function DailySummaryPage() {
                   const cx = chart.pl + chart.slot * i + chart.slot / 2;
                   const h = chart.H - chart.pt - chart.pb;
                   const y = chart.pt + h * (1 - (d.adr ?? 0) / chart.maxAdr);
-                  return <circle key={d.day} cx={cx} cy={y} r="3" fill={T.gold} />;
+                  if (d.adr == null) return null;
+                  // L'étiquette passe sous le point quand celui-ci frôle le
+                  // haut du cadre, pour ne pas être coupée.
+                  const above = y > chart.pt + 16;
+                  return (
+                    <g key={d.day}>
+                      <circle cx={cx} cy={y} r="3.5" fill={T.gold} />
+                      <text
+                        x={cx}
+                        y={above ? y - 8 : y + 15}
+                        textAnchor="middle"
+                        fill={T.gold}
+                        fontSize="10.5"
+                        fontWeight="700"
+                      >
+                        {NF.format(d.adr)}
+                      </text>
+                    </g>
+                  );
                 })}
               </Box>
             </Box>
@@ -511,7 +535,7 @@ export function DailySummaryPage() {
             </Stack>
             <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
               <Box sx={{ width: 13, height: 2, bgcolor: T.gold }} />
-              Prix moyen (max {n(chart?.maxAdr)} MAD)
+              Prix moyen en MAD
             </Stack>
           </Stack>
         </Paper>
@@ -520,7 +544,13 @@ export function DailySummaryPage() {
       {/* Rythme de prise */}
       <Section
         title="Le rythme de prise"
-        aside={`${report.paceTotal} réservations enregistrées en 7 jours · ${report.paceNights} nuitées`}
+        aside={
+          report.pace.length
+            ? `Du ${fmtDayShort(report.pace[0].day)} au ${fmtDayShort(
+                report.pace[report.pace.length - 1].day,
+              )} · ${report.paceTotal} réservations · ${report.paceNights} nuitées`
+            : `${report.paceTotal} réservations · ${report.paceNights} nuitées`
+        }
       >
         <Paper variant="outlined" sx={{ border: `1px solid ${T.rule}`, borderRadius: 0.5, p: 2 }}>
           <Stack direction="row" sx={{ gap: 1, alignItems: 'flex-end', minHeight: 70 }}>
@@ -541,7 +571,9 @@ export function DailySummaryPage() {
                       borderRadius: '2px 2px 0 0',
                     }}
                   />
-                  <Typography sx={{ fontSize: 10, color: T.ink3 }}>{p.day.slice(8)}</Typography>
+                  <Typography sx={{ fontSize: 10, color: T.ink3, whiteSpace: 'nowrap' }}>
+                    {fmtDayShort(p.day)}
+                  </Typography>
                 </Stack>
               );
             })}
