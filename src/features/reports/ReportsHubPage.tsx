@@ -46,20 +46,11 @@ const REPORTS: Report[] = [
     route: '/reports/exploitation',
   },
   {
-    id: 'origin',
-    title: 'Origine clients',
+    id: 'clients',
+    title: 'Clients',
     pitch: 'D’où viennent les réservations',
     detail:
-      'Carte et classement par pays. Le podium change selon le critère : le Maroc réserve le plus, la France dépense le plus.',
-    accent: T.green,
-    route: '/reports/origine',
-  },
-  {
-    id: 'clients',
-    title: 'Client 360',
-    pitch: 'Qui consomme quoi, sur tous ses séjours',
-    detail:
-      'Classement par consommation, produits favoris, répartition par type. Le PMS ne sait pas le produire : il connaît des séjours, pas des clients.',
+      'Carte, canal de distribution et concentration. Le podium change selon le critère : le Maroc réserve le plus, la France dépense le plus.',
     accent: T.gold,
     route: '/reports/clients',
   },
