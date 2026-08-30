@@ -69,7 +69,12 @@ export function parseGuestDocument(raw: unknown): GuestDocument | null {
   const fieldKeys = parseFieldKeys(rec.fieldKeys);
   const doc: GuestDocument = {
     id,
-    kind: rec.kind === 'police_form' ? 'police_form' : 'contract',
+    kind:
+      rec.kind === 'police_form'
+        ? 'police_form'
+        : rec.kind === 'short_term_rental'
+          ? 'short_term_rental'
+          : 'contract',
     name,
     title,
     content,
@@ -92,6 +97,8 @@ export function parseGuestDocuments(raw: unknown): GuestDocument[] | null {
   const out: GuestDocument[] = [];
   const ids = new Set<string>();
   let policeCount = 0;
+  let disclaimerCount = 0;
+  let rentalCount = 0;
   for (const item of raw) {
     const doc = parseGuestDocument(item);
     if (!doc) return null;
@@ -100,6 +107,12 @@ export function parseGuestDocuments(raw: unknown): GuestDocument[] | null {
     if (doc.kind === 'police_form') {
       policeCount += 1;
       if (policeCount > 1) return null;
+    } else if (doc.kind === 'short_term_rental') {
+      rentalCount += 1;
+      if (rentalCount > 1) return null;
+    } else {
+      disclaimerCount += 1;
+      if (disclaimerCount > 1) return null;
     }
     out.push(doc);
   }

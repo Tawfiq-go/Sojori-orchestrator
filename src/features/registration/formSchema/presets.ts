@@ -26,14 +26,18 @@ export function simplePresetSchema(): RegistrationFormSchema {
   return { version: 2, source: 'preset:simple', fields }
 }
 
-/** Existing “complete” listings: police-form field set. */
+/**
+ * “Complete” = fiche police field set.
+ * Extras (profession, provenance, allant à, téléphone) stay visible for the PDF
+ * but are optional — they must not block enregistrement when OCR identity is done.
+ */
 export function completePresetSchema(): RegistrationFormSchema {
   const fields = [
     ...simplePresetSchema().fields,
-    builtinField('profession', { required: true, enabled: true, order: 13 }),
-    builtinField('coming_from', { required: true, enabled: true, order: 14 }),
-    builtinField('going_to', { required: true, enabled: true, order: 15 }),
-    builtinField('phone', { required: true, enabled: true, order: 16 }),
+    builtinField('profession', { required: false, enabled: true, order: 13 }),
+    builtinField('coming_from', { required: false, enabled: true, order: 14 }),
+    builtinField('going_to', { required: false, enabled: true, order: 15 }),
+    builtinField('phone', { required: false, enabled: true, order: 16 }),
     builtinField('domicile', { required: false, enabled: true, order: 17 }),
     builtinField('city', { required: false, enabled: true, order: 18 }),
     builtinField('country', { required: false, enabled: true, order: 19 }),
@@ -55,7 +59,9 @@ export const SIMPLE_REQUIRED_KEYS = [
   'passport_photo',
 ] as const
 
-export const COMPLETE_EXTRA_REQUIRED_KEYS = [
+/** Kept for callers that still list “extra” complete fields (all optional now). */
+export const COMPLETE_EXTRA_REQUIRED_KEYS = [] as const
+export const COMPLETE_EXTRA_OPTIONAL_KEYS = [
   'profession',
   'coming_from',
   'going_to',
