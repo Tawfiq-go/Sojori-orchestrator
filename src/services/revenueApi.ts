@@ -323,3 +323,75 @@ export async function fetchCustomerDetail(
     return null;
   }
 }
+
+export type OperationsPeriod = {
+  key: string;
+  label: string;
+  from: string;
+  to: string;
+  parcUnits: number;
+  blockedUnits: number;
+  availableUnits: number;
+  soldUnits: number;
+  unsoldUnits: number;
+  outOfServiceUnits: number;
+  houseGuestUnits: number;
+  unclassifiedUnits: number;
+  roomRevenue: number;
+  revenue: { rooms: number; fnb: number; misc: number; total: number };
+  occupancyPct: number | null;
+  adr: number | null;
+  revpar: number | null;
+  trevpar: number | null;
+};
+
+export type OperationsReport = {
+  success: boolean;
+  asOf: string;
+  periods: OperationsPeriod[];
+  daily: Array<{
+    day: string;
+    availableUnits: number;
+    soldUnits: number;
+    blockedUnits: number;
+    roomRevenue: number;
+    occupancyPct: number | null;
+    adr: number | null;
+  }>;
+  extras: Array<{
+    category: string;
+    monthGross: number;
+    monthItems: number;
+    yearGross: number;
+    yearItems: number;
+  }>;
+  settlement: {
+    billedGross: number;
+    billedLines: number;
+    taxes: number;
+    taxLines: number;
+    due: number;
+    collected: number;
+    gap: number;
+    gapPct: number;
+  };
+  blockReasons: Array<{ category: string; rawName: string; nights: number }>;
+};
+
+/** Rapport d'exploitation — occupation, revenu, extras, encaissements. */
+export async function fetchOperationsReport(params?: {
+  asOf?: string;
+}): Promise<OperationsReport | null> {
+  try {
+    const search = new URLSearchParams();
+    if (params?.asOf) search.set('asOf', params.asOf);
+    const qs = search.toString();
+    const res = await apiClient.get(
+      `${REVENUE_BASE}/reports/operations${qs ? `?${qs}` : ''}`,
+      { timeout: 30000 },
+    );
+    return res?.data?.success ? (res.data as OperationsReport) : null;
+  } catch {
+    return null;
+  }
+}

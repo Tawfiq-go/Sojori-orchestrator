@@ -125,6 +125,11 @@ const ReportsHubPage = lazyWithReload(() =>
     default: module.ReportsHubPage,
   }))
 );
+const OperationsReportPage = lazyWithReload(() =>
+  import('./features/reports/OperationsReportPage').then((module) => ({
+    default: module.OperationsReportPage,
+  })),
+);
 const ClientReportPage = lazyWithReload(() =>
   import('./features/reports/ClientReportPage').then((module) => ({
     default: module.ClientReportPage,
@@ -440,6 +445,7 @@ function App() {
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
               <Route path="/reports" element={<LazyRoute><ReportsHubPage /></LazyRoute>} />
               <Route path="/reports/clients" element={<LazyRoute><ClientReportPage /></LazyRoute>} />
+              <Route path="/reports/exploitation" element={<LazyRoute><OperationsReportPage /></LazyRoute>} />
               <Route path="/tasks/extras/ventes" element={<LazyRoute><ExtrasVentesPage /></LazyRoute>} />
               <Route path="/tasks/extras/configuration" element={<LazyRoute><TasksExtrasCataloguePage /></LazyRoute>} />
               {/* Ancienne entree « Liste extra » : fusionnee dans le catalogue. */}

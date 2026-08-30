@@ -388,6 +388,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         description: 'Lancer un rapport — clients, revenu, journée',
       },
       {
+        id: 'reports/exploitation',
+        label: 'Exploitation',
+        iconType: 'document',
+        iconColor: '#2d4a6b',
+        description: 'Occupation, revenu et encaissements',
+      },
+      {
         id: 'reports/clients',
         label: 'Client 360',
         iconType: 'worker',
