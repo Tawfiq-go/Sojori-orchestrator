@@ -385,7 +385,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         label: 'Tous les rapports',
         iconType: 'document',
         iconColor: '#b8851a',
-        description: 'Lancer un rapport — clients, revenu, journée',
+        description: 'Lancer un rapport — exploitation, clients, ventes',
       },
       {
         id: 'reports/exploitation',
