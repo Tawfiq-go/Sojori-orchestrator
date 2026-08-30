@@ -265,6 +265,32 @@ export async function fetchCustomersReport(params: {
   }
 }
 
+export type NationalityReport = {
+  success: boolean;
+  countries: Array<{ code: string; customers: number; gross: number }>;
+  customers: number;
+  totalGross: number;
+  /** Clients dont la nationalité n'est pas exploitable — à afficher. */
+  unknownCustomers: number;
+};
+
+/** Répartition géographique des clients ayant consommé sur la période. */
+export async function fetchNationalityReport(params: {
+  from: string;
+  to: string;
+}): Promise<NationalityReport | null> {
+  try {
+    const search = new URLSearchParams({ from: params.from, to: params.to });
+    const res = await apiClient.get(
+      `${REVENUE_BASE}/reports/nationalities?${search.toString()}`,
+      { timeout: 20000 },
+    );
+    return res?.data?.success ? (res.data as NationalityReport) : null;
+  } catch {
+    return null;
+  }
+}
+
 export type CustomerDetail = {
   success: boolean;
   customerId: string;
