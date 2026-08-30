@@ -470,6 +470,8 @@ export async function fetchClientOrigin(params: {
 
 export type DailyStats = {
   day: string;
+  /** Vrai quand la recette vient du prix négocié, pas de la facturation. */
+  isForecast?: boolean;
   parcUnits: number;
   blockedUnits: number;
   availableUnits: number;
@@ -497,6 +499,20 @@ export type DailySummary = {
     departureDate: string | null;
   }>;
   pace: Array<{ day: string; reservations: number; nights: number }>;
+  /** Ce qui a été pris ces 7 jours, ventilé par mois d'arrivée. */
+  pickup: Array<{
+    takenOn: string;
+    stayMonth: string;
+    reservations: number;
+    nights: number;
+    revenue: number;
+  }>;
+  revenuePerformance: {
+    previous: { month: string; total: number; booked: boolean };
+    current: { month: string; total: number; booked: boolean };
+    next: { month: string; total: number; booked: boolean };
+    variationPct: number | null;
+  };
   paceTotal: number;
   paceNights: number;
   extras: {
