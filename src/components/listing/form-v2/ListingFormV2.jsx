@@ -24,6 +24,7 @@ import { RuImportDataTab } from './tabs/DetailTabsRuImport';
 import PostImportOnboardingTab from './tabs/PostImportOnboardingTab';
 import ListingExperiencesTab from './tabs/ListingExperiencesTab';
 import ListingMenageTab from './tabs/ListingMenageTab';
+import ListingRoomServiceTab from './tabs/ListingRoomServiceTab';
 import ListingOrchestrationV3Embed from '../../../features/orchestrationListingV3/ListingOrchestrationV3Embed';
 
 export default function ListingFormV2({
@@ -237,6 +238,15 @@ export default function ListingFormV2({
       if (tabKey === 'experiences') {
         return (
           <ListingExperiencesTab
+            listingId={listingId}
+            listingCityId={values.cityId}
+            listingOwnerId={values.ownerId}
+          />
+        );
+      }
+      if (tabKey === 'room-service') {
+        return (
+          <ListingRoomServiceTab
             listingId={listingId}
             listingCityId={values.cityId}
             listingOwnerId={values.ownerId}
