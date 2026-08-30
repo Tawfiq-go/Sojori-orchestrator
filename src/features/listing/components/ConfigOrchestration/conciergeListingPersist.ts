@@ -1,5 +1,15 @@
 import { listingsService } from '../../../../services/listingsService';
 
+export type RoomServiceBreakfastConfig = {
+  enabled: boolean;
+  entitlement: 'per_traveler' | 'per_reservation';
+  start: 'arrival' | 'j_plus_1';
+  endInclusive: boolean;
+  includedServiceIds: string[];
+  defaultTime?: string;
+  guestMustSelectDays: boolean;
+};
+
 export type ConciergeServicesSlice = {
   transportServices?: unknown[];
   groceryServices?: unknown[];
@@ -9,6 +19,7 @@ export type ConciergeServicesSlice = {
   conciergePartnerId?: string | null;
   /** Ids PartnerService cochés sur le listing (absent / [] = aucune expérience guest). */
   enabledExperienceIds?: string[];
+  roomServiceBreakfast?: RoomServiceBreakfastConfig | null;
 };
 
 export type ConciergeServicesArrays = {
@@ -18,7 +29,27 @@ export type ConciergeServicesArrays = {
   conciergeSource?: 'own' | 'partner';
   conciergePartnerId?: string | null;
   enabledExperienceIds?: string[] | null;
+  roomServiceBreakfast?: RoomServiceBreakfastConfig | null;
 };
+
+function normalizeBreakfast(raw: unknown): RoomServiceBreakfastConfig | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const b = raw as Record<string, unknown>;
+  return {
+    enabled: Boolean(b.enabled),
+    entitlement: b.entitlement === 'per_reservation' ? 'per_reservation' : 'per_traveler',
+    start: b.start === 'arrival' ? 'arrival' : 'j_plus_1',
+    endInclusive: Boolean(b.endInclusive),
+    includedServiceIds: (Array.isArray(b.includedServiceIds) ? b.includedServiceIds : [])
+      .map(String)
+      .filter(Boolean),
+    defaultTime:
+      typeof b.defaultTime === 'string' && b.defaultTime.trim()
+        ? b.defaultTime.trim().slice(0, 8)
+        : '08:00',
+    guestMustSelectDays: b.guestMustSelectDays !== false,
+  };
+}
 
 /** Read current listing_concierge_services (source of truth for WhatsApp snapshot). */
 export async function fetchListingConciergeArrays(
@@ -27,6 +58,7 @@ export async function fetchListingConciergeArrays(
   const res = await listingsService.getListingConciergeConfig(listingId);
   const doc = (res.data || {}) as ConciergeServicesSlice & {
     enabledExperienceIds?: unknown;
+    roomServiceBreakfast?: unknown;
   };
   const enabledRaw = doc.enabledExperienceIds;
   const enabledExperienceIds =
@@ -40,6 +72,7 @@ export async function fetchListingConciergeArrays(
     conciergeSource: doc.conciergeSource === 'partner' ? 'partner' : 'own',
     conciergePartnerId: doc.conciergePartnerId ?? null,
     enabledExperienceIds,
+    roomServiceBreakfast: normalizeBreakfast(doc.roomServiceBreakfast),
   };
 }
 
@@ -70,6 +103,11 @@ export async function persistListingConciergeSlice(
   if (slice.enabledExperienceIds !== undefined) {
     body.enabledExperienceIds = slice.enabledExperienceIds;
   }
+  if (slice.roomServiceBreakfast !== undefined) {
+    body.roomServiceBreakfast = slice.roomServiceBreakfast;
+  } else if (existing.roomServiceBreakfast) {
+    body.roomServiceBreakfast = existing.roomServiceBreakfast;
+  }
   const res = await listingsService.updateListingConciergeServices(listingId, body);
   if (res.error) throw new Error(res.error);
   return {
@@ -82,5 +120,9 @@ export async function persistListingConciergeSlice(
       body.enabledExperienceIds !== undefined
         ? body.enabledExperienceIds
         : existing.enabledExperienceIds,
+    roomServiceBreakfast:
+      body.roomServiceBreakfast !== undefined
+        ? body.roomServiceBreakfast
+        : (existing.roomServiceBreakfast ?? null),
   };
 }
