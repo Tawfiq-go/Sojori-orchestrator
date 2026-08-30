@@ -46,12 +46,18 @@ export type CountryDatum = {
   code: string;
   customers: number;
   gross: number;
+  /** Libellé de la valeur affichée dans l'infobulle (« MAD », « séjours »…). */
+  unit?: string;
+  /** Seconde ligne d'infobulle, quand la métrique le justifie. */
+  secondary?: string;
 };
 
 type Props = {
   countries: CountryDatum[];
   /** Clients dont la nationalité est inconnue — affiché, jamais masqué. */
   unknownCustomers?: number;
+  /** Ce que mesure la teinte, nommé sous la légende. */
+  metricLabel?: string;
 };
 
 const world = worldTopo as unknown as Parameters<typeof feature>[0];
@@ -62,7 +68,11 @@ type CountryFeature = Feature<Geometry, { name: string }>;
 /** Échelle dorée : du plus clair au plus soutenu, en 5 paliers. */
 const RAMP = ['#f6e9c8', '#ecd393', '#e0b95a', '#cc9a26', '#a2761b'];
 
-export function NationalityMap({ countries, unknownCustomers = 0 }: Props) {
+export function NationalityMap({
+  countries,
+  unknownCustomers = 0,
+  metricLabel,
+}: Props) {
   const [hover, setHover] = useState<string | null>(null);
 
   const byNumeric = useMemo(() => {
@@ -189,11 +199,16 @@ export function NationalityMap({ countries, unknownCustomers = 0 }: Props) {
             {countryFlag(hovered.code)} {countryName(hovered.code)}
           </Typography>
           <Typography sx={{ fontSize: 11.5, color: T.text2, mt: 0.25 }}>
-            {hovered.gross.toLocaleString('fr-FR')} MAD ·{' '}
+            {hovered.gross.toLocaleString('fr-FR')} {hovered.unit ?? 'MAD'} ·{' '}
             {hovered.customers} client{hovered.customers > 1 ? 's' : ''}
           </Typography>
+          {hovered.secondary ? (
+            <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.25 }}>
+              {hovered.secondary}
+            </Typography>
+          ) : null}
           <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-            {total ? Math.round((hovered.gross / total) * 100) : 0} % des extras
+            {total ? Math.round((hovered.gross / total) * 100) : 0} % du total
           </Typography>
         </Box>
       ) : null}
@@ -202,7 +217,9 @@ export function NationalityMap({ countries, unknownCustomers = 0 }: Props) {
         direction="row"
         sx={{ alignItems: 'center', gap: 1, mt: 1.25, flexWrap: 'wrap' }}
       >
-        <Typography sx={{ fontSize: 10.5, color: T.text3, fontWeight: 600 }}>Moins</Typography>
+        <Typography sx={{ fontSize: 10.5, color: T.text3, fontWeight: 600 }}>
+          {metricLabel ?? 'Moins'}
+        </Typography>
         {RAMP.map((c) => (
           <Box key={c} sx={{ width: 26, height: 9, bgcolor: c, borderRadius: 0.4 }} />
         ))}
