@@ -23,7 +23,7 @@ import {
   FormControlLabel,
   Switch,
 } from '@mui/material';
-import { Add, Close, CloudUpload, Edit, Person, PictureAsPdf, RestartAlt } from '@mui/icons-material';
+import { Add, Close, CloudUpload, Edit, PictureAsPdf, RestartAlt } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { ReservationRegistrationActions } from '../reservations/ReservationRegistrationActions';
 import * as fulltaskApi from '../../services/fulltaskApi';
@@ -259,6 +259,26 @@ export function RegistrationTab({
   const [travelerAnswers, setTravelerAnswers] = useState<Record<string, Record<string, unknown>>>({});
   const [editCustom, setEditCustom] = useState<Record<string, unknown>>({});
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [expandedTraveler, setExpandedTraveler] = useState<number | null>(null);
+
+  const resaGuestName = String(
+    r?.guestName ||
+      r?.guest_name ||
+      [r?.guestFirstName || r?.guest_first_name, r?.guestLastName || r?.guest_last_name]
+        .filter(Boolean)
+        .join(' ') ||
+      '',
+  ).trim();
+
+  const travelerDisplayName = (index: number, m: Member): string => {
+    const fromMember = [m.first_name || m.firstName, m.last_name || m.lastName]
+      .map(x => String(x || '').trim())
+      .filter(Boolean)
+      .join(' ');
+    if (fromMember) return fromMember;
+    if (index === 0 && resaGuestName) return resaGuestName;
+    return `Voyageur ${index + 1}`;
+  };
 
   const loadLevel = useCallback(async () => {
     const custom = ((r?.guestRegistration as { customAnswers?: {
@@ -593,18 +613,18 @@ export function RegistrationTab({
       ) : null}
       <Paper
         sx={{
-          p: 2,
-          mb: 1.75,
+          p: 1.25,
+          mb: 1.25,
           border: `1px solid ${T.border}`,
-          borderRadius: 1.5,
+          borderRadius: 1.25,
           bgcolor: T.bg1,
         }}
       >
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1.5 }}
+          sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1 }}
         >
-          <Box>
+          <Stack direction="row" sx={{ gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
             <Typography
               sx={{
                 fontSize: 11,
@@ -612,62 +632,44 @@ export function RegistrationTab({
                 color: T.text3,
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
-                mb: 0.5,
               }}
             >
-              Enregistrement voyageurs
+              Enregistrement
             </Typography>
-            <Stack direction="row" sx={{ gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Typography
-                sx={{
-                  fontSize: 22,
-                  fontWeight: 800,
-                  fontFamily: '"Geist Mono", monospace',
-                  color: complete ? T.success : T.primaryDeep,
-                }}
-              >
-                {stats.ok}/{regTotal}
-              </Typography>
-              <Chip
-                size="small"
-                label={
-                  registrationLevel === 'complete' ? 'Mode complet' : 'Mode simple'
-                }
-                sx={{
-                  fontWeight: 700,
-                  fontSize: 11,
-                  height: 22,
-                  bgcolor: T.bg3,
-                  color: T.text2,
-                }}
-              />
-              <Chip
-                size="small"
-                label={complete ? 'Finalisé' : 'En cours'}
-                sx={{
-                  fontWeight: 700,
-                  fontSize: 11,
-                  height: 22,
-                  bgcolor: complete ? 'rgba(10,143,94,0.12)' : T.primaryTint,
-                  color: complete ? T.success : T.primaryDeep,
-                }}
-              />
-              <Typography sx={{ fontSize: 12, color: T.text3 }}>
-                {stats.ok} validé{stats.ok > 1 ? 's' : ''} · {stats.draft} brouillon
-                {stats.draft > 1 ? 's' : ''} · {stats.missing} manquant
-                {stats.missing > 1 ? 's' : ''}
-              </Typography>
-            </Stack>
+            <Typography
+              sx={{
+                fontSize: 20,
+                fontWeight: 800,
+                fontFamily: '"Geist Mono", monospace',
+                color: complete ? T.success : T.primaryDeep,
+                lineHeight: 1,
+              }}
+            >
+              {stats.ok}/{regTotal}
+            </Typography>
+            <Chip
+              size="small"
+              label={registrationLevel === 'complete' ? 'Complet' : 'Simple'}
+              sx={{
+                fontWeight: 700,
+                fontSize: 10,
+                height: 20,
+                bgcolor: T.bg3,
+                color: T.text2,
+              }}
+            />
             {!complete && stats.missingLabels.length > 0 ? (
-              <Typography sx={{ mt: 0.75, fontSize: 12, color: T.text3, lineHeight: 1.35 }}>
-                À compléter : {stats.missingLabels.slice(0, 5).join(', ')}
-                {stats.missingLabels.length > 5
-                  ? ` (+${stats.missingLabels.length - 5})`
-                  : ''}
+              <Typography sx={{ fontSize: 11, color: T.text3 }}>
+                Manque : {stats.missingLabels.slice(0, 3).join(', ')}
+                {stats.missingLabels.length > 3 ? ` +${stats.missingLabels.length - 3}` : ''}
               </Typography>
-            ) : null}
-          </Box>
-          <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
+            ) : (
+              <Typography sx={{ fontSize: 11, color: T.text3 }}>
+                {complete ? 'Finalisé' : `${stats.draft} brouillon${stats.draft > 1 ? 's' : ''}`}
+              </Typography>
+            )}
+          </Stack>
+          <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
             {registrationLevel === 'complete' ? (
               <Button
                 size="small"
@@ -684,12 +686,13 @@ export function RegistrationTab({
                 sx={{
                   textTransform: 'none',
                   fontWeight: 700,
-                  fontSize: 12,
+                  fontSize: 11,
                   bgcolor: T.primaryDeep,
                   '&:hover': { bgcolor: '#6e4f14' },
+                  minHeight: 28,
                 }}
               >
-                PDF fiche police
+                PDF police
               </Button>
             ) : null}
             {resaId && !readOnly ? (
@@ -697,14 +700,15 @@ export function RegistrationTab({
                 size="small"
                 variant="outlined"
                 disabled={saving}
-                startIcon={<RestartAlt sx={{ fontSize: 16 }} />}
+                startIcon={<RestartAlt sx={{ fontSize: 15 }} />}
                 onClick={() => void handleResetAttempt()}
                 sx={{
                   textTransform: 'none',
                   fontWeight: 700,
-                  fontSize: 12,
+                  fontSize: 11,
                   borderColor: T.border,
                   color: T.text2,
+                  minHeight: 28,
                 }}
               >
                 Nouvel essai
@@ -725,17 +729,18 @@ export function RegistrationTab({
               <Button
                 size="small"
                 variant="outlined"
-                startIcon={<Add sx={{ fontSize: 16 }} />}
+                startIcon={<Add sx={{ fontSize: 15 }} />}
                 onClick={openAdd}
                 sx={{
                   textTransform: 'none',
                   fontWeight: 700,
-                  fontSize: 12,
+                  fontSize: 11,
                   borderColor: T.border,
                   color: T.text2,
+                  minHeight: 28,
                 }}
               >
-                Nouveau voyageur
+                Voyageur
               </Button>
             ) : null}
           </Stack>
@@ -754,19 +759,19 @@ export function RegistrationTab({
       {Math.max(members.length, regTotal) === 0 ? (
         <Paper
           sx={{
-            p: 4,
+            p: 2.5,
             textAlign: 'center',
             border: `1px dashed ${T.border}`,
-            borderRadius: 1.5,
+            borderRadius: 1.25,
             bgcolor: T.bg1,
           }}
         >
-          <Person sx={{ fontSize: 36, color: T.text4, mb: 1 }} />
-          <Typography sx={{ fontSize: 13, color: T.text3, mb: 1.5 }}>
-            Aucun voyageur enregistré pour cette réservation.
+          <Typography sx={{ fontSize: 13, color: T.text3, mb: 1 }}>
+            Aucun voyageur à enregistrer.
           </Typography>
           {!readOnly ? (
             <Button
+              size="small"
               variant="contained"
               startIcon={<Add />}
               onClick={openAdd}
@@ -782,23 +787,24 @@ export function RegistrationTab({
           ) : null}
         </Paper>
       ) : (
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: '1fr',
-            gap: 1.25,
-          }}
-        >
+        <Stack spacing={0.5}>
           {Array.from({ length: Math.max(members.length, regTotal) }, (_, i) => {
             const m = (members[i] || {}) as Member;
             const status = memberStatus(m, formSchema, travelerAnswers[String(i)]);
-            const missing = evaluateRegistrationCompleteness(formSchema, {
-              members: [m],
-              customAnswers: { stay: stayAnswers, travelers: { '0': travelerAnswers[String(i)] ?? {} } },
-              travelerCount: 1,
-            }).travelersMissing[0] ?? [];
-            const first = String(m.first_name || m.firstName || '—');
-            const last = String(m.last_name || m.lastName || '');
+            const missing =
+              evaluateRegistrationCompleteness(formSchema, {
+                members: [m],
+                customAnswers: {
+                  stay: stayAnswers,
+                  travelers: { '0': travelerAnswers[String(i)] ?? {} },
+                },
+                travelerCount: 1,
+              }).travelersMissing[0] ?? [];
+            const displayName = travelerDisplayName(i, m);
+            const fromResaOnly =
+              !(m.first_name || m.firstName || m.last_name || m.lastName) &&
+              i === 0 &&
+              Boolean(resaGuestName);
             const front = memberDocUrl(m, 'front');
             const back = memberDocUrl(m, 'back');
             const rawDocType = String(m.document_type || '').trim();
@@ -807,7 +813,13 @@ export function RegistrationTab({
               : back
                 ? 'national_id'
                 : 'passport';
-            const ocrBlocks: Array<{ label: string; value: string; mono?: boolean; missing?: boolean }> = [
+            const expanded = expandedTraveler === i;
+            const ocrBlocks: Array<{
+              label: string;
+              value: string;
+              mono?: boolean;
+              missing?: boolean;
+            }> = [
               { label: 'Type', value: docTypeLabel(docKind) },
               {
                 label: docKind === 'national_id' ? 'N° CIN' : 'N° pièce',
@@ -828,25 +840,8 @@ export function RegistrationTab({
               { label: 'Genre', value: memberField(m, 'gender') || '—' },
               {
                 label: 'Résidence',
-                value: memberField(m, 'country_of_residence', 'residence_country', 'country') || '—',
-              },
-              { label: 'Lieu naissance', value: memberField(m, 'place_of_birth', 'birth_place') || '—' },
-              { label: 'Délivré à', value: memberField(m, 'document_issued_at', 'issued_at') || '—' },
-              {
-                label: 'Délivré le',
-                value: formDate(memberField(m, 'document_issued_on', 'issued_on')) || '—',
-              },
-              {
-                label: 'Expire le',
-                value: formDate(memberField(m, 'document_expiry_date', 'expiry_date')) || '—',
-              },
-              {
-                label: 'Pays émission',
-                value: memberField(m, 'issuing_country') || '—',
-              },
-              {
-                label: 'N° personnel',
-                value: memberField(m, 'personal_number') || '—',
+                value:
+                  memberField(m, 'country_of_residence', 'residence_country', 'country') || '—',
               },
             ];
             if (registrationLevel === 'complete') {
@@ -854,62 +849,72 @@ export function RegistrationTab({
                 {
                   label: 'Profession',
                   value: memberField(m, 'profession', 'occupation') || '—',
-                  missing: missing.includes('profession'),
                 },
                 {
                   label: 'Provenance',
                   value: memberField(m, 'coming_from', 'provenance') || '—',
-                  missing: missing.includes('coming_from'),
                 },
-                {
-                  label: 'Destination',
-                  value: memberField(m, 'going_to', 'destination') || '—',
-                  missing: missing.includes('going_to'),
-                },
-                {
-                  label: 'Téléphone',
-                  value: memberField(m, 'phone') || '—',
-                  missing: missing.includes('phone'),
-                },
-                { label: 'Domicile', value: memberField(m, 'domicile', 'address') || '—' },
-                { label: 'Ville', value: memberField(m, 'city') || '—' },
               );
             }
             return (
               <Paper
                 key={i}
                 sx={{
-                  p: 1.25,
-                  border: `1px solid ${missing.length ? 'rgba(200,30,30,0.35)' : T.border}`,
-                  borderRadius: 1.5,
+                  px: 1,
+                  py: 0.55,
+                  border: `1px solid ${missing.length ? 'rgba(200,30,30,0.28)' : T.border}`,
+                  borderRadius: 1.1,
                   bgcolor: T.bg1,
                 }}
               >
-                <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1, gap: 1 }}>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 13, fontWeight: 800, color: T.text, lineHeight: 1.2 }}>
-                      {first} {last}
+                <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, minHeight: 34 }}>
+                  <Box
+                    onClick={() => setExpandedTraveler(expanded ? null : i)}
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.75,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        fontWeight: 750,
+                        color: T.text,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {displayName}
                     </Typography>
-                    <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
-                      Voyageur {i + 1} · {docTypeLabel(docKind)}
+                    <Typography sx={{ fontSize: 10.5, color: T.text4, flexShrink: 0 }}>
+                      #{i + 1}
+                      {fromResaOnly ? ' · résa' : ''}
                     </Typography>
-                  </Box>
-                  <Stack direction="row" sx={{ gap: 0.5, alignItems: 'flex-start', flexShrink: 0 }}>
                     <Chip
                       size="small"
                       label={
-                        status === 'complete' ? 'Validé' : status === 'draft' ? 'Brouillon' : 'Incomplet'
+                        status === 'complete'
+                          ? 'OK'
+                          : status === 'draft'
+                            ? 'Brouillon'
+                            : 'À faire'
                       }
                       sx={{
-                        height: 20,
-                        fontSize: 10,
+                        height: 18,
+                        fontSize: 9.5,
                         fontWeight: 700,
+                        flexShrink: 0,
                         bgcolor:
                           status === 'complete'
                             ? 'rgba(10,143,94,0.12)'
                             : status === 'draft'
                               ? 'rgba(196,101,6,0.12)'
-                              : 'rgba(200,30,30,0.10)',
+                              : 'rgba(200,30,30,0.08)',
                         color:
                           status === 'complete'
                             ? T.success
@@ -918,91 +923,93 @@ export function RegistrationTab({
                               : T.error,
                       }}
                     />
-                    {!readOnly ? (
-                      <>
-                        <IconButton size="small" onClick={() => openEdit(i)} sx={{ color: T.text2 }}>
-                          <Edit sx={{ fontSize: 16 }} />
-                        </IconButton>
+                  </Box>
+                  {!readOnly ? (
+                    <>
+                      <IconButton size="small" onClick={() => openEdit(i)} sx={{ color: T.text2 }}>
+                        <Edit sx={{ fontSize: 15 }} />
+                      </IconButton>
+                      {members[i] ? (
                         <IconButton
                           size="small"
                           onClick={() => void handleDelete(i)}
                           sx={{ color: T.error }}
                         >
-                          <Close sx={{ fontSize: 16 }} />
+                          <Close sx={{ fontSize: 15 }} />
                         </IconButton>
-                      </>
-                    ) : null}
-                  </Stack>
-                </Stack>
-
-                {missing.length > 0 ? (
-                  <Typography
-                    sx={{
-                      fontSize: 11.5,
-                      fontWeight: 700,
-                      color: T.error,
-                      mb: 1,
-                      lineHeight: 1.35,
-                    }}
-                  >
-                    Manquent :{' '}
-                    {missing
-                      .slice(0, 8)
-                      .map((k) => {
-                        const field = formSchema.fields.find((f) => f.id === k);
-                        return field ? fieldLabel(field) : k;
-                      })
-                      .join(', ')}
-                    {missing.length > 8 ? ` (+${missing.length - 8})` : ''}
-                  </Typography>
-                ) : null}
-
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: {
-                      xs: 'repeat(2, minmax(0, 1fr))',
-                      sm: 'repeat(3, minmax(0, 1fr))',
-                      md: 'repeat(6, minmax(0, 1fr))',
-                    },
-                    gap: 0.75,
-                    mb: 1,
-                  }}
-                >
-                  {ocrBlocks.map((block) => (
-                    <OcrCell
-                      key={`${i}-${block.label}`}
-                      label={block.label}
-                      value={block.value}
-                      mono={block.mono}
-                      missing={block.missing}
-                    />
-                  ))}
-                </Box>
-
-                <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.75 }}>
-                  {docKind === 'national_id' ? (
-                    <>
-                      {front ? (
-                        <DocOpenButton src={front} label="Recto" onPreview={setPreviewUrl} />
-                      ) : null}
-                      {back ? (
-                        <DocOpenButton src={back} label="Verso" onPreview={setPreviewUrl} />
                       ) : null}
                     </>
-                  ) : front ? (
-                    <DocOpenButton src={front} label="Passeport" onPreview={setPreviewUrl} />
-                  ) : null}
-                  {!front && !back ? (
-                    <Typography sx={{ fontSize: 11.5, color: T.text4 }}>
-                      Aucune image de pièce d’identité
-                    </Typography>
                   ) : null}
                 </Stack>
+
+                {expanded ? (
+                  <Box sx={{ pt: 0.75, pb: 0.35 }}>
+                    {missing.length > 0 ? (
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 650,
+                          color: T.error,
+                          mb: 0.75,
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        Manque :{' '}
+                        {missing
+                          .slice(0, 6)
+                          .map(k => {
+                            const field = formSchema.fields.find(f => f.id === k);
+                            return field ? fieldLabel(field) : k;
+                          })
+                          .join(', ')}
+                        {missing.length > 6 ? ` +${missing.length - 6}` : ''}
+                      </Typography>
+                    ) : null}
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: {
+                          xs: 'repeat(2, minmax(0, 1fr))',
+                          sm: 'repeat(3, minmax(0, 1fr))',
+                          md: 'repeat(6, minmax(0, 1fr))',
+                        },
+                        gap: 0.6,
+                        mb: 0.75,
+                      }}
+                    >
+                      {ocrBlocks.map(block => (
+                        <OcrCell
+                          key={`${i}-${block.label}`}
+                          label={block.label}
+                          value={block.value}
+                          mono={block.mono}
+                          missing={block.missing}
+                        />
+                      ))}
+                    </Box>
+                    <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                      {docKind === 'national_id' ? (
+                        <>
+                          {front ? (
+                            <DocOpenButton src={front} label="Recto" onPreview={setPreviewUrl} />
+                          ) : null}
+                          {back ? (
+                            <DocOpenButton src={back} label="Verso" onPreview={setPreviewUrl} />
+                          ) : null}
+                        </>
+                      ) : front ? (
+                        <DocOpenButton src={front} label="Passeport" onPreview={setPreviewUrl} />
+                      ) : null}
+                      {!front && !back ? (
+                        <Typography sx={{ fontSize: 11, color: T.text4 }}>Pas de pièce</Typography>
+                      ) : null}
+                    </Stack>
+                  </Box>
+                ) : null}
               </Paper>
             );
           })}
-        </Box>
+        </Stack>
       )}
 
       <Dialog
