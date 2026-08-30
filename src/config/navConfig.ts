@@ -395,6 +395,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         description: 'Occupation, revenu et encaissements',
       },
       {
+        id: 'reports/origine',
+        label: 'Origine clients',
+        iconType: 'worker',
+        iconColor: '#93C47D',
+        description: 'D’où viennent les réservations, et ce qu’elles rapportent',
+      },
+      {
         id: 'reports/clients',
         label: 'Client 360',
         iconType: 'worker',

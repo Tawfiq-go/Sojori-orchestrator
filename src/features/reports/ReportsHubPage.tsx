@@ -46,6 +46,15 @@ const REPORTS: Report[] = [
     route: '/reports/exploitation',
   },
   {
+    id: 'origin',
+    title: 'Origine clients',
+    pitch: 'D’où viennent les réservations',
+    detail:
+      'Carte et classement par pays. Le podium change selon le critère : le Maroc réserve le plus, la France dépense le plus.',
+    accent: T.green,
+    route: '/reports/origine',
+  },
+  {
     id: 'clients',
     title: 'Client 360',
     pitch: 'Qui consomme quoi, sur tous ses séjours',
