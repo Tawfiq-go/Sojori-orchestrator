@@ -395,3 +395,53 @@ export async function fetchOperationsReport(params?: {
     return null;
   }
 }
+
+export type OriginCountry = {
+  code: string;
+  customers: number;
+  reservations: number;
+  nights: number;
+  accommodation: number;
+  extras: number;
+  total: number;
+  perReservation: number | null;
+};
+
+export type ClientOriginReport = {
+  success: boolean;
+  countries: OriginCountry[];
+  totals: {
+    customers: number;
+    reservations: number;
+    nights: number;
+    accommodation: number;
+    extras: number;
+    total: number;
+  };
+  /** Clients sans nationalité exploitable — comptés, jamais écartés. */
+  unplaced: {
+    customers: number;
+    reservations: number;
+    nights: number;
+    accommodation: number;
+    extras: number;
+    total: number;
+  };
+};
+
+/** Origine des clients, pondérée par les réservations. */
+export async function fetchClientOrigin(params: {
+  from: string;
+  to: string;
+}): Promise<ClientOriginReport | null> {
+  try {
+    const search = new URLSearchParams({ from: params.from, to: params.to });
+    const res = await apiClient.get(
+      `${REVENUE_BASE}/reports/client-origin?${search.toString()}`,
+      { timeout: 30000 },
+    );
+    return res?.data?.success ? (res.data as ClientOriginReport) : null;
+  } catch {
+    return null;
+  }
+}
