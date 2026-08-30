@@ -467,3 +467,68 @@ export async function fetchClientOrigin(params: {
     return null;
   }
 }
+
+export type DailyStats = {
+  day: string;
+  parcUnits: number;
+  blockedUnits: number;
+  availableUnits: number;
+  soldUnits: number;
+  roomRevenue: number;
+  occupancyPct: number | null;
+  adr: number | null;
+  revpar: number | null;
+  blocks: Array<{ name: string; category: string; reason: string }>;
+};
+
+export type DailySummary = {
+  success: boolean;
+  asOf: string;
+  parcUnits: number;
+  days: { yesterday: DailyStats; today: DailyStats; tomorrow: DailyStats };
+  week: DailyStats[];
+  movement: Array<{ day: string; arrivals: number; departures: number; guestsIn: number }>;
+  arrivals: Array<{
+    guestName: string;
+    unit: string | null;
+    channel: string;
+    guests: number;
+    nights: number;
+    departureDate: string | null;
+  }>;
+  pace: Array<{ day: string; reservations: number; nights: number }>;
+  paceTotal: number;
+  paceNights: number;
+  extras: {
+    today: Array<{ category: string; gross: number; items: number }>;
+    yesterdayTotal: number;
+  };
+  months: Array<{
+    month: string;
+    availableUnits: number;
+    soldUnits: number;
+    roomRevenue: number;
+    occupancyPct: number | null;
+    adr: number | null;
+    revpar: number | null;
+  }>;
+  cumulative: Array<{ month: string; nights: number; cumulative: number }>;
+};
+
+/** Résumé quotidien — le rapport du matin. */
+export async function fetchDailySummary(params?: {
+  asOf?: string;
+}): Promise<DailySummary | null> {
+  try {
+    const search = new URLSearchParams();
+    if (params?.asOf) search.set('asOf', params.asOf);
+    const qs = search.toString();
+    const res = await apiClient.get(
+      `${REVENUE_BASE}/reports/daily-summary${qs ? `?${qs}` : ''}`,
+      { timeout: 30000 },
+    );
+    return res?.data?.success ? (res.data as DailySummary) : null;
+  } catch {
+    return null;
+  }
+}

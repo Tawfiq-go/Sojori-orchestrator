@@ -6,6 +6,7 @@ import guestContractsService, {
   missingSigners,
   type GuestContractStatus,
   type GuestContractSummary,
+  type GuestContractTraveler,
 } from '../../services/guestContractsService';
 import {
   type GuestContractDocumentType,
@@ -46,6 +47,7 @@ const TYPE_ORDER: GuestContractDocumentType[] = ['moroccan_police_form', 'stay_c
 type ConfiguredContract = {
   documentType: GuestContractDocumentType;
   name: string;
+  signerPolicy: 'primary_guest' | 'each_traveler';
 };
 
 function statusColor(status: GuestContractStatus) {
@@ -75,6 +77,7 @@ function configuredFromDocs(docs: GuestDocument[]): ConfiguredContract[] {
     out.push({
       documentType,
       name: (doc.title || doc.name || documentTypeLabel(documentType)).trim(),
+      signerPolicy: doc.signerPolicy === 'each_traveler' ? 'each_traveler' : 'primary_guest',
     });
   }
   return out.sort(
@@ -82,6 +85,88 @@ function configuredFromDocs(docs: GuestDocument[]): ConfiguredContract[] {
       (TYPE_ORDER.indexOf(a.documentType) === -1 ? 99 : TYPE_ORDER.indexOf(a.documentType)) -
       (TYPE_ORDER.indexOf(b.documentType) === -1 ? 99 : TYPE_ORDER.indexOf(b.documentType)),
   );
+}
+
+function travelerLabel(t: GuestContractTraveler, i: number): string {
+  const name = [t.firstName, t.lastName].filter(Boolean).join(' ').trim();
+  return name || `Voyageur ${i + 1}`;
+}
+
+function principalLabel(contracts: GuestContractSummary[]): string {
+  for (const c of contracts) {
+    const idx = c.primaryTravelerIndex ?? 0;
+    const t = (c.travelers ?? []).find(x => x.travelerIndex === idx) ?? (c.travelers ?? [])[0];
+    if (t) {
+      const name = travelerLabel(t, idx);
+      if (name) return name;
+    }
+    if (c.guestName?.trim()) return c.guestName.trim();
+  }
+  return 'Voyageur principal';
+}
+
+type MatrixRow = { doc: string; who: string };
+
+function buildWhoSignsMatrix(
+  configured: ConfiguredContract[],
+  contracts: GuestContractSummary[],
+): { rows: MatrixRow[]; combo: string; airbnbNote: string } {
+  const travelers =
+    contracts.find(c => (c.travelers?.length ?? 0) > 0)?.travelers ??
+    ([] as GuestContractTraveler[]);
+  const principal = principalLabel(contracts);
+  const hasPolice = configured.some(c => c.documentType === 'moroccan_police_form');
+  const hasDisclaimer = configured.some(c => c.documentType === 'stay_contract');
+  const rows: MatrixRow[] = [];
+
+  for (const cfg of configured) {
+    if (cfg.documentType === 'moroccan_police_form') {
+      if (travelers.length === 0) {
+        rows.push({
+          doc: `${cfg.name} · toutes les fiches`,
+          who: `Signature : ${principal} (1 fois)`,
+        });
+      } else if (cfg.signerPolicy === 'each_traveler') {
+        travelers.forEach((t, i) => {
+          rows.push({
+            doc: `${cfg.name} · ${travelerLabel(t, i)}`,
+            who: `Signe : ${travelerLabel(t, i)}`,
+          });
+        });
+      } else {
+        // Airbnb / default: all sheets collected, one principal signature
+        travelers.forEach((t, i) => {
+          rows.push({
+            doc: `${cfg.name} · ${travelerLabel(t, i)}`,
+            who: `Collectée · signée par ${principal}`,
+          });
+        });
+      }
+    } else {
+      rows.push({
+        doc: cfg.name,
+        who: `Signature : ${principal}`,
+      });
+    }
+  }
+
+  const nPolice = hasPolice ? Math.max(1, travelers.length || 1) : 0;
+  const parts: string[] = [];
+  if (hasPolice) parts.push(`${nPolice} fiche${nPolice > 1 ? 's' : ''} police`);
+  if (hasDisclaimer) parts.push('1 disclaimer');
+  const combo =
+    parts.length === 0
+      ? 'Aucun document signature web'
+      : `Combinaison prévue : ${parts.join(' + ')} → 1 lien web · 1 signature (${principal})`;
+
+  const airbnbNote =
+    hasPolice && configured.some(c => c.documentType === 'moroccan_police_form' && c.signerPolicy === 'primary_guest')
+      ? 'Mode Airbnb : toutes les fiches sont récupérées ; seuls le principal signe (pas chaque client).'
+      : hasPolice
+        ? 'Mode hôtel : chaque adulte peut être requis pour sa fiche (policy listing).'
+        : '';
+
+  return { rows, combo, airbnbNote };
 }
 
 type Props = {
@@ -124,14 +209,18 @@ export function GuestContractSection({
       if (parsed) {
         setConfigured(configuredFromDocs(parsed));
       } else {
-        // Legacy: any generated contract types, or nothing configured
         const byType = latestByType(listRes.success && Array.isArray(listRes.data) ? listRes.data : []);
         setConfigured(
           [...byType.keys()]
-            .map(documentType => ({
-              documentType: documentType as GuestContractDocumentType,
-              name: documentTypeLabel(documentType),
-            }))
+            .map(documentType => {
+              const c = byType.get(documentType);
+              return {
+                documentType: documentType as GuestContractDocumentType,
+                name: documentTypeLabel(documentType),
+                signerPolicy:
+                  c?.signerPolicy === 'each_traveler' ? ('each_traveler' as const) : ('primary_guest' as const),
+              };
+            })
             .sort(
               (a, b) =>
                 (TYPE_ORDER.indexOf(a.documentType) === -1 ? 99 : TYPE_ORDER.indexOf(a.documentType)) -
@@ -152,6 +241,10 @@ export function GuestContractSection({
   }, [load]);
 
   const byType = useMemo(() => latestByType(contracts), [contracts]);
+  const matrix = useMemo(
+    () => buildWhoSignsMatrix(configured, contracts),
+    [configured, contracts],
+  );
 
   const ensureOne = async (documentType: GuestContractDocumentType) => {
     let contract = byType.get(documentType) ?? null;
@@ -336,6 +429,48 @@ export function GuestContractSection({
           );
         })}
       </Stack>
+
+      {!loading && configured.length > 0 ? (
+        <Box sx={{ mt: 1.5, pt: 1.25, borderTop: `1px solid ${T.border}` }}>
+          <Typography
+            sx={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: T.text3,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              mb: 0.75,
+            }}
+          >
+            Qui signe quoi
+          </Typography>
+          <Typography sx={{ fontSize: 12, color: T.text2, fontWeight: 650, mb: 0.75 }}>
+            {matrix.combo}
+          </Typography>
+          {matrix.airbnbNote ? (
+            <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 0.75, lineHeight: 1.35 }}>
+              {matrix.airbnbNote}
+            </Typography>
+          ) : null}
+          <Stack spacing={0.35}>
+            {matrix.rows.map((row, i) => (
+              <Stack
+                key={`${row.doc}-${i}`}
+                direction={{ xs: 'column', sm: 'row' }}
+                sx={{
+                  justifyContent: 'space-between',
+                  gap: 0.5,
+                  py: 0.35,
+                  borderBottom: i < matrix.rows.length - 1 ? `1px solid ${T.border}` : 'none',
+                }}
+              >
+                <Typography sx={{ fontSize: 12, color: T.text2, fontWeight: 600 }}>{row.doc}</Typography>
+                <Typography sx={{ fontSize: 12, color: T.text3 }}>{row.who}</Typography>
+              </Stack>
+            ))}
+          </Stack>
+        </Box>
+      ) : null}
     </Box>
   );
 }
