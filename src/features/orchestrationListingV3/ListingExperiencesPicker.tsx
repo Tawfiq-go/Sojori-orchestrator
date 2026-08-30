@@ -10,7 +10,10 @@ import {
 } from '@mui/material';
 import { toast } from 'react-toastify';
 import { partnersApi, type PartnerService } from '../../services/partnersApi';
-import { persistListingConciergeSlice } from '../listing/components/ConfigOrchestration/conciergeListingPersist';
+import {
+  fetchListingConciergeArrays,
+  persistListingConciergeSlice,
+} from '../listing/components/ConfigOrchestration/conciergeListingPersist';
 
 type Props = {
   listingId: string;
@@ -21,6 +24,11 @@ type Props = {
   onSaved?: (ids: string[]) => void;
   /** Hauteur max de la grille (sidebar listing = plus haute). */
   maxHeight?: number;
+  /**
+   * Filtre catalogue : expériences J3 (hors transport/room_service),
+   * ou plats Room Service uniquement.
+   */
+  kindFilter?: 'experience' | 'room_service';
 };
 
 function money(n: number) {
@@ -40,6 +48,7 @@ export function ListingExperiencesPicker({
   enabledIds,
   onSaved,
   maxHeight = 560,
+  kindFilter = 'experience',
 }: Props) {
   const [rows, setRows] = useState<PartnerService[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,11 +66,17 @@ export function ListingExperiencesPicker({
         cityId: listingCityId || undefined,
         ownerId: listingOwnerId || undefined,
       });
-      setRows(list);
+      const byKind = list.filter((r) => {
+        const k = r.kind || 'experience';
+        if (kindFilter === 'room_service') return k === 'room_service';
+        return k !== 'room_service' && k !== 'transport';
+      });
+      setRows(byKind);
+      const kindIdSet = new Set(byKind.map((r) => String(r.id)));
       if (enabledIds === undefined || enabledIds === null) {
         setSelected(new Set());
       } else {
-        setSelected(new Set(enabledIds.map(String)));
+        setSelected(new Set(enabledIds.map(String).filter((id) => kindIdSet.has(id))));
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Catalogue expériences indisponible');
@@ -69,7 +84,7 @@ export function ListingExperiencesPicker({
     } finally {
       setLoading(false);
     }
-  }, [listingCityId, listingOwnerId, enabledIds]);
+  }, [listingCityId, listingOwnerId, enabledIds, kindFilter]);
 
   useEffect(() => {
     void load();
@@ -134,17 +149,29 @@ export function ListingExperiencesPicker({
   const save = async () => {
     setSaving(true);
     try {
-      const ids = Array.from(selected);
+      // Même champ enabledExperienceIds : fusionner avec l’autre kind pour ne pas l’écraser.
+      const current = await fetchListingConciergeArrays(listingId);
+      const prevIds = (current.enabledExperienceIds ?? []).map(String);
+      const catalogIds = new Set(rows.map((r) => String(r.id)));
+      const keptOther = prevIds.filter((id) => !catalogIds.has(id));
+      const ids = [...keptOther, ...Array.from(selected)];
       await persistListingConciergeSlice(listingId, {
         enabledExperienceIds: ids,
         conciergeSource: 'own',
         conciergePartnerId: null,
       });
       onSaved?.(ids);
+      const n = selected.size;
+      const noun =
+        kindFilter === 'room_service'
+          ? n > 1
+            ? 'plats Room Service'
+            : 'plat Room Service'
+          : n > 1
+            ? 'expériences'
+            : 'expérience';
       toast.success(
-        ids.length
-          ? `${ids.length} expérience${ids.length > 1 ? 's' : ''} active${ids.length > 1 ? 's' : ''} sur ce listing`
-          : 'Aucune expérience active sur ce listing',
+        n ? `${n} ${noun} actif${n > 1 ? 's' : ''} sur ce listing` : `Aucun ${noun} actif sur ce listing`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Enregistrement impossible');
@@ -164,9 +191,18 @@ export function ListingExperiencesPicker({
   if (!rows.length) {
     return (
       <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.55 }}>
-        Aucune expérience pour la ville de ce listing. Créez les vôtres dans{' '}
-        <b>Expériences → Catalogue</b>, ou activez des activités for sale du Marché puis
-        activez-les ici.
+        {kindFilter === 'room_service' ? (
+          <>
+            Aucun plat Room Service pour ce listing. Créez-en dans{' '}
+            <b>Expériences → Catalogue</b> (type Room Service), puis activez-les ici.
+          </>
+        ) : (
+          <>
+            Aucune expérience pour la ville de ce listing. Créez les vôtres dans{' '}
+            <b>Expériences → Catalogue</b>, ou activez des activités for sale du Marché puis
+            activez-les ici.
+          </>
+        )}
       </Typography>
     );
   }
@@ -174,8 +210,17 @@ export function ListingExperiencesPicker({
   return (
     <Box>
       <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 1.5, lineHeight: 1.5 }}>
-        Activez sur <b>ce listing</b> les expériences visibles pour le guest (vos activités +
-        for sale). Rien n’est activé automatiquement.
+        {kindFilter === 'room_service' ? (
+          <>
+            Activez sur <b>ce listing</b> les plats Room Service visibles pour le guest. Le
+            déclenchement WhatsApp se gère dans <b>Orchestration → Room Service</b>.
+          </>
+        ) : (
+          <>
+            Activez sur <b>ce listing</b> les expériences visibles pour le guest (vos activités +
+            for sale). Rien n’est activé automatiquement.
+          </>
+        )}
       </Typography>
 
       <Box

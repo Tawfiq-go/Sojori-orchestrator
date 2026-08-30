@@ -5,6 +5,8 @@ import {
   type Partner,
   type PartnerService,
   type PartnerServiceFormule,
+  type PartnerServiceKind,
+  type PartnerServiceOptionGroup,
   type PartnerServicePayment,
   type PartnerServiceSchedule,
   type PartnerServiceContact,
@@ -28,7 +30,7 @@ import './partnersAdmin.css';
 
 type Draft = {
   partnerId: string;
-  kind: 'experience' | 'transport';
+  kind: PartnerServiceKind;
   transportDirections: { toDestination: boolean; fromDestination: boolean };
   category: string;
   title: string;
@@ -37,6 +39,7 @@ type Draft = {
   cityIds: 'all' | string[];
   photos: string[];
   formules: PartnerServiceFormule[];
+  optionGroups: PartnerServiceOptionGroup[];
   schedule: PartnerServiceSchedule;
   payment: PartnerServicePayment;
   contact: PartnerServiceContact;
@@ -47,6 +50,25 @@ type Draft = {
   sortOrder: number;
   forSale: boolean;
 };
+
+function newOptionGroupId(): string {
+  return `g_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function newOptionChoiceId(): string {
+  return `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function emptyOptionGroup(): PartnerServiceOptionGroup {
+  return {
+    id: newOptionGroupId(),
+    label: '',
+    required: true,
+    min: 1,
+    max: 1,
+    choices: [{ id: newOptionChoiceId(), label: '', priceDeltaMad: 0 }],
+  };
+}
 
 const REMINDER_OFFSETS = [
   { v: 3, l: 'J-3' },
@@ -70,6 +92,7 @@ const CATS = [
   { v: 'Vue d’en haut', l: 'Vue d’en haut' },
   { v: 'Culture & nature', l: 'Culture & nature' },
   { v: 'Mobilité', l: 'Mobilité' },
+  { v: 'Food', l: 'Food / Room Service' },
   { v: 'Soirée', l: 'Soirée' },
 ];
 
@@ -165,6 +188,7 @@ function emptyDraft(): Draft {
     cityIds: 'all',
     photos: [],
     formules: [{ label: '', priceMad: 0 }],
+    optionGroups: [],
     schedule: { ...DEFAULT_SCHEDULE },
     payment: { ...DEFAULT_PAYMENT, methods: [...DEFAULT_PAYMENT.methods] },
     contact: { firstName: '', lastName: '', email: '' },
@@ -182,10 +206,26 @@ function toDraft(s: PartnerService): Draft {
     Array.isArray(s.formules) && s.formules.length
       ? s.formules.map((f) => ({ label: f.label || '', priceMad: f.priceMad === null ? null : Number(f.priceMad) || 0, city: f.city || undefined }))
       : [{ label: '', priceMad: 0 }];
+  const optionGroups = Array.isArray(s.optionGroups)
+    ? s.optionGroups.map((g) => ({
+        id: g.id || newOptionGroupId(),
+        label: g.label || '',
+        required: Boolean(g.required),
+        min: g.min,
+        max: g.max,
+        choices: (g.choices || []).map((c) => ({
+          id: c.id || newOptionChoiceId(),
+          label: c.label || '',
+          priceDeltaMad: Number(c.priceDeltaMad) || 0,
+        })),
+      }))
+    : [];
   const pay = s.payment || DEFAULT_PAYMENT;
+  const kind: PartnerServiceKind =
+    s.kind === 'transport' || s.kind === 'room_service' ? s.kind : 'experience';
   return {
     partnerId: s.partnerId ? String(s.partnerId) : '',
-    kind: s.kind === 'transport' ? 'transport' : 'experience',
+    kind,
     transportDirections: {
       toDestination: s.transportDirections?.toDestination !== false,
       fromDestination: s.transportDirections?.fromDestination !== false,
@@ -194,15 +234,15 @@ function toDraft(s: PartnerService): Draft {
     title: s.title || '',
     description: s.description || '',
     whatsapp: s.whatsapp || '',
-    cityIds: s.cityIds === undefined || s.cityIds === null ? 'all' : s.cityIds,
-    photos: Array.isArray(s.photos) ? s.photos.slice(0, 3) : [],
+    cityIds: Array.isArray(s.cityIds) ? s.cityIds.map(String) : 'all',
+    photos: Array.isArray(s.photos) ? s.photos.map(String) : [],
     formules,
+    optionGroups,
     schedule: { ...DEFAULT_SCHEDULE, ...(s.schedule || {}) },
     payment: {
-      methods: Array.isArray(pay.methods) && pay.methods.length ? [...pay.methods] : ['cash'],
-      collection: pay.collection === 'deposit' ? 'deposit' : 'full',
-      depositPercent: pay.depositPercent ?? null,
-      timing: pay.timing === 'on_confirmation' ? 'on_confirmation' : 'instant',
+      ...DEFAULT_PAYMENT,
+      ...pay,
+      methods: [...(pay.methods || DEFAULT_PAYMENT.methods)],
     },
     contact: {
       firstName: s.contact?.firstName || '',
@@ -213,7 +253,7 @@ function toDraft(s: PartnerService): Draft {
     providerReminder: { ...DEFAULT_PROVIDER_REMINDER, ...(s.providerReminder || {}) },
     shareGuestContact: { ...DEFAULT_SHARE_GUEST_CONTACT, ...(s.shareGuestContact || {}) },
     active: s.active !== false,
-    sortOrder: s.sortOrder || 0,
+    sortOrder: Number(s.sortOrder) || 0,
     forSale: Boolean(s.forSale),
   };
 }
@@ -581,6 +621,29 @@ export function OwnerExperiencesPage() {
           : null,
       timing: draft.payment.timing === 'on_confirmation' ? 'on_confirmation' : 'instant',
     };
+    const optionGroups =
+      draft.kind === 'room_service'
+        ? draft.optionGroups
+            .map((g) => ({
+              id: g.id || newOptionGroupId(),
+              label: (g.label || '').trim(),
+              required: Boolean(g.required),
+              min: g.min,
+              max: g.max,
+              choices: (g.choices || [])
+                .map((c) => ({
+                  id: c.id || newOptionChoiceId(),
+                  label: (c.label || '').trim(),
+                  priceDeltaMad: Number(c.priceDeltaMad) || 0,
+                }))
+                .filter((c) => c.label),
+            }))
+            .filter((g) => g.label && g.choices.length)
+        : [];
+    if (draft.kind === 'room_service' && !optionGroups.length) {
+      toast.error('Ajoutez au moins un groupe d’options (ex. Boisson chaude — type)');
+      return;
+    }
     const body = {
       partnerId: draft.partnerId,
       kind: draft.kind,
@@ -592,6 +655,7 @@ export function OwnerExperiencesPage() {
       cityIds: draft.cityIds,
       photos: draft.photos.slice(0, 3),
       formules,
+      optionGroups,
       schedule: draft.schedule,
       payment,
       contact: {
@@ -1342,10 +1406,11 @@ export function OwnerExperiencesPage() {
             </section>
             <section style={{ marginBottom: 22 }}>
               <div className="pa-lbl">Type</div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                 {([
                   { v: 'experience' as const, l: '✨ Expérience' },
                   { v: 'transport' as const, l: '🚐 Transport / Navette' },
+                  { v: 'room_service' as const, l: '🍽️ Room Service' },
                 ]).map((t) => (
                   <button
                     key={t.v}
@@ -1355,8 +1420,18 @@ export function OwnerExperiencesPage() {
                       setDraft((d) => ({
                         ...d,
                         kind: t.v,
-                        // Un transport est une Mobilité — pas la peine de choisir.
-                        category: t.v === 'transport' ? 'Mobilité' : d.category,
+                        category:
+                          t.v === 'transport'
+                            ? 'Mobilité'
+                            : t.v === 'room_service'
+                              ? 'Food'
+                              : d.category === 'Mobilité' || d.category === 'Food'
+                                ? 'Aventure'
+                                : d.category,
+                        optionGroups:
+                          t.v === 'room_service' && !d.optionGroups.length
+                            ? [emptyOptionGroup()]
+                            : d.optionGroups,
                       }))
                     }
                   >
@@ -1364,6 +1439,12 @@ export function OwnerExperiencesPage() {
                   </button>
                 ))}
               </div>
+              {draft.kind === 'room_service' ? (
+                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                  Un plat = une fiche. Prix dans Formules ; options (café, lait, jus…) dans
+                  les groupes ci-dessous — proposées au guest WhatsApp.
+                </div>
+              ) : null}
               {draft.kind === 'transport' ? (
                 <>
                   <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
@@ -1492,7 +1573,11 @@ export function OwnerExperiencesPage() {
 
             <section style={{ marginBottom: 22 }}>
               <div className="pa-lbl">
-                {draft.kind === 'transport' ? 'Destinations (depuis le logement)' : 'Formules'}
+                {draft.kind === 'transport'
+                  ? 'Destinations (depuis le logement)'
+                  : draft.kind === 'room_service'
+                    ? 'Prix du plat'
+                    : 'Formules'}
               </div>
               {draft.kind === 'transport' ? (
                 <>
@@ -1641,9 +1726,257 @@ export function OwnerExperiencesPage() {
                   }))
                 }
               >
-                {draft.kind === 'transport' ? '+ Destination' : '+ Formule'}
+                {draft.kind === 'transport'
+                  ? '+ Destination'
+                  : draft.kind === 'room_service'
+                    ? '+ Prix'
+                    : '+ Formule'}
               </button>
             </section>
+
+            {draft.kind === 'room_service' ? (
+              <section style={{ marginBottom: 22 }}>
+                <div className="pa-lbl">Options du plat</div>
+                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                  Groupes obligatoires ou facultatifs (choix unique ou multi). Ex. Beldi :
+                  type de boisson, lait, sucre, jus…
+                </div>
+                {draft.optionGroups.map((g, gi) => (
+                  <div
+                    key={g.id || gi}
+                    style={{
+                      marginTop: 14,
+                      padding: 12,
+                      border: '1px solid var(--pa-line)',
+                      borderRadius: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 110px 36px',
+                        gap: 8,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <input
+                        className="pa-in"
+                        style={inpBase}
+                        placeholder="Nom du groupe (ex. Boisson chaude — type)"
+                        value={g.label}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            optionGroups: d.optionGroups.map((x, j) =>
+                              j === gi ? { ...x, label: e.target.value } : x,
+                            ),
+                          }))
+                        }
+                      />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(g.required)}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              optionGroups: d.optionGroups.map((x, j) =>
+                                j === gi
+                                  ? {
+                                      ...x,
+                                      required: e.target.checked,
+                                      min: e.target.checked ? Math.max(1, x.min ?? 1) : 0,
+                                    }
+                                  : x,
+                              ),
+                            }))
+                          }
+                        />
+                        Obligatoire
+                      </label>
+                      <button
+                        type="button"
+                        style={btnOutline({ padding: '8px' })}
+                        onClick={() =>
+                          setDraft((d) => ({
+                            ...d,
+                            optionGroups: d.optionGroups.filter((_, j) => j !== gi),
+                          }))
+                        }
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: 8,
+                        marginTop: 8,
+                      }}
+                    >
+                      <label style={{ fontSize: 12 }}>
+                        Min
+                        <input
+                          className="pa-in"
+                          style={{ ...inpBase, marginTop: 4 }}
+                          type="number"
+                          min={0}
+                          value={g.min ?? (g.required ? 1 : 0)}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              optionGroups: d.optionGroups.map((x, j) =>
+                                j === gi
+                                  ? { ...x, min: Math.max(0, Number(e.target.value) || 0) }
+                                  : x,
+                              ),
+                            }))
+                          }
+                        />
+                      </label>
+                      <label style={{ fontSize: 12 }}>
+                        Max (1 = choix unique)
+                        <input
+                          className="pa-in"
+                          style={{ ...inpBase, marginTop: 4 }}
+                          type="number"
+                          min={1}
+                          value={g.max ?? 1}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              optionGroups: d.optionGroups.map((x, j) =>
+                                j === gi
+                                  ? { ...x, max: Math.max(1, Number(e.target.value) || 1) }
+                                  : x,
+                              ),
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    {(g.choices || []).map((c, ci) => (
+                      <div
+                        key={c.id || ci}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 100px 36px',
+                          gap: 8,
+                          marginTop: 8,
+                        }}
+                      >
+                        <input
+                          className="pa-in"
+                          style={inpBase}
+                          placeholder="Choix"
+                          value={c.label}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              optionGroups: d.optionGroups.map((x, j) =>
+                                j === gi
+                                  ? {
+                                      ...x,
+                                      choices: (x.choices || []).map((ch, k) =>
+                                        k === ci ? { ...ch, label: e.target.value } : ch,
+                                      ),
+                                    }
+                                  : x,
+                              ),
+                            }))
+                          }
+                        />
+                        <input
+                          className="pa-in"
+                          style={inpBase}
+                          type="number"
+                          placeholder="+MAD"
+                          value={c.priceDeltaMad ?? 0}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              optionGroups: d.optionGroups.map((x, j) =>
+                                j === gi
+                                  ? {
+                                      ...x,
+                                      choices: (x.choices || []).map((ch, k) =>
+                                        k === ci
+                                          ? {
+                                              ...ch,
+                                              priceDeltaMad: Number(e.target.value) || 0,
+                                            }
+                                          : ch,
+                                      ),
+                                    }
+                                  : x,
+                              ),
+                            }))
+                          }
+                        />
+                        <button
+                          type="button"
+                          style={btnOutline({ padding: '8px' })}
+                          onClick={() =>
+                            setDraft((d) => ({
+                              ...d,
+                              optionGroups: d.optionGroups.map((x, j) =>
+                                j === gi
+                                  ? {
+                                      ...x,
+                                      choices: (x.choices || []).filter((_, k) => k !== ci),
+                                    }
+                                  : x,
+                              ),
+                            }))
+                          }
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      style={btnOutline({ marginTop: 10 })}
+                      onClick={() =>
+                        setDraft((d) => ({
+                          ...d,
+                          optionGroups: d.optionGroups.map((x, j) =>
+                            j === gi
+                              ? {
+                                  ...x,
+                                  choices: [
+                                    ...(x.choices || []),
+                                    {
+                                      id: newOptionChoiceId(),
+                                      label: '',
+                                      priceDeltaMad: 0,
+                                    },
+                                  ],
+                                }
+                              : x,
+                          ),
+                        }))
+                      }
+                    >
+                      + Choix
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  style={btnOutline({ marginTop: 12 })}
+                  onClick={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      optionGroups: [...d.optionGroups, emptyOptionGroup()],
+                    }))
+                  }
+                >
+                  + Groupe d’options
+                </button>
+              </section>
+            ) : null}
             </>
             )}
 
