@@ -401,6 +401,18 @@ export function ExtrasVentesPage() {
           value={count}
           accent={T.info}
         />
+        {/*
+          Les taxes de séjour ne sont ni du revenu ni de la TVA : elles sont
+          collectées pour l'État. Affichées à part pour rester visibles sans
+          fausser le chiffre d'affaires.
+        */}
+        {summary?.cityTaxTotal ? (
+          <Kpi
+            label="Taxes séjour"
+            value={money(summary.cityTaxTotal)}
+            accent={T.text3}
+          />
+        ) : null}
         <ToggleButtonGroup
           size="small"
           exclusive

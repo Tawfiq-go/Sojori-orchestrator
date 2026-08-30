@@ -73,6 +73,9 @@ export type RevenueSummary = {
     { label: string; gross: number; net: number; tax: number; lines: number }
   >;
   order: string[];
+  /** Taxes de séjour — hors chiffre d'affaires, reversées à l'État. */
+  cityTaxTotal: number;
+  cityTaxes: Array<{ name: string; gross: number; lines: number }>;
 };
 
 /** Ventilation USALI sur une période. */
