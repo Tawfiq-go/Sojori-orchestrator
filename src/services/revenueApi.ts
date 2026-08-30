@@ -548,3 +548,71 @@ export async function fetchDailySummary(params?: {
     return null;
   }
 }
+
+export type TrendMonth = {
+  month: string;
+  daysMeasured: number;
+  parcUnits: number;
+  availableUnits: number;
+  soldUnits: number;
+  blockedUnits: number;
+  outOfServiceUnits: number;
+  houseGuestUnits: number;
+  unclassifiedUnits: number;
+  roomRevenue: number;
+  extrasRevenue: number;
+  totalRevenue: number;
+  occupancyPct: number | null;
+  adr: number | null;
+  revpar: number | null;
+  trevpar: number | null;
+  /** Ce que les nuitées bloquées auraient rapporté au prix du mois. */
+  blockedValue: number;
+  blockedValueByReason: {
+    houseGuest: number;
+    outOfService: number;
+    unclassified: number;
+  };
+};
+
+export type AnnualTrend = {
+  success: boolean;
+  year: number;
+  months: TrendMonth[];
+  totals: {
+    availableUnits: number;
+    soldUnits: number;
+    blockedUnits: number;
+    roomRevenue: number;
+    extrasRevenue: number;
+    totalRevenue: number;
+    occupancyPct: number | null;
+    adr: number | null;
+    revpar: number | null;
+    trevpar: number | null;
+    blockedValue: number;
+    blockedValuePctOfRoom: number | null;
+    blockedByReason: { houseGuest: number; outOfService: number; unclassified: number };
+    blockedValueByReason: { houseGuest: number; outOfService: number; unclassified: number };
+  };
+  best: { month: string; revpar: number | null } | null;
+  worst: { month: string; revpar: number | null } | null;
+};
+
+/** Tendance annuelle — matrice mois × indicateur. */
+export async function fetchAnnualTrend(params?: {
+  year?: number;
+}): Promise<AnnualTrend | null> {
+  try {
+    const search = new URLSearchParams();
+    if (params?.year) search.set('year', String(params.year));
+    const qs = search.toString();
+    const res = await apiClient.get(
+      `${REVENUE_BASE}/reports/annual-trend${qs ? `?${qs}` : ''}`,
+      { timeout: 30000 },
+    );
+    return res?.data?.success ? (res.data as AnnualTrend) : null;
+  } catch {
+    return null;
+  }
+}
