@@ -27,12 +27,16 @@ import {
   YAxis,
 } from 'recharts';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
+import { NationalityMap } from './NationalityMap';
+import { countryFlag, countryName } from './countryCodes';
 import {
   fetchCustomerDetail,
   fetchCustomersReport,
+  fetchNationalityReport,
   type CustomerDetail,
   type CustomerReportRow,
   type CustomersReport,
+  type NationalityReport,
 } from '../../services/revenueApi';
 
 /**
@@ -129,6 +133,7 @@ export function ClientReportPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [geo, setGeo] = useState<NationalityReport | null>(null);
 
   const period = PERIODS.find((p) => p.id === periodId) ?? PERIODS[1];
   const range = useMemo(() => {
@@ -147,6 +152,18 @@ export function ClientReportPage() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [range]);
+
+  // Chargée à part : la carte ne doit pas retarder le classement.
+  useEffect(() => {
+    let cancelled = false;
+    setGeo(null);
+    fetchNationalityReport(range).then((d) => {
+      if (!cancelled) setGeo(d);
+    });
     return () => {
       cancelled = true;
     };
@@ -323,6 +340,97 @@ export function ClientReportPage() {
               ) : null}
             </Paper>
           </Box>
+
+          {geo && geo.countries.length > 0 ? (
+            <Paper
+              sx={{
+                p: 2.5,
+                mb: 2,
+                border: `1px solid ${T.border}`,
+                borderRadius: 1.75,
+                bgcolor: T.bg1,
+              }}
+            >
+              <Stack
+                direction="row"
+                sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 1.5, gap: 1 }}
+              >
+                <Typography sx={{ fontSize: 13, fontWeight: 800, color: T.text }}>
+                  D'où viennent vos clients
+                </Typography>
+                <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
+                  {geo.countries.length} pays · {geo.customers} clients
+                </Typography>
+              </Stack>
+
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', lg: '1.85fr 1fr' },
+                  gap: 2.5,
+                  alignItems: 'start',
+                }}
+              >
+                <NationalityMap
+                  countries={geo.countries}
+                  unknownCustomers={geo.unknownCustomers}
+                />
+
+                <Stack sx={{ gap: 0.75 }}>
+                  {geo.countries.slice(0, 8).map((c) => {
+                    const share = geo.totalGross
+                      ? Math.round((c.gross / geo.totalGross) * 100)
+                      : 0;
+                    return (
+                      <Box key={c.code}>
+                        <Stack
+                          direction="row"
+                          sx={{ alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}
+                        >
+                          <Typography
+                            sx={{ fontSize: 12, color: T.text, fontWeight: 600, minWidth: 0 }}
+                            noWrap
+                          >
+                            {countryFlag(c.code)} {countryName(c.code)}
+                          </Typography>
+                          <Typography
+                            sx={{ fontSize: 11.5, color: T.text2, fontWeight: 700, flexShrink: 0 }}
+                          >
+                            {c.gross.toLocaleString('fr-FR')}
+                          </Typography>
+                        </Stack>
+                        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, mt: 0.25 }}>
+                          <Box
+                            sx={{
+                              flex: 1,
+                              height: 5,
+                              bgcolor: T.bg2,
+                              borderRadius: 3,
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: `${share}%`,
+                                height: '100%',
+                                bgcolor: T.gold,
+                                borderRadius: 3,
+                              }}
+                            />
+                          </Box>
+                          <Typography
+                            sx={{ fontSize: 10.5, color: T.text3, minWidth: 52, textAlign: 'right' }}
+                          >
+                            {share} % · {c.customers}
+                          </Typography>
+                        </Stack>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              </Box>
+            </Paper>
+          ) : null}
 
           <Paper sx={{ border: `1px solid ${T.border}`, borderRadius: 1.75, overflow: 'hidden' }}>
             <Box sx={{ overflowX: 'auto' }}>
