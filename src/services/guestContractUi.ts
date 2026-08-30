@@ -44,6 +44,9 @@ export type GuestContractSummary = {
   missingSignerIds?: string[];
   nextSignerId?: string | null;
   travelers?: GuestContractTraveler[];
+  primaryTravelerIndex?: number;
+  guestName?: string;
+  documentTitle?: string;
   signatures?: Array<{ signerId: string; signerName: string; travelerIndex: number | null }>;
   establishmentName?: string;
   reservationNumber?: string;

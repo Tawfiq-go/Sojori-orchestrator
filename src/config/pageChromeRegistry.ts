@@ -33,6 +33,7 @@ const TITLE_OVERRIDES: Record<string, string> = {
   'tasks/planning': 'Planning',
   'tasks/list': 'Liste des tâches',
   reports: 'Rapports',
+  'reports/quotidien': 'Résumé quotidien',
   'reports/clients': 'Clients',
   'reports/exploitation': "Rapport d'exploitation",
   'tasks/extras/ventes': 'Ventes',
