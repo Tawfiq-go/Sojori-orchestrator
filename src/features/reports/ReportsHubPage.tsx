@@ -46,6 +46,15 @@ const REPORTS: Report[] = [
     route: '/reports/quotidien',
   },
   {
+    id: 'annual',
+    title: 'Tendance annuelle',
+    pitch: 'La saison mois par mois',
+    detail:
+      'Occupation, prix et rendement sur l’année, plus ce qu’aucun PMS ne calcule : ce que les villas retirées de la vente représentent.',
+    accent: T.primary,
+    route: '/reports/annuel',
+  },
+  {
     id: 'operations',
     title: 'Exploitation',
     pitch: 'Occupation, revenu et encaissements',
