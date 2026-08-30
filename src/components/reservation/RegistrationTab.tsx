@@ -121,6 +121,42 @@ function memberDocUrl(m: Member, side: 'front' | 'back'): string {
   return String(m.document_back_download || m.document_back_scan || '').trim();
 }
 
+/** Choix client / OCR : passport | national_id (CIN). */
+function normalizeDocType(raw: unknown): 'passport' | 'national_id' | 'other' {
+  const s = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  if (!s || s === 'passport' || s === 'passeport') return 'passport';
+  if (
+    s === 'national_id' ||
+    s === 'id_card' ||
+    s === 'cin' ||
+    s === 'cni' ||
+    s.includes('identity') ||
+    s.includes('identite')
+  ) {
+    return 'national_id';
+  }
+  if (s === 'other') return 'other';
+  return 'passport';
+}
+
+function docTypeLabel(raw: unknown): string {
+  const t = normalizeDocType(raw);
+  if (t === 'national_id') return 'CIN';
+  if (t === 'other') return 'Autre';
+  return 'Passeport';
+}
+
+function memberField(m: Member, ...keys: string[]): string {
+  for (const k of keys) {
+    const v = String(m[k] ?? '').trim();
+    if (v) return v;
+  }
+  return '';
+}
+
 function memberStatus(
   m: Member,
   schema: RegistrationFormSchema,
@@ -162,7 +198,7 @@ function toForm(m?: Member | null): MemberForm {
     last_name: String(m.last_name || m.lastName || ''),
     nationality: String(m.nationality || ''),
     gender: String(m.gender || '').toLowerCase(),
-    document_type: String(m.document_type || 'passport').toLowerCase() || 'passport',
+    document_type: normalizeDocType(m.document_type),
     document_number: String(m.document_number || m.passport || ''),
     date_of_birth,
     country_of_residence: String(m.country_of_residence || m.residence_country || m.country || ''),
@@ -633,7 +669,6 @@ export function RegistrationTab({
                 {stats.ok} validé{stats.ok > 1 ? 's' : ''} · {stats.draft} brouillon
                 {stats.draft > 1 ? 's' : ''} · {stats.missing} manquant
                 {stats.missing > 1 ? 's' : ''}
-                {regDone !== stats.ok ? ` · sync ${regDone}` : ''}
               </Typography>
             </Stack>
             {!complete && stats.missingLabels.length > 0 ? (
@@ -726,9 +761,16 @@ export function RegistrationTab({
             ) : null}
           </Stack>
         </Stack>
-      </Paper>
 
-      {resaId ? <GuestContractSection reservationId={resaId} readOnly={readOnly} /> : null}
+        {resaId ? (
+          <GuestContractSection
+            reservationId={resaId}
+            listingId={listingId || null}
+            readOnly={readOnly}
+            embedded
+          />
+        ) : null}
+      </Paper>
 
       {Math.max(members.length, regTotal) === 0 ? (
         <Paper
@@ -764,8 +806,8 @@ export function RegistrationTab({
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-            gap: 1.5,
+            gridTemplateColumns: '1fr',
+            gap: 1.25,
           }}
         >
           {Array.from({ length: Math.max(members.length, regTotal) }, (_, i) => {
@@ -780,34 +822,107 @@ export function RegistrationTab({
             const last = String(m.last_name || m.lastName || '');
             const front = memberDocUrl(m, 'front');
             const back = memberDocUrl(m, 'back');
-            const passport = String(m.document_number || m.passport || '—');
+            const rawDocType = String(m.document_type || '').trim();
+            const docKind = rawDocType
+              ? normalizeDocType(rawDocType)
+              : back
+                ? 'national_id'
+                : 'passport';
+            const ocrBlocks: Array<{ label: string; value: string; mono?: boolean; missing?: boolean }> = [
+              { label: 'Type', value: docTypeLabel(docKind) },
+              {
+                label: docKind === 'national_id' ? 'N° CIN' : 'N° pièce',
+                value: memberField(m, 'document_number', 'passport') || '—',
+                mono: true,
+                missing: missing.includes('document_number'),
+              },
+              {
+                label: 'Nationalité',
+                value: memberField(m, 'nationality') || '—',
+                missing: missing.includes('nationality'),
+              },
+              {
+                label: 'Naissance',
+                value: formDate(memberField(m, 'date_of_birth', 'birth_date', 'birthDate')) || '—',
+                missing: missing.includes('birth_date'),
+              },
+              { label: 'Genre', value: memberField(m, 'gender') || '—' },
+              {
+                label: 'Résidence',
+                value: memberField(m, 'country_of_residence', 'residence_country', 'country') || '—',
+              },
+              { label: 'Lieu naissance', value: memberField(m, 'place_of_birth', 'birth_place') || '—' },
+              { label: 'Délivré à', value: memberField(m, 'document_issued_at', 'issued_at') || '—' },
+              {
+                label: 'Délivré le',
+                value: formDate(memberField(m, 'document_issued_on', 'issued_on')) || '—',
+              },
+              {
+                label: 'Expire le',
+                value: formDate(memberField(m, 'document_expiry_date', 'expiry_date')) || '—',
+              },
+              {
+                label: 'Pays émission',
+                value: memberField(m, 'issuing_country') || '—',
+              },
+              {
+                label: 'N° personnel',
+                value: memberField(m, 'personal_number') || '—',
+              },
+            ];
+            if (registrationLevel === 'complete') {
+              ocrBlocks.push(
+                {
+                  label: 'Profession',
+                  value: memberField(m, 'profession', 'occupation') || '—',
+                  missing: missing.includes('profession'),
+                },
+                {
+                  label: 'Provenance',
+                  value: memberField(m, 'coming_from', 'provenance') || '—',
+                  missing: missing.includes('coming_from'),
+                },
+                {
+                  label: 'Destination',
+                  value: memberField(m, 'going_to', 'destination') || '—',
+                  missing: missing.includes('going_to'),
+                },
+                {
+                  label: 'Téléphone',
+                  value: memberField(m, 'phone') || '—',
+                  missing: missing.includes('phone'),
+                },
+                { label: 'Domicile', value: memberField(m, 'domicile', 'address') || '—' },
+                { label: 'Ville', value: memberField(m, 'city') || '—' },
+              );
+            }
             return (
               <Paper
                 key={i}
                 sx={{
-                  p: 2,
+                  p: 1.25,
                   border: `1px solid ${missing.length ? 'rgba(200,30,30,0.35)' : T.border}`,
                   borderRadius: 1.5,
                   bgcolor: T.bg1,
                 }}
               >
-                <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1.25, gap: 1 }}>
-                  <Box>
-                    <Typography sx={{ fontSize: 14, fontWeight: 800, color: T.text }}>
+                <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1, gap: 1 }}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 13, fontWeight: 800, color: T.text, lineHeight: 1.2 }}>
                       {first} {last}
                     </Typography>
-                    <Typography sx={{ fontSize: 11, color: T.text3 }}>
-                      Voyageur {i + 1}
+                    <Typography sx={{ fontSize: 10.5, color: T.text3 }}>
+                      Voyageur {i + 1} · {docTypeLabel(docKind)}
                     </Typography>
                   </Box>
-                  <Stack direction="row" sx={{ gap: 0.5, alignItems: 'flex-start' }}>
+                  <Stack direction="row" sx={{ gap: 0.5, alignItems: 'flex-start', flexShrink: 0 }}>
                     <Chip
                       size="small"
                       label={
                         status === 'complete' ? 'Validé' : status === 'draft' ? 'Brouillon' : 'Incomplet'
                       }
                       sx={{
-                        height: 22,
+                        height: 20,
                         fontSize: 10,
                         fontWeight: 700,
                         bgcolor:
@@ -844,7 +959,7 @@ export function RegistrationTab({
                 {missing.length > 0 ? (
                   <Typography
                     sx={{
-                      fontSize: 12,
+                      fontSize: 11.5,
                       fontWeight: 700,
                       color: T.error,
                       mb: 1,
@@ -863,84 +978,48 @@ export function RegistrationTab({
                   </Typography>
                 ) : null}
 
-                <Stack spacing={0.45} sx={{ mb: 1.25 }}>
-                  <InfoRow
-                    label="Nationalité"
-                    value={String(m.nationality || '—')}
-                    missing={missing.includes('nationality')}
-                  />
-                  <InfoRow
-                    label="Passeport / pièce"
-                    value={passport}
-                    mono
-                    missing={missing.includes('document_number')}
-                  />
-                  <InfoRow
-                    label="Naissance"
-                    value={
-                      formDate(String(m.date_of_birth || m.birth_date || m.birthDate || '')) || '—'
-                    }
-                    missing={missing.includes('birth_date')}
-                  />
-                  <InfoRow
-                    label="Lieu de naissance"
-                    value={String(m.place_of_birth || m.birth_place || '—')}
-                  />
-                  <InfoRow
-                    label="Délivré à"
-                    value={String(m.document_issued_at || m.issued_at || '—')}
-                  />
-                  <InfoRow
-                    label="Délivré le"
-                    value={formDate(String(m.document_issued_on || m.issued_on || '')) || '—'}
-                  />
-                  <InfoRow label="Genre" value={String(m.gender || '—')} />
-                  <InfoRow
-                    label="Résidence"
-                    value={String(m.country_of_residence || m.residence_country || m.country || '—')}
-                  />
-                  {registrationLevel === 'complete' ? (
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: 'repeat(2, minmax(0, 1fr))',
+                      sm: 'repeat(3, minmax(0, 1fr))',
+                      md: 'repeat(6, minmax(0, 1fr))',
+                    },
+                    gap: 0.75,
+                    mb: 1,
+                  }}
+                >
+                  {ocrBlocks.map((block) => (
+                    <OcrCell
+                      key={`${i}-${block.label}`}
+                      label={block.label}
+                      value={block.value}
+                      mono={block.mono}
+                      missing={block.missing}
+                    />
+                  ))}
+                </Box>
+
+                <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                  {docKind === 'national_id' ? (
                     <>
-                      <InfoRow
-                        label="Profession"
-                        value={String(m.profession || '—')}
-                        missing={missing.includes('profession')}
-                      />
-                      <InfoRow
-                        label="Provenance"
-                        value={String(m.coming_from || '—')}
-                        missing={missing.includes('coming_from')}
-                      />
-                      <InfoRow
-                        label="Destination"
-                        value={String(m.going_to || '—')}
-                        missing={missing.includes('going_to')}
-                      />
-                      <InfoRow
-                        label="Téléphone"
-                        value={String(m.phone || '—')}
-                        missing={missing.includes('phone')}
-                      />
-                      <InfoRow label="Domicile" value={String(m.domicile || m.address || '—')} />
-                      <InfoRow label="Ville" value={String(m.city || '—')} />
+                      {front ? (
+                        <DocOpenButton src={front} label="Recto" onPreview={setPreviewUrl} />
+                      ) : null}
+                      {back ? (
+                        <DocOpenButton src={back} label="Verso" onPreview={setPreviewUrl} />
+                      ) : null}
                     </>
+                  ) : front ? (
+                    <DocOpenButton src={front} label="Passeport" onPreview={setPreviewUrl} />
+                  ) : null}
+                  {!front && !back ? (
+                    <Typography sx={{ fontSize: 11.5, color: T.text4 }}>
+                      Aucune image de pièce d’identité
+                    </Typography>
                   ) : null}
                 </Stack>
-
-                {(front || back) ? (
-                  <Stack direction="row" spacing={1}>
-                    {front ? (
-                      <SignedDocThumb src={front} label="Recto" onPreview={setPreviewUrl} />
-                    ) : null}
-                    {back ? (
-                      <SignedDocThumb src={back} label="Verso" onPreview={setPreviewUrl} />
-                    ) : null}
-                  </Stack>
-                ) : (
-                  <Typography sx={{ fontSize: 11.5, color: T.text4 }}>
-                    Aucune image de pièce d’identité
-                  </Typography>
-                )}
               </Paper>
             );
           })}
@@ -1016,6 +1095,7 @@ export function RegistrationTab({
                 onChange={(e) => setField('document_type', e.target.value)}
               >
                 <MenuItem value="passport">Passeport</MenuItem>
+                <MenuItem value="national_id">Carte d’identité (CIN)</MenuItem>
                 <MenuItem value="id_card">Carte d’identité</MenuItem>
                 <MenuItem value="other">Autre</MenuItem>
               </TextField>
@@ -1287,7 +1367,7 @@ export function RegistrationTab({
   );
 }
 
-function InfoRow({
+function OcrCell({
   label,
   value,
   mono,
@@ -1298,23 +1378,95 @@ function InfoRow({
   mono?: boolean;
   missing?: boolean;
 }) {
+  const empty = !value || value === '—';
   return (
-    <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
-      <Typography sx={{ fontSize: 12, color: missing ? T.error : T.text3, fontWeight: missing ? 700 : 400 }}>
+    <Box
+      sx={{
+        border: `1px solid ${missing ? 'rgba(200,30,30,0.35)' : T.border}`,
+        borderRadius: 1,
+        bgcolor: missing ? 'rgba(200,30,30,0.04)' : T.bg0,
+        px: 0.85,
+        py: 0.65,
+        minWidth: 0,
+      }}
+    >
+      <Typography
+        sx={{
+          fontSize: 9.5,
+          fontWeight: 750,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          color: missing ? T.error : T.text4,
+          mb: 0.2,
+          lineHeight: 1.2,
+        }}
+      >
         {label}
       </Typography>
       <Typography
         sx={{
-          fontSize: 12.5,
-          fontWeight: 600,
-          color: missing ? T.error : T.text,
-          textAlign: 'right',
+          fontSize: 12,
+          fontWeight: 650,
+          color: missing && empty ? T.error : T.text,
           fontFamily: mono ? '"Geist Mono", monospace' : 'inherit',
+          lineHeight: 1.25,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}
+        title={missing && empty ? 'manquant' : value}
       >
-        {missing && (!value || value === '—') ? 'manquant' : value}
+        {missing && empty ? 'manquant' : value}
       </Typography>
-    </Stack>
+    </Box>
+  );
+}
+
+/** Opens signed document URL on demand — no inline image in the card. */
+function DocOpenButton({
+  src,
+  label,
+  onPreview,
+}: {
+  src: string;
+  label: string;
+  onPreview: (url: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  const open = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const url = isListingsBucketUrl(src) ? await getListingMediaDisplayUrl(src) : src;
+      onPreview(url);
+    } catch {
+      toast.error('Image indisponible');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Button
+      size="small"
+      variant="outlined"
+      disabled={busy}
+      onClick={() => void open()}
+      startIcon={busy ? <CircularProgress size={12} /> : undefined}
+      sx={{
+        textTransform: 'none',
+        fontWeight: 700,
+        fontSize: 11.5,
+        borderColor: T.border,
+        color: T.text2,
+        py: 0.35,
+        px: 1.1,
+        minHeight: 28,
+      }}
+    >
+      {busy ? '…' : label}
+    </Button>
   );
 }
 
