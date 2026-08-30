@@ -4,18 +4,21 @@ import { defaultGuestDocuments, documentTypeForGuestDocument } from './catalog';
 import { firstSignedContract, parseGuestDocument, signableDocuments } from './parse';
 
 describe('guestDocuments dual web signature', () => {
-  it('defaults both police and disclaimer to Actif + Signature web', () => {
+  it('defaults police, disclaimer and LCD contrat to Actif + Signature web', () => {
     const docs = defaultGuestDocuments();
-    assert.equal(docs.length, 2);
+    assert.equal(docs.length, 3);
     assert.equal(docs[0].kind, 'police_form');
     assert.equal(docs[0].enabled, true);
     assert.equal(docs[0].requiresSignature, true);
     assert.equal(docs[1].kind, 'contract');
     assert.equal(docs[1].enabled, true);
     assert.equal(docs[1].requiresSignature, true);
+    assert.equal(docs[2].kind, 'short_term_rental');
+    assert.equal(docs[2].enabled, true);
+    assert.equal(docs[2].requiresSignature, true);
     assert.deepEqual(
       signableDocuments(docs).map((d) => documentTypeForGuestDocument(d)),
-      ['moroccan_police_form', 'stay_contract'],
+      ['moroccan_police_form', 'stay_contract', 'short_term_rental'],
     );
   });
 
