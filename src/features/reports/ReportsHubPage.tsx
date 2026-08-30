@@ -37,6 +37,15 @@ type Report = {
 
 const REPORTS: Report[] = [
   {
+    id: 'daily',
+    title: 'Résumé quotidien',
+    pitch: 'Ce que l’équipe lit chaque matin',
+    detail:
+      'Mouvement du jour, villas immobilisées et pourquoi, semaine à venir, rythme de prise. Le PMS donne les chiffres ; celui-ci nomme les villas.',
+    accent: T.gold,
+    route: '/reports/quotidien',
+  },
+  {
     id: 'operations',
     title: 'Exploitation',
     pitch: 'Occupation, revenu et encaissements',

@@ -388,6 +388,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         description: 'Lancer un rapport — exploitation, clients, ventes',
       },
       {
+        id: 'reports/quotidien',
+        label: 'Résumé quotidien',
+        iconType: 'calendar',
+        iconColor: '#b8851a',
+        description: 'Le rapport du matin — mouvement, semaine, rythme de prise',
+      },
+      {
         id: 'reports/exploitation',
         label: 'Exploitation',
         iconType: 'document',
