@@ -49,6 +49,45 @@ function monthRange(offset: number): { from: string; to: string; label: string; 
   };
 }
 
+/**
+ * Périodes longues, bornées sur des **mois entiers**.
+ *
+ * Le mois en cours est inclus : au 30 août, « 3 derniers mois » couvre juin,
+ * juillet et août. Conséquence assumée — début septembre, ce même bouton
+ * comptera un septembre de quelques jours, ce que le libellé sous les
+ * boutons annonce explicitement.
+ */
+const SPANS = [
+  { id: 'm3', label: '3 derniers mois', months: 3 },
+  { id: 'm6', label: '6 derniers mois', months: 6 },
+  { id: 'ytd', label: 'Cette année', months: 0 },
+] as const;
+
+type SpanId = (typeof SPANS)[number]['id'];
+
+function spanRange(id: SpanId): { from: string; to: string; label: string; future: boolean } {
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  // Borne haute : le 1er du mois PROCHAIN — le mois en cours est inclus.
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  const spec = SPANS.find((s) => s.id === id) ?? SPANS[0];
+  const start =
+    id === 'ytd'
+      ? new Date(Date.UTC(now.getUTCFullYear(), 0, 1))
+      : new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() - (spec.months - 1), 1));
+
+  const first = MONTH_SHORT.format(start).replace('.', '');
+  const last = MONTH_SHORT.format(monthStart).replace('.', '');
+  const detail = start.getTime() === monthStart.getTime() ? last : `${first} → ${last}`;
+
+  return {
+    from: start.toISOString().slice(0, 10),
+    to: end.toISOString().slice(0, 10),
+    label: `${spec.label} · ${detail}`,
+    future: false,
+  };
+}
+
 /** Les colonnes triables — chacune raconte une histoire différente. */
 const METRICS = [
   { id: 'reservations', label: 'Réservations', unit: 'séjours' },
@@ -63,11 +102,16 @@ const NF = new Intl.NumberFormat('fr-FR');
 
 export function ClientOriginPage() {
   const [monthOffset, setMonthOffset] = useState(0);
+  /** null = navigation mensuelle ; sinon une période longue est active. */
+  const [span, setSpan] = useState<SpanId | null>(null);
   const [metric, setMetric] = useState<MetricId>('reservations');
   const [report, setReport] = useState<ClientOriginReport | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const current = useMemo(() => monthRange(monthOffset), [monthOffset]);
+  const current = useMemo(
+    () => (span ? spanRange(span) : monthRange(monthOffset)),
+    [span, monthOffset],
+  );
   const range = useMemo(
     () => ({ from: current.from, to: current.to }),
     [current.from, current.to],
@@ -115,6 +159,29 @@ export function ClientOriginPage() {
   const totals = report?.totals;
   const maxVal = rows.length ? (rows[0][metric] as number) : 0;
 
+  /**
+   * Le pourcentage se calcule sur le TOTAL du critère actif, pas sur le
+   * premier pays : « 30 séjours » ne dit pas si c'est 35 % ou 60 % du mois.
+   * Les clients sans nationalité entrent au dénominateur — sinon les parts
+   * sommeraient à 100 % en ignorant une partie réelle de l'activité.
+   */
+  const metricTotal = useMemo(() => {
+    const placed = rows.reduce((s, c) => s + (c[metric] as number), 0);
+    const u = report?.unplaced;
+    if (!u) return placed;
+    const unplacedValue =
+      metric === 'reservations'
+        ? u.reservations
+        : metric === 'nights'
+          ? u.nights
+          : metric === 'extras'
+            ? u.extras
+            : u.total;
+    return placed + unplacedValue;
+  }, [rows, metric, report]);
+
+  const share = (v: number) => (metricTotal > 0 ? Math.round((v / metricTotal) * 100) : 0);
+
   if (loading) {
     return (
       <DashboardWrapper breadcrumb={['Rapports', 'Origine des clients']}>
@@ -150,18 +217,24 @@ export function ClientOriginPage() {
       <Stack direction="row" sx={{ gap: 0.75, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <Chip
           label="◀"
-          onClick={() => setMonthOffset((o) => o - 1)}
+          onClick={() => {
+            setSpan(null);
+            setMonthOffset((o) => o - 1);
+          }}
           sx={{ height: 28, fontSize: 12, bgcolor: T.bg2, border: `1px solid ${T.border}` }}
         />
         {[-2, -1, 0, 1, 2].map((delta) => {
           const m = monthRange(monthOffset + delta);
-          const isCurrent = delta === 0;
+          const isCurrent = delta === 0 && !span;
           const short = MONTH_SHORT.format(new Date(`${m.from}T00:00:00Z`));
           return (
             <Chip
               key={m.from}
               label={isCurrent ? m.label : short}
-              onClick={() => setMonthOffset((o) => o + delta)}
+              onClick={() => {
+                setSpan(null);
+                setMonthOffset((o) => o + delta);
+              }}
               sx={{
                 height: 28,
                 fontSize: 12.5,
@@ -176,15 +249,38 @@ export function ClientOriginPage() {
         })}
         <Chip
           label="▶"
-          onClick={() => setMonthOffset((o) => o + 1)}
+          onClick={() => {
+            setSpan(null);
+            setMonthOffset((o) => o + 1);
+          }}
           sx={{ height: 28, fontSize: 12, bgcolor: T.bg2, border: `1px solid ${T.border}` }}
         />
-        {current.future ? (
-          <Typography sx={{ fontSize: 11.5, color: T.text3, ml: 1, fontStyle: 'italic' }}>
-            Mois à venir — nationalité non encore saisie, l'origine se lit par canal
-          </Typography>
-        ) : null}
+        <Box sx={{ width: 12 }} />
+        {SPANS.map((sp) => (
+          <Chip
+            key={sp.id}
+            label={sp.label}
+            onClick={() => setSpan((cur) => (cur === sp.id ? null : sp.id))}
+            sx={{
+              height: 28,
+              fontSize: 12.5,
+              fontWeight: span === sp.id ? 700 : 500,
+              bgcolor: span === sp.id ? `${T.gold}22` : T.bg2,
+              color: span === sp.id ? T.primaryDeep : T.text2,
+              border: `1px solid ${span === sp.id ? T.gold : T.border}`,
+            }}
+          />
+        ))}
       </Stack>
+
+      {/* Ce que couvre exactement la période affichée */}
+      <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 2, fontStyle: 'italic' }}>
+        {current.future
+          ? 'Mois à venir — nationalité non encore saisie, l’origine se lit par canal.'
+          : span
+            ? `${current.label} — mois entiers, mois en cours compris. Les parts sont arrondies à l’unité.`
+            : `${current.label}`}
+      </Typography>
 
       {/* Indicateurs */}
       {totals ? (
@@ -398,6 +494,9 @@ export function ClientOriginPage() {
           <Stack sx={{ gap: 0.75 }}>
             {rows.slice(0, 8).map((c) => {
               const v = c[metric] as number;
+              // Barre calée sur le premier pays : sans ça, les petits pays
+              // deviennent des traits invisibles. Le chiffre à côté donne la
+              // part réelle.
               const w = maxVal > 0 ? Math.round((v / maxVal) * 100) : 0;
               return (
                 <Box key={c.code}>
@@ -408,9 +507,22 @@ export function ClientOriginPage() {
                     <Typography sx={{ fontSize: 12, fontWeight: 600, color: T.text }} noWrap>
                       {countryFlag(c.code)} {countryName(c.code)}
                     </Typography>
-                    <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: T.text2 }}>
-                      {NF.format(v)}
-                    </Typography>
+                    <Stack direction="row" sx={{ alignItems: 'baseline', gap: 0.75 }}>
+                      <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: T.text2 }}>
+                        {NF.format(v)}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: T.primaryDeep,
+                          minWidth: 30,
+                          textAlign: 'right',
+                        }}
+                      >
+                        {share(v)} %
+                      </Typography>
+                    </Stack>
                   </Stack>
                   <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, mt: 0.25 }}>
                     <Box sx={{ flex: 1, height: 5, bgcolor: T.bg2, borderRadius: 3 }}>
@@ -468,6 +580,7 @@ export function ClientOriginPage() {
                 { l: 'Hébergement', a: 'right' as const, k: null },
                 { l: 'Hors hébergement', a: 'right' as const, k: 'extras' },
                 { l: 'Total', a: 'right' as const, k: 'total' },
+                { l: 'Part', a: 'right' as const, k: null },
                 { l: 'Par séjour', a: 'right' as const, k: null },
               ].map((h) => (
                 <Box
@@ -514,23 +627,33 @@ export function ClientOriginPage() {
                   c.accommodation,
                   c.extras,
                   c.total,
+                  null,
                   c.perReservation,
-                ].map((v, i) => (
-                  <Box
-                    component="td"
-                    key={`${c.code}-${String(i)}`}
-                    sx={{
-                      p: '9px 14px',
-                      textAlign: 'right',
-                      borderBottom: `1px solid ${T.border}`,
-                      whiteSpace: 'nowrap',
-                      fontWeight: i === 5 ? 700 : 400,
-                      color: i === 5 ? T.text : T.text2,
-                    }}
-                  >
-                    {v == null ? '—' : NF.format(v)}
-                  </Box>
-                ))}
+                ].map((v, i) => {
+                  // La colonne « Part » suit le critère actif : c'est elle
+                  // qui rend les pays comparables entre eux.
+                  const isShare = i === 6;
+                  return (
+                    <Box
+                      component="td"
+                      key={`${c.code}-${String(i)}`}
+                      sx={{
+                        p: '9px 14px',
+                        textAlign: 'right',
+                        borderBottom: `1px solid ${T.border}`,
+                        whiteSpace: 'nowrap',
+                        fontWeight: i === 5 || isShare ? 700 : 400,
+                        color: isShare ? T.primaryDeep : i === 5 ? T.text : T.text2,
+                      }}
+                    >
+                      {isShare
+                        ? `${share(c[metric] as number)} %`
+                        : v == null
+                          ? '—'
+                          : NF.format(v)}
+                    </Box>
+                  );
+                })}
               </Box>
             ))}
 
@@ -539,7 +662,7 @@ export function ClientOriginPage() {
               <Box component="tr">
                 <Box
                   component="td"
-                  colSpan={8}
+                  colSpan={9}
                   sx={{
                     p: '11px 14px',
                     borderTop: `1px dashed ${T.border}`,
@@ -549,8 +672,21 @@ export function ClientOriginPage() {
                 >
                   <b>{report.unplaced.customers} clients sans nationalité saisie</b> —{' '}
                   {report.unplaced.reservations} réservations,{' '}
-                  {NF.format(report.unplaced.total)} MAD. Réservations directes dont la réception
-                  n'a pas renseigné le pays : hors carte, mais comptés dans les totaux.
+                  {NF.format(report.unplaced.total)} MAD, soit{' '}
+                  <b>
+                    {share(
+                      metric === 'reservations'
+                        ? report.unplaced.reservations
+                        : metric === 'nights'
+                          ? report.unplaced.nights
+                          : metric === 'extras'
+                            ? report.unplaced.extras
+                            : report.unplaced.total,
+                    )}{' '}
+                    %
+                  </b>{' '}
+                  du total. Réservations dont la réception n'a pas renseigné le pays : hors
+                  carte, mais comptées dans les parts ci-dessus.
                 </Box>
               </Box>
             ) : null}
