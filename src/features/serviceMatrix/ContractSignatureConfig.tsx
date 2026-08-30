@@ -47,6 +47,8 @@ import {
 type Props = {
   listingId?: string;
   ownerKey?: string;
+  /** Listing documents tab: logo / en-tête only — signature lives on each contract. */
+  logoOnly?: boolean;
 };
 
 type AnyDoc = ListingOrchestrationDoc | OwnerOrchestrationDoc;
@@ -88,7 +90,7 @@ function LogoFallback({ name }: { name: string }) {
   );
 }
 
-export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
+export function ContractSignatureConfig({ listingId, ownerKey, logoOnly = false }: Props) {
   const [doc, setDoc] = useState<AnyDoc | null>(null);
   const [value, setValue] = useState<ContractSignatureConfigValue>(DEFAULT_CONTRACT_SIGNATURE);
   const [origin, setOrigin] = useState<ContractSignatureOrigin>('default');
@@ -377,7 +379,9 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
       }}
     >
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.75, flexWrap: 'wrap' }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>Contrat et signature</Typography>
+        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+          {logoOnly ? 'En-tête des documents' : 'Contrat et signature'}
+        </Typography>
         <Chip
           size="small"
           label={originChipLabel}
@@ -387,12 +391,21 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
         />
       </Stack>
 
-      <Alert severity="info" sx={{ mb: 0.75, fontSize: 12.5, py: 0.5 }}>
-        L&apos;envoi WhatsApp automatique exige les deux options activées (contrat + envoi auto).
-      </Alert>
-      <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mb: 1.5, lineHeight: 1.4 }}>
-        Signature électronique simple (loi n° 43-20) — non avancée ni qualifiée.
-      </Typography>
+      {!logoOnly && (
+        <>
+          <Alert severity="info" sx={{ mb: 0.75, fontSize: 12.5, py: 0.5 }}>
+            L&apos;envoi WhatsApp automatique exige les deux options activées (contrat + envoi auto).
+          </Alert>
+          <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mb: 1.5, lineHeight: 1.4 }}>
+            Signature électronique simple (loi n° 43-20) — non avancée ni qualifiée.
+          </Typography>
+        </>
+      )}
+      {logoOnly && (
+        <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mb: 1.5, lineHeight: 1.4 }}>
+          Logo imprimé en en-tête des PDF (héritage propriétaire, override possible ici).
+        </Typography>
+      )}
 
       <Box
         sx={{
@@ -510,6 +523,7 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
         ) : null}
       </Box>
 
+      {logoOnly ? null : (
       <Box
         sx={{
           mb: 1.5,
@@ -618,7 +632,9 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
           </Typography>
         ) : null}
       </Box>
+      )}
 
+      {logoOnly ? null : (
       <Stack spacing={1.25}>
         <FormControlLabel
           control={
@@ -753,6 +769,7 @@ export function ContractSignatureConfig({ listingId, ownerKey }: Props) {
           </AccordionDetails>
         </Accordion>
       </Stack>
+      )}
     </Box>
   );
 }

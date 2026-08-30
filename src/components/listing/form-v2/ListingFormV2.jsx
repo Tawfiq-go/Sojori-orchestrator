@@ -24,6 +24,7 @@ import { RuImportDataTab } from './tabs/DetailTabsRuImport';
 import PostImportOnboardingTab from './tabs/PostImportOnboardingTab';
 import ListingExperiencesTab from './tabs/ListingExperiencesTab';
 import ListingMenageTab from './tabs/ListingMenageTab';
+import ListingDocumentsTab from './tabs/ListingDocumentsTab';
 import ListingRoomServiceTab from './tabs/ListingRoomServiceTab';
 import ListingOrchestrationV3Embed from '../../../features/orchestrationListingV3/ListingOrchestrationV3Embed';
 
@@ -255,6 +256,9 @@ export default function ListingFormV2({
       }
       if (tabKey === 'menage') {
         return <ListingMenageTab listingId={listingId} />;
+      }
+      if (tabKey === 'documents') {
+        return <ListingDocumentsTab listingId={listingId} />;
       }
       if (tabKey === 'license')      return <LicenseTab     {...common} />;
     }

@@ -377,6 +377,26 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
+    group: 'Rapports',
+    roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
+    items: [
+      {
+        id: 'reports',
+        label: 'Tous les rapports',
+        iconType: 'document',
+        iconColor: '#b8851a',
+        description: 'Lancer un rapport — clients, revenu, journée',
+      },
+      {
+        id: 'reports/clients',
+        label: 'Client 360',
+        iconType: 'worker',
+        iconColor: '#E6B022',
+        description: 'Qui consomme quoi, sur tous ses séjours',
+      },
+    ],
+  },
+  {
     group: 'Finances',
     roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner, Roles.Landlord],
     items: [

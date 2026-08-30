@@ -24,6 +24,7 @@ export const FULLTASK_TASK_TYPES = [
   'transport',
   'groceries',
   'concierge',
+  'room_service',
   'support',
   'service_client',
 ] as const;
@@ -50,6 +51,7 @@ export const FULLTASK_TASK_TYPE_LABELS: Record<FulltaskTaskTypeId, string> = {
   transport: 'Transport',
   groceries: 'Courses',
   concierge: 'Conciergerie',
+  room_service: 'Room service',
   support: 'Support',
   service_client: 'Service client',
 };
@@ -74,6 +76,7 @@ export const FULLTASK_TASK_TYPE_EMOJI: Partial<Record<FulltaskTaskTypeId, string
   transport: '🚗',
   groceries: '🛒',
   concierge: '🛎',
+  room_service: '🍳',
   support: '🆘',
   service_client: '💌',
 };
@@ -106,6 +109,7 @@ export function defaultOrchestrationReferenceForTaskType(taskType?: string): Ref
     t === 'transport' ||
     t === 'groceries' ||
     t === 'concierge' ||
+    t === 'room_service' ||
     t === 'checkout_cleaning' ||
     t === 'cleaning_refresh' ||
     t === 'cleaning_urgent' ||
