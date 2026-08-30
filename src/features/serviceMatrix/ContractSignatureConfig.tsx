@@ -53,6 +53,55 @@ type Props = {
 
 type AnyDoc = ListingOrchestrationDoc | OwnerOrchestrationDoc;
 
+/** PDF company chrome — matches srv-listing applyCompanyHeaderOverride. */
+type CompanyHeaderFields = {
+  address: string;
+  city: string;
+  postalCode: string;
+  email: string;
+  phone: string;
+  website: string;
+};
+
+const EMPTY_COMPANY_HEADER: CompanyHeaderFields = {
+  address: '',
+  city: '',
+  postalCode: '',
+  email: '',
+  phone: '',
+  website: '',
+};
+
+function parseCompanyHeader(raw: unknown): Partial<CompanyHeaderFields> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const rec = raw as Record<string, unknown>;
+  const out: Partial<CompanyHeaderFields> = {};
+  for (const key of Object.keys(EMPTY_COMPANY_HEADER) as (keyof CompanyHeaderFields)[]) {
+    if (key in rec && typeof rec[key] === 'string') out[key] = String(rec[key]).trim();
+  }
+  return out;
+}
+
+function mergeCompanyHeader(
+  base: CompanyHeaderFields,
+  override: Partial<CompanyHeaderFields>,
+): CompanyHeaderFields {
+  return {
+    address: override.address !== undefined ? override.address : base.address,
+    city: override.city !== undefined ? override.city : base.city,
+    postalCode: override.postalCode !== undefined ? override.postalCode : base.postalCode,
+    email: override.email !== undefined ? override.email : base.email,
+    phone: override.phone !== undefined ? override.phone : base.phone,
+    website: override.website !== undefined ? override.website : base.website,
+  };
+}
+
+function companyHeaderLines(h: CompanyHeaderFields): string[] {
+  const line1 = [h.address, [h.postalCode, h.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const line2 = [h.email, h.phone, h.website].filter(Boolean).join(' · ');
+  return [line1, line2].filter(Boolean);
+}
+
 function initialsFromName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
@@ -102,6 +151,11 @@ export function ContractSignatureConfig({ listingId, ownerKey, logoOnly = false 
   const [establishmentName, setEstablishmentName] = useState('');
   const [listingName, setListingName] = useState('');
   const [logoBusy, setLogoBusy] = useState(false);
+  const [headerBase, setHeaderBase] = useState<CompanyHeaderFields>(EMPTY_COMPANY_HEADER);
+  const [headerOverride, setHeaderOverride] = useState<Partial<CompanyHeaderFields>>({});
+  const [headerDraft, setHeaderDraft] = useState<CompanyHeaderFields>(EMPTY_COMPANY_HEADER);
+  const [headerDirty, setHeaderDirty] = useState(false);
+  const [headerSaving, setHeaderSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const ownerMode = !listingId && Boolean(ownerKey);
 
@@ -118,9 +172,20 @@ export function ContractSignatureConfig({ listingId, ownerKey, logoOnly = false 
         typeof account?.companyName === 'string' ? String(account.companyName).trim() : '';
       setOwnerLogoUrl(logo);
       setEstablishmentName(publicName || company || '');
+      return {
+        email: typeof account?.email === 'string' ? String(account.email).trim() : '',
+        phone: typeof account?.phone === 'string' ? String(account.phone).trim() : '',
+        website:
+          typeof (pm.directBooking as { website?: unknown } | undefined)?.website === 'string'
+            ? String((pm.directBooking as { website?: string }).website).trim()
+            : typeof pm.website === 'string'
+              ? String(pm.website).trim()
+              : '',
+      };
     } catch {
       setOwnerLogoUrl('');
       setEstablishmentName('');
+      return { email: '', phone: '', website: '' };
     }
   }, []);
 
@@ -196,29 +261,60 @@ export function ContractSignatureConfig({ listingId, ownerKey, logoOnly = false 
 
       const oid = await resolveOwnerId(d);
       setResolvedOwnerId(oid);
-      if (oid) await loadOwnerBranding(oid);
+      let ownerContact = { email: '', phone: '', website: '' };
+      if (oid) ownerContact = await loadOwnerBranding(oid);
       else {
         setOwnerLogoUrl('');
         setEstablishmentName('');
       }
 
-      // Listing name for header fallback (priority over owner public name).
+      // Listing name + address for header (PDF company chrome).
+      let listingAddress = '';
+      let listingCity = '';
+      let listingPostal = '';
+      let listingWebsite = '';
       if (!ownerMode && listingId) {
         try {
           const listingRes = await listingsService.getListingById(listingId);
           const listing = listingRes?.data as
-            | { nickname?: string; name?: string }
+            | {
+                nickname?: string;
+                name?: string;
+                address?: string;
+                city?: string;
+                zipcode?: string;
+                postalCode?: string;
+                website?: string;
+              }
             | undefined;
           const ln =
             String(listing?.nickname || listing?.name || '')
               .trim() || '';
           setListingName(ln);
+          listingAddress = String(listing?.address || '').trim();
+          listingCity = String(listing?.city || '').trim();
+          listingPostal = String(listing?.zipcode || listing?.postalCode || '').trim();
+          listingWebsite = String(listing?.website || '').trim();
         } catch {
           setListingName('');
         }
       } else {
         setListingName('');
       }
+
+      const base: CompanyHeaderFields = {
+        address: listingAddress,
+        city: listingCity,
+        postalCode: listingPostal,
+        email: ownerContact.email,
+        phone: ownerContact.phone,
+        website: listingWebsite || ownerContact.website,
+      };
+      const override = parseCompanyHeader(gestion.companyHeader);
+      setHeaderBase(base);
+      setHeaderOverride(override);
+      setHeaderDraft(mergeCompanyHeader(base, override));
+      setHeaderDirty(false);
     } catch {
       setDoc(null);
       setResolvedOwnerId(null);
@@ -227,6 +323,10 @@ export function ContractSignatureConfig({ listingId, ownerKey, logoOnly = false 
       setEstablishmentName('');
       setListingName('');
       setOrigin('default');
+      setHeaderBase(EMPTY_COMPANY_HEADER);
+      setHeaderOverride({});
+      setHeaderDraft(EMPTY_COMPANY_HEADER);
+      setHeaderDirty(false);
     } finally {
       setLoading(false);
     }
@@ -297,6 +397,48 @@ export function ContractSignatureConfig({ listingId, ownerKey, logoOnly = false 
       doc: doc as ListingOrchestrationDoc,
     });
     setListingOverrideUrl(url?.trim() || '');
+  };
+
+  const persistCompanyHeader = async (next: CompanyHeaderFields | null) => {
+    if (!doc || ownerMode || !listingId || headerSaving) return;
+    setHeaderSaving(true);
+    try {
+      const existingGestion = (doc.capabilities?.registration?.gestion ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const gestion = { ...existingGestion };
+      if (next) {
+        gestion.companyHeader = { ...next };
+      } else {
+        delete gestion.companyHeader;
+      }
+      await saveListingGestion({
+        listingId,
+        capabilityKey: 'registration',
+        gestion,
+        doc: doc as ListingOrchestrationDoc,
+      });
+      if (next) {
+        setHeaderOverride({ ...next });
+        setHeaderDraft({ ...next });
+      } else {
+        setHeaderOverride({});
+        setHeaderDraft({ ...headerBase });
+      }
+      setHeaderDirty(false);
+      toast.success(next ? 'En-tête PDF enregistré' : 'En-tête rétabli (héritage listing / propriétaire)');
+      void load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Enregistrement en-tête impossible');
+    } finally {
+      setHeaderSaving(false);
+    }
+  };
+
+  const setHeaderField = (key: keyof CompanyHeaderFields, val: string) => {
+    setHeaderDraft(prev => ({ ...prev, [key]: val }));
+    setHeaderDirty(true);
   };
 
   const onLogoFile = async (files: FileList | null) => {
@@ -403,9 +545,175 @@ export function ContractSignatureConfig({ listingId, ownerKey, logoOnly = false 
       )}
       {logoOnly && (
         <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mb: 1.5, lineHeight: 1.4 }}>
-          Logo imprimé en en-tête des PDF (héritage propriétaire, override possible ici).
+          Logo et coordonnées imprimés en en-tête de tous les PDF (héritage listing / propriétaire,
+          surcharge possible ici).
         </Typography>
       )}
+
+      {logoOnly && !ownerMode ? (
+        <Box
+          sx={{
+            mb: 1.5,
+            p: 1.25,
+            borderRadius: 1,
+            border: '1px dashed rgba(26,22,17,0.14)',
+            bgcolor: '#faf9f7',
+          }}
+        >
+          <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'text.secondary', mb: 0.75 }}>
+            Aperçu en-tête PDF
+          </Typography>
+          <Stack direction="row" spacing={1.25} alignItems="flex-start">
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                flexShrink: 0,
+                '& img': { width: 44, height: 44, objectFit: 'contain', display: 'block' },
+              }}
+            >
+              <ReportLogoPreview
+                canonicalUrl={logoPreview.effectiveUrl}
+                alt={displayName}
+                empty={<LogoFallback name={displayName} />}
+                brokenFallback={<LogoFallback name={displayName} />}
+              />
+            </Box>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{displayName}</Typography>
+              {companyHeaderLines(headerDraft).length ? (
+                companyHeaderLines(headerDraft).map(line => (
+                  <Typography
+                    key={line}
+                    sx={{ fontSize: 11.5, color: 'text.secondary', lineHeight: 1.4, mt: 0.15 }}
+                  >
+                    {line}
+                  </Typography>
+                ))
+              ) : (
+                <Typography sx={{ fontSize: 11.5, color: 'warning.main', mt: 0.25 }}>
+                  Aucune coordonnée — renseignez adresse / e-mail ci-dessous.
+                </Typography>
+              )}
+            </Box>
+          </Stack>
+        </Box>
+      ) : null}
+
+      {logoOnly && !ownerMode ? (
+        <Box
+          sx={{
+            mb: 1.5,
+            p: 1.25,
+            borderRadius: 1,
+            bgcolor: 'rgba(26,22,17,0.02)',
+            border: '1px solid rgba(26,22,17,0.08)',
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>Coordonnées en-tête</Typography>
+            <Chip
+              size="small"
+              label={
+                Object.keys(headerOverride).length > 0
+                  ? 'Surcharge logement'
+                  : 'Hérité listing / propriétaire'
+              }
+              variant="outlined"
+              sx={{ height: 22, fontSize: 11 }}
+              color={Object.keys(headerOverride).length > 0 ? 'warning' : 'default'}
+            />
+          </Stack>
+          <Stack spacing={1}>
+            <TextField
+              size="small"
+              fullWidth
+              label="Adresse"
+              value={headerDraft.address}
+              placeholder={headerBase.address || 'Rue, n°…'}
+              disabled={!doc || headerSaving}
+              onChange={e => setHeaderField('address', e.target.value)}
+            />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField
+                size="small"
+                fullWidth
+                label="Code postal"
+                value={headerDraft.postalCode}
+                placeholder={headerBase.postalCode || ''}
+                disabled={!doc || headerSaving}
+                onChange={e => setHeaderField('postalCode', e.target.value)}
+              />
+              <TextField
+                size="small"
+                fullWidth
+                label="Ville"
+                value={headerDraft.city}
+                placeholder={headerBase.city || ''}
+                disabled={!doc || headerSaving}
+                onChange={e => setHeaderField('city', e.target.value)}
+              />
+            </Stack>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField
+                size="small"
+                fullWidth
+                label="E-mail"
+                value={headerDraft.email}
+                placeholder={headerBase.email || ''}
+                disabled={!doc || headerSaving}
+                onChange={e => setHeaderField('email', e.target.value)}
+              />
+              <TextField
+                size="small"
+                fullWidth
+                label="Téléphone"
+                value={headerDraft.phone}
+                placeholder={headerBase.phone || ''}
+                disabled={!doc || headerSaving}
+                onChange={e => setHeaderField('phone', e.target.value)}
+              />
+            </Stack>
+            <TextField
+              size="small"
+              fullWidth
+              label="Site web"
+              value={headerDraft.website}
+              placeholder={headerBase.website || 'https://…'}
+              disabled={!doc || headerSaving}
+              onChange={e => setHeaderField('website', e.target.value)}
+            />
+          </Stack>
+          <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1.25 }}>
+            <Button
+              size="small"
+              variant="contained"
+              disabled={!doc || !headerDirty || headerSaving}
+              onClick={() => void persistCompanyHeader(headerDraft)}
+            >
+              {headerSaving ? 'Enregistrement…' : 'Enregistrer l’en-tête'}
+            </Button>
+            {Object.keys(headerOverride).length > 0 || headerDirty ? (
+              <Button
+                size="small"
+                variant="outlined"
+                color="inherit"
+                disabled={!doc || headerSaving}
+                onClick={() => {
+                  if (Object.keys(headerOverride).length > 0) {
+                    void persistCompanyHeader(null);
+                  } else {
+                    setHeaderDraft({ ...headerBase });
+                    setHeaderDirty(false);
+                  }
+                }}
+              >
+                Revenir à l’héritage
+              </Button>
+            ) : null}
+          </Stack>
+        </Box>
+      ) : null}
 
       <Box
         sx={{
