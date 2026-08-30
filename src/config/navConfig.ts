@@ -395,6 +395,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         description: 'Le rapport du matin — mouvement, semaine, rythme de prise',
       },
       {
+        id: 'reports/annuel',
+        label: 'Tendance annuelle',
+        iconType: 'chart',
+        iconColor: '#2d4a6b',
+        description: 'La saison mois par mois, et ce que les blocages coûtent',
+      },
+      {
         id: 'reports/exploitation',
         label: 'Exploitation',
         iconType: 'document',
