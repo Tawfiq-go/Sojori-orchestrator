@@ -1,5 +1,6 @@
 export {
   type FieldBadgeKind,
+  type GuestContractDocumentType,
   type GuestDocument,
   type GuestDocumentClause,
   type GuestDocumentFieldDef,
