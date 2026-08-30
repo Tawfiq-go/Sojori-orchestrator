@@ -23,7 +23,6 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
-import { ReportsPage } from './pages/ReportsPage';
 import ForbiddenPage from './pages/ForbiddenPage';
 import { MaJourneePage } from './pages/MaJourneePage';
 
@@ -120,6 +119,16 @@ const TasksPlanningPageV2 = lazyWithReload(() =>
 );
 const TasksStaffFulltaskPage = lazyWithReload(() =>
   import('./pages/TasksStaffFulltaskPage').then((module) => ({ default: module.default }))
+);
+const ReportsHubPage = lazyWithReload(() =>
+  import('./features/reports/ReportsHubPage').then((module) => ({
+    default: module.ReportsHubPage,
+  }))
+);
+const ClientReportPage = lazyWithReload(() =>
+  import('./features/reports/ClientReportPage').then((module) => ({
+    default: module.ClientReportPage,
+  }))
 );
 const ExtrasVentesPage = lazyWithReload(() =>
   import('./features/extras/ExtrasVentesPage').then((module) => ({
@@ -384,7 +393,6 @@ function App() {
               <Route path="/ma-journee" element={<MaJourneePage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
               {/* Section Orchestration — URLs canoniques /orchestration/* (alignées menu).
                   Les anciennes /tasks/plans|ops|orchestration-config|whatsapp-messages
                   redirigent ici (query préservée) pour ne pas casser les deep-links générés. */}
@@ -430,6 +438,8 @@ function App() {
 
               {/* Claude Design V2 - Remplace les anciennes vues */}
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
+              <Route path="/reports" element={<LazyRoute><ReportsHubPage /></LazyRoute>} />
+              <Route path="/reports/clients" element={<LazyRoute><ClientReportPage /></LazyRoute>} />
               <Route path="/tasks/extras/ventes" element={<LazyRoute><ExtrasVentesPage /></LazyRoute>} />
               <Route path="/tasks/extras/configuration" element={<LazyRoute><TasksExtrasCataloguePage /></LazyRoute>} />
               {/* Ancienne entree « Liste extra » : fusionnee dans le catalogue. */}
