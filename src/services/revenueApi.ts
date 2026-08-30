@@ -407,9 +407,31 @@ export type OriginCountry = {
   perReservation: number | null;
 };
 
+export type BookingChannel = {
+  channel: string;
+  direct: boolean;
+  reservations: number;
+  nights: number;
+  guests: number;
+};
+
+/** Concentration réelle du chiffre d'affaires — mesurée, pas supposée. */
+export type Concentration = {
+  customers: number;
+  top10Pct: number;
+  top20Pct: number;
+  top50Pct: number;
+  customersFor80Pct: number;
+  customersFor80Share: number;
+};
+
 export type ClientOriginReport = {
   success: boolean;
   countries: OriginCountry[];
+  channels: BookingChannel[];
+  /** Part des réservations en direct, null si le canal est indisponible. */
+  directPct: number | null;
+  concentration: Concentration;
   totals: {
     customers: number;
     reservations: number;

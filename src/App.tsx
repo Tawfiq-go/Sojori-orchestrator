@@ -135,11 +135,6 @@ const OperationsReportPage = lazyWithReload(() =>
     default: module.OperationsReportPage,
   })),
 );
-const ClientReportPage = lazyWithReload(() =>
-  import('./features/reports/ClientReportPage').then((module) => ({
-    default: module.ClientReportPage,
-  }))
-);
 const ExtrasVentesPage = lazyWithReload(() =>
   import('./features/extras/ExtrasVentesPage').then((module) => ({
     default: module.ExtrasVentesPage,
@@ -449,9 +444,9 @@ function App() {
               {/* Claude Design V2 - Remplace les anciennes vues */}
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
               <Route path="/reports" element={<LazyRoute><ReportsHubPage /></LazyRoute>} />
-              <Route path="/reports/clients" element={<LazyRoute><ClientReportPage /></LazyRoute>} />
+              <Route path="/reports/clients" element={<LazyRoute><ClientOriginPage /></LazyRoute>} />
               <Route path="/reports/exploitation" element={<LazyRoute><OperationsReportPage /></LazyRoute>} />
-              <Route path="/reports/origine" element={<LazyRoute><ClientOriginPage /></LazyRoute>} />
+              <Route path="/reports/origine" element={<Navigate to="/reports/clients" replace />} />
               <Route path="/tasks/extras/ventes" element={<LazyRoute><ExtrasVentesPage /></LazyRoute>} />
               <Route path="/tasks/extras/configuration" element={<LazyRoute><TasksExtrasCataloguePage /></LazyRoute>} />
               {/* Ancienne entree « Liste extra » : fusionnee dans le catalogue. */}

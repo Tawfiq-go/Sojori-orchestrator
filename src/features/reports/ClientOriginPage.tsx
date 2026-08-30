@@ -26,12 +26,28 @@ const T = {
   border: 'rgba(20,17,10,0.08)',
 };
 
-const PERIODS = [
-  { id: 'm1', label: '30 jours', days: 30 },
-  { id: 'm3', label: '3 mois', days: 92 },
-  { id: 'm6', label: '6 mois', days: 183 },
-  { id: 'all', label: 'Tout', days: 3650 },
-];
+/**
+ * Navigation par mois calendaires, pas par fenêtre glissante.
+ *
+ * « 30 derniers jours » ne veut rien dire pour un hôtelier : sa saison se
+ * lit en mois. Le futur est accessible — les réservations à venir sont
+ * connues, même si leur nationalité ne l'est pas encore.
+ */
+const MONTH_FMT = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
+const MONTH_SHORT = new Intl.DateTimeFormat('fr-FR', { month: 'short' });
+
+function monthRange(offset: number): { from: string; to: string; label: string; future: boolean } {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1));
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+  const label = MONTH_FMT.format(start);
+  return {
+    from: start.toISOString().slice(0, 10),
+    to: end.toISOString().slice(0, 10),
+    label: label.charAt(0).toUpperCase() + label.slice(1),
+    future: offset > 0,
+  };
+}
 
 /** Les colonnes triables — chacune raconte une histoire différente. */
 const METRICS = [
@@ -44,20 +60,18 @@ const METRICS = [
 type MetricId = (typeof METRICS)[number]['id'];
 
 const NF = new Intl.NumberFormat('fr-FR');
-const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
 export function ClientOriginPage() {
-  const [periodId, setPeriodId] = useState('all');
+  const [monthOffset, setMonthOffset] = useState(0);
   const [metric, setMetric] = useState<MetricId>('reservations');
   const [report, setReport] = useState<ClientOriginReport | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const period = PERIODS.find((p) => p.id === periodId) ?? PERIODS[3];
-  const range = useMemo(() => {
-    const to = new Date();
-    const from = new Date(to.getTime() - period.days * 24 * 3600e3);
-    return { from: ymd(from), to: ymd(new Date(to.getTime() + 24 * 3600e3)) };
-  }, [period.days]);
+  const current = useMemo(() => monthRange(monthOffset), [monthOffset]);
+  const range = useMemo(
+    () => ({ from: current.from, to: current.to }),
+    [current.from, current.to],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -111,13 +125,15 @@ export function ClientOriginPage() {
     );
   }
 
-  if (!report || !rows.length) {
+  // Un mois a venir n'a pas encore de pays — les sejours ne sont pas
+  // consommes — mais ses canaux existent. On n'affiche « aucune donnee »
+  // que si les deux manquent.
+  if (!report || (!rows.length && !report.channels.length)) {
     return (
       <DashboardWrapper breadcrumb={['Rapports', 'Origine des clients']}>
         <Paper variant="outlined" sx={{ p: 4, border: `1px solid ${T.border}`, borderRadius: 1.5 }}>
           <Typography sx={{ fontSize: 14, color: T.text2 }}>
-            Aucune donnée sur la période. L'origine est reconstituée depuis les nationalités
-            saisies à la réception.
+            Aucune réservation sur ce mois.
           </Typography>
         </Paper>
       </DashboardWrapper>
@@ -130,23 +146,44 @@ export function ClientOriginPage() {
         D'où viennent les clients qui réservent, et ce qu'ils dépensent une fois sur place.
       </Typography>
 
-      {/* Période */}
-      <Stack direction="row" sx={{ gap: 1, mb: 2, flexWrap: 'wrap' }}>
-        {PERIODS.map((p) => (
-          <Chip
-            key={p.id}
-            label={p.label}
-            onClick={() => setPeriodId(p.id)}
-            sx={{
-              height: 28,
-              fontSize: 12.5,
-              fontWeight: periodId === p.id ? 700 : 500,
-              bgcolor: periodId === p.id ? `${T.gold}22` : T.bg2,
-              color: periodId === p.id ? T.primaryDeep : T.text2,
-              border: `1px solid ${periodId === p.id ? T.gold : T.border}`,
-            }}
-          />
-        ))}
+      {/* Navigation mensuelle — le futur est accessible */}
+      <Stack direction="row" sx={{ gap: 0.75, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Chip
+          label="◀"
+          onClick={() => setMonthOffset((o) => o - 1)}
+          sx={{ height: 28, fontSize: 12, bgcolor: T.bg2, border: `1px solid ${T.border}` }}
+        />
+        {[-2, -1, 0, 1, 2].map((delta) => {
+          const m = monthRange(monthOffset + delta);
+          const isCurrent = delta === 0;
+          const short = MONTH_SHORT.format(new Date(`${m.from}T00:00:00Z`));
+          return (
+            <Chip
+              key={m.from}
+              label={isCurrent ? m.label : short}
+              onClick={() => setMonthOffset((o) => o + delta)}
+              sx={{
+                height: 28,
+                fontSize: 12.5,
+                fontWeight: isCurrent ? 700 : 500,
+                bgcolor: isCurrent ? `${T.gold}22` : T.bg2,
+                color: isCurrent ? T.primaryDeep : m.future ? T.text3 : T.text2,
+                border: `1px solid ${isCurrent ? T.gold : T.border}`,
+                fontStyle: m.future ? 'italic' : 'normal',
+              }}
+            />
+          );
+        })}
+        <Chip
+          label="▶"
+          onClick={() => setMonthOffset((o) => o + 1)}
+          sx={{ height: 28, fontSize: 12, bgcolor: T.bg2, border: `1px solid ${T.border}` }}
+        />
+        {current.future ? (
+          <Typography sx={{ fontSize: 11.5, color: T.text3, ml: 1, fontStyle: 'italic' }}>
+            Mois à venir — nationalité non encore saisie, l'origine se lit par canal
+          </Typography>
+        ) : null}
       </Stack>
 
       {/* Indicateurs */}
@@ -224,7 +261,122 @@ export function ClientOriginPage() {
         ))}
       </Stack>
 
-      {/* Carte + classement */}
+      {/* Canal de distribution et concentration — deux lectures que la carte
+          ne donne pas : par où arrivent les réservations, et à quel point le
+          chiffre dépend de quelques clients. */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+          gap: 2,
+          mb: 2.5,
+        }}
+      >
+        <Paper variant="outlined" sx={{ p: 2.25, border: `1px solid ${T.border}`, borderRadius: 1.75 }}>
+          <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 1.5 }}>
+            <Typography sx={{ fontSize: 13, fontWeight: 800, color: T.text }}>
+              Canal de réservation
+            </Typography>
+            {report.directPct != null ? (
+              <Typography sx={{ fontSize: 11.5, color: T.text3 }}>
+                {report.directPct} % en direct
+              </Typography>
+            ) : null}
+          </Stack>
+          {report.channels.length ? (
+            <Stack sx={{ gap: 1 }}>
+              {report.channels.map((c) => {
+                const maxCh = Math.max(...report.channels.map((x) => x.reservations), 1);
+                const w = Math.round((c.reservations / maxCh) * 100);
+                return (
+                  <Box key={c.channel}>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: T.text }}>
+                        {c.channel}
+                        {c.direct ? (
+                          <Box
+                            component="span"
+                            sx={{
+                              ml: 0.75,
+                              fontSize: 9.5,
+                              fontWeight: 700,
+                              letterSpacing: '.06em',
+                              px: 0.6,
+                              py: '1px',
+                              borderRadius: '2px',
+                              bgcolor: `${T.gold}26`,
+                              color: T.primaryDeep,
+                            }}
+                          >
+                            DIRECT
+                          </Box>
+                        ) : null}
+                      </Typography>
+                      <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2 }}>
+                        {NF.format(c.reservations)}
+                      </Typography>
+                    </Stack>
+                    <Box sx={{ height: 5, bgcolor: T.bg2, borderRadius: 3, mt: 0.4 }}>
+                      <Box
+                        sx={{
+                          width: `${w}%`,
+                          height: '100%',
+                          borderRadius: 3,
+                          bgcolor: c.direct ? T.gold : T.text3,
+                        }}
+                      />
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Stack>
+          ) : (
+            <Typography sx={{ fontSize: 12, color: T.text3 }}>
+              Aucune réservation sur ce mois.
+            </Typography>
+          )}
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: 2.25, border: `1px solid ${T.border}`, borderRadius: 1.75 }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 800, color: T.text, mb: 1.5 }}>
+            Concentration du chiffre d'affaires
+          </Typography>
+          <Stack sx={{ gap: 1 }}>
+            {[
+              { l: 'Les 10 % premiers', v: report.concentration.top10Pct },
+              { l: 'Les 20 % premiers', v: report.concentration.top20Pct },
+              { l: 'Les 50 % premiers', v: report.concentration.top50Pct },
+            ].map((r) => (
+              <Box key={r.l}>
+                <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
+                  <Typography sx={{ fontSize: 12.5, color: T.text2 }}>{r.l}</Typography>
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text }}>
+                    {r.v} % du CA
+                  </Typography>
+                </Stack>
+                <Box sx={{ height: 5, bgcolor: T.bg2, borderRadius: 3, mt: 0.4 }}>
+                  <Box sx={{ width: `${r.v}%`, height: '100%', bgcolor: T.gold, borderRadius: 3 }} />
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+          {report.concentration.customers > 0 ? (
+            <Typography sx={{ fontSize: 11.5, color: T.text3, mt: 1.5, lineHeight: 1.6 }}>
+              <b>
+                {report.concentration.customersFor80Share} % de vos clients font 80 % du chiffre
+              </b>{' '}
+              ({report.concentration.customersFor80Pct} sur {report.concentration.customers}).
+              {report.concentration.customersFor80Share > 35
+                ? ' Clientèle homogène : vous ne dépendez pas de quelques gros comptes.'
+                : ' Clientèle concentrée : quelques clients pèsent lourd.'}
+            </Typography>
+          ) : null}
+        </Paper>
+      </Box>
+
+      {/* Carte + classement — absents tant que les séjours ne sont pas
+          consommés : la nationalité n'est saisie qu'à l'enregistrement. */}
+      {rows.length ? (
       <Paper
         variant="outlined"
         sx={{ p: 2.5, mb: 2.5, border: `1px solid ${T.border}`, borderRadius: 1.75 }}
@@ -278,8 +430,21 @@ export function ClientOriginPage() {
           </Stack>
         </Box>
       </Paper>
+      ) : (
+        <Paper
+          variant="outlined"
+          sx={{ p: 2.5, mb: 2.5, border: `1px dashed ${T.border}`, borderRadius: 1.75 }}
+        >
+          <Typography sx={{ fontSize: 13, color: T.text2, lineHeight: 1.6 }}>
+            <b>Pas encore de répartition par pays sur ce mois.</b> La nationalité est saisie à
+            l'enregistrement du séjour : pour les arrivées à venir, l'origine se lit au canal de
+            réservation ci-dessus.
+          </Typography>
+        </Paper>
+      )}
 
       {/* Tableau complet */}
+      {rows.length ? (
       <Paper
         variant="outlined"
         sx={{ border: `1px solid ${T.border}`, borderRadius: 1.75, overflowX: 'auto' }}
@@ -392,6 +557,7 @@ export function ClientOriginPage() {
           </tbody>
         </Box>
       </Paper>
+      ) : null}
     </DashboardWrapper>
   );
 }
