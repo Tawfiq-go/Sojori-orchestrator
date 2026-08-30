@@ -102,82 +102,23 @@ function principalLabel(contracts: GuestContractSummary[]): string {
     const t = (c.travelers ?? []).find(x => x.travelerIndex === idx) ?? (c.travelers ?? [])[0];
     if (t) {
       const name = travelerLabel(t, idx);
-      if (name) return name;
+      if (name && !name.startsWith('Voyageur ')) return name;
     }
     if (c.guestName?.trim()) return c.guestName.trim();
   }
   return 'Voyageur principal';
 }
 
-type MatrixRow = { doc: string; who: string };
-
-function buildWhoSignsMatrix(
-  configured: ConfiguredContract[],
-  contracts: GuestContractSummary[],
-): { rows: MatrixRow[]; combo: string; airbnbNote: string } {
-  const travelers =
-    contracts.find(c => (c.travelers?.length ?? 0) > 0)?.travelers ??
-    ([] as GuestContractTraveler[]);
-  const principal = principalLabel(contracts);
+function formatLabel(configured: ConfiguredContract[]): string {
   const hasPolice = configured.some(c => c.documentType === 'moroccan_police_form');
-  const hasDisclaimer = configured.some(c => c.documentType === 'stay_contract');
-  const rows: MatrixRow[] = [];
-
-  for (const cfg of configured) {
-    if (cfg.documentType === 'moroccan_police_form') {
-      if (travelers.length === 0) {
-        rows.push({
-          doc: `${cfg.name} · toutes les fiches`,
-          who: `Signature : ${principal} (1 fois)`,
-        });
-      } else if (cfg.signerPolicy === 'each_traveler') {
-        travelers.forEach((t, i) => {
-          rows.push({
-            doc: `${cfg.name} · ${travelerLabel(t, i)}`,
-            who: `Signe : ${travelerLabel(t, i)}`,
-          });
-        });
-      } else {
-        // Airbnb / default: all sheets collected, one principal signature
-        travelers.forEach((t, i) => {
-          rows.push({
-            doc: `${cfg.name} · ${travelerLabel(t, i)}`,
-            who: `Collectée · signée par ${principal}`,
-          });
-        });
-      }
-    } else {
-      rows.push({
-        doc: cfg.name,
-        who: `Signature : ${principal}`,
-      });
-    }
-  }
-
-  const nPolice = hasPolice ? Math.max(1, travelers.length || 1) : 0;
-  const parts: string[] = [];
-  if (hasPolice) parts.push(`${nPolice} fiche${nPolice > 1 ? 's' : ''} police`);
-  if (hasDisclaimer) parts.push('1 disclaimer');
-  const combo =
-    parts.length === 0
-      ? 'Aucun document signature web'
-      : hasPolice &&
-          hasDisclaimer &&
-          configured.every(c => c.signerPolicy === 'primary_guest')
-        ? `Bundle Airbnb : ${parts.join(' + ')} → 1 PDF · 1 lien WhatsApp · 1 signature (${principal})`
-        : `Combinaison prévue : ${parts.join(' + ')} → liens selon config · signataire ${principal}`;
-
-  const airbnbNote =
-    hasPolice &&
-    hasDisclaimer &&
-    configured.every(c => c.signerPolicy === 'primary_guest')
-      ? 'Mode Airbnb : toutes les fiches sont dans le même document web que le disclaimer ; le principal signe une seule fois.'
-      : hasPolice &&
-          configured.some(c => c.documentType === 'moroccan_police_form' && c.signerPolicy === 'each_traveler')
-        ? 'Mode hôtel : chaque adulte peut être requis pour sa fiche (policy listing).'
-        : '';
-
-  return { rows, combo, airbnbNote };
+  const hasStay = configured.some(c => c.documentType === 'stay_contract');
+  const allPrimary = configured.every(c => c.signerPolicy === 'primary_guest');
+  const policeEach = configured.some(
+    c => c.documentType === 'moroccan_police_form' && c.signerPolicy === 'each_traveler',
+  );
+  if (hasPolice && hasStay && allPrimary) return 'Airbnb · 1 lien';
+  if (policeEach) return 'Hôtel · par voyageur';
+  return 'Selon listing';
 }
 
 type Props = {
@@ -252,10 +193,6 @@ export function GuestContractSection({
   }, [load]);
 
   const byType = useMemo(() => latestByType(contracts), [contracts]);
-  const matrix = useMemo(
-    () => buildWhoSignsMatrix(configured, contracts),
-    [configured, contracts],
-  );
 
   const isAirbnbBundle = useMemo(
     () =>
@@ -265,6 +202,56 @@ export function GuestContractSection({
       configured.every(c => c.signerPolicy === 'primary_guest'),
     [configured],
   );
+
+  const signRows = useMemo(() => {
+    const travelers =
+      contracts.find(c => (c.travelers?.length ?? 0) > 0)?.travelers ??
+      ([] as GuestContractTraveler[]);
+    const principal = principalLabel(contracts);
+    const rows: { key: string; who: string; doc: string; documentType: GuestContractDocumentType }[] =
+      [];
+
+    for (const cfg of configured) {
+      if (cfg.documentType === 'moroccan_police_form' && cfg.signerPolicy === 'each_traveler') {
+        const list = travelers.length > 0 ? travelers : [{ travelerIndex: 0 } as GuestContractTraveler];
+        list.forEach((t, i) => {
+          rows.push({
+            key: `police-${i}`,
+            who: travelerLabel(t, i),
+            doc: 'Fiche',
+            documentType: 'moroccan_police_form',
+          });
+        });
+      } else if (cfg.documentType === 'moroccan_police_form') {
+        rows.push({
+          key: 'police-bundle',
+          who: principal,
+          doc: travelers.length > 1 ? `Fiches (${travelers.length})` : 'Fiche',
+          documentType: isAirbnbBundle ? 'stay_contract' : 'moroccan_police_form',
+        });
+      } else {
+        rows.push({
+          key: cfg.documentType,
+          who: principal,
+          doc: cfg.name.replace(/^Guest\s+/i, ''),
+          documentType: isAirbnbBundle && cfg.documentType === 'stay_contract' ? 'stay_contract' : cfg.documentType,
+        });
+      }
+    }
+
+    // Airbnb: one web link for the whole pack — collapse duplicate stay rows
+    if (isAirbnbBundle) {
+      return [
+        {
+          key: 'airbnb',
+          who: principal,
+          doc: 'Pack (fiches + disclaimer)',
+          documentType: 'stay_contract' as GuestContractDocumentType,
+        },
+      ];
+    }
+    return rows;
+  }, [configured, contracts, isAirbnbBundle]);
 
   const ensureOne = async (documentType: GuestContractDocumentType) => {
     let contract = byType.get(documentType) ?? null;
@@ -296,9 +283,8 @@ export function GuestContractSection({
     }
   };
 
-  const openWeb = (documentType: GuestContractDocumentType) =>
-    void withBusy(`${documentType}:web`, async () => {
-      // Airbnb: web opens the bundle (stay_contract = police pages + disclaimer)
+  const openWeb = (documentType: GuestContractDocumentType, rowKey: string) =>
+    void withBusy(`${rowKey}:web`, async () => {
       const targetType = isAirbnbBundle ? 'stay_contract' : documentType;
       const contract = await ensureOne(targetType);
       if (!contract) return;
@@ -319,9 +305,10 @@ export function GuestContractSection({
       window.open(res.data.url, '_blank', 'noopener,noreferrer');
     });
 
-  const openPdf = (documentType: GuestContractDocumentType) =>
-    void withBusy(`${documentType}:pdf`, async () => {
-      const contract = await ensureOne(documentType);
+  const openPdf = (documentType: GuestContractDocumentType, rowKey: string) =>
+    void withBusy(`${rowKey}:pdf`, async () => {
+      const targetType = isAirbnbBundle ? 'stay_contract' : documentType;
+      const contract = await ensureOne(targetType);
       if (!contract) return;
       const variant = contract.status === 'signed' ? 'signed' : 'unsigned';
       const res = await guestContractsService.documentUrl(contract.id, variant);
@@ -336,17 +323,17 @@ export function GuestContractSection({
     <Box
       sx={
         embedded
-          ? { mt: 1.5, pt: 1.25, borderTop: `1px solid ${T.border}` }
+          ? { mt: 1, pt: 1, borderTop: `1px solid ${T.border}` }
           : {
-              p: 1.5,
-              mb: 1.75,
+              p: 1.25,
+              mb: 1.25,
               border: `1px solid ${T.border}`,
-              borderRadius: 1.5,
+              borderRadius: 1.25,
               bgcolor: T.bg1,
             }
       }
     >
-      <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 1 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, mb: 0.75, flexWrap: 'wrap' }}>
         <Typography
           sx={{
             fontSize: 11,
@@ -358,141 +345,129 @@ export function GuestContractSection({
         >
           Contrats
         </Typography>
-        {loading ? <CircularProgress size={14} /> : null}
+        {configured.length > 0 ? (
+          <Chip
+            size="small"
+            label={formatLabel(configured)}
+            sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: T.bg3, color: T.text2 }}
+          />
+        ) : null}
+        {loading ? <CircularProgress size={12} /> : null}
       </Stack>
 
       {!loading && configured.length === 0 ? (
-        <Typography sx={{ fontSize: 12.5, color: T.text4 }}>
-          Aucun contrat avec signature web sur ce listing.
+        <Typography sx={{ fontSize: 12, color: T.text4 }}>
+          Aucun contrat signature web sur ce listing.
         </Typography>
       ) : null}
 
-      <Stack spacing={0.75}>
-        {configured.map(cfg => {
-          const current = byType.get(cfg.documentType);
-          const webBusy = busyKey === `${cfg.documentType}:web`;
-          const pdfBusy = busyKey === `${cfg.documentType}:pdf`;
+      <Stack spacing={0.4}>
+        {signRows.map(row => {
+          const current = byType.get(isAirbnbBundle ? 'stay_contract' : row.documentType);
+          const webBusy = busyKey === `${row.key}:web`;
+          const pdfBusy = busyKey === `${row.key}:pdf`;
           const anyBusy = Boolean(busyKey);
           return (
             <Stack
-              key={cfg.documentType}
-              direction={{ xs: 'column', sm: 'row' }}
+              key={row.key}
+              direction="row"
               sx={{
-                alignItems: { sm: 'center' },
-                justifyContent: 'space-between',
-                gap: 1,
-                px: 1.1,
-                py: 0.85,
-                borderRadius: 1.1,
+                alignItems: 'center',
+                gap: 0.75,
+                px: 0.85,
+                py: 0.45,
+                borderRadius: 1,
                 bgcolor: T.bg3,
                 border: `1px solid ${T.border}`,
+                minHeight: 34,
               }}
             >
-              <Stack direction="row" sx={{ alignItems: 'center', gap: 0.85, minWidth: 0, flexWrap: 'wrap' }}>
-                <Typography sx={{ fontSize: 13, fontWeight: 800, color: T.text2 }}>
-                  {cfg.name}
-                </Typography>
-                {current ? (
-                  <Chip
-                    size="small"
-                    label={STATUS_LABEL[current.status] ?? current.status}
-                    sx={{
-                      height: 20,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      bgcolor: T.bg1,
-                      color: statusColor(current.status),
-                    }}
-                  />
-                ) : (
-                  <Chip
-                    size="small"
-                    label="À générer"
-                    sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: T.bg1, color: T.text3 }}
-                  />
-                )}
-              </Stack>
-              <Stack direction="row" sx={{ gap: 0.75, flexShrink: 0 }}>
-                <Button
+              <Typography
+                sx={{
+                  fontSize: 12.5,
+                  fontWeight: 750,
+                  color: T.text2,
+                  flex: '1 1 120px',
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {row.who}
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  color: T.text3,
+                  flex: '0 1 110px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  display: { xs: 'none', sm: 'block' },
+                }}
+              >
+                {row.doc}
+              </Typography>
+              {current ? (
+                <Chip
                   size="small"
-                  variant="contained"
-                  disabled={readOnly || anyBusy || current?.status === 'signed'}
-                  onClick={() => openWeb(cfg.documentType)}
+                  label={STATUS_LABEL[current.status] ?? current.status}
                   sx={{
-                    textTransform: 'none',
+                    height: 18,
+                    fontSize: 9.5,
                     fontWeight: 700,
-                    fontSize: 12,
-                    bgcolor: T.primaryDeep,
-                    minHeight: 30,
-                    px: 1.25,
+                    bgcolor: T.bg1,
+                    color: statusColor(current.status),
+                    flexShrink: 0,
                   }}
-                >
-                  {webBusy ? <CircularProgress size={14} color="inherit" /> : 'Ouvrir web'}
-                </Button>
-                <Button
+                />
+              ) : (
+                <Chip
                   size="small"
-                  variant="outlined"
-                  disabled={anyBusy}
-                  onClick={() => openPdf(cfg.documentType)}
-                  sx={{
-                    textTransform: 'none',
-                    fontWeight: 700,
-                    fontSize: 12,
-                    borderColor: T.border,
-                    color: T.text2,
-                    minHeight: 30,
-                    px: 1.25,
-                  }}
-                >
-                  {pdfBusy ? <CircularProgress size={14} /> : 'PDF'}
-                </Button>
-              </Stack>
+                  label="—"
+                  sx={{ height: 18, fontSize: 9.5, fontWeight: 700, bgcolor: T.bg1, color: T.text4 }}
+                />
+              )}
+              <Button
+                size="small"
+                variant="contained"
+                disabled={readOnly || anyBusy || current?.status === 'signed'}
+                onClick={() => openWeb(row.documentType, row.key)}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: 11,
+                  bgcolor: T.primaryDeep,
+                  minHeight: 26,
+                  px: 1,
+                  flexShrink: 0,
+                }}
+              >
+                {webBusy ? <CircularProgress size={12} color="inherit" /> : 'Lien'}
+              </Button>
+              <Button
+                size="small"
+                variant="text"
+                disabled={anyBusy}
+                onClick={() => openPdf(row.documentType, row.key)}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: 11,
+                  color: T.text2,
+                  minHeight: 26,
+                  minWidth: 0,
+                  px: 0.75,
+                  flexShrink: 0,
+                }}
+              >
+                {pdfBusy ? <CircularProgress size={12} /> : 'PDF'}
+              </Button>
             </Stack>
           );
         })}
       </Stack>
-
-      {!loading && configured.length > 0 ? (
-        <Box sx={{ mt: 1.5, pt: 1.25, borderTop: `1px solid ${T.border}` }}>
-          <Typography
-            sx={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: T.text3,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              mb: 0.75,
-            }}
-          >
-            Qui signe quoi
-          </Typography>
-          <Typography sx={{ fontSize: 12, color: T.text2, fontWeight: 650, mb: 0.75 }}>
-            {matrix.combo}
-          </Typography>
-          {matrix.airbnbNote ? (
-            <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 0.75, lineHeight: 1.35 }}>
-              {matrix.airbnbNote}
-            </Typography>
-          ) : null}
-          <Stack spacing={0.35}>
-            {matrix.rows.map((row, i) => (
-              <Stack
-                key={`${row.doc}-${i}`}
-                direction={{ xs: 'column', sm: 'row' }}
-                sx={{
-                  justifyContent: 'space-between',
-                  gap: 0.5,
-                  py: 0.35,
-                  borderBottom: i < matrix.rows.length - 1 ? `1px solid ${T.border}` : 'none',
-                }}
-              >
-                <Typography sx={{ fontSize: 12, color: T.text2, fontWeight: 600 }}>{row.doc}</Typography>
-                <Typography sx={{ fontSize: 12, color: T.text3 }}>{row.who}</Typography>
-              </Stack>
-            ))}
-          </Stack>
-        </Box>
-      ) : null}
     </Box>
   );
 }
