@@ -136,6 +136,22 @@ function formatLabel(configured: ConfiguredContract[]): string {
   return 'Selon listing';
 }
 
+/** Compact row label: the contract name, never a truncated "Fiche". */
+function contractRowLabel(cfg: ConfiguredContract): string {
+  if (cfg.documentType === 'moroccan_police_form') return 'Fiche de police';
+  const stripped = (cfg.name || '').replace(/^Guest\s+/i, '').trim();
+  if (cfg.documentType === 'stay_contract') return stripped || 'Disclaimer';
+  return stripped || documentTypeLabel(cfg.documentType);
+}
+
+function escWaitingHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 type Props = {
   reservationId: string;
   listingId?: string | null;
@@ -245,7 +261,7 @@ export function GuestContractSection({
           rows.push({
             key: `police-${t.index}`,
             who: t.name,
-            doc: 'Fiche',
+            doc: contractRowLabel(cfg),
             documentType: 'moroccan_police_form',
           });
         });
@@ -254,7 +270,7 @@ export function GuestContractSection({
         rows.push({
           key: 'police-primary',
           who: principal,
-          doc: named.length > 1 ? `Fiches (${named.length})` : 'Fiche',
+          doc: contractRowLabel(cfg),
           documentType: 'moroccan_police_form',
         });
       } else {
@@ -262,7 +278,7 @@ export function GuestContractSection({
         rows.push({
           key: cfg.documentType,
           who: principal,
-          doc: cfg.name.replace(/^Guest\s+/i, ''),
+          doc: contractRowLabel(cfg),
           documentType: cfg.documentType,
         });
       }
@@ -319,9 +335,75 @@ export function GuestContractSection({
 
   const paintWaitingTab = (tab: Window | null, title: string) => {
     if (!tab || tab.closed) return;
+    const logo = `${window.location.origin}/brand/png/favicon/sojori-favicon-512.png`;
+    const safeTitle = escWaitingHtml(title);
+    const html = `<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>${safeTitle}</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: #f4efe4;
+      color: #14110a;
+      display: grid;
+      place-items: center;
+    }
+    .wrap { text-align: center; padding: 24px; animation: sojori-fade-in .4s ease both; }
+    .mark { width: 72px; height: 72px; margin: 0 auto 18px; position: relative; }
+    .mark img {
+      width: 72px; height: 72px; border-radius: 16px; display: block;
+      animation: sojori-pulse-gold 1.8s ease-in-out infinite;
+    }
+    .ring {
+      position: absolute; inset: -10px; border-radius: 22px;
+      border: 2px dashed rgba(184, 133, 26, .55);
+      animation: sojori-spin 2.4s linear infinite;
+    }
+    .word {
+      font-weight: 800; letter-spacing: .18em; text-transform: lowercase;
+      font-size: 13px; color: #876119; margin: 0 0 10px;
+    }
+    .title { font-size: 15px; font-weight: 650; margin: 0; color: #3d3933; }
+    .bar {
+      width: 120px; height: 3px; margin: 16px auto 0; border-radius: 99px;
+      background: linear-gradient(90deg, transparent, #e6b022, transparent);
+      background-size: 200% 100%;
+      animation: sojori-shimmer 1.6s linear infinite;
+    }
+    @keyframes sojori-spin { to { transform: rotate(360deg); } }
+    @keyframes sojori-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    @keyframes sojori-pulse-gold {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(230, 176, 34, .45); }
+      50% { box-shadow: 0 0 0 10px rgba(230, 176, 34, 0); }
+    }
+    @keyframes sojori-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @media (prefers-reduced-motion: reduce) {
+      .ring, .mark img, .bar, .wrap { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="mark">
+      <div class="ring" aria-hidden="true"></div>
+      <img src="${escWaitingHtml(logo)}" alt="Sojori" width="72" height="72"/>
+    </div>
+    <p class="word">sojori</p>
+    <p class="title">${safeTitle}…</p>
+    <div class="bar" aria-hidden="true"></div>
+  </div>
+</body>
+</html>`;
     try {
-      tab.document.title = title;
-      tab.document.body.innerHTML = `<p style="font:14px system-ui;padding:24px;color:#555">${title}…</p>`;
+      tab.document.open();
+      tab.document.write(html);
+      tab.document.close();
     } catch {
       /* cross-origin or closed */
     }
@@ -432,8 +514,21 @@ export function GuestContractSection({
           tab?.close();
           return;
         }
-        const variant = contract.status === 'signed' ? 'signed' : 'unsigned';
-        const res = await guestContractsService.documentUrl(contract.id, variant);
+        const tryUrl = async (variant: 'signed' | 'unsigned') => {
+          try {
+            return await guestContractsService.documentUrl(contract.id, variant);
+          } catch (err) {
+            return {
+              success: false as const,
+              message: err instanceof Error ? err.message : 'PDF indisponible',
+            };
+          }
+        };
+        let variant: 'signed' | 'unsigned' = contract.status === 'signed' ? 'signed' : 'unsigned';
+        let res = await tryUrl(variant);
+        if ((!res.success || !res.data?.url) && variant === 'signed') {
+          res = await tryUrl('unsigned');
+        }
         if (!res.success || !res.data?.url) {
           tab?.close();
           toast.error(res.message || 'PDF indisponible');
@@ -534,11 +629,10 @@ export function GuestContractSection({
                 sx={{
                   fontSize: 11,
                   color: T.text3,
-                  flex: '0 1 110px',
+                  flex: '0 1 150px',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  display: { xs: 'none', sm: 'block' },
                 }}
               >
                 {row.doc}
