@@ -110,17 +110,29 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         badge: 'Live',
         description: 'Suivi unités · ménage · arrivées — Nommos (kanban HK)',
       },
+    ],
+  },
+  {
+    group: 'Réception',
+    roles: PM_ROLES,
+    items: [
       {
         id: 'reception/rack',
-        label: 'Rack réception',
+        label: 'Rack d’affectation',
         iconType: 'calendar',
         iconColor: '#2d4a6b',
         badge: 'NEW',
-        description: 'Affecter les chambres — chambres × jours, conflits détectés',
+        description: 'Qui dort où — chambres × jours, conflits détectés avant la pose',
       },
+    ],
+  },
+  {
+    group: 'Ménage',
+    roles: PM_ROLES,
+    items: [
       {
         id: 'menage/rack',
-        label: 'Rack ménage',
+        label: 'La journée',
         iconType: 'calendar',
         iconColor: '#B8881A',
         badge: 'Live',
@@ -128,7 +140,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
       },
       {
         id: 'menage/repartition',
-        label: 'Répartition',
+        label: 'La répartition',
         iconType: 'calendar',
         iconColor: '#B8881A',
         badge: 'NEW',
@@ -136,7 +148,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
       },
       {
         id: 'menage/semaine',
-        label: 'Semaine ménage',
+        label: 'La semaine',
         iconType: 'calendar',
         iconColor: '#B8881A',
         badge: 'NEW',
@@ -144,7 +156,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
       },
       {
         id: 'menage/equipe',
-        label: 'Équipe ménage',
+        label: 'L’équipe',
         iconType: 'calendar',
         iconColor: '#B8881A',
         badge: 'NEW',
@@ -786,6 +798,9 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Inbox: false,
   Guest: false,
   Staff: false,
+  // Les deux postes du terrain : ouverts, ils sont consultés chaque jour.
+  Réception: true,
+  Ménage: true,
   Équipe: true,
   Finances: true,
   Partenaires: false,
