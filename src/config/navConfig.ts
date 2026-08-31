@@ -111,6 +111,14 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         description: 'Suivi unités · ménage · arrivées — Nommos (kanban HK)',
       },
       {
+        id: 'reception/rack',
+        label: 'Rack réception',
+        iconType: 'calendar',
+        iconColor: '#2d4a6b',
+        badge: 'NEW',
+        description: 'Affecter les chambres — chambres × jours, conflits détectés',
+      },
+      {
         id: 'menage/rack',
         label: 'Rack ménage',
         iconType: 'calendar',

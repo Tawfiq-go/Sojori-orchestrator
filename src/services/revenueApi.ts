@@ -730,3 +730,121 @@ export async function fetchArrivalsReport(params?: {
     return null;
   }
 }
+
+export type RackStay = {
+  id: string;
+  guestName: string;
+  guests: number;
+  nights: number;
+  arrivalDate: string | null;
+  departureDate: string | null;
+  roomId: string | null;
+  roomName: string | null;
+  roomTypeId: string | null;
+  roomTypeName: string | null;
+  channel: string;
+  amount: number;
+  registrationDone: boolean;
+  paid: boolean;
+  checkinStatus: string | null;
+  status: string;
+};
+
+export type RackRoom = {
+  id: string;
+  name: string;
+  number: number | null;
+  roomTypeId: string | null;
+  roomTypeName: string | null;
+  capacity: number | null;
+  stays: RackStay[];
+};
+
+export type ReceptionRack = {
+  success: boolean;
+  listing: {
+    id: string;
+    name: string;
+    /** Le PMS décide : le rack propose au lieu d'écrire. */
+    pmsIsMaster: boolean;
+    writeEnabled: boolean;
+  };
+  from: string;
+  to: string;
+  days: number;
+  rooms: RackRoom[];
+  unassigned: RackStay[];
+  totals: { rooms: number; stays: number; unassigned: number };
+};
+
+/** Rack d'affectation — chambres, séjours, créneaux libres. */
+export async function fetchReceptionRack(params?: {
+  listingId?: string;
+  from?: string;
+  days?: number;
+}): Promise<ReceptionRack | null> {
+  try {
+    const search = new URLSearchParams();
+    if (params?.listingId) search.set('listingId', params.listingId);
+    if (params?.from) search.set('from', params.from);
+    if (params?.days) search.set('days', String(params.days));
+    const qs = search.toString();
+    const res = await apiClient.get(`${REVENUE_BASE}/reception/rack${qs ? `?${qs}` : ''}`, {
+      timeout: 30000,
+    });
+    return res?.data?.success ? (res.data as ReceptionRack) : null;
+  } catch {
+    return null;
+  }
+}
+
+export type AssignResult =
+  | { ok: true; roomId: string | null; roomName: string | null }
+  | {
+      ok: false;
+      error: string;
+      message?: string;
+      conflicts?: Array<{ guestName: string; from: string | null; to: string | null }>;
+      guests?: number;
+      capacity?: number;
+      forceable?: boolean;
+    };
+
+/**
+ * Affecte une chambre à un séjour.
+ *
+ * Les refus métier remontent avec leur détail : l'interface doit pouvoir
+ * expliquer *pourquoi* plutôt qu'échouer en silence.
+ */
+export async function assignRoom(params: {
+  reservationId: string;
+  roomId: string | null;
+  force?: boolean;
+}): Promise<AssignResult> {
+  try {
+    const res = await apiClient.post(
+      `${REVENUE_BASE}/reception/assign-room`,
+      {
+        reservationId: params.reservationId,
+        roomId: params.roomId,
+        force: params.force === true,
+      },
+      { timeout: 30000, validateStatus: () => true },
+    );
+    const d = res?.data;
+    if (d?.success) {
+      return { ok: true, roomId: d.roomId ?? null, roomName: d.roomName ?? null };
+    }
+    return {
+      ok: false,
+      error: String(d?.error || 'unknown'),
+      message: d?.message,
+      conflicts: d?.conflicts,
+      guests: d?.guests,
+      capacity: d?.capacity,
+      forceable: d?.forceable === true,
+    };
+  } catch (e) {
+    return { ok: false, error: 'network', message: e instanceof Error ? e.message : String(e) };
+  }
+}
