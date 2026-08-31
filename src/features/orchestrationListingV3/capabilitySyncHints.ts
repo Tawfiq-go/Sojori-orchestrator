@@ -15,6 +15,7 @@ export type OwnerTemplateSyncMeta = {
 
 const CONCIERGE_KEYS = new Set(['transport', 'groceries', 'concierge']);
 const LISTING_TEMPLATE_KEYS = new Set([
+  'arrival_journey',
   'cleaning_free',
   'cleaning_paid',
   'cleaning_sojori',
