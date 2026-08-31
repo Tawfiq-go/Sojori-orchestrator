@@ -318,55 +318,106 @@ export function GuestContractSection({
     setBusyKey(key);
     try {
       await fn();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Action contrat impossible');
     } finally {
       setBusyKey(null);
     }
   };
 
-  const openWeb = (documentType: GuestContractDocumentType, rowKey: string) =>
+  /** Open tab in the click gesture so the browser does not block after await. */
+  const openUrlInNewTab = (url: string, preopened: Window | null) => {
+    if (preopened && !preopened.closed) {
+      preopened.location.href = url;
+      return true;
+    }
+    const w = window.open(url, '_blank', 'noopener,noreferrer');
+    return Boolean(w);
+  };
+
+  const openWeb = (documentType: GuestContractDocumentType, rowKey: string) => {
+    const tab = window.open('about:blank', '_blank');
     void withBusy(`${rowKey}:web`, async () => {
-      if (registeredTravelers !== undefined && named.length === 0) {
-        toast.info('Enregistrez d’abord un voyageur');
-        return;
+      try {
+        if (registeredTravelers !== undefined && named.length === 0) {
+          tab?.close();
+          toast.info('Enregistrez d’abord un voyageur');
+          return;
+        }
+        const targetType = isAirbnbBundle ? 'stay_contract' : documentType;
+        const contract = await ensureOne(targetType);
+        if (!contract) {
+          tab?.close();
+          return;
+        }
+        if (contract.status === 'signed') {
+          tab?.close();
+          toast.info('Déjà signé — utilisez PDF');
+          return;
+        }
+        if (contract.status === 'finalizing') {
+          tab?.close();
+          toast.info('Finalisation en cours');
+          return;
+        }
+        const signerId = missingSigners(contract)[0]?.signerId ?? contract.nextSignerId ?? undefined;
+        const res = await guestContractsService.createAccessToken(contract.id, signerId || undefined);
+        if (!res.success || !res.data?.url) {
+          tab?.close();
+          toast.error(res.message || 'Lien impossible');
+          return;
+        }
+        if (!openUrlInNewTab(res.data.url, tab)) {
+          try {
+            await navigator.clipboard.writeText(res.data.url);
+            toast.info('Popup bloqué — lien copié dans le presse-papiers');
+          } catch {
+            toast.error(`Popup bloqué — ouvrez : ${res.data.url}`);
+          }
+        }
+      } catch (err) {
+        tab?.close();
+        throw err;
       }
-      const targetType = isAirbnbBundle ? 'stay_contract' : documentType;
-      const contract = await ensureOne(targetType);
-      if (!contract) return;
-      if (contract.status === 'signed') {
-        toast.info('Déjà signé — utilisez PDF');
-        return;
-      }
-      if (contract.status === 'finalizing') {
-        toast.info('Finalisation en cours');
-        return;
-      }
-      const signerId = missingSigners(contract)[0]?.signerId ?? contract.nextSignerId ?? undefined;
-      const res = await guestContractsService.createAccessToken(contract.id, signerId || undefined);
-      if (!res.success || !res.data?.url) {
-        toast.error(res.message || 'Lien impossible');
-        return;
-      }
-      window.open(res.data.url, '_blank', 'noopener,noreferrer');
     });
+  };
 
-  const openPdf = (documentType: GuestContractDocumentType, rowKey: string) =>
+  const openPdf = (documentType: GuestContractDocumentType, rowKey: string) => {
+    const tab = window.open('about:blank', '_blank');
     void withBusy(`${rowKey}:pdf`, async () => {
-      if (registeredTravelers !== undefined && named.length === 0) {
-        toast.info('Enregistrez d’abord un voyageur');
-        return;
+      try {
+        if (registeredTravelers !== undefined && named.length === 0) {
+          tab?.close();
+          toast.info('Enregistrez d’abord un voyageur');
+          return;
+        }
+        const targetType = isAirbnbBundle ? 'stay_contract' : documentType;
+        const contract = await ensureOne(targetType);
+        if (!contract) {
+          tab?.close();
+          return;
+        }
+        const variant = contract.status === 'signed' ? 'signed' : 'unsigned';
+        const res = await guestContractsService.documentUrl(contract.id, variant);
+        if (!res.success || !res.data?.url) {
+          tab?.close();
+          toast.error(res.message || 'PDF indisponible');
+          return;
+        }
+        if (!openUrlInNewTab(res.data.url, tab)) {
+          try {
+            await navigator.clipboard.writeText(res.data.url);
+            toast.info('Popup bloqué — lien PDF copié');
+          } catch {
+            toast.error(`Popup bloqué — ouvrez : ${res.data.url}`);
+          }
+        }
+      } catch (err) {
+        tab?.close();
+        throw err;
       }
-      const targetType = isAirbnbBundle ? 'stay_contract' : documentType;
-      const contract = await ensureOne(targetType);
-      if (!contract) return;
-      const variant = contract.status === 'signed' ? 'signed' : 'unsigned';
-      const res = await guestContractsService.documentUrl(contract.id, variant);
-      if (!res.success || !res.data?.url) {
-        toast.error(res.message || 'PDF indisponible');
-        return;
-      }
-      window.open(res.data.url, '_blank', 'noopener,noreferrer');
     });
-
+  };
   return (
     <Box
       sx={
