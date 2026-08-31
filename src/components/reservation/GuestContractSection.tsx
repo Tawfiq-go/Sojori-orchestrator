@@ -276,7 +276,13 @@ export function GuestContractSection({
     opts?: { force?: boolean },
   ) => {
     const existing = liveContract(byType.get(documentType), registeredTravelers);
-    if (existing && existing.status !== 'failed' && opts?.force !== true) {
+    if (
+      existing &&
+      existing.status !== 'failed' &&
+      existing.status !== 'pending_generation' &&
+      existing.unsignedSha256 &&
+      opts?.force !== true
+    ) {
       return existing;
     }
     const res = await guestContractsService.ensure(reservationId, true, { documentType });
@@ -385,7 +391,10 @@ export function GuestContractSection({
           missingSigners(contract)[0]?.signerId ||
           contract.nextSignerId ||
           undefined;
-        const res = await guestContractsService.createAccessToken(contract.id, signerId || undefined);
+        let res = await guestContractsService.createAccessToken(contract.id, signerId || undefined);
+        if (!res.success && preferredSigner) {
+          res = await guestContractsService.createAccessToken(contract.id);
+        }
         if (!res.success || !res.data?.url) {
           tab?.close();
           toast.error(res.message || 'Lien impossible');
