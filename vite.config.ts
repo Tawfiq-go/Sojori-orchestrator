@@ -49,6 +49,10 @@ function rewriteAdminFulltaskPath(path: string): string {
     '/proprio-contacts',
     '/owner-bookers',
     '/communications-ai',
+    // Rack d'affectation : monté sous /api/v1/fulltask comme les autres
+    // routes de session, pas sous le legacy /api.
+    '/reception',
+    '/reports',
   ]
   if (v1Prefixes.some((p) => rest === p || rest.startsWith(`${p}/`))) {
     return `/api/v1/fulltask${rest}`
