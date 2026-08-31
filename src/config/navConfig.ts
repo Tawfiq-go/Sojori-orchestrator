@@ -466,6 +466,23 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
+    // Lecture orientee location courte duree : le PM pilote au MOIS (il doit
+    // couvrir un loyer ou justifier sa commission), la ou l'hotel pilote au
+    // JOUR. Les rapports ci-dessus restent inchanges — ceux-ci s'y ajoutent.
+    group: 'Rapports 2',
+    roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
+    items: [
+      {
+        id: 'reports2/performance',
+        label: 'Performance & projection',
+        iconType: 'chart',
+        iconColor: '#b8851a',
+        description: 'Le realise et ce qui est deja au carnet — portefeuille, proprietaire, bien',
+        badge: 'NEW',
+      },
+    ],
+  },
+  {
     group: 'Finances',
     roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner, Roles.Landlord],
     items: [

@@ -38,6 +38,7 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
     if (view === 'simple') return 'calendar/simple';
     return 'calendar/multi';
   }
+  if (path === '/reports2' || path.startsWith('/reports2/')) return 'reports2/performance';
   if (path.startsWith('/listings/mapping')) return 'listings/mapping';
   if (path.startsWith('/listings/orchestration-model')) return 'listings/orchestration-model';
   if (path.startsWith('/listings') || path.startsWith('/catalogue/listings')) return 'listings/list';
