@@ -6,7 +6,6 @@ import guestContractsService, {
   missingSigners,
   type GuestContractStatus,
   type GuestContractSummary,
-  type GuestContractTraveler,
 } from '../../services/guestContractsService';
 import {
   type GuestContractDocumentType,
@@ -47,6 +46,11 @@ const TYPE_ORDER: GuestContractDocumentType[] = [
   'stay_contract',
   'short_term_rental',
 ];
+
+export type RegisteredContractTraveler = {
+  index: number;
+  name: string;
+};
 
 type ConfiguredContract = {
   documentType: GuestContractDocumentType;
@@ -91,22 +95,33 @@ function configuredFromDocs(docs: GuestDocument[]): ConfiguredContract[] {
   );
 }
 
-function travelerLabel(t: GuestContractTraveler, i: number): string {
-  const name = [t.firstName, t.lastName].filter(Boolean).join(' ').trim();
-  return name || `Voyageur ${i + 1}`;
+function registrationFingerprint(travelers: RegisteredContractTraveler[]): string {
+  return travelers
+    .map(t => `${t.index}:${t.name.replace(/\s+/g, ' ').trim().toLowerCase()}`)
+    .filter(s => !s.endsWith(':'))
+    .join('|');
 }
 
-function principalLabel(contracts: GuestContractSummary[]): string {
-  for (const c of contracts) {
-    const idx = c.primaryTravelerIndex ?? 0;
-    const t = (c.travelers ?? []).find(x => x.travelerIndex === idx) ?? (c.travelers ?? [])[0];
-    if (t) {
-      const name = travelerLabel(t, idx);
-      if (name && !name.startsWith('Voyageur ')) return name;
-    }
-    if (c.guestName?.trim()) return c.guestName.trim();
-  }
-  return 'Voyageur principal';
+function contractFingerprint(contract: GuestContractSummary | null | undefined): string {
+  if (!contract) return '';
+  return (contract.travelers ?? [])
+    .map(t => {
+      const name = [t.firstName, t.lastName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+      return name ? `${t.travelerIndex}:${name.toLowerCase()}` : '';
+    })
+    .filter(Boolean)
+    .join('|');
+}
+
+/** Only surface a contract when its frozen travelers still match live registration. */
+function liveContract(
+  contract: GuestContractSummary | null | undefined,
+  registered: RegisteredContractTraveler[] | undefined,
+): GuestContractSummary | null {
+  if (!contract || contract.status === 'superseded') return null;
+  if (registered === undefined) return contract;
+  if (registered.length === 0) return null;
+  return contractFingerprint(contract) === registrationFingerprint(registered) ? contract : null;
 }
 
 function formatLabel(configured: ConfiguredContract[]): string {
@@ -126,6 +141,8 @@ type Props = {
   listingId?: string | null;
   readOnly?: boolean;
   embedded?: boolean;
+  /** Live named members from guest registration — contracts must follow these people. */
+  registeredTravelers?: RegisteredContractTraveler[];
 };
 
 export function GuestContractSection({
@@ -133,6 +150,7 @@ export function GuestContractSection({
   listingId,
   readOnly = false,
   embedded = false,
+  registeredTravelers,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -170,7 +188,9 @@ export function GuestContractSection({
                 documentType: documentType as GuestContractDocumentType,
                 name: documentTypeLabel(documentType),
                 signerPolicy:
-                  c?.signerPolicy === 'each_traveler' ? ('each_traveler' as const) : ('primary_guest' as const),
+                  c?.signerPolicy === 'each_traveler'
+                    ? ('each_traveler' as const)
+                    : ('primary_guest' as const),
               };
             })
             .sort(
@@ -203,44 +223,65 @@ export function GuestContractSection({
     [configured],
   );
 
+  const named = useMemo(() => {
+    if (registeredTravelers !== undefined) {
+      return registeredTravelers.filter(t => t.name.trim());
+    }
+    const fromContract =
+      contracts.find(c => (c.travelers?.length ?? 0) > 0)?.travelers ?? [];
+    return fromContract
+      .map(t => ({
+        index: t.travelerIndex,
+        name: [t.firstName, t.lastName].filter(Boolean).join(' ').trim(),
+      }))
+      .filter(t => t.name);
+  }, [registeredTravelers, contracts]);
+
+  const principal = named[0]?.name || 'Voyageur principal';
+
   const signRows = useMemo(() => {
-    const travelers =
-      contracts.find(c => (c.travelers?.length ?? 0) > 0)?.travelers ??
-      ([] as GuestContractTraveler[]);
-    const principal = principalLabel(contracts);
-    const rows: { key: string; who: string; doc: string; documentType: GuestContractDocumentType }[] =
-      [];
+    const rows: {
+      key: string;
+      who: string;
+      doc: string;
+      documentType: GuestContractDocumentType;
+    }[] = [];
 
     for (const cfg of configured) {
       if (cfg.documentType === 'moroccan_police_form' && cfg.signerPolicy === 'each_traveler') {
-        const list = travelers.length > 0 ? travelers : [{ travelerIndex: 0 } as GuestContractTraveler];
-        list.forEach((t, i) => {
+        if (named.length === 0) continue;
+        named.forEach(t => {
           rows.push({
-            key: `police-${i}`,
-            who: travelerLabel(t, i),
+            key: `police-${t.index}`,
+            who: t.name,
             doc: 'Fiche',
             documentType: 'moroccan_police_form',
           });
         });
       } else if (cfg.documentType === 'moroccan_police_form') {
+        if (registeredTravelers !== undefined && named.length === 0) continue;
         rows.push({
           key: 'police-bundle',
           who: principal,
-          doc: travelers.length > 1 ? `Fiches (${travelers.length})` : 'Fiche',
+          doc: named.length > 1 ? `Fiches (${named.length})` : 'Fiche',
           documentType: isAirbnbBundle ? 'stay_contract' : 'moroccan_police_form',
         });
       } else {
+        if (registeredTravelers !== undefined && named.length === 0) continue;
         rows.push({
           key: cfg.documentType,
           who: principal,
           doc: cfg.name.replace(/^Guest\s+/i, ''),
-          documentType: isAirbnbBundle && cfg.documentType === 'stay_contract' ? 'stay_contract' : cfg.documentType,
+          documentType:
+            isAirbnbBundle && cfg.documentType === 'stay_contract'
+              ? 'stay_contract'
+              : cfg.documentType,
         });
       }
     }
 
-    // Airbnb: one web link for the whole pack — collapse duplicate stay rows
     if (isAirbnbBundle) {
+      if (registeredTravelers !== undefined && named.length === 0) return [];
       return [
         {
           key: 'airbnb',
@@ -251,17 +292,16 @@ export function GuestContractSection({
       ];
     }
     return rows;
-  }, [configured, contracts, isAirbnbBundle]);
+  }, [configured, isAirbnbBundle, named, principal, registeredTravelers]);
 
   const ensureOne = async (documentType: GuestContractDocumentType) => {
-    let contract = byType.get(documentType) ?? null;
-    if (contract && contract.status !== 'failed') return contract;
+    // Always force refresh so PDF/link track current registered travelers.
     const res = await guestContractsService.ensure(reservationId, true, { documentType });
     if (!res.success) {
       toast.error(res.message || 'Génération impossible');
       return null;
     }
-    contract =
+    let contract =
       res.data?.contracts?.find(c => c.documentType === documentType) ??
       (res.data?.contract?.documentType === documentType ? res.data.contract : null) ??
       null;
@@ -285,6 +325,10 @@ export function GuestContractSection({
 
   const openWeb = (documentType: GuestContractDocumentType, rowKey: string) =>
     void withBusy(`${rowKey}:web`, async () => {
+      if (registeredTravelers !== undefined && named.length === 0) {
+        toast.info('Enregistrez d’abord un voyageur');
+        return;
+      }
       const targetType = isAirbnbBundle ? 'stay_contract' : documentType;
       const contract = await ensureOne(targetType);
       if (!contract) return;
@@ -307,6 +351,10 @@ export function GuestContractSection({
 
   const openPdf = (documentType: GuestContractDocumentType, rowKey: string) =>
     void withBusy(`${rowKey}:pdf`, async () => {
+      if (registeredTravelers !== undefined && named.length === 0) {
+        toast.info('Enregistrez d’abord un voyageur');
+        return;
+      }
       const targetType = isAirbnbBundle ? 'stay_contract' : documentType;
       const contract = await ensureOne(targetType);
       if (!contract) return;
@@ -361,9 +409,16 @@ export function GuestContractSection({
         </Typography>
       ) : null}
 
+      {!loading && configured.length > 0 && registeredTravelers !== undefined && named.length === 0 ? (
+        <Typography sx={{ fontSize: 12, color: T.text4 }}>
+          Aucun voyageur enregistré — les contrats apparaîtront avec les personnes enregistrées.
+        </Typography>
+      ) : null}
+
       <Stack spacing={0.4}>
         {signRows.map(row => {
-          const current = byType.get(isAirbnbBundle ? 'stay_contract' : row.documentType);
+          const raw = byType.get(isAirbnbBundle ? 'stay_contract' : row.documentType);
+          const current = liveContract(raw, registeredTravelers);
           const webBusy = busyKey === `${row.key}:web`;
           const pdfBusy = busyKey === `${row.key}:pdf`;
           const anyBusy = Boolean(busyKey);

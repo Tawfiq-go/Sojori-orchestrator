@@ -127,9 +127,24 @@ export function ownerFacingSourceBadge(field: RegistrationFieldDef): string {
   return 'À renseigner par le voyageur'
 }
 
+/** WhatsApp visibility — independent from required. */
+export function ownerFacingWhatsAppLabel(field: RegistrationFieldDef): string {
+  return field.enabled === false ? 'Masqué' : 'WhatsApp'
+}
+
+/**
+ * Client obligation — independent from WhatsApp visibility.
+ * Example: N° d’entrée can be on WhatsApp but facultatif (guest gets it on arrival).
+ */
 export function ownerFacingRequiredLabel(field: RegistrationFieldDef): string {
-  if (field.enabled === false) return 'Inactive'
-  return field.required ? 'Obligatoire' : 'Facultative'
+  if (field.enabled === false) return '—'
+  return field.required ? 'Obligatoire' : 'Facultatif'
+}
+
+/** Combined status line for owner rows. */
+export function ownerFacingFieldStatusLine(field: RegistrationFieldDef): string {
+  if (field.enabled === false) return 'Masqué (pas sur WhatsApp)'
+  return field.required ? 'WhatsApp · Obligatoire pour le client' : 'WhatsApp · Facultatif pour le client'
 }
 
 export function ownerFacingFieldTypeLabel(type: RegistrationFieldType): string {
