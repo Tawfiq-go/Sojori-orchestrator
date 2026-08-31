@@ -58,7 +58,7 @@ import {
   isDedicatedOcrProperty,
   newCustomField,
   ownerFacingFieldTypeLabel,
-  ownerFacingRequiredLabel,
+  ownerFacingFieldStatusLine,
   ownerFacingSourceBadge,
   parseRegistrationFormSchema,
   parseRegistrationFormSchemaStrict,
@@ -306,6 +306,12 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
       <Alert severity="info" sx={{ fontSize: 12, mb: 1.5 }} data-testid="owner-flow-hint">
         Après la photo du document, le voyageur voit d’abord les informations du passeport, puis
         peut compléter l’enregistrement si besoin. Tout se passe dans WhatsApp.
+        {' '}
+        <strong>WhatsApp</strong> = le champ est proposé au client.
+        {' '}
+        <strong>Obligatoire</strong> = il doit le remplir pour valider (sinon il peut passer).
+        Exemple : le n° d’entrée au Maroc peut être sur WhatsApp sans être obligatoire — le client
+        l’a souvent seulement à l’arrivée.
       </Alert>
 
       {!ownerMode && (
@@ -380,29 +386,12 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
         >
           <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{photo.label}</Typography>
           <Typography sx={{ fontSize: 11, color: 'text.secondary', mb: 0.5 }}>
-            {ownerFacingSourceBadge(photo)} — {ownerFacingRequiredLabel(photo)}
+            {ownerFacingSourceBadge(photo)} — {ownerFacingFieldStatusLine(photo)}
           </Typography>
           <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
             {coreProtectedFieldExplanation(photo)}
           </Typography>
           <Stack direction="row" spacing={1} sx={{ mt: 0.75, alignItems: 'center' }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  size="small"
-                  checked={photo.required && photo.enabled !== false}
-                  disabled={saving}
-                  onChange={(e) => {
-                    updateFields(
-                      fields.map((f) =>
-                        f.id === photo.id ? { ...f, required: e.target.checked, enabled: true } : f,
-                      ),
-                    );
-                  }}
-                />
-              }
-              label={<Typography sx={{ fontSize: 11 }}>Obligatoire</Typography>}
-            />
             <FormControlLabel
               control={
                 <Switch
@@ -413,14 +402,37 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
                     updateFields(
                       fields.map((f) =>
                         f.id === photo.id
-                          ? { ...f, enabled: e.target.checked, required: e.target.checked ? photo.required : false }
+                          ? {
+                              ...f,
+                              enabled: e.target.checked,
+                              required: e.target.checked ? photo.required : false,
+                            }
                           : f,
                       ),
                     );
                   }}
                 />
               }
-              label={<Typography sx={{ fontSize: 11 }}>Active</Typography>}
+              label={<Typography sx={{ fontSize: 11 }}>WhatsApp</Typography>}
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={photo.required && photo.enabled !== false}
+                  disabled={saving || photo.enabled === false}
+                  onChange={(e) => {
+                    updateFields(
+                      fields.map((f) =>
+                        f.id === photo.id
+                          ? { ...f, required: e.target.checked, enabled: true }
+                          : f,
+                      ),
+                    );
+                  }}
+                />
+              }
+              label={<Typography sx={{ fontSize: 11 }}>Obligatoire</Typography>}
             />
           </Stack>
         </Box>
@@ -448,8 +460,10 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
         </Alert>
       ) : (
         <Alert severity="info" sx={{ fontSize: 12, mb: 1.5 }} data-testid="completion-tab-help">
-          Ces informations ne figurent généralement pas sur le passeport. Le voyageur devra les
-          renseigner.
+          Ces informations ne figurent généralement pas sur le passeport. Activez{' '}
+          <strong>WhatsApp</strong> pour les proposer au voyageur ;{' '}
+          <strong>Obligatoire</strong> seulement s’il doit absolument les remplir
+          (ex. n° d’entrée = WhatsApp sans obligatoire).
         </Alert>
       )}
 
@@ -481,7 +495,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
                   {field.label || 'Sans titre'}
                 </Typography>
                 <Typography sx={{ fontSize: 11, color: 'text.secondary' }} data-testid="owner-field-meta">
-                  {ownerFacingSourceBadge(field)} — {ownerFacingRequiredLabel(field)}
+                  {ownerFacingSourceBadge(field)} — {ownerFacingFieldStatusLine(field)}
                   {field.kind === 'custom' ? ` — ${ownerFacingFieldTypeLabel(field.type)}` : ''}
                 </Typography>
                 {protectedCore && (
@@ -525,24 +539,6 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
                   control={
                     <Switch
                       size="small"
-                      checked={field.required && field.enabled !== false}
-                      disabled={saving}
-                      onChange={(e) => {
-                        updateFields(
-                          fields.map((f) =>
-                            f.id === field.id ? { ...f, required: e.target.checked, enabled: true } : f,
-                          ),
-                        );
-                      }}
-                    />
-                  }
-                  label={<Typography sx={{ fontSize: 11 }}>Obligatoire</Typography>}
-                />
-                <FormControlLabel
-                  sx={{ mr: 0 }}
-                  control={
-                    <Switch
-                      size="small"
                       checked={field.enabled !== false}
                       disabled={saving}
                       onChange={(e) => {
@@ -560,7 +556,27 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
                       }}
                     />
                   }
-                  label={<Typography sx={{ fontSize: 11 }}>Active</Typography>}
+                  label={<Typography sx={{ fontSize: 11 }}>WhatsApp</Typography>}
+                />
+                <FormControlLabel
+                  sx={{ mr: 0 }}
+                  control={
+                    <Switch
+                      size="small"
+                      checked={field.required && field.enabled !== false}
+                      disabled={saving || field.enabled === false}
+                      onChange={(e) => {
+                        updateFields(
+                          fields.map((f) =>
+                            f.id === field.id
+                              ? { ...f, required: e.target.checked, enabled: true }
+                              : f,
+                          ),
+                        );
+                      }}
+                    />
+                  }
+                  label={<Typography sx={{ fontSize: 11 }}>Obligatoire</Typography>}
                 />
                 <Button size="small" onClick={() => setEditing(field)}>
                   Modifier
@@ -876,20 +892,27 @@ function FieldEditorDialog({
           <FormControlLabel
             control={
               <Switch
-                checked={draft.required}
-                onChange={(e) => setDraft({ ...draft, required: e.target.checked, enabled: true })}
+                checked={draft.enabled !== false}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    enabled: e.target.checked,
+                    required: e.target.checked ? draft.required : false,
+                  })
+                }
               />
             }
-            label="Obligatoire"
+            label="WhatsApp (affiché au client)"
           />
           <FormControlLabel
             control={
               <Switch
-                checked={draft.enabled !== false}
-                onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
+                checked={Boolean(draft.required) && draft.enabled !== false}
+                disabled={draft.enabled === false}
+                onChange={(e) => setDraft({ ...draft, required: e.target.checked, enabled: true })}
               />
             }
-            label="Active"
+            label="Obligatoire pour le client"
           />
         </Stack>
       </DialogContent>
