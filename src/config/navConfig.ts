@@ -260,18 +260,32 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         description: 'Tous les extras vendus — restauration, prestations, mini-bar',
       },
       {
-        id: 'tasks/extras/minibar',
-        label: 'Stock',
-        iconType: 'check',
-        iconColor: '#E6B022',
-        description: 'Stocks suivis par villa — mini-bar, linge, consommables',
-      },
-      {
         id: 'tasks/extras/configuration',
         label: 'Catalogue',
         iconType: 'settings',
         iconColor: '#E6B022',
-        description: 'Produits, prix, TVA, dotation villas',
+        description: 'Produits, prix, TVA — ce qui est vendable',
+      },
+    ],
+  },
+  {
+    /**
+     * Le stock n'est pas de la vente.
+     *
+     * Le mini-bar rapporte, le linge coûte, et pourtant les deux partagent
+     * le même geste : compter, réapprovisionner, alerter sur un seuil. Les
+     * garder sous « Extra » les rangeait avec le chiffre d'affaires, où
+     * personne ne va pour préparer une villa.
+     */
+    group: 'Stock',
+    roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
+    items: [
+      {
+        id: 'tasks/extras/minibar',
+        label: 'Mini-bar',
+        iconType: 'check',
+        iconColor: '#93C47D',
+        description: 'Dotation et consommations par villa — réassort, seuils',
       },
     ],
   },
@@ -799,6 +813,7 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Guest: false,
   Staff: false,
   // Les deux postes du terrain : ouverts, ils sont consultés chaque jour.
+  Stock: true,
   Réception: true,
   Ménage: true,
   Équipe: true,
