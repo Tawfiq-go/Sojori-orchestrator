@@ -8,7 +8,7 @@ export type {
   GuestContractSummary,
   GuestContractTraveler,
 } from './guestContractUi';
-export { missingSigners } from './guestContractUi';
+export { missingSigners, needsNewSigningVersion, pickContractForType } from './guestContractUi';
 
 const RESERVATIONS_API = MICROSERVICE_BASE_URL.SRV_RESERVATION;
 
@@ -40,6 +40,19 @@ function unwrap<T>(body: { success?: boolean; data?: T; error?: string; message?
   return { success: false, message: body?.error || body?.message || 'Erreur contrat voyageur' };
 }
 
+function unwrapCaught<T>(err: unknown): { success: false; message: string } {
+  const data = (err as { response?: { data?: { success?: boolean; error?: string; message?: string } } })
+    ?.response?.data;
+  if (data) {
+    const body = unwrap<T>(data);
+    return { success: false, message: body.message || 'Erreur contrat voyageur' };
+  }
+  return {
+    success: false,
+    message: err instanceof Error ? err.message : 'Erreur contrat voyageur',
+  };
+}
+
 class GuestContractsService {
   async list(reservationId: string) {
     const url = `${RESERVATIONS_API}/${encodeURIComponent(reservationId)}/guest-contracts`;
@@ -68,8 +81,24 @@ class GuestContractsService {
 
   async regenerate(contractId: string, forceNewVersion = false) {
     const url = `${RESERVATIONS_API}/guest-contracts/${encodeURIComponent(contractId)}/regenerate`;
-    const response = await apiClient.post(url, { forceNewVersion });
-    return unwrap<{ contract?: GuestContractSummary }>(response.data);
+    try {
+      const response = await apiClient.post(url, { forceNewVersion });
+      return unwrap<{ contract?: GuestContractSummary; contracts?: GuestContractSummary[] }>(
+        response.data,
+      );
+    } catch (err) {
+      return unwrapCaught<GuestContractSummary>(err);
+    }
+  }
+
+  async supersede(contractId: string) {
+    const url = `${RESERVATIONS_API}/guest-contracts/${encodeURIComponent(contractId)}/supersede`;
+    try {
+      const response = await apiClient.post(url, { reason: 'staff_deleted' });
+      return unwrap<GuestContractSummary>(response.data);
+    } catch (err) {
+      return unwrapCaught<GuestContractSummary>(err);
+    }
   }
 
   async createAccessToken(contractId: string, signerId?: string) {
@@ -78,13 +107,7 @@ class GuestContractsService {
       const response = await apiClient.post(url, signerId ? { signerId } : {});
       return unwrap<{ token: string; url: string; expiresAt: string; signerId: string }>(response.data);
     } catch (err) {
-      const data = (err as { response?: { data?: { success?: boolean; error?: string; message?: string } } })
-        ?.response?.data;
-      if (data) return unwrap<{ token: string; url: string; expiresAt: string; signerId: string }>(data);
-      return {
-        success: false as const,
-        message: err instanceof Error ? err.message : 'Lien impossible',
-      };
+      return unwrapCaught<{ token: string; url: string; expiresAt: string; signerId: string }>(err);
     }
   }
 
