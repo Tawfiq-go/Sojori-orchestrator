@@ -23,6 +23,7 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   if (path.startsWith('/tasks/extras')) return 'tasks/extras/configuration';
   if (path === '/planning' || path.startsWith('/planning/')) return 'planning';
   if (path === '/ops-board' || path.startsWith('/ops-board/')) return 'ops-board';
+  if (path === '/reception/rack' || path.startsWith('/reception/rack/')) return 'reception/rack';
   if (path === '/menage/rack' || path.startsWith('/menage/rack/')) return 'menage/rack';
   if (path === '/menage/repartition' || path.startsWith('/menage/repartition/')) {
     return 'menage/repartition';
