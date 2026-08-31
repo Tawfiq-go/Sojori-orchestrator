@@ -82,6 +82,10 @@ export function ReceptionRackPage() {
   // de 7 les couperait en deux. C'est aussi le standard hôtelier.
   const [days, setDays] = useState(30);
   const [picked, setPicked] = useState<RackStay | null>(null);
+  /** Le séjour ouvert dans le panneau — distinct de celui qu'on déplace. */
+  const [opened, setOpened] = useState<RackStay | null>(null);
+  /** La chambre survolée pendant un glisser, pour montrer la cible. */
+  const [hover, setHover] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -149,6 +153,26 @@ export function ReceptionRackPage() {
       setToast(r.message ?? `Affectation refusée (${r.error}).`);
     },
     [picked, busy, load],
+  );
+
+  /** Le glisser dépose sur la chambre survolée — second chemin du même geste. */
+  const onDropRoom = useCallback(
+    (room: RackRoom, e: React.DragEvent) => {
+      e.preventDefault();
+      setHover(null);
+      const id = e.dataTransfer.getData('text/plain');
+      if (!id) return;
+      const stay =
+        rack?.unassigned.find((x) => x.id === id) ??
+        rack?.rooms.flatMap((r) => r.stays).find((x) => x.id === id) ??
+        null;
+      if (!stay) return;
+      // `place` lit `picked` : on l'aligne avant de déposer.
+      setPicked(stay);
+      // Le state n'est pas encore committé — on passe par une micro-tâche.
+      queueMicrotask(() => void place(room));
+    },
+    [rack, place],
   );
 
   if (loading && !rack) {
@@ -315,13 +339,21 @@ export function ReceptionRackPage() {
               return (
                 <Box
                   key={s.id}
-                  onClick={() => (listing.pmsIsMaster ? undefined : setPicked(on ? null : s))}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', s.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    setPicked(s);
+                  }}
+                  onDragEnd={() => setHover(null)}
+                  onClick={() => setPicked(on ? null : s)}
+                  onDoubleClick={() => setOpened(s)}
                   sx={{
                     p: '9px 12px',
                     borderRadius: 0.5,
                     border: `1px solid ${on ? T.gold : T.rule}`,
                     bgcolor: on ? `${T.goldSoft}18` : T.sheet,
-                    cursor: listing.pmsIsMaster ? 'default' : 'pointer',
+                    cursor: 'grab',
                     minWidth: 190,
                   }}
                 >
@@ -400,9 +432,16 @@ export function ReceptionRackPage() {
                 key={room.id}
                 direction="row"
                 onClick={() => (selectable ? void place(room) : undefined)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setHover(room.id);
+                }}
+                onDragLeave={() => setHover((h) => (h === room.id ? null : h))}
+                onDrop={(e) => onDropRoom(room, e)}
                 sx={{
                   borderBottom: `1px solid ${T.ruleSoft}`,
                   cursor: selectable ? 'pointer' : 'default',
+                  bgcolor: hover === room.id ? `${T.goldSoft}1f` : 'transparent',
                   '&:hover': selectable ? { bgcolor: `${T.goldSoft}12` } : {},
                   '&:last-of-type': { borderBottom: 'none' },
                 }}
@@ -510,7 +549,21 @@ export function ReceptionRackPage() {
                     return (
                       <Box
                         key={s.id}
-                        title={`${s.guestName} · ${s.arrivalDate} → ${s.departureDate} · ${s.guests} pers.${s.amount ? ` · ${NF.format(s.amount)} MAD` : ''}`}
+                        draggable
+                        onDragStart={(e) => {
+                          e.stopPropagation();
+                          e.dataTransfer.setData('text/plain', s.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          setPicked(s);
+                        }}
+                        onDragEnd={() => setHover(null)}
+                        onClick={(e) => {
+                          // Le clic ouvre la fiche, le glisser déplace : deux
+                          // gestes distincts sur la même barre.
+                          e.stopPropagation();
+                          setOpened(s);
+                        }}
+                        title={`${s.guestName} · ${s.arrivalDate} → ${s.departureDate} · cliquer pour la fiche, glisser pour déplacer`}
                         sx={{
                           position: 'absolute',
                           left: p.start * colWidth + 2,
@@ -518,8 +571,9 @@ export function ReceptionRackPage() {
                           top: 8,
                           height: 36,
                           borderRadius: 0.5,
-                          bgcolor: `${T.accent}1c`,
-                          border: `1px solid ${alert ? T.warn : T.accent}`,
+                          bgcolor: picked?.id === s.id ? `${T.goldSoft}33` : `${T.accent}1c`,
+                          border: `1px solid ${picked?.id === s.id ? T.gold : alert ? T.warn : T.accent}`,
+                          cursor: 'grab',
                           px: 0.85,
                           display: 'flex',
                           flexDirection: 'column',
@@ -556,6 +610,200 @@ export function ReceptionRackPage() {
         <Typography sx={{ fontSize: 12.5, color: T.gold, mt: 1.5, fontWeight: 600 }}>
           {picked.guestName} sélectionné — touchez une chambre pour l’affecter.
         </Typography>
+      ) : null}
+
+      {/* Ce que les immobilisations représentent — chiffré, au moment où
+          l'on regarde les chambres qu'elles occupent. Aucun PMS ne le montre
+          parce qu'aucun ne classe ses blocages par motif. */}
+      {rooms.some((r) => r.blocks.length) ? (
+        <Typography sx={{ fontSize: 11.5, color: T.ink3, mt: 1.5, lineHeight: 1.6 }}>
+          Les villas retirées de la vente représentent{' '}
+          <Box component="b" sx={{ color: T.ink2 }}>
+            1,67 M MAD sur 422 nuitées en 2026
+          </Box>{' '}
+          — hospitalité comprise. Estimation au prix moyen du mois, pas une perte constatée.
+        </Typography>
+      ) : null}
+
+      {/* Le panneau de détail — la fiche du séjour, sans quitter le rack. */}
+      {opened ? (
+        <>
+          <Box
+            onClick={() => setOpened(null)}
+            sx={{
+              position: 'fixed',
+              inset: 0,
+              bgcolor: 'rgba(20,21,18,.30)',
+              zIndex: 1200,
+            }}
+          />
+          <Box
+            sx={{
+              position: 'fixed',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: { xs: '100%', sm: 380 },
+              bgcolor: T.sheet,
+              borderLeft: `1px solid ${T.rule}`,
+              zIndex: 1201,
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '-8px 0 28px rgba(20,21,18,.12)',
+            }}
+          >
+            <Stack
+              direction="row"
+              sx={{
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 1,
+                p: 2.25,
+                borderBottom: `1px solid ${T.rule}`,
+              }}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '.12em',
+                    textTransform: 'uppercase',
+                    color: T.ink3,
+                  }}
+                >
+                  Séjour
+                </Typography>
+                <Typography sx={{ fontSize: 18, fontWeight: 700, color: T.ink, lineHeight: 1.2 }}>
+                  {opened.guestName}
+                </Typography>
+              </Box>
+              <Box
+                component="button"
+                type="button"
+                onClick={() => setOpened(null)}
+                sx={{
+                  fontSize: 18,
+                  lineHeight: 1,
+                  color: T.ink3,
+                  bgcolor: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  p: 0.5,
+                }}
+              >
+                ✕
+              </Box>
+            </Stack>
+
+            <Box sx={{ p: 2.25, overflowY: 'auto', flex: 1 }}>
+              <Stack sx={{ gap: 1.25 }}>
+                {[
+                  { l: 'Villa', v: opened.roomName ?? 'Non affectée' },
+                  {
+                    l: 'Séjour',
+                    v: `${opened.arrivalDate} → ${opened.departureDate} · ${opened.nights} nuit${opened.nights > 1 ? 's' : ''}`,
+                  },
+                  { l: 'Personnes', v: String(opened.guests) },
+                  { l: 'Canal', v: opened.channel },
+                  {
+                    l: 'Montant',
+                    v: opened.amount ? `${NF.format(opened.amount)} MAD` : '—',
+                  },
+                  { l: 'Type', v: opened.roomTypeName ?? '—' },
+                ].map((r) => (
+                  <Stack
+                    key={r.l}
+                    direction="row"
+                    sx={{
+                      justifyContent: 'space-between',
+                      gap: 1.5,
+                      py: 0.75,
+                      borderBottom: `1px solid ${T.ruleSoft}`,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 12, color: T.ink3 }}>{r.l}</Typography>
+                    <Typography
+                      sx={{ fontSize: 13, fontWeight: 600, color: T.ink, textAlign: 'right' }}
+                    >
+                      {r.v}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+
+              {/* Ce qui reste à faire — vu sans ouvrir le dossier. */}
+              {!opened.registrationDone || !opened.paid ? (
+                <Box
+                  sx={{
+                    mt: 2,
+                    p: 1.5,
+                    borderRadius: 0.5,
+                    border: `1px solid ${T.warn}44`,
+                    bgcolor: `${T.warn}0e`,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: '.1em',
+                      textTransform: 'uppercase',
+                      color: T.warn,
+                      mb: 0.75,
+                    }}
+                  >
+                    À traiter
+                  </Typography>
+                  <Stack sx={{ gap: 0.4 }}>
+                    {!opened.registrationDone ? (
+                      <Typography sx={{ fontSize: 12.5, color: T.ink2 }}>
+                        Fiche de police à signer
+                      </Typography>
+                    ) : null}
+                    {!opened.paid ? (
+                      <Typography sx={{ fontSize: 12.5, color: T.ink2 }}>
+                        Séjour non soldé
+                      </Typography>
+                    ) : null}
+                  </Stack>
+                </Box>
+              ) : null}
+
+              <Box sx={{ mt: 2.5 }}>
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={() => {
+                    setPicked(opened);
+                    setOpened(null);
+                    setToast(
+                      `${opened.guestName} sélectionné — touchez une chambre pour ${opened.roomId ? 'le déplacer' : 'l’affecter'}.`,
+                    );
+                  }}
+                  sx={{
+                    width: '100%',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: T.gold,
+                    bgcolor: `${T.goldSoft}18`,
+                    border: `1px solid ${T.goldSoft}`,
+                    borderRadius: 0.5,
+                    py: 1,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {opened.roomId ? 'Déplacer ce séjour' : 'Affecter une chambre'}
+                </Box>
+                <Typography sx={{ fontSize: 11, color: T.ink3, mt: 1, lineHeight: 1.55 }}>
+                  {listing.pmsIsMaster
+                    ? 'Le déplacement sera proposé, pas écrit : cet établissement est piloté par son PMS.'
+                    : 'Le déplacement part directement vers les canaux.'}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </>
       ) : null}
 
       <Snackbar
