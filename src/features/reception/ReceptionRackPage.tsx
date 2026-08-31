@@ -39,6 +39,13 @@ const T = {
 };
 
 const DAY_MS = 86_400_000;
+
+/** Ce que le motif dit à la réception, en trois mots. */
+const BLOCK_LABEL: Record<string, string> = {
+  out_of_service: 'Hors service',
+  house_guest: 'Invité maison',
+  unclassified: 'Motif non saisi',
+};
 const NF = new Intl.NumberFormat('fr-FR');
 
 const DOW = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' });
@@ -71,7 +78,9 @@ export function ReceptionRackPage() {
   const [rack, setRack] = useState<ReceptionRack | null>(null);
   const [loading, setLoading] = useState(true);
   const [offset, setOffset] = useState(0);
-  const [days, setDays] = useState(14);
+  // 30 jours par défaut : les séjours montent à 15 nuits, une fenêtre
+  // de 7 les couperait en deux. C'est aussi le standard hôtelier.
+  const [days, setDays] = useState(30);
   const [picked, setPicked] = useState<RackStay | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -225,7 +234,7 @@ export function ReceptionRackPage() {
             sx={{ height: 28, fontSize: 12, bgcolor: T.sheetAlt, border: `1px solid ${T.rule}` }}
           />
           <Box sx={{ width: 8 }} />
-          {[7, 14, 30].map((d) => (
+          {[7, 14, 30, 60].map((d) => (
             <Chip
               key={d}
               label={`${d} j`}
@@ -399,9 +408,29 @@ export function ReceptionRackPage() {
                 }}
               >
                 <Box sx={{ width: 220, flexShrink: 0, p: '10px 12px' }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 600, color: T.ink }}>
-                    {room.name}
-                  </Typography>
+                  <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
+                    <Typography
+                      sx={{ fontSize: 13, fontWeight: 600, color: room.enabled ? T.ink : T.ink3 }}
+                    >
+                      {room.name}
+                    </Typography>
+                    {!room.enabled ? (
+                      <Box
+                        sx={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          letterSpacing: '.05em',
+                          px: 0.5,
+                          py: '1px',
+                          borderRadius: '2px',
+                          bgcolor: `${T.ink3}1e`,
+                          color: T.ink3,
+                        }}
+                      >
+                        OOO
+                      </Box>
+                    ) : null}
+                  </Stack>
                   <Typography sx={{ fontSize: 10.5, color: T.ink3, mt: 0.15 }}>
                     {room.roomTypeName ?? '—'}
                     {room.capacity ? ` · ${room.capacity} couch.` : ''}
@@ -422,6 +451,57 @@ export function ReceptionRackPage() {
                       />
                     ))}
                   </Stack>
+
+                  {/* Immobilisations : une chambre retirée de la vente doit
+                      se voir AVEC son motif. Une ligne vide se lit « libre »,
+                      ce qui est exactement l'erreur à éviter. */}
+                  {room.blocks.map((b) => {
+                    const p = span(
+                      { arrivalDate: b.from, departureDate: b.to } as RackStay,
+                      grid,
+                    );
+                    if (!p) return null;
+                    const oos = b.category === 'out_of_service';
+                    const tint = oos ? T.ink3 : T.gold;
+                    return (
+                      <Box
+                        key={`b-${b.from}-${b.reason}`}
+                        title={`${BLOCK_LABEL[b.category] ?? b.category} · ${b.reason} · ${b.from} → ${b.to}`}
+                        sx={{
+                          position: 'absolute',
+                          left: p.start * colWidth + 2,
+                          width: p.width * colWidth - 4,
+                          top: 8,
+                          height: 36,
+                          borderRadius: 0.5,
+                          border: `1px dashed ${tint}`,
+                          backgroundImage: `repeating-linear-gradient(45deg, ${tint}26, ${tint}26 4px, transparent 4px, transparent 8px)`,
+                          px: 0.85,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'center',
+                          overflow: 'hidden',
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: oos ? T.ink2 : T.gold,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {b.reason || BLOCK_LABEL[b.category]}
+                        </Typography>
+                        <Typography sx={{ fontSize: 9.5, color: T.ink3, whiteSpace: 'nowrap' }}>
+                          {BLOCK_LABEL[b.category] ?? ''}
+                        </Typography>
+                      </Box>
+                    );
+                  })}
 
                   {room.stays.map((s) => {
                     const p = span(s, grid);
