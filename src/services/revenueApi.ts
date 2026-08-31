@@ -750,6 +750,15 @@ export type RackStay = {
   status: string;
 };
 
+export type RackBlock = {
+  from: string;
+  to: string;
+  /** `out_of_service` | `house_guest` | `unclassified` */
+  category: string;
+  /** Le libellé saisi au PMS — « MR ILYASS », « Pas prêt ». */
+  reason: string;
+};
+
 export type RackRoom = {
   id: string;
   name: string;
@@ -757,7 +766,10 @@ export type RackRoom = {
   roomTypeId: string | null;
   roomTypeName: string | null;
   capacity: number | null;
+  /** Une chambre désactivée reste affichée, signalée par un badge. */
+  enabled: boolean;
   stays: RackStay[];
+  blocks: RackBlock[];
 };
 
 export type ReceptionRack = {
