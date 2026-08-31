@@ -294,8 +294,14 @@ export function GuestContractSection({
     return rows;
   }, [configured, isAirbnbBundle, named, principal, registeredTravelers]);
 
-  const ensureOne = async (documentType: GuestContractDocumentType) => {
-    // Always force refresh so PDF/link track current registered travelers.
+  const ensureOne = async (
+    documentType: GuestContractDocumentType,
+    opts?: { force?: boolean },
+  ) => {
+    const existing = liveContract(byType.get(documentType), registeredTravelers);
+    if (existing && existing.status !== 'failed' && opts?.force !== true) {
+      return existing;
+    }
     const res = await guestContractsService.ensure(reservationId, true, { documentType });
     if (!res.success) {
       toast.error(res.message || 'Génération impossible');
@@ -325,18 +331,54 @@ export function GuestContractSection({
     }
   };
 
-  /** Open tab in the click gesture so the browser does not block after await. */
-  const openUrlInNewTab = (url: string, preopened: Window | null) => {
-    if (preopened && !preopened.closed) {
-      preopened.location.href = url;
-      return true;
+  const paintWaitingTab = (tab: Window | null, title: string) => {
+    if (!tab || tab.closed) return;
+    try {
+      tab.document.title = title;
+      tab.document.body.innerHTML = `<p style="font:14px system-ui;padding:24px;color:#555">${title}…</p>`;
+    } catch {
+      /* cross-origin or closed */
     }
-    const w = window.open(url, '_blank', 'noopener,noreferrer');
-    return Boolean(w);
+  };
+
+  /** Prefer navigating a tab opened in the click gesture; always surface a clickable toast. */
+  const deliverUrl = async (url: string, preopened: Window | null, kind: 'web' | 'pdf') => {
+    let opened = false;
+    if (preopened && !preopened.closed) {
+      try {
+        preopened.location.href = url;
+        opened = true;
+      } catch {
+        opened = false;
+      }
+    }
+    if (!opened) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      opened = true;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      /* ignore */
+    }
+    toast.success(
+      kind === 'pdf'
+        ? 'PDF prêt — onglet ouvert (lien aussi copié)'
+        : 'Lien prêt — onglet ouvert (lien aussi copié)',
+      { autoClose: 4000 },
+    );
   };
 
   const openWeb = (documentType: GuestContractDocumentType, rowKey: string) => {
     const tab = window.open('about:blank', '_blank');
+    paintWaitingTab(tab, 'Préparation du lien de signature');
+    toast.info('Préparation du lien…', { toastId: `gc-web-${rowKey}`, autoClose: 2500 });
     void withBusy(`${rowKey}:web`, async () => {
       try {
         if (registeredTravelers !== undefined && named.length === 0) {
@@ -360,21 +402,20 @@ export function GuestContractSection({
           toast.info('Finalisation en cours');
           return;
         }
-        const signerId = missingSigners(contract)[0]?.signerId ?? contract.nextSignerId ?? undefined;
+        const travelerMatch = /^police-(\d+)$/.exec(rowKey);
+        const preferredSigner = travelerMatch ? `traveler:${travelerMatch[1]}` : undefined;
+        const signerId =
+          preferredSigner ||
+          missingSigners(contract)[0]?.signerId ||
+          contract.nextSignerId ||
+          undefined;
         const res = await guestContractsService.createAccessToken(contract.id, signerId || undefined);
         if (!res.success || !res.data?.url) {
           tab?.close();
           toast.error(res.message || 'Lien impossible');
           return;
         }
-        if (!openUrlInNewTab(res.data.url, tab)) {
-          try {
-            await navigator.clipboard.writeText(res.data.url);
-            toast.info('Popup bloqué — lien copié dans le presse-papiers');
-          } catch {
-            toast.error(`Popup bloqué — ouvrez : ${res.data.url}`);
-          }
-        }
+        await deliverUrl(res.data.url, tab, 'web');
       } catch (err) {
         tab?.close();
         throw err;
@@ -384,6 +425,8 @@ export function GuestContractSection({
 
   const openPdf = (documentType: GuestContractDocumentType, rowKey: string) => {
     const tab = window.open('about:blank', '_blank');
+    paintWaitingTab(tab, 'Préparation du PDF');
+    toast.info('Préparation du PDF…', { toastId: `gc-pdf-${rowKey}`, autoClose: 2500 });
     void withBusy(`${rowKey}:pdf`, async () => {
       try {
         if (registeredTravelers !== undefined && named.length === 0) {
@@ -404,14 +447,7 @@ export function GuestContractSection({
           toast.error(res.message || 'PDF indisponible');
           return;
         }
-        if (!openUrlInNewTab(res.data.url, tab)) {
-          try {
-            await navigator.clipboard.writeText(res.data.url);
-            toast.info('Popup bloqué — lien PDF copié');
-          } catch {
-            toast.error(`Popup bloqué — ouvrez : ${res.data.url}`);
-          }
-        }
+        await deliverUrl(res.data.url, tab, 'pdf');
       } catch (err) {
         tab?.close();
         throw err;
