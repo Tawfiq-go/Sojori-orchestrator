@@ -46,6 +46,7 @@ import {
 } from '../../features/registration/formSchema';
 import { downloadFichePolicePdf } from '../../features/registration/fichePolicePdf';
 import { GuestContractSection } from './GuestContractSection';
+import { EnregistrementStatusBanner, type EnregistrementStatus } from './EnregistrementStatusBanner';
 import { fetchDefaultPmReportHeader } from '../../features/finances/financesApi';
 import { normalizeProfitReportHeader } from '../../features/finances/utils/profitReportHeader';
 
@@ -222,12 +223,14 @@ interface RegistrationTabProps {
   reservationDetails: any;
   onRefresh?: () => void;
   readOnly?: boolean;
+  enregistrementStatus?: EnregistrementStatus;
 }
 
 export function RegistrationTab({
   reservationDetails,
   onRefresh,
   readOnly = false,
+  enregistrementStatus,
 }: RegistrationTabProps) {
   const r = reservationDetails;
   const resaId = String(r?._id || r?.id || '');
@@ -561,6 +564,7 @@ export function RegistrationTab({
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: T.bg0, minHeight: 320 }}>
+      {enregistrementStatus ? <EnregistrementStatusBanner status={enregistrementStatus} /> : null}
       {enabledFields(formSchema).some((f) => f.scope === 'per_stay') ? (
         <Paper
           sx={{
@@ -613,6 +617,7 @@ export function RegistrationTab({
         </Paper>
       ) : null}
       <Paper
+        id="enregistrement-pieces"
         sx={{
           p: 1.25,
           mb: 1.25,
