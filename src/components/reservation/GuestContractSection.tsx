@@ -276,6 +276,9 @@ export function GuestContractSection({
     opts?: { force?: boolean },
   ) => {
     const existing = liveContract(byType.get(documentType), registeredTravelers);
+    if (existing && ['partially_signed', 'signed', 'finalizing'].includes(existing.status) && opts?.force !== true) {
+      return existing;
+    }
     if (
       existing &&
       existing.status !== 'failed' &&
@@ -285,7 +288,7 @@ export function GuestContractSection({
     ) {
       return existing;
     }
-    const res = await guestContractsService.ensure(reservationId, true, { documentType });
+    const res = await guestContractsService.ensure(reservationId, false, { documentType });
     if (!res.success) {
       toast.error(res.message || 'Génération impossible');
       return null;
@@ -385,14 +388,19 @@ export function GuestContractSection({
           return;
         }
         const travelerMatch = /^police-(\d+)$/.exec(rowKey);
-        const preferredSigner = travelerMatch ? `traveler:${travelerMatch[1]}` : undefined;
+        const idx = travelerMatch ? Number(travelerMatch[1]) : NaN;
+        const fromContract = Number.isFinite(idx)
+          ? (contract.travelers ?? []).find(t => t.travelerIndex === idx)
+          : undefined;
+        const preferredSigner =
+          fromContract?.signerId || (Number.isFinite(idx) ? `traveler:${idx}` : undefined);
         const signerId =
           preferredSigner ||
           missingSigners(contract)[0]?.signerId ||
           contract.nextSignerId ||
           undefined;
         let res = await guestContractsService.createAccessToken(contract.id, signerId || undefined);
-        if (!res.success && preferredSigner) {
+        if (!res.success && preferredSigner && contract.signerPolicy !== 'each_traveler') {
           res = await guestContractsService.createAccessToken(contract.id);
         }
         if (!res.success || !res.data?.url) {
