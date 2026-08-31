@@ -74,8 +74,18 @@ class GuestContractsService {
 
   async createAccessToken(contractId: string, signerId?: string) {
     const url = `${RESERVATIONS_API}/guest-contracts/${encodeURIComponent(contractId)}/access-token`;
-    const response = await apiClient.post(url, signerId ? { signerId } : {});
-    return unwrap<{ token: string; url: string; expiresAt: string; signerId: string }>(response.data);
+    try {
+      const response = await apiClient.post(url, signerId ? { signerId } : {});
+      return unwrap<{ token: string; url: string; expiresAt: string; signerId: string }>(response.data);
+    } catch (err) {
+      const data = (err as { response?: { data?: { success?: boolean; error?: string; message?: string } } })
+        ?.response?.data;
+      if (data) return unwrap<{ token: string; url: string; expiresAt: string; signerId: string }>(data);
+      return {
+        success: false as const,
+        message: err instanceof Error ? err.message : 'Lien impossible',
+      };
+    }
   }
 
   async documentUrl(contractId: string, variant: 'unsigned' | 'signed') {
