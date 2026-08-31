@@ -33,7 +33,12 @@ function isDirectLocalService(url: string, port: number): boolean {
 function rewriteAdminFulltaskPath(path: string): string {
   const prefix = '/api/v1/admin/fulltask'
   const rest = path.startsWith(prefix) ? path.slice(prefix.length) : path
-  /** Chemins proxifiés vers /api/v1/fulltask/* côté srv-fulltask (≠ legacy /api/tasks). */
+  /**
+   * Chemins servis par srv-fulltask sous son mount d'équipe.
+   *
+   * L'ingress expose `/api/v1/task/*` — pas `/api/v1/fulltask/*`, qui n'existe
+   * que sur le pod. Router vers le mauvais préfixe donne un 404 muet.
+   */
   const v1Prefixes = [
     '/notification',
     '/staff-simplified',
@@ -55,7 +60,7 @@ function rewriteAdminFulltaskPath(path: string): string {
     '/reports',
   ]
   if (v1Prefixes.some((p) => rest === p || rest.startsWith(`${p}/`))) {
-    return `/api/v1/fulltask${rest}`
+    return `/api/v1/task${rest}`
   }
   return `/api${rest}`
 }
