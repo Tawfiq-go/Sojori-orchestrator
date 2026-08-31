@@ -10,6 +10,7 @@ import MetricsPageUltra from './MetricsPageUltra';
 import RabbitMQPage from './RabbitMQPage';
 import WhatsAppMonitoringPage from './WhatsAppMonitoringPage';
 import AIMonitoringPage from './AIMonitoringPage';
+import OcrBenchmarkTab from './OcrBenchmarkTab';
 import InfrastructureMonitoringPage from './InfrastructureMonitoringPage';
 import PodsMonitoringPage from './PodsMonitoringPage';
 import ReservationSyncMonitorTab from './ReservationSyncMonitorTab';
@@ -26,6 +27,7 @@ const TAB_OPTIONS = [
   { value: 'Sockets', label: '🔌 Sockets' },
   { value: 'API', label: '🌐 API' },
   { value: 'AI', label: '🤖 IA' },
+  { value: 'OCR', label: '🪪 OCR' },
   { value: 'Infrastructure', label: '🏗️ Infra' },
   { value: 'Pods', label: '🧩 Pods' },
   { value: 'ReservationSync', label: '🔄 Sync résa' },
@@ -46,6 +48,7 @@ const TAB_BY_LOWER: Record<string, MonitorTab> = {
   sockets: 'Sockets',
   api: 'API',
   ai: 'AI',
+  ocr: 'OCR',
   infrastructure: 'Infrastructure',
   pods: 'Pods',
   'reservation-sync': 'ReservationSync',
@@ -116,6 +119,7 @@ export default function MonitoringHubPage() {
             {tab === 'Sockets' && <SocketMonitoringPage />}
             {tab === 'API' && <APIMonitoringPage />}
             {tab === 'AI' && <AIMonitoringPage />}
+            {tab === 'OCR' && <OcrBenchmarkTab />}
             {tab === 'Infrastructure' && <InfrastructureMonitoringPage />}
             {tab === 'Pods' && <PodsMonitoringPage />}
             {tab === 'ReservationSync' && <ReservationSyncMonitorTab />}
