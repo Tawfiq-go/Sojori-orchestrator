@@ -38,6 +38,7 @@ import {
   evaluateRegistrationCompleteness,
   fieldLabel,
   fieldValueForStay,
+  relaxCompleteExtraRequired,
   resolveEffectiveRegistrationForm,
   simplePresetSchema,
   type RegistrationFieldDef,
@@ -314,7 +315,7 @@ export function RegistrationTab({
         : resolveEffectiveRegistrationForm({
             listingGestion: doc?.capabilities?.registration?.gestion ?? {},
           });
-      setFormSchema(resolved.schema);
+      setFormSchema(relaxCompleteExtraRequired(resolved.schema));
       setRegistrationLevel(resolved.registrationLevel);
     } catch {
       setRegistrationLevel('simple');
@@ -752,6 +753,15 @@ export function RegistrationTab({
             listingId={listingId || null}
             readOnly={readOnly}
             embedded
+            registeredTravelers={members
+              .map((m, i) => {
+                const name = [memberField(m, 'first_name', 'firstName'), memberField(m, 'last_name', 'lastName')]
+                  .filter(Boolean)
+                  .join(' ')
+                  .trim();
+                return { index: i, name };
+              })
+              .filter(t => t.name)}
           />
         ) : null}
       </Paper>

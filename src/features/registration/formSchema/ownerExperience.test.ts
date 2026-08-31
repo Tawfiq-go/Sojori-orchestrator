@@ -16,6 +16,9 @@ import {
   simplePresetSchema,
   completePresetSchema,
   builtinField,
+  ownerFacingFieldStatusLine,
+  ownerFacingRequiredLabel,
+  ownerFacingWhatsAppLabel,
 } from './index'
 
 describe('owner registration experience', () => {
@@ -120,6 +123,20 @@ describe('owner registration experience', () => {
     assert.equal(ownerFacingSourceBadge(nationality), 'Lu sur le passeport')
     assert.equal(ownerFacingSourceBadge(profession), 'À renseigner par le voyageur')
     assert.doesNotMatch(ownerFacingSourceBadge(nationality), /OCR|slot|short_text/i)
+  })
+
+  it('separates WhatsApp visibility from client obligation', () => {
+    const entry = builtinField('entry_number_morocco', { required: false, enabled: true, order: 20 })
+    assert.equal(ownerFacingWhatsAppLabel(entry), 'WhatsApp')
+    assert.equal(ownerFacingRequiredLabel(entry), 'Facultatif')
+    assert.equal(ownerFacingFieldStatusLine(entry), 'WhatsApp · Facultatif pour le client')
+
+    const required = { ...entry, required: true }
+    assert.equal(ownerFacingFieldStatusLine(required), 'WhatsApp · Obligatoire pour le client')
+
+    const hidden = { ...entry, enabled: false, required: false }
+    assert.equal(ownerFacingWhatsAppLabel(hidden), 'Masqué')
+    assert.equal(ownerFacingFieldStatusLine(hidden), 'Masqué (pas sur WhatsApp)')
   })
 
   it('formats inheritance labels for owners', () => {

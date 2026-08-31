@@ -44,6 +44,17 @@ describe('RegistrationFormEditor owner UI contracts', () => {
     )
   })
 
+  it('owner sees WhatsApp vs Obligatoire as independent switches', () => {
+    assert.match(editorSource, /label=\{<Typography sx=\{\{ fontSize: 11 \}\}>WhatsApp<\/Typography>\}/)
+    assert.match(editorSource, /label=\{<Typography sx=\{\{ fontSize: 11 \}\}>Obligatoire<\/Typography>\}/)
+    assert.doesNotMatch(editorSource, />Active</)
+    assert.match(editorSource, /ownerFacingFieldStatusLine/)
+    assert.match(
+      editorSource,
+      /n° d’entrée au Maroc peut être sur WhatsApp sans être obligatoire/,
+    )
+  })
+
   it('owner never sees Override annonce / Revenir au formulaire owner wording', () => {
     assert.doesNotMatch(editorSource, /Override annonce/)
     assert.doesNotMatch(editorSource, /Revenir au formulaire owner/)

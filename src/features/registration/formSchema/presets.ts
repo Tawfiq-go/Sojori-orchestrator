@@ -41,7 +41,9 @@ export function completePresetSchema(): RegistrationFormSchema {
     builtinField('domicile', { required: false, enabled: true, order: 17 }),
     builtinField('city', { required: false, enabled: true, order: 18 }),
     builtinField('country', { required: false, enabled: true, order: 19 }),
-    builtinField('arrival_time', { required: false, enabled: true, order: 20 }),
+    // Shown on WhatsApp by default, never required — guest often gets it only on arrival in Morocco.
+    builtinField('entry_number_morocco', { required: false, enabled: true, order: 20 }),
+    builtinField('arrival_time', { required: false, enabled: true, order: 21 }),
   ]
   return { version: 2, source: 'preset:complete', fields }
 }
@@ -68,6 +70,24 @@ export const COMPLETE_EXTRA_OPTIONAL_KEYS = [
   'phone',
 ] as const
 
+const OPTIONAL_COMPLETE_EXTRA = new Set<string>(COMPLETE_EXTRA_OPTIONAL_KEYS)
+
+/**
+ * Soft-migrate persisted listing schemas that still mark complete extras as required.
+ * Profession / provenance / allant à / téléphone must never block enregistrement.
+ */
+export function relaxCompleteExtraRequired(schema: RegistrationFormSchema): RegistrationFormSchema {
+  let changed = false
+  const fields = schema.fields.map((f) => {
+    const key = f.binding || f.id
+    if (OPTIONAL_COMPLETE_EXTRA.has(key) && f.required) {
+      changed = true
+      return { ...f, required: false }
+    }
+    return f
+  })
+  return changed ? { ...schema, fields } : schema
+}
 const MAX_PASSPORT_CORE_REQUIRED = new Set([
   'first_name',
   'last_name',
