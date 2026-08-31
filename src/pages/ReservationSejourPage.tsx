@@ -24,6 +24,7 @@ import { GuestInfoTab } from '../components/reservation/GuestInfoTab';
 import { FinancierTab } from '../components/reservation/FinancierTab';
 import { MessagesTab } from '../components/reservation/MessagesTab';
 import { RegistrationTab } from '../components/reservation/RegistrationTab';
+import { useEnregistrementStatus } from '../components/reservation/EnregistrementStatusBanner';
 import { useWriteAccess } from '../hooks/useWriteAccess';
 import { isMewsOrigin } from '../utils/reservationCreatedVia';
 import { Roles } from '../constants/roles';
@@ -78,6 +79,7 @@ export function ReservationSejourPage() {
   const [isSaving, setIsSaving] = useState(false);
   const contentFs = usePageFullscreen();
   const contentFullscreen = contentFs.fullscreen;
+  const enregistrement = useEnregistrementStatus(reservationDetails);
 
   // Sync tab when URL ?tab= changes (ex. lien depuis Séjour → Enregistrement)
   useEffect(() => {
@@ -255,9 +257,10 @@ export function ReservationSejourPage() {
         reservationDetails={reservationDetails}
         onRefresh={refreshReservation}
         readOnly={!canWrite}
+        enregistrementStatus={enregistrement}
       />
     );
-  }, [tab, reservationDetails, isEditMode, editedData, refreshReservation, canWrite]);
+  }, [tab, reservationDetails, isEditMode, editedData, refreshReservation, canWrite, enregistrement]);
 
   const tabsBar = (
     <Tabs
@@ -390,6 +393,38 @@ export function ReservationSejourPage() {
             {isEditMode && (
               <Chip label="Édition" size="small" sx={{ height: 20, bgcolor: T.primaryTint, color: T.primaryDeep, fontWeight: 700, fontSize: 10 }} />
             )}
+            <Chip
+              size="small"
+              clickable
+              onClick={() => {
+                setTab(0);
+                setSearchParams({ tab: 'sejour' });
+              }}
+              label={enregistrement.hourChosen && enregistrement.hour ? `Arrivée ${enregistrement.hour}` : 'Heure ?'}
+              sx={{
+                height: 20,
+                fontWeight: 700,
+                fontSize: 10,
+                bgcolor: enregistrement.hourChosen ? 'rgba(10,143,94,0.12)' : T.primaryTint,
+                color: enregistrement.hourChosen ? T.success : T.warning,
+              }}
+            />
+            <Chip
+              size="small"
+              clickable
+              onClick={() => {
+                setTab(3);
+                setSearchParams({ tab: 'enregistrement' });
+              }}
+              label={`Enreg. ${enregistrement.enregistrementDone}/${enregistrement.enregistrementNeeded}`}
+              sx={{
+                height: 20,
+                fontWeight: 700,
+                fontSize: 10,
+                bgcolor: enregistrement.enregistrementComplete ? 'rgba(10,143,94,0.12)' : T.bg3,
+                color: enregistrement.enregistrementComplete ? T.success : T.text2,
+              }}
+            />
           </Stack>
           <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.2, lineHeight: 1.2 }} noWrap title={`${reservationDetails.guestName || 'Voyageur'} · ${formatStayRange(reservationDetails.arrivalDate, reservationDetails.departureDate)}`}>
             {reservationDetails.guestName || 'Voyageur'} · {formatStayRange(reservationDetails.arrivalDate, reservationDetails.departureDate)}
