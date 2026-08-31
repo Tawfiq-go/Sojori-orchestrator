@@ -72,3 +72,17 @@ export function missingSigners(contract: GuestContractSummary): GuestContractTra
   }
   return [];
 }
+
+export function needsNewSigningVersion(status: GuestContractStatus): boolean {
+  return status === 'signed' || status === 'finalizing';
+}
+
+export function pickContractForType(
+  data: { contract?: GuestContractSummary; contracts?: GuestContractSummary[] } | undefined,
+  documentType: string,
+): GuestContractSummary | null {
+  const fromList = data?.contracts?.find(c => c.documentType === documentType);
+  if (fromList) return fromList;
+  if (data?.contract?.documentType === documentType) return data.contract;
+  return data?.contract ?? null;
+}

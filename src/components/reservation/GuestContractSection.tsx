@@ -4,6 +4,8 @@ import { toast } from 'react-toastify';
 import listingsService from '../../services/listingsService';
 import guestContractsService, {
   missingSigners,
+  needsNewSigningVersion,
+  pickContractForType,
   type GuestContractStatus,
   type GuestContractSummary,
 } from '../../services/guestContractsService';
@@ -287,6 +289,17 @@ export function GuestContractSection({
     return rows;
   }, [configured, named, principal, registeredTravelers]);
 
+  const refreshContracts = async (documentType?: GuestContractDocumentType) => {
+    const listRes = await guestContractsService.list(reservationId);
+    if (listRes.success && Array.isArray(listRes.data)) {
+      setContracts(listRes.data);
+      if (documentType) {
+        return liveContract(latestByType(listRes.data).get(documentType), registeredTravelers);
+      }
+    }
+    return null;
+  };
+
   const ensureOne = async (
     documentType: GuestContractDocumentType,
     opts?: { force?: boolean },
@@ -313,11 +326,7 @@ export function GuestContractSection({
       res.data?.contracts?.find(c => c.documentType === documentType) ??
       (res.data?.contract?.documentType === documentType ? res.data.contract : null) ??
       null;
-    const listRes = await guestContractsService.list(reservationId);
-    if (listRes.success && Array.isArray(listRes.data)) {
-      setContracts(listRes.data);
-      contract = latestByType(listRes.data).get(documentType) ?? contract;
-    }
+    contract = (await refreshContracts(documentType)) ?? contract;
     return contract;
   };
 
@@ -443,7 +452,36 @@ export function GuestContractSection({
     );
   };
 
+  const confirmNewSigningLink = (contract: GuestContractSummary) => {
+    const shared = contract.signerPolicy === 'each_traveler';
+    if (contract.status === 'finalizing') {
+      return window.confirm(
+        shared
+          ? 'Finalisation en cours. Un nouveau lien remplace la version actuelle pour tous les voyageurs. Continuer ?'
+          : 'Finalisation en cours. Un nouveau lien de signature remplacera cette version. Continuer ?',
+      );
+    }
+    return window.confirm(
+      shared
+        ? 'Ce contrat est déjà signé. Un nouveau lien remplace la version actuelle pour tous les voyageurs — ils devront re-signer. Continuer ?'
+        : 'Ce contrat est déjà signé. Un nouveau lien de signature remplacera cette version. Continuer ?',
+    );
+  };
+
+  const confirmRemoveContract = (contract: GuestContractSummary) => {
+    const shared = contract.signerPolicy === 'each_traveler';
+    return window.confirm(
+      shared
+        ? 'Retirer ce contrat ? La fiche de tous les voyageurs disparaîtra et les liens de signature cesseront de fonctionner.'
+        : 'Retirer ce contrat de la réservation ? Les liens de signature cesseront de fonctionner.',
+    );
+  };
+
   const openWeb = (documentType: GuestContractDocumentType, rowKey: string) => {
+    const existing = liveContract(byType.get(documentType), registeredTravelers);
+    if (existing && needsNewSigningVersion(existing.status)) {
+      if (readOnly || !confirmNewSigningLink(existing)) return;
+    }
     const tab = window.open('about:blank', '_blank');
     paintWaitingTab(tab, 'Préparation du lien de signature');
     toast.info('Préparation du lien…', { toastId: `gc-web-${rowKey}`, autoClose: 2500 });
@@ -454,14 +492,26 @@ export function GuestContractSection({
           toast.info('Enregistrez d’abord un voyageur');
           return;
         }
-        const contract = await ensureOne(documentType);
+        let contract: GuestContractSummary | null = liveContract(
+          byType.get(documentType),
+          registeredTravelers,
+        );
+        if (contract && needsNewSigningVersion(contract.status)) {
+          const regen = await guestContractsService.regenerate(contract.id, true);
+          if (!regen.success) {
+            tab?.close();
+            toast.error(regen.message || 'Nouveau lien impossible');
+            return;
+          }
+          contract =
+            (await refreshContracts(documentType)) ??
+            pickContractForType(regen.data, documentType) ??
+            null;
+        } else {
+          contract = await ensureOne(documentType);
+        }
         if (!contract) {
           tab?.close();
-          return;
-        }
-        if (contract.status === 'signed') {
-          tab?.close();
-          toast.info('Déjà signé — utilisez PDF');
           return;
         }
         if (contract.status === 'finalizing') {
@@ -495,6 +545,21 @@ export function GuestContractSection({
         tab?.close();
         throw err;
       }
+    });
+  };
+
+  const removeContract = (documentType: GuestContractDocumentType, rowKey: string) => {
+    const existing = liveContract(byType.get(documentType), registeredTravelers);
+    if (!existing || readOnly) return;
+    if (!confirmRemoveContract(existing)) return;
+    void withBusy(`${rowKey}:del`, async () => {
+      const res = await guestContractsService.supersede(existing.id);
+      if (!res.success) {
+        toast.error(res.message || 'Suppression impossible');
+        return;
+      }
+      await refreshContracts();
+      toast.success('Contrat retiré');
     });
   };
 
@@ -595,6 +660,7 @@ export function GuestContractSection({
           const current = liveContract(raw, registeredTravelers);
           const webBusy = busyKey === `${row.key}:web`;
           const pdfBusy = busyKey === `${row.key}:pdf`;
+          const delBusy = busyKey === `${row.key}:del`;
           const anyBusy = Boolean(busyKey);
           return (
             <Stack
@@ -660,7 +726,7 @@ export function GuestContractSection({
               <Button
                 size="small"
                 variant="contained"
-                disabled={readOnly || anyBusy || current?.status === 'signed'}
+                disabled={readOnly || anyBusy}
                 onClick={() => openWeb(row.documentType, row.key)}
                 sx={{
                   textTransform: 'none',
@@ -692,6 +758,26 @@ export function GuestContractSection({
               >
                 {pdfBusy ? <CircularProgress size={12} /> : 'PDF'}
               </Button>
+              {current && !readOnly ? (
+                <Button
+                  size="small"
+                  variant="text"
+                  disabled={anyBusy}
+                  onClick={() => removeContract(row.documentType, row.key)}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontSize: 11,
+                    color: T.error,
+                    minHeight: 26,
+                    minWidth: 0,
+                    px: 0.75,
+                    flexShrink: 0,
+                  }}
+                >
+                  {delBusy ? <CircularProgress size={12} /> : 'Suppr.'}
+                </Button>
+              ) : null}
             </Stack>
           );
         })}
