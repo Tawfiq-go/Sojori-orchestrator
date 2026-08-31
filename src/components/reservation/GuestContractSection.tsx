@@ -131,7 +131,7 @@ function formatLabel(configured: ConfiguredContract[]): string {
   const policeEach = configured.some(
     c => c.documentType === 'moroccan_police_form' && c.signerPolicy === 'each_traveler',
   );
-  if (hasPolice && hasStay && allPrimary) return 'Airbnb · 1 lien';
+  if (hasPolice && hasStay && allPrimary) return 'Airbnb · fiches + disclaimer';
   if (policeEach) return 'Hôtel · par voyageur';
   return 'Selon listing';
 }
@@ -214,15 +214,6 @@ export function GuestContractSection({
 
   const byType = useMemo(() => latestByType(contracts), [contracts]);
 
-  const isAirbnbBundle = useMemo(
-    () =>
-      configured.length >= 2 &&
-      configured.some(c => c.documentType === 'moroccan_police_form') &&
-      configured.some(c => c.documentType === 'stay_contract') &&
-      configured.every(c => c.signerPolicy === 'primary_guest'),
-    [configured],
-  );
-
   const named = useMemo(() => {
     if (registeredTravelers !== undefined) {
       return registeredTravelers.filter(t => t.name.trim());
@@ -261,10 +252,10 @@ export function GuestContractSection({
       } else if (cfg.documentType === 'moroccan_police_form') {
         if (registeredTravelers !== undefined && named.length === 0) continue;
         rows.push({
-          key: 'police-bundle',
+          key: 'police-primary',
           who: principal,
           doc: named.length > 1 ? `Fiches (${named.length})` : 'Fiche',
-          documentType: isAirbnbBundle ? 'stay_contract' : 'moroccan_police_form',
+          documentType: 'moroccan_police_form',
         });
       } else {
         if (registeredTravelers !== undefined && named.length === 0) continue;
@@ -272,27 +263,13 @@ export function GuestContractSection({
           key: cfg.documentType,
           who: principal,
           doc: cfg.name.replace(/^Guest\s+/i, ''),
-          documentType:
-            isAirbnbBundle && cfg.documentType === 'stay_contract'
-              ? 'stay_contract'
-              : cfg.documentType,
+          documentType: cfg.documentType,
         });
       }
     }
 
-    if (isAirbnbBundle) {
-      if (registeredTravelers !== undefined && named.length === 0) return [];
-      return [
-        {
-          key: 'airbnb',
-          who: principal,
-          doc: 'Pack (fiches + disclaimer)',
-          documentType: 'stay_contract' as GuestContractDocumentType,
-        },
-      ];
-    }
     return rows;
-  }, [configured, isAirbnbBundle, named, principal, registeredTravelers]);
+  }, [configured, named, principal, registeredTravelers]);
 
   const ensureOne = async (
     documentType: GuestContractDocumentType,
@@ -386,8 +363,7 @@ export function GuestContractSection({
           toast.info('Enregistrez d’abord un voyageur');
           return;
         }
-        const targetType = isAirbnbBundle ? 'stay_contract' : documentType;
-        const contract = await ensureOne(targetType);
+        const contract = await ensureOne(documentType);
         if (!contract) {
           tab?.close();
           return;
@@ -434,8 +410,7 @@ export function GuestContractSection({
           toast.info('Enregistrez d’abord un voyageur');
           return;
         }
-        const targetType = isAirbnbBundle ? 'stay_contract' : documentType;
-        const contract = await ensureOne(targetType);
+        const contract = await ensureOne(documentType);
         if (!contract) {
           tab?.close();
           return;
@@ -504,7 +479,7 @@ export function GuestContractSection({
 
       <Stack spacing={0.4}>
         {signRows.map(row => {
-          const raw = byType.get(isAirbnbBundle ? 'stay_contract' : row.documentType);
+          const raw = byType.get(row.documentType);
           const current = liveContract(raw, registeredTravelers);
           const webBusy = busyKey === `${row.key}:web`;
           const pdfBusy = busyKey === `${row.key}:pdf`;
