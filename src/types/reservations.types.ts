@@ -25,6 +25,19 @@ export interface ReservationMember {
   status: string;
 }
 
+export interface GuestParty {
+  principalSlot?: number;
+  groups?: Array<{ id: string; name: string }>;
+  memberships?: Array<{ slot: number; groupId: string; role: 'chef' | 'member' }>;
+  capabilities?: Array<{
+    slot: number;
+    key: 'checkin' | 'breakfast' | 'experiences' | 'access' | 'wifi';
+    mode: 'self' | 'proxy' | 'none';
+  }>;
+  phones?: Array<{ slot: number; waE164: string }>;
+  updatedAt?: string;
+}
+
 /**
  * Enregistrement des invités
  */
@@ -144,6 +157,7 @@ export interface Reservation {
   // Registration
   guestsRegistrationStatus?: string | null;
   guestRegistration?: GuestRegistration;
+  guestParty?: GuestParty;
   police_registration?: GuestRegistration; // Alias
 
   // Messages & Communication

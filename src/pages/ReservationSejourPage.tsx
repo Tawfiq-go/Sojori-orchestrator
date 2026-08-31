@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════
 // Sojori — Reservation Sejour Page · édition « Atelier 2026 »
-// Wrapper de page avec header sticky, infobar, 4 onglets.
+// Wrapper de page avec header sticky, infobar, 5 onglets.
 // Tous les onglets injectés via slots — pas de logique métier ici.
 // ════════════════════════════════════════════════════════════════════
 
@@ -24,6 +24,7 @@ import { GuestInfoTab } from '../components/reservation/GuestInfoTab';
 import { FinancierTab } from '../components/reservation/FinancierTab';
 import { MessagesTab } from '../components/reservation/MessagesTab';
 import { RegistrationTab } from '../components/reservation/RegistrationTab';
+import { PartyTab } from '../components/reservation/PartyTab';
 import { useWriteAccess } from '../hooks/useWriteAccess';
 import { isMewsOrigin } from '../utils/reservationCreatedVia';
 import { Roles } from '../constants/roles';
@@ -37,7 +38,7 @@ const T = {
   success: '#0a8f5e', warning: '#c46506', error: '#c81e1e', info: '#0673b3',
 };
 
-const TAB_NAMES = ['sejour', 'financier', 'messages', 'enregistrement'];
+const TAB_NAMES = ['sejour', 'financier', 'messages', 'enregistrement', 'voyageurs'];
 
 function formatStayRange(arrival?: string, departure?: string): string {
   if (!arrival) return '—';
@@ -250,13 +251,16 @@ export function ReservationSejourPage() {
     if (tab === 2) {
       return <MessagesTab reservationDetails={reservationDetails} />;
     }
-    return (
-      <RegistrationTab
-        reservationDetails={reservationDetails}
-        onRefresh={refreshReservation}
-        readOnly={!canWrite}
-      />
-    );
+    if (tab === 3) {
+      return (
+        <RegistrationTab
+          reservationDetails={reservationDetails}
+          onRefresh={refreshReservation}
+          readOnly={!canWrite}
+        />
+      );
+    }
+    return <PartyTab reservationDetails={reservationDetails} />;
   }, [tab, reservationDetails, isEditMode, editedData, refreshReservation, canWrite]);
 
   const tabsBar = (
@@ -283,6 +287,7 @@ export function ReservationSejourPage() {
       <Tab label="Financier" />
       <Tab label="Messages" />
       <Tab label="Enregistrement" />
+      <Tab label="Espace voyageurs" />
     </Tabs>
   );
 
