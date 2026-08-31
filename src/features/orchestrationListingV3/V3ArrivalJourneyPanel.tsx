@@ -21,9 +21,8 @@ const MODE_STUBS: Record<string, { fr: string; en: string }> = {
 };
 
 const STEPS = [
-  { key: 'arrival_choose', label: 'Heure d’arrivée' },
   { key: 'registration', label: 'Pièces d’identité' },
-  { key: 'contract', label: 'Contrat digital' },
+  { key: 'contract', label: 'Contrats obligatoires' },
 ] as const;
 
 export function V3ArrivalJourneyPanel({ receptionMode }: Props) {
@@ -41,15 +40,16 @@ export function V3ArrivalJourneyPanel({ receptionMode }: Props) {
       </Box>
       <Box>
         <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 0.75 }}>
-          Étapes Check-In — obligatoire / optionnel (stub)
+          Enregistrement — pièces + contrats (pas l’heure)
         </Typography>
         {STEPS.map((step) => (
           <Typography key={step.key} sx={{ fontSize: 13, color: V3.t2, mb: 0.5 }}>
-            · {step.label} — statut lu depuis la config heure / enregistrement / contrat (V1)
+            · {step.label} — lu depuis la config Enregistrement / documents signables
           </Typography>
         ))}
         <Typography sx={{ fontSize: 12, color: V3.t3, mt: 1 }}>
-          Le message Parcours Arrivée (menu C) compose mode + étapes actives + fait / à faire.
+          L’heure d’arrivée est un statut à part (capability D1). L’enregistrement est complet
+          quand les pièces et les signatures obligatoires sont faites.
         </Typography>
       </Box>
     </Box>

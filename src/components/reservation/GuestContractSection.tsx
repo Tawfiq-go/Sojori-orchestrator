@@ -608,6 +608,7 @@ export function GuestContractSection({
   };
   return (
     <Box
+      id="enregistrement-contrats"
       sx={
         embedded
           ? { mt: 1, pt: 1, borderTop: `1px solid ${T.border}` }
