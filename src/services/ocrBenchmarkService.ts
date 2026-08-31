@@ -6,9 +6,11 @@ export type OcrDocumentType = 'passport' | 'national_id';
 export type OcrBenchmarkCategory =
   | 'production_baseline'
   | 'fast_candidate'
+  | 'balanced_candidate'
   | 'quality_candidate'
-  | 'experimental'
   | 'specialized_ocr';
+
+export type OcrBenchmarkCompareScope = 'standard' | 'all';
 
 export interface OcrBenchmarkProvider {
   provider: string;
@@ -18,6 +20,7 @@ export interface OcrBenchmarkProvider {
   category: OcrBenchmarkCategory;
   pricingAvailable: boolean;
   freeTierEligible?: boolean;
+  requiresPaidAccess?: boolean;
   description: string;
   credentialConfigured: boolean;
   credentialStatus: string;
@@ -129,6 +132,7 @@ export interface OcrBenchmarkSingleResponse {
 
 export interface OcrBenchmarkCompareResponse {
   mode: 'compare';
+  compareScope?: OcrBenchmarkCompareScope;
   metricScope: string;
   whatsappTimingNotice: string;
   roundTripMs: number;
@@ -200,9 +204,18 @@ export async function compareOcrModels(input: {
   reference?: OcrReferenceValues;
   clientStartedAt?: number;
   providers: OcrBenchmarkProvider[];
+  compareScope?: OcrBenchmarkCompareScope;
 }): Promise<OcrBenchmarkCompareResponse> {
   const clientStartedAt = input.clientStartedAt ?? Date.now();
-  const enabled = input.providers.filter((p) => p.enabled);
+  const compareScope = input.compareScope ?? 'standard';
+  const qualityIds = new Set(
+    input.providers.filter((p) => p.category === 'quality_candidate').map((p) => p.modelIds[0]),
+  );
+  const enabled = input.providers.filter((p) => {
+    if (!p.enabled) return false;
+    if (compareScope === 'standard' && qualityIds.has(p.modelIds[0])) return false;
+    return true;
+  });
   const results: OcrBenchmarkResult[] = [];
 
   for (const provider of enabled) {
@@ -220,6 +233,7 @@ export async function compareOcrModels(input: {
 
   return {
     mode: 'compare',
+    compareScope,
     metricScope: 'ocr_backend_core',
     whatsappTimingNotice: WHATSAPP_TIMING_NOTICE,
     roundTripMs: Date.now() - clientStartedAt,
@@ -255,7 +269,15 @@ export function formatBytes(n: number): string {
 export const CATEGORY_LABELS: Record<OcrBenchmarkCategory, string> = {
   production_baseline: 'Baseline prod.',
   fast_candidate: 'Rapide',
+  balanced_candidate: 'Équilibré',
   quality_candidate: 'Qualité',
-  experimental: 'Expérimental',
   specialized_ocr: 'OCR spécialisé',
 };
+
+export const CATEGORY_ORDER: OcrBenchmarkCategory[] = [
+  'production_baseline',
+  'fast_candidate',
+  'balanced_candidate',
+  'quality_candidate',
+  'specialized_ocr',
+];

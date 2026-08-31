@@ -9,6 +9,7 @@ import {
   Collapse,
   FormControl,
   InputLabel,
+  ListSubheader,
   MenuItem,
   Select,
   Stack,
@@ -30,11 +31,13 @@ import {
 } from '../../features/monitoring/shared/MonitorDesign';
 import {
   CATEGORY_LABELS,
+  CATEGORY_ORDER,
   compareOcrModels,
   fetchOcrBenchmarkProviders,
   fileToBase64,
   formatBytes,
   runOcrBenchmark,
+  type OcrBenchmarkCompareScope,
   type OcrBenchmarkProvider,
   type OcrBenchmarkResult,
   type OcrBenchmarkRunMetrics,
@@ -100,6 +103,7 @@ function formatProviderLabel(provider: string): string {
     openai: 'OpenAI',
     gemini: 'Gemini',
     deepseek: 'DeepSeek',
+    mistral: 'Mistral',
     production_chain: 'Production',
     gcloud_vision: 'Google Cloud Vision',
   };
@@ -642,7 +646,7 @@ export default function OcrBenchmarkTab() {
     }
   };
 
-  const runCompare = async () => {
+  const runCompare = async (compareScope: OcrBenchmarkCompareScope = 'standard') => {
     if (!imageBase64) {
       setRunError('Chargez une image de document');
       return;
@@ -659,6 +663,7 @@ export default function OcrBenchmarkTab() {
         runCount,
         reference,
         providers,
+        compareScope,
       });
       const runs: Record<string, SessionRun> = {};
       for (const row of res.results) {
@@ -684,6 +689,15 @@ export default function OcrBenchmarkTab() {
     id: string;
     manualStats: ReturnType<typeof computeReviewStats>;
   };
+
+  const groupedProviders = useMemo(() => {
+    const groups = new Map<string, OcrBenchmarkProvider[]>();
+    for (const cat of CATEGORY_ORDER) {
+      const rows = providers.filter((p) => p.category === cat);
+      if (rows.length) groups.set(cat, rows);
+    }
+    return groups;
+  }, [providers]);
 
   const comparisonRows: ComparisonRow[] = useMemo(() => {
     const rows = compareResults.map((r, idx) => ({
@@ -838,12 +852,20 @@ export default function OcrBenchmarkTab() {
                     value={modelId}
                     onChange={(e) => setModelId(String(e.target.value))}
                   >
-                    {providers.map((p) => (
-                      <MenuItem key={p.modelIds[0]} value={p.modelIds[0]} disabled={!p.enabled}>
-                        {p.displayName}
-                        {!p.enabled ? ` (${p.credentialStatus})` : ''}
-                      </MenuItem>
-                    ))}
+                    {[...groupedProviders.entries()].map(([category, rows]) => [
+                      <ListSubheader key={`hdr-${category}`} sx={{ fontSize: 11, fontWeight: 700, lineHeight: 2 }}>
+                        {CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS]}
+                      </ListSubheader>,
+                      ...rows.map((p) => (
+                        <MenuItem key={p.modelIds[0]} value={p.modelIds[0]} disabled={!p.enabled}>
+                          {p.displayName}
+                          <Typography component="span" sx={{ fontSize: 10, color: t.text3, ml: 0.75 }}>
+                            ({p.model})
+                          </Typography>
+                          {!p.enabled ? ` — ${p.credentialStatus}` : ''}
+                        </MenuItem>
+                      )),
+                    ])}
                   </Select>
                 </FormControl>
               )}
@@ -857,9 +879,13 @@ export default function OcrBenchmarkTab() {
                     {selectedProvider.freeTierEligible ? (
                       <Badge variant="neutral">Free tier disponible</Badge>
                     ) : null}
+                    {selectedProvider.requiresPaidAccess ? (
+                      <Badge variant="warning">Accès payant / quota requis</Badge>
+                    ) : null}
                   </Stack>
                   <Typography sx={{ fontSize: 11, color: t.text3 }}>
-                    {CATEGORY_LABELS[selectedProvider.category]} · {selectedProvider.description}
+                    {CATEGORY_LABELS[selectedProvider.category]} · {selectedProvider.model} ·{' '}
+                    {selectedProvider.description}
                   </Typography>
                 </Stack>
               ) : null}
@@ -889,8 +915,11 @@ export default function OcrBenchmarkTab() {
                 <Button sx={btnPrimarySx} onClick={() => void runAnalyze()} disabled={running}>
                   {running ? '…' : 'Analyser'}
                 </Button>
-                <Button sx={btnGhostSx} onClick={() => void runCompare()} disabled={running}>
+                <Button sx={btnGhostSx} onClick={() => void runCompare('standard')} disabled={running}>
                   Comparer les modèles
+                </Button>
+                <Button sx={btnGhostSx} onClick={() => void runCompare('all')} disabled={running}>
+                  Comparer tous les modèles
                 </Button>
               </Stack>
             </Stack>
