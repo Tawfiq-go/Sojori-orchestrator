@@ -132,6 +132,21 @@ export function MaJourneeDashboard() {
             <span className="t">Départs</span>
             <span className="d">{model.departureDetail}</span>
           </button>
+          {/* Terrain : sans cloture du staff, ni l'heure d'arrivee ni l'etat
+              du logement ne remontent — le filet de rattrapage reste inerte. */}
+          <button
+            type="button"
+            className={`num clickable${
+              model.staffTotal && model.staffDone < model.staffTotal ? ' bad' : ''
+            }`}
+            onClick={() => navigate('/tasks?due=today')}
+          >
+            <span className="n">
+              {model.staffTotal ? `${model.staffDone}/${model.staffTotal}` : '—'}
+            </span>
+            <span className="t">Terrain clôturé</span>
+            <span className="d">{model.staffDetail}</span>
+          </button>
           <button
             type="button"
             className="num clickable"
