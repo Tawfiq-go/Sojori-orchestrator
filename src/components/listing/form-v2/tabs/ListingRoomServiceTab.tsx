@@ -35,7 +35,9 @@ const DEFAULT_BREAKFAST: RoomServiceBreakfastConfig = {
   start: 'j_plus_1',
   endInclusive: false,
   includedServiceIds: [],
-  defaultTime: '08:00',
+  defaultTime: '09:00',
+  timeWindow: { from: '07:00', to: '11:00' },
+  timeMode: 'shared',
   guestMustSelectDays: true,
 };
 
@@ -125,7 +127,7 @@ export default function ListingRoomServiceTab({
     return (
       <Box sx={{ p: 2 }}>
         <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-          Enregistrez d’abord le listing pour activer le Room Service.
+          Enregistrez d’abord le listing pour activer le petit déjeuner inclus.
         </Typography>
       </Box>
     );
@@ -147,11 +149,11 @@ export default function ListingRoomServiceTab({
         LISTING
       </Typography>
       <Typography sx={{ fontSize: 22, fontWeight: 750, mb: 0.75, lineHeight: 1.2 }}>
-        Room Service
+        Petit Déjeuner Inclus
       </Typography>
       <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 2, lineHeight: 1.5 }}>
-        Petit déjeuner inclus (cycle staff hôtel) + catalogue plats. Les commandes
-        créent des tâches staff (lettre R), pas provider.
+        Formules PDJ incluses pour le guest WhatsApp + configuration des jours et horaires.
+        Les commandes créent des tâches staff (lettre R).
       </Typography>
 
       <Box
@@ -243,11 +245,55 @@ export default function ListingRoomServiceTab({
 
           <TextField
             size="small"
-            label="Heure cible"
-            value={breakfast.defaultTime || '08:00'}
+            label="Heure par défaut"
+            value={breakfast.defaultTime || '09:00'}
             onChange={(e) => setBreakfast((p) => ({ ...p, defaultTime: e.target.value }))}
-            placeholder="08:00"
+            placeholder="09:00"
           />
+
+          <TextField
+            size="small"
+            label="Heure min (7h–11h)"
+            value={breakfast.timeWindow?.from || '07:00'}
+            onChange={(e) =>
+              setBreakfast((p) => ({
+                ...p,
+                timeWindow: { from: e.target.value, to: p.timeWindow?.to || '11:00' },
+              }))
+            }
+            placeholder="07:00"
+          />
+
+          <TextField
+            size="small"
+            label="Heure max (7h–11h)"
+            value={breakfast.timeWindow?.to || '11:00'}
+            onChange={(e) =>
+              setBreakfast((p) => ({
+                ...p,
+                timeWindow: { from: p.timeWindow?.from || '07:00', to: e.target.value },
+              }))
+            }
+            placeholder="11:00"
+          />
+
+          <FormControl size="small" fullWidth>
+            <InputLabel id="rs-time-mode">Mode heure guest</InputLabel>
+            <Select
+              labelId="rs-time-mode"
+              label="Mode heure guest"
+              value={breakfast.timeMode || 'shared'}
+              onChange={(e) =>
+                setBreakfast((p) => ({
+                  ...p,
+                  timeMode: e.target.value as RoomServiceBreakfastConfig['timeMode'],
+                }))
+              }
+            >
+              <MenuItem value="shared">Même heure pour toute la commande (écran confirmation)</MenuItem>
+              <MenuItem value="per_traveler">Heure par jour (écran sélection)</MenuItem>
+            </Select>
+          </FormControl>
         </Box>
 
         <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 2, mb: 0.5 }}>
