@@ -28,7 +28,7 @@ type Props = {
    * Filtre catalogue : expériences J3 (hors transport/room_service),
    * ou plats Room Service uniquement.
    */
-  kindFilter?: 'experience' | 'room_service';
+  kindFilter?: 'experience' | 'room_service' | 'villa_experience';
 };
 
 function money(n: number) {
@@ -69,7 +69,8 @@ export function ListingExperiencesPicker({
       const byKind = list.filter((r) => {
         const k = r.kind || 'experience';
         if (kindFilter === 'room_service') return k === 'room_service';
-        return k !== 'room_service' && k !== 'transport';
+        if (kindFilter === 'villa_experience') return k === 'villa_experience';
+        return k !== 'room_service' && k !== 'transport' && k !== 'villa_experience';
       });
       setRows(byKind);
       const kindIdSet = new Set(byKind.map((r) => String(r.id)));
@@ -167,9 +168,13 @@ export function ListingExperiencesPicker({
           ? n > 1
             ? 'plats Room Service'
             : 'plat Room Service'
-          : n > 1
-            ? 'expériences'
-            : 'expérience';
+          : kindFilter === 'villa_experience'
+            ? n > 1
+              ? 'ambiances en villa'
+              : 'ambiance en villa'
+            : n > 1
+              ? 'expériences'
+              : 'expérience';
       toast.success(
         n ? `${n} ${noun} actif${n > 1 ? 's' : ''} sur ce listing` : `Aucun ${noun} actif sur ce listing`,
       );
