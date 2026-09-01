@@ -520,7 +520,8 @@ function configHints(cap: CapDoc, key: string): string[] {
         ? g.TS_CLEAN
         : [];
     if (key === 'cleaning_free' && g.includedAlways === true) {
-      hints.push('Always · chaque jour');
+      const n = Math.max(1, Number((ops.included as { everyNDays?: number } | undefined)?.everyNDays) || 1)
+      hints.push(n >= 2 ? 'Cadence · jours alternés' : 'Cadence · tous les jours');
     } else if (key === 'cleaning_free' && freq.length) {
       hints.push(`${freq.length} palier${freq.length > 1 ? 's' : ''}`);
     }

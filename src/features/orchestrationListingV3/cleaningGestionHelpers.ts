@@ -8,6 +8,7 @@ import {
 
 export type CleaningIncludedGestion = {
   always: boolean
+  everyNDays: number
   frequency: FrequencyTier[];
   timeSlots: TimeSlot[];
   descriptionFr: string;
@@ -40,13 +41,15 @@ export function parseCleaningIncludedGestion(
     hasGestionExtras ? g.extras : listingValues.includedCleaningExtras
   ) as IncludedCleaningExtra[] | undefined;
 
-  const ops = g.menageOps as { included?: { always?: boolean } } | undefined
-  const listingOps = listingValues.menageOps as { included?: { always?: boolean } } | undefined
+  const ops = g.menageOps as { included?: { always?: boolean; everyNDays?: number } } | undefined
+  const listingOps = listingValues.menageOps as { included?: { always?: boolean; everyNDays?: number } } | undefined
   const always =
     g.includedAlways === true || ops?.included?.always === true || listingOps?.included?.always === true
+  const rawEvery = Number(g.everyNDays ?? ops?.included?.everyNDays ?? listingOps?.included?.everyNDays)
 
   return {
     always,
+    everyNDays: Number.isFinite(rawEvery) && rawEvery >= 1 ? Math.round(rawEvery) : 1,
     frequency:
       Array.isArray(rawFreq) && rawFreq.length > 0
         ? rawFreq.map(normalizeTier)
@@ -66,6 +69,7 @@ export function cleaningIncludedToGestion(state: CleaningIncludedGestion): Recor
   const slots = state.timeSlots.map(normalizeIncludedCleaningSlot);
   return {
     includedAlways: state.always,
+    everyNDays: state.everyNDays,
     frequency: state.frequency,
     timeSlots: slots,
     TS_CLEAN: slots,
