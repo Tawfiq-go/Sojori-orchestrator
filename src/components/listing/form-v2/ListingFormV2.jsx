@@ -23,6 +23,7 @@ import { DistributionTab, DirectBookingTab, RoomsTab, LicenseTab } from './tabs/
 import { RuImportDataTab } from './tabs/DetailTabsRuImport';
 import PostImportOnboardingTab from './tabs/PostImportOnboardingTab';
 import ListingExperiencesTab from './tabs/ListingExperiencesTab';
+import ListingAmbiancesTab from './tabs/ListingAmbiancesTab';
 import ListingMenageTab from './tabs/ListingMenageTab';
 import ListingDocumentsTab from './tabs/ListingDocumentsTab';
 import ListingRoomServiceTab from './tabs/ListingRoomServiceTab';
@@ -239,6 +240,15 @@ export default function ListingFormV2({
       if (tabKey === 'experiences') {
         return (
           <ListingExperiencesTab
+            listingId={listingId}
+            listingCityId={values.cityId}
+            listingOwnerId={values.ownerId}
+          />
+        );
+      }
+      if (tabKey === 'ambiances') {
+        return (
+          <ListingAmbiancesTab
             listingId={listingId}
             listingCityId={values.cityId}
             listingOwnerId={values.ownerId}
