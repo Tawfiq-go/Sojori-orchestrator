@@ -51,6 +51,14 @@ const authService = {
    * Connexion mock.
    * Toute combinaison email/password est acceptée pour accélérer les démos.
    */
+  /**
+   * Le mock n'émet jamais de défi 2FA : présent pour respecter le contrat du
+   * service réel, et échouer clairement si un test l'appelle par erreur.
+   */
+  async verifyMfa(_challengeToken: string, _code: string): Promise<AuthResponse> {
+    throw new Error("Le mode mock n'implémente pas la double authentification.");
+  },
+
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const email = credentials.email.trim().toLowerCase();
     const password = credentials.password.trim();

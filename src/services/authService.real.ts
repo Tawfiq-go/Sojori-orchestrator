@@ -38,6 +38,25 @@ export interface AuthResponse {
   user: User;
 }
 
+/**
+ * Réponse de `/login` quand le compte a un second facteur actif.
+ *
+ * Aucun token n'est délivré à cette étape : `challengeToken` atteste seulement
+ * que le mot de passe est franchi, et n'ouvre que `/login/verify-mfa`.
+ * La méthode est imposée par le serveur — le client ne la choisit pas.
+ */
+export interface MfaChallengeResponse {
+  mfaRequired: true;
+  method: 'totp' | 'whatsapp';
+  challengeToken: string;
+}
+
+export type LoginResult = AuthResponse | MfaChallengeResponse;
+
+export function isMfaChallenge(r: LoginResult): r is MfaChallengeResponse {
+  return (r as MfaChallengeResponse)?.mfaRequired === true;
+}
+
 export interface ValidateTokenResponse {
   success: boolean;
   newToken?: string;
@@ -111,7 +130,47 @@ const authService = {
   /**
    * Connexion RÉELLE (toujours, même depuis localhost)
    */
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
+  /**
+   * Deuxième étape du login : échange le code contre une vraie session.
+   *
+   * Accepte le code TOTP comme un code de secours — le serveur essaie les deux,
+   * l'utilisateur n'a pas à préciser lequel il saisit.
+   */
+  async verifyMfa(challengeToken: string, code: string): Promise<AuthResponse> {
+    try {
+      const response = await apiClient.post(AUTH_CONFIG.API_URL + '/login/verify-mfa', {
+        challengeToken,
+        code: String(code).trim(),
+      });
+
+      const { token, refreshToken, user } = response.data;
+      if (!token || !user) {
+        throw new Error('Réponse invalide du serveur');
+      }
+
+      setTokens(token, refreshToken);
+      return { token, refreshToken, user };
+    } catch (error: any) {
+      const data = error?.response?.data;
+      if (data?.error === 'too_many_attempts') {
+        throw new Error('Trop de tentatives. Reconnectez-vous pour obtenir un nouveau code.');
+      }
+      if (data?.error === 'invalid_or_expired_challenge') {
+        throw new Error('Session expirée. Reconnectez-vous.');
+      }
+      if (data?.error === 'invalid_code') {
+        const left = data?.attemptsLeft;
+        throw new Error(
+          typeof left === 'number' && left > 0
+            ? `Code incorrect. ${left} tentative${left > 1 ? 's' : ''} restante${left > 1 ? 's' : ''}.`
+            : 'Code incorrect.',
+        );
+      }
+      throw new Error(data?.error || 'Vérification impossible.');
+    }
+  },
+
+  async login(credentials: LoginCredentials): Promise<LoginResult> {
     const { email, password, rememberMe } = credentials;
 
     if (!email || !password) {
@@ -134,6 +193,17 @@ const authService = {
         password: password.trim(),
         rememberMe: rememberMe || false,
       });
+
+      // Second facteur requis : pas de token à cette étape, l'appelant doit
+      // enchaîner sur verifyMfa(). Ne pas traiter ce cas ferait échouer le
+      // login sur « réponse invalide » alors que le mot de passe est correct.
+      if (response.data?.mfaRequired) {
+        return {
+          mfaRequired: true,
+          method: response.data.method || 'totp',
+          challengeToken: response.data.challengeToken,
+        };
+      }
 
       const { token, refreshToken, user } = response.data;
 
