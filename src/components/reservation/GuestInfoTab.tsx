@@ -164,20 +164,6 @@ const formatTime = (t: any) => {
   return s;
 };
 
-/** Emails proxy OTA (Airbnb/Booking via RU) — inutiles à afficher. */
-function isProxyGuestEmail(email: unknown): boolean {
-  const e = String(email || '').toLowerCase();
-  if (!e || !e.includes('@')) return true;
-  return (
-    e.includes('guest.airbnb') ||
-    e.includes('guests.quickconnect') ||
-    e.includes('@guest.booking') ||
-    e.includes('noreply') ||
-    e.includes('no-reply') ||
-    /@guests?\./i.test(e)
-  );
-}
-
 /** Nettoie notes OTA (&#xD;, entités HTML) et formate Key: value. */
 function cleanNotes(raw: unknown): string {
   let s = String(raw ?? '');
@@ -559,7 +545,6 @@ export function GuestInfoTab({
   };
 
   const members = Array.isArray(r.guestRegistration?.members) ? r.guestRegistration.members : [];
-  const showEmail = isEditMode || !isProxyGuestEmail(r.guestEmail);
   const notesRows = !isEditMode ? notesAsRows(r.notes) : null;
   const regTotal = Number(r.guestRegistration?.nbre_guest_to_register ?? r.adults ?? 0) || 0;
   const regDone = Number(r.guestRegistration?.nbre_guest_registered ?? 0) || 0;
@@ -574,10 +559,8 @@ export function GuestInfoTab({
         <Box>
           <SectionCard title="Voyageur">
             <EditableRow label="Nom" field="guestName" value={r.guestName || `${r.guestFirstName ?? ''} ${r.guestLastName ?? ''}`.trim()} {...rowProps} />
-            {showEmail ? (
-              <EditableRow label="Email" field="guestEmail" value={r.guestEmail} type="email" {...rowProps} />
-            ) : null}
-            <EditableRow label="Téléphone" field="phone" value={r.phone} type="tel" mono {...rowProps} />
+            <Row label="Email" value="Masqué" />
+            <Row label="Téléphone" value="Masqué" />
             <EditableRow label="Pays" field="guestCountry" value={r.guestCountry} {...rowProps} />
             {isEditMode ? (
               <>
