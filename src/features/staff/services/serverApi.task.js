@@ -693,15 +693,6 @@ export function updateOwnerWhatsappAiTier(ownerId, tier) {
   );
 }
 
-export function getOwnerRuLoginCredentials(ownerId) {
-  return axios
-    .get(`${MICROSERVICE_BASE_URL.SRV_USER}/user/owner/${encodeURIComponent(String(ownerId))}/ru-login-credentials`)
-    .then((r) => r.data)
-    .catch((e) => {
-      const msg = e?.response?.data?.error || e?.message || 'Request failed';
-      throw new Error(msg);
-    });
-}
 
 /**
  * Admin PM Config — objet séparé de Account/pmProfile : plafond des moyens de
