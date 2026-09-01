@@ -546,6 +546,8 @@ export function fullTaskToListItem(
     staffCode: staff?._id ? String(staff._id) : undefined,
     staffName: staff?.name || null,
     staffPhone: staff?.phone || null,
+    linkedItemNumber: payload.parentTaskCode ? String(payload.parentTaskCode) : null,
+    linkedItemId: payload.parentTaskId ? String(payload.parentTaskId) : null,
     descriptions: descriptionLine ? [{ description: descriptionLine }] : [],
     conciergeDetailLine,
     conciergeGroupingKey,
@@ -587,6 +589,76 @@ export function fullTaskToListItem(
     isClientRequest: task.status === 'waiting_guest',
     isClientConfirmed: task.status !== 'waiting_guest',
   };
+}
+
+/** Recouche cadence : une Task TU- → N lignes dashboard SR-XXXXXXXX (FdM, heure, durée). */
+export function stayLineTaskRef(id: string): { mongoId: string; lineId?: string } {
+  const raw = String(id ?? '').trim()
+  const m = /^(.+):(SR-[A-Z0-9]{8})$/.exec(raw)
+  if (m) return { mongoId: m[1], lineId: m[2] }
+  return { mongoId: raw }
+}
+
+export function explodeStaySeriesTasksForDashboard(
+  tasks: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  for (const t of tasks) {
+    const payload = (t.payload && typeof t.payload === 'object' ? t.payload : {}) as Record<
+      string,
+      unknown
+    >
+    const execs = payload.kind === 'stay_series' && Array.isArray(payload.executions)
+      ? payload.executions
+      : null
+    if (!execs) {
+      out.push(t)
+      continue
+    }
+    const parentId = String(t._id ?? '')
+    const parentCode = String(t.taskCode ?? '')
+    for (const raw of execs) {
+      if (!raw || typeof raw !== 'object') continue
+      const e = raw as Record<string, unknown>
+      if (String(e.status ?? '') === 'cancelled') continue
+      const date = String(e.date ?? '').slice(0, 10)
+      const roomId = String(e.roomId ?? '').trim()
+      const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(date)
+      if (!dateOk && !roomId) continue
+      const lineId = String(e.lineId ?? '').trim()
+      const startHour = Number(e.startHour)
+      const slotId = String(e.slotId ?? '')
+      const durationMin = Number(e.durationMin)
+      out.push({
+        ...t,
+        _id: lineId ? `${parentId}:${lineId}` : `${parentId}:${date || roomId}`,
+        taskCode: lineId || parentCode,
+        assignedTo: e.assignedTo || t.assignedTo,
+        roomId: roomId || t.roomId,
+        roomName: e.roomName || t.roomName,
+        status: e.status === 'waiting_guest' ? 'waiting_guest' : e.status || t.status,
+        scheduledDate: dateOk ? `${date}T00:00:00.000Z` : t.scheduledDate,
+        scheduledAt:
+          e.time ||
+          (Number.isFinite(startHour) ? `${startHour}:00` : t.scheduledAt),
+        payload: {
+          ...payload,
+          date,
+          slotId,
+          time: e.time,
+          startHour: Number.isFinite(startHour) ? startHour : undefined,
+          selectedTime: e.time,
+          stayLineId: lineId,
+          parentTaskCode: parentCode,
+          parentTaskId: parentId,
+          menageDurationMinutes: Number.isFinite(durationMin) && durationMin > 0
+            ? durationMin
+            : payload.menageDurationMinutes,
+        },
+      })
+    }
+  }
+  return out
 }
 
 /** Évite N jours × M fenêtres (doublons API) → payload géant au PATCH staff. */
