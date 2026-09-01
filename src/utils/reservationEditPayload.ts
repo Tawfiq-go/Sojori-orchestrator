@@ -33,12 +33,10 @@ export function buildReservationUpdatePayload(
   const children = Number(merged.children ?? 0);
   const infants = Number(merged.infants ?? 0);
 
-  return {
+  const payload: Record<string, unknown> = {
     guestName: merged.guestName,
     guestFirstName: merged.guestFirstName,
     guestLastName: merged.guestLastName,
-    guestEmail: merged.guestEmail,
-    phone: merged.phone,
     guestCountry: merged.guestCountry,
     guestLanguage: merged.guestLanguage,
     adults,
@@ -64,6 +62,11 @@ export function buildReservationUpdatePayload(
     comments: merged.comments,
     CreatedTasks: Array.isArray(merged.CreatedTasks) ? merged.CreatedTasks : [],
   };
+  const email = String(merged.guestEmail || '').trim();
+  const phone = String(merged.phone || '').trim();
+  if (email.includes('@') && !email.startsWith('enc:v1:')) payload.guestEmail = email;
+  if (phone.replace(/\D/g, '').length >= 6 && !phone.startsWith('enc:v1:')) payload.phone = phone;
+  return payload;
 }
 
 export function formatDateInputValue(date: unknown): string {

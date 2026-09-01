@@ -2824,7 +2824,9 @@ const UpdateOwnerSidebar = ({
               Les 2 mots de passe — {`${owner.firstName || ''} ${owner.lastName || ''}`.trim() || 'PM'}
             </div>
             <div className="owner-form-hint" style={{ marginBottom: 12 }}>
-              À gauche = Dashboard Sojori · À droite = Extranet R.U. (champs séparés en base)
+              Emails uniquement — les mots de passe ne sont plus affichés. Reset dashboard = lien
+              « mot de passe ». RU = champ dédié dans la fiche owner, jamais le mot de passe
+              dashboard.
             </div>
             {ruCredLoading ? <div>Chargement…</div> : null}
             {!ruCredLoading && ruCredError ? (
@@ -2857,7 +2859,13 @@ const UpdateOwnerSidebar = ({
                   </label>
                   <label className="field">
                     <span className="owner-form-hint">Mot de passe dashboard</span>
-                    <input className="input" readOnly value={ruCredData.sojoriPassword || '—'} />
+                    <input
+                      className="input"
+                      readOnly
+                      value={
+                        ruCredData.hasSojoriPassword ? 'Enregistré (non affiché)' : '—'
+                      }
+                    />
                   </label>
                 </div>
                 <div
@@ -2880,7 +2888,11 @@ const UpdateOwnerSidebar = ({
                     <input
                       className="input"
                       readOnly
-                      value={ruCredData.password || '(aucun ruPassword en base)'}
+                      value={
+                        ruCredData.hasRuPassword
+                          ? 'Enregistré (non affiché)'
+                          : '(aucun ruPassword en base)'
+                      }
                       style={{ fontWeight: 600 }}
                     />
                   </label>
