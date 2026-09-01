@@ -91,10 +91,13 @@ export default function V3MenageTypeCards({
     setCfg(next);
     setSaving(true);
     listingsService
-      .updateListingProperty(listingId, { menageOps: next })
+      .updateListingProperty(listingId, {
+        menageOps: next,
+        includedAlways: next.included.always === true,
+      })
       .then(() => {
         savedRef.current = next;
-        onListingPatch?.({ menageOps: next });
+        onListingPatch?.({ menageOps: next, includedAlways: next.included.always === true });
       })
       .catch((e: unknown) => {
         setCfg(prev);
@@ -105,6 +108,20 @@ export default function V3MenageTypeCards({
 
   const tiers = parseFrequencyTiers(listingValues.frequency);
   const flex = cfg.flexibility;
+  const cadenceAlways = cfg.included.always === true;
+  const cadenceEvery = Math.max(1, Number(cfg.included.everyNDays) || 1);
+  const recoucheBadge = !cfg.included.enabled
+    ? { label: 'Off', tone: 'or' as const }
+    : cadenceAlways && cadenceEvery >= 2
+      ? { label: 'Incluse · jours alternés', tone: 'teal' as const }
+      : cadenceAlways
+        ? { label: 'Incluse · tous les jours', tone: 'teal' as const }
+        : { label: 'Incluse · paliers', tone: 'teal' as const };
+  const recoucheSubtitle = cadenceAlways
+    ? cadenceEvery >= 2
+      ? 'Un passage un jour sur deux pendant le séjour · hors arrivée / départ · le guest choisit l’heure'
+      : 'Un passage chaque jour pendant le séjour · hors arrivée / départ · le guest choisit l’heure'
+    : 'Proposée par l’occupation · paliers selon la durée du séjour · au-delà du quota : payante';
 
   return (
     <Stack sx={{ gap: 1.5 }}>
@@ -118,14 +135,63 @@ export default function V3MenageTypeCards({
       <TypeCard
         emoji="🧹"
         title="Recouche · pendant le séjour"
-        subtitle="Proposée par l'occupation · paliers selon la durée du séjour · au-delà du quota : payante"
-        badges={[{ label: 'Incluse · paliers', tone: 'teal' }]}
+        subtitle={recoucheSubtitle}
+        badges={[recoucheBadge]}
         enabled={cfg.included.enabled}
         onToggle={v => commit(c => ({ ...c, included: { ...c.included, enabled: v } }))}
         expanded={expanded.recouche === true}
         onExpand={() => setExpanded(e => ({ ...e, recouche: !e.recouche }))}
         accent
       >
+        {/* Cadence */}
+        <Section
+          label="Cadence pendant le séjour"
+          caption="Tous les jours, jours alternés, ou paliers selon la durée. Hors jour d’arrivée et de départ."
+        >
+          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+            {(
+              [
+                { id: 'daily', label: 'Tous les jours' },
+                { id: 'alt', label: 'Jours alternés' },
+                { id: 'tiers', label: 'Paliers' },
+              ] as const
+            ).map(opt => {
+              const active =
+                opt.id === 'tiers'
+                  ? !cadenceAlways
+                  : cadenceAlways && (opt.id === 'alt' ? cadenceEvery >= 2 : cadenceEvery <= 1);
+              return (
+                <Box
+                  key={opt.id}
+                  onClick={() =>
+                    commit(c => ({
+                      ...c,
+                      included: {
+                        ...c.included,
+                        always: opt.id !== 'tiers',
+                        everyNDays: opt.id === 'alt' ? 2 : 1,
+                      },
+                    }))
+                  }
+                  sx={{
+                    px: 1.25,
+                    py: 0.6,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    border: `1px solid ${active ? V3.p : V3.b}`,
+                    bgcolor: active ? V3.pt : '#fff',
+                    color: active ? V3.pd : V3.t2,
+                  }}
+                >
+                  {opt.label}
+                </Box>
+              );
+            })}
+          </Box>
+        </Section>
+
         {/* Durée & crédits */}
         <Section label="Durée & crédits par niveau" caption="1 crédit = 1 minute · alimente le barème">
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25 }}>
@@ -154,8 +220,16 @@ export default function V3MenageTypeCards({
           </Box>
         </Section>
 
-        {/* Facturation */}
-        <Section label="Facturation — la frontière inclus / payant">
+        {/* Facturation — paliers (masqués en cadence tous les jours / alternés) */}
+        <Section
+          label="Facturation — la frontière inclus / payant"
+          caption={
+            cadenceAlways
+              ? 'Paliers inactifs : la cadence ci-dessus fixe les jours de passage.'
+              : undefined
+          }
+        >
+          <Box sx={{ opacity: cadenceAlways ? 0.45 : 1, pointerEvents: cadenceAlways ? 'none' : 'auto' }}>
           {tiers.length > 0 ? (
             <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: '10px', overflow: 'hidden' }}>
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, px: 1.25, py: 0.75, bgcolor: V3.alt }}>
@@ -191,6 +265,7 @@ export default function V3MenageTypeCards({
               Paliers configurés dans Orchestration (Ménage inclus · paliers &amp; créneaux).
             </Typography>
           )}
+          </Box>
 
           <Stack direction="row" sx={{ gap: 2, flexWrap: 'wrap', mt: 1.25 }}>
             {(['towels', 'sheets'] as const).map(opt => (
