@@ -181,6 +181,10 @@ export type MaJourneeModel = {
   messages: MsgRow[];
   arrivalDetail: string;
   departureDetail: string;
+  /** Accueils et menages du jour clotures par le staff, sur le total attendu. */
+  staffDone: number;
+  staffTotal: number;
+  staffDetail: string;
 };
 
 const EMPTY: MaJourneeModel = {
@@ -196,6 +200,9 @@ const EMPTY: MaJourneeModel = {
   messages: [],
   arrivalDetail: 'Rien à signaler',
   departureDetail: 'Aucun départ',
+  staffDone: 0,
+  staffTotal: 0,
+  staffDetail: 'Rien à clôturer',
 };
 
 function reservationKeysOf(r: Reservation): string[] {
@@ -245,8 +252,12 @@ function mapArrival(r: Reservation, cleanMap: Map<string, string>): StayRow {
           : `Attendu · ${plannedLabel}?`
         : 'Attendu · heure ?',
     });
-    if (!hourOk) {
-      checks.push({ cls: 'no', text: 'Heure à confirmer' });
+    // Pas de second marqueur quand l'heure manque : « Attendu · heure ? »
+    // le dit deja. Le repeter sur chaque ligne — les voyageurs ne declarent
+    // pas encore leur heure — noyait la page sous un bruit constant, au
+    // point qu'une heure REELLEMENT declaree passerait inapercue.
+    if (hourOk) {
+      checks.push({ cls: 'ok', text: '✓ Heure déclarée' });
     }
   }
 
@@ -297,9 +308,14 @@ function mapDeparture(r: Reservation, cleanMap: Map<string, string>): StayRow {
     checks: [
       { cls: left ? 'done' : 'no', text: left ? 'Parti' : 'Pas encore parti' },
       {
-        cls: clean === 'clean' ? 'ok' : clean === 'dirty' ? 'bad' : 'no',
-        text:
-          clean === 'clean'
+        // Tant que le voyageur est la, l'etat « clean » est celui du menage
+        // PRECEDENT : afficher « Menage fait » laissait croire que la
+        // remise en etat du depart etait deja faite, alors qu'elle ne peut
+        // pas avoir commence.
+        cls: !left ? 'no' : clean === 'clean' ? 'ok' : clean === 'dirty' ? 'bad' : 'no',
+        text: !left
+          ? 'Ménage après départ'
+          : clean === 'clean'
             ? '✓ Ménage fait'
             : clean === 'dirty'
               ? 'Ménage à faire'
@@ -621,22 +637,30 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
         if (!isArrived && a.timeTbd) hourTbd += 1;
         if (a.checks.some((c) => c.cls === 'bad')) dirty += 1;
       }
+      // En location courte duree il n'y a pas de reception : cet ecran EST
+      // le filet qui rattrape les oublis. Ce qui manque passe donc devant —
+      // « 5 sans heure » se lit comme une action, « 5 attendus » comme un
+      // simple constat.
       const arrivalDetail = [
+        dirty ? `⚠ ${dirty} logement${dirty > 1 ? 's' : ''} pas prêt${dirty > 1 ? 's' : ''}` : null,
+        hourTbd ? `${hourTbd} sans heure déclarée` : null,
         attendu ? `${attendu} attendu${attendu > 1 ? 's' : ''}` : null,
         arrived ? `${arrived} arrivé${arrived > 1 ? 's' : ''}` : null,
         ready ? `${ready} prête${ready > 1 ? 's' : ''}` : null,
-        hourTbd ? `${hourTbd} heure à confirmer` : null,
-        dirty ? `${dirty} logement${dirty > 1 ? 's' : ''} sale${dirty > 1 ? 's' : ''}` : null,
       ]
         .filter(Boolean)
         .join(' · ') || (arrivals.length ? 'En cours' : 'Rien à signaler');
 
       const left = departures.filter((d) => d.checks.some((c) => c.text === 'Parti')).length;
       const pending = Math.max(0, departures.length - left);
+      // Un depart non constate apres l'heure de sortie bloque le menage, donc
+      // l'arrivee suivante : c'est l'oubli le plus couteux de la journee.
       const departureDetail =
         departures.length === 0
           ? 'Aucun départ'
-          : `${left} parti${left > 1 ? 's' : ''} · ${pending} pas encore`;
+          : pending
+            ? `⚠ ${pending} départ${pending > 1 ? 's' : ''} à constater${left ? ` · ${left} parti${left > 1 ? 's' : ''}` : ''}`
+            : `${left} parti${left > 1 ? 's' : ''}`;
 
       const created = createdRes?.data || [];
       const chans = new Set<string>();
@@ -657,6 +681,39 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
       }
 
       const taskList = taskListEarly;
+
+      /**
+       * Cloture des tâches terrain du jour.
+       *
+       * En location courte duree il n'y a pas de reception : c'est le clic
+       * « Fin accueil » du staff qui declare l'arrivee quand le voyageur ne
+       * l'a pas fait. Sans cloture, ni l'heure ni l'etat du logement ne
+       * remontent — et le filet de rattrapage reste inerte.
+       */
+      const FIELD_TYPES = ['receive_arrival', 'receive_departure', 'checkout_cleaning'];
+      let staffDone = 0;
+      let staffTotal = 0;
+      let staffDoing = 0;
+      for (const t of taskList) {
+        const type = String((t as { type?: unknown }).type || '');
+        if (!FIELD_TYPES.includes(type)) continue;
+        if (!taskOnDay(t, date)) continue;
+        const st = String((t as { status?: unknown }).status || '');
+        if (st === 'cancelled') continue;
+        staffTotal += 1;
+        if (st === 'done') staffDone += 1;
+        else if (st === 'doing') staffDoing += 1;
+      }
+      const staffDetail = !staffTotal
+        ? 'Rien à clôturer'
+        : staffDone === staffTotal
+          ? 'Tout est clôturé'
+          : [
+              staffDoing ? `${staffDoing} commencée${staffDoing > 1 ? 's' : ''}` : null,
+              `⚠ ${staffTotal - staffDone} à clôturer`,
+            ]
+              .filter(Boolean)
+              .join(' · ');
 
       const experiences: ExpRow[] = taskList
         .filter((t) => isExperienceTask(t) && taskOnDay(t, date))
@@ -773,6 +830,9 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
         messages: messagesForDay,
         arrivalDetail,
         departureDetail,
+        staffDone,
+        staffTotal,
+        staffDetail,
       });
     } finally {
       setLoading(false);
