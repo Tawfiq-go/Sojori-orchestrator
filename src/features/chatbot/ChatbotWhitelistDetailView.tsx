@@ -252,7 +252,9 @@ export default function ChatbotWhitelistDetailView() {
                       </span>
                     </div>
                     <div className="meta">
-                      <b>{String(wl.reservationCode ?? '—')}</b> · {String(wl.phoneOta ?? '—')}
+                      <b>{String(wl.reservationCode ?? '—')}</b>
+                      {' · '}
+                      contact masqué
                     </div>
                     <Box sx={{ mt: 0.75 }}>
                       <WhitelistLanguageCell

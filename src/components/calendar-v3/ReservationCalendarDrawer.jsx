@@ -124,7 +124,6 @@ export default function ReservationCalendarDrawer({ reservation, onClose }) {
   const roomLabel = [reservation.roomName, reservation.roomTypeName, reservation.roomTypes?.roomTypeName]
     .filter(Boolean)
     .join(' · ');
-  const phone = reservation.guestPhone || reservation.phone;
   const status = reservation.status || '—';
 
   const openFullPage = () => {
@@ -254,12 +253,10 @@ export default function ReservationCalendarDrawer({ reservation, onClose }) {
             </Section>
           ) : null}
 
-          {(phone || reservation.guestEmail) && (
-            <Section title="Contact">
-              {phone ? <Line name="Téléphone" value={phone} /> : null}
-              {reservation.guestEmail ? <Line name="Email" value={reservation.guestEmail} /> : null}
-            </Section>
-          )}
+          <Section title="Contact">
+            <Line name="Téléphone" value="Masqué" />
+            <Line name="Email" value="Masqué" />
+          </Section>
 
           {notes ? (
             <Section title="Notes">
