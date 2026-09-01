@@ -28,6 +28,9 @@ export type MenageTrackWithOptions = MenageTrackConfig & {
   /** Par passage (défaut) ou forfait mensuel */
   pricingMode: 'per_passage' | 'monthly_forfait';
   monthlyForfaitAmount: number;
+  /** Recouche cadence — true = tous les N jours (hors arrivée / départ). */
+  always?: boolean;
+  everyNDays?: number;
 };
 
 export type MenageCheckoutConfig = MenageTrackConfig & {
@@ -143,6 +146,7 @@ export function normalizeMenageOps(raw: unknown): MenageOpsConfig {
       return { enabled: bool(z.enabled, f.enabled), price: Math.max(0, num(z.price, f.price)) };
     };
     const fbOpts = fb.options ?? { towels: optionOff(), sheets: optionOff() };
+    const fbTrack = fb as MenageTrackWithOptions;
     return {
       enabled: bool(t.enabled, fb.enabled),
       defaultLevel: t.defaultLevel === 'grand' ? 'grand' : 'normal',
@@ -154,6 +158,8 @@ export function normalizeMenageOps(raw: unknown): MenageOpsConfig {
       },
       pricingMode: t.pricingMode === 'monthly_forfait' ? 'monthly_forfait' : 'per_passage',
       monthlyForfaitAmount: Math.max(0, num(t.monthlyForfaitAmount, fb.monthlyForfaitAmount ?? 0)),
+      always: bool(t.always, fbTrack.always === true),
+      everyNDays: Math.max(1, Math.round(num(t.everyNDays, fbTrack.everyNDays ?? 1))),
     };
   };
 

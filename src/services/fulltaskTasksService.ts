@@ -1,7 +1,7 @@
 import listingsService from './listingsService';
 import * as fulltaskApi from './fulltaskApi';
 import reservationsService from './reservationsService';
-import { LEGACY_TO_FULLTASK_STATUS, fullTaskToListItem } from '../utils/fulltaskMappers';
+import { LEGACY_TO_FULLTASK_STATUS, explodeStaySeriesTasksForDashboard, fullTaskToListItem, stayLineTaskRef } from '../utils/fulltaskMappers';
 import type { ReservationMetaLike } from '../utils/fulltaskMappers';
 import type { TaskFulltaskUpdatePayload, TaskListItem, TasksSearchParams } from '../types/tasks.types';
 import { toLegacyAuthUser } from '../utils/legacyAuthUser';
@@ -76,7 +76,13 @@ class FulltaskTasksService {
       }
     }
 
-    return fullTaskToListItem(raw, staffById, listingById, reservationMeta);
+    const payload = (raw.payload || {}) as Record<string, unknown>;
+    const mappedRaw =
+      payload.stayLineId || payload.kind !== 'stay_series'
+        ? raw
+        : explodeStaySeriesTasksForDashboard([raw])[0] ?? raw;
+
+    return fullTaskToListItem(mappedRaw, staffById, listingById, reservationMeta);
   }
 
   async fetchTaskListItem(
@@ -221,7 +227,7 @@ class FulltaskTasksService {
       );
     }
 
-    let rows = rawTasks.map((t: Record<string, unknown>) => {
+    let rows = explodeStaySeriesTasksForDashboard(rawTasks).map((t: Record<string, unknown>) => {
       const resId = t.reservationId ? String(t.reservationId) : '';
       const payload = (t.payload || {}) as Record<string, unknown>;
       const fromPayload: ReservationMetaLike | undefined =
@@ -290,9 +296,13 @@ class FulltaskTasksService {
   }
 
   async getTaskById(taskId: string) {
-    const res = await fulltaskApi.getTask(taskId);
+    const { mongoId, lineId } = stayLineTaskRef(taskId);
+    const res = await fulltaskApi.getTask(mongoId);
     if (res?.success === false) throw new Error(res?.error || 'Tâche introuvable');
-    return res?.data as Record<string, unknown>;
+    const raw = res?.data as Record<string, unknown>;
+    if (!lineId) return raw;
+    const exploded = explodeStaySeriesTasksForDashboard([raw]);
+    return exploded.find((t) => String(t.taskCode) === lineId) ?? exploded[0] ?? raw;
   }
 
   async updateTask(
@@ -303,11 +313,12 @@ class FulltaskTasksService {
       listingById?: Record<string, string>;
     },
   ): Promise<TaskListItem | null> {
+    const { mongoId, lineId } = stayLineTaskRef(taskId);
     const { status: legacyStatus, ...fields } = body;
     let latestRaw: Record<string, unknown> | null = null;
 
     if (legacyStatus) {
-      latestRaw = await this.applyLegacyStatusChange(taskId, legacyStatus);
+      latestRaw = await this.applyLegacyStatusChange(mongoId, legacyStatus);
     }
 
     const fieldPatch: Record<string, unknown> = {};
@@ -319,12 +330,16 @@ class FulltaskTasksService {
     if (fields.priority !== undefined) fieldPatch.priority = fields.priority;
 
     if (Object.keys(fieldPatch).length > 0) {
-      const res = await fulltaskApi.patchTask(taskId, fieldPatch);
+      const res = await fulltaskApi.patchTask(mongoId, fieldPatch);
       if (res?.success === false) throw new Error(res?.error || 'Mise à jour refusée');
       if (res?.data) latestRaw = res.data as Record<string, unknown>;
     }
 
     if (!latestRaw) return null;
+    if (lineId) {
+      const exploded = explodeStaySeriesTasksForDashboard([latestRaw]);
+      latestRaw = exploded.find((t) => String(t.taskCode) === lineId) ?? exploded[0] ?? latestRaw;
+    }
     return this.mapRawTaskToListItem(latestRaw, caches);
   }
 

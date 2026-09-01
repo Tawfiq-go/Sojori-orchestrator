@@ -127,19 +127,27 @@ export default function V3CleaningIncludedPanel({
   return (
     <Box sx={{ width: '100%', maxWidth: 'none' }}>
       <Box sx={{ ...sectionSx, mb: 2, p: 2 }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t }}>Always</Typography>
+        <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t }}>Cadence Recouche</Typography>
         <Typography sx={{ fontSize: 11, color: V3.t3, mb: 1 }}>
-          Hôtel : un ménage séjour chaque jour (hors arrivée / départ). Aucun palier. Appartement :
-          laisser OFF et régler les paliers.
+          Tous les jours ou jours alternés pendant le séjour (hors arrivée / départ). Paliers : un
+          nombre de passages selon la durée.
         </Typography>
-        <Box sx={{ display: 'flex', gap: 0.75 }}>
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
           <Button
             size="small"
-            variant={state.always ? 'contained' : 'outlined'}
-            onClick={() => patch(s => ({ ...s, always: true }))}
+            variant={state.always && state.everyNDays <= 1 ? 'contained' : 'outlined'}
+            onClick={() => patch(s => ({ ...s, always: true, everyNDays: 1 }))}
             sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '8px' }}
           >
-            Always ON
+            Tous les jours
+          </Button>
+          <Button
+            size="small"
+            variant={state.always && state.everyNDays >= 2 ? 'contained' : 'outlined'}
+            onClick={() => patch(s => ({ ...s, always: true, everyNDays: 2 }))}
+            sx={{ textTransform: 'none', fontWeight: 800, borderRadius: '8px' }}
+          >
+            Jours alternés
           </Button>
           <Button
             size="small"
