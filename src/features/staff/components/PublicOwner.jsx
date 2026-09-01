@@ -8,7 +8,7 @@ import AdminFilter from './AdminFilter';
 import UpdateOwnerSidebar from './UpdateOwnerSidebar';
 import TableLoading from 'components/TableLoading/TableLoadign';
 import { getOwners } from '../../../services/teamDashboardApi';
-import { getCities, updateFillCompany, deleteOwner, getOwnerRuLoginCredentials, syncOwnersRuIds, applyOwnersRuIdsSync, sendOwnerPasswordLink } from '../services/serverApi.task';
+import { getCities, updateFillCompany, deleteOwner, syncOwnersRuIds, applyOwnersRuIdsSync, sendOwnerPasswordLink } from '../services/serverApi.task';
 import { parseOwnerPasswordLinkResponse } from '../utils/ownerPasswordLinkFeedback';
 import { logPmMail } from '../../../utils/ownerMailDebug';
 import OwnerPasswordLinkDialog from './OwnerPasswordLinkDialog';
@@ -82,12 +82,7 @@ const PublicOwner = ({
   const [loadingCities, setLoadingCities] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [ownerToDelete, setOwnerToDelete] = useState(null);
-  const [ruCredOpen, setRuCredOpen] = useState(false);
   const [passwordLinkDialog, setPasswordLinkDialog] = useState(null);
-  const [ruCredOwner, setRuCredOwner] = useState(null);
-  const [ruCredData, setRuCredData] = useState(null);
-  const [ruCredLoading, setRuCredLoading] = useState(false);
-  const [ruCredError, setRuCredError] = useState('');
   const [listings, setListings] = useState([]);
   const [selectedListings, setSelectedListings] = useState([]);
   const [syncDialog, setSyncDialog] = useState(false);
@@ -325,33 +320,6 @@ const PublicOwner = ({
   const handleDeleteCancel = () => {
     setDeleteDialog(false);
     setOwnerToDelete(null);
-  };
-  const handleRuCredentialsClick = async owner => {
-    const id = normalizeOwnerId(owner?._id);
-    if (!id) return;
-    setRuCredOwner(owner);
-    setRuCredOpen(true);
-    setRuCredData(null);
-    setRuCredError('');
-    setRuCredLoading(true);
-    try {
-      const res = await getOwnerRuLoginCredentials(id);
-      if (res?.success && res.data) {
-        setRuCredData(res.data);
-      } else {
-        setRuCredError(res?.error || '—');
-      }
-    } catch (e) {
-      setRuCredError(e?.message || '—');
-    } finally {
-      setRuCredLoading(false);
-    }
-  };
-  const handleRuCredClose = () => {
-    setRuCredOpen(false);
-    setRuCredOwner(null);
-    setRuCredData(null);
-    setRuCredError('');
   };
   const handleSendPasswordLink = async owner => {
     const id = normalizeOwnerId(owner?._id);
@@ -1029,23 +997,6 @@ const PublicOwner = ({
                     </IconButton>
                   </Tooltip>
                 )}
-                {canUpdate && <Tooltip title={t('owner_credentials_tooltip', {
-        defaultValue: 'Identifiants (Sojori + R.U.)',
-      })}>
-                    <IconButton size="small" onClick={() => handleRuCredentialsClick(rowData)} sx={{
-          p: 0.35,
-          borderRadius: 1,
-          border: '1px solid rgba(15,23,42,0.15)',
-          color: SOJORI.ink,
-          '&:hover': {
-            bgcolor: 'rgba(15,23,42,0.06)'
-          }
-        }}>
-                        <VpnKeyIcon sx={{
-            fontSize: 16
-          }} />
-                      </IconButton>
-                  </Tooltip>}
                 {canUpdate && <IconButton size="small" onClick={() => handleUpdate(rowData)} sx={{
         p: 0.35,
         borderRadius: 1,
@@ -1690,80 +1641,6 @@ const PublicOwner = ({
                 </DialogActions>
             </Dialog>
 
-            <Dialog open={ruCredOpen} onClose={handleRuCredClose} PaperProps={{
-      sx: {
-        borderRadius: '12px',
-        minWidth: '380px',
-        maxWidth: '480px'
-      }
-    }}>
-                <DialogTitle sx={{
-        fontSize: '16px',
-        fontWeight: 700
-      }}>
-                    {t('owner_credentials_dialog_title', {
-          defaultValue: 'Identifiants du compte',
-        })}
-                </DialogTitle>
-                <DialogContent>
-                    {ruCredOwner && <Typography variant="body2" color="text.secondary" sx={{
-          mb: 1.5
-        }}>
-                        {ruCredOwner.firstName} {ruCredOwner.lastName}
-                    </Typography>}
-                    {ruCredLoading && <CircularProgress size={24} />}
-                    {!ruCredLoading && ruCredError && <Alert severity="warning">{ruCredError}</Alert>}
-                    {!ruCredLoading && ruCredData && <Stack spacing={2} sx={{
-          mt: 0.5
-        }}>
-                            <TextField label={t('Email dashboard')} value={ruCredData.email || ''} fullWidth size="small" slotProps={{
-            input: {
-              readOnly: true
-            }
-          }} />
-                            <TextField label="Email R.U. (extranet)" value={ruCredData.ruEmail || '—'} fullWidth size="small" slotProps={{
-            input: {
-              readOnly: true
-            }
-          }} />
-
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <LockOpenIcon sx={{ fontSize: 18, color: SOJORI.teal }} />
-                              <TextField label="Mot de passe Sojori (dashboard)" value={ruCredData.sojoriPassword || '—'} fullWidth size="small" type="text" slotProps={{
-                input: {
-                  readOnly: true
-                }
-              }} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(0,180,180,0.04)' } }} />
-                            </Box>
-
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <VpnKeyIcon sx={{ fontSize: 18, color: SOJORI.orange }} />
-                              <TextField label="Mot de passe R.U. (extranet)" value={ruCredData.password || '—'} fullWidth size="small" type="text" slotProps={{
-                input: {
-                  readOnly: true
-                }
-              }} sx={{ '& .MuiOutlinedInput-root': { bgcolor: SOJORI.orangeSoft } }} />
-                            </Box>
-
-                            {ruCredData.ruOwnerId != null && ruCredData.ruOwnerId !== '' && <Typography variant="caption" color="text.secondary">
-                                RU OwnerId: {String(ruCredData.ruOwnerId)}
-                              </Typography>}
-                            <Alert severity="info" variant="outlined" sx={{ fontSize: '0.75rem' }}>
-                                <LockOpenIcon sx={{ fontSize: 13, mr: 0.5, verticalAlign: 'middle', color: SOJORI.teal }} /> Sojori : connexion au dashboard client<br/>
-                                <VpnKeyIcon sx={{ fontSize: 13, mr: 0.5, verticalAlign: 'middle', color: SOJORI.orange }} /> R.U. : accès extranet Rentals United (usage interne)
-                            </Alert>
-                        </Stack>}
-                </DialogContent>
-                <DialogActions sx={{
-        p: 2
-      }}>
-                    <Button onClick={handleRuCredClose} variant="contained" sx={{
-          textTransform: 'none'
-        }}>
-                        {t('Close')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
 
             <Dialog open={syncDialog} onClose={handleSyncClose} maxWidth="md" fullWidth PaperProps={{
       sx: {

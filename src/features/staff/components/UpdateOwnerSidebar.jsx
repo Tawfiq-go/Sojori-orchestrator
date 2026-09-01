@@ -10,7 +10,6 @@ import {
   syncOwnerRu,
   updateOwner,
   sendOwnerPasswordLink,
-  getOwnerRuLoginCredentials,
   updateOwnerWhatsappAiTier,
   updateFillCompany,
   updateFillCompanyLocal,
@@ -414,10 +413,6 @@ const UpdateOwnerSidebar = ({
   const [passwordDialogLoading, setPasswordDialogLoading] = useState(false);
   const [sendLinkLoading, setSendLinkLoading] = useState(false);
   const [passwordLinkDialog, setPasswordLinkDialog] = useState(null);
-  const [ruCredOpen, setRuCredOpen] = useState(false);
-  const [ruCredLoading, setRuCredLoading] = useState(false);
-  const [ruCredError, setRuCredError] = useState('');
-  const [ruCredData, setRuCredData] = useState(null);
   const [savedOwnerId, setSavedOwnerId] = useState(null);
   const [saveLoading, setSaveLoading] = useState(false);
   const [activateLoading, setActivateLoading] = useState(false);
@@ -1403,7 +1398,6 @@ const UpdateOwnerSidebar = ({
     setRuCredError('');
     setRuCredLoading(true);
     try {
-      const res = await getOwnerRuLoginCredentials(owner._id);
       if (res?.success && res.data) {
         setRuCredData(res.data);
       } else {
@@ -2785,138 +2779,6 @@ const UpdateOwnerSidebar = ({
           onSubmit={handleOwnerPasswordSubmit}
           mode={passwordDialogMode}
         />
-      ) : null}
-      {!isCreate && owner && !isPmSelfService && ruCredOpen ? (
-        <div
-          className="owner-drawer-host"
-          role="presentation"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1400,
-            background: 'rgba(15,23,42,0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 16,
-          }}
-          onClick={() => {
-            setRuCredOpen(false);
-            setRuCredData(null);
-            setRuCredError('');
-          }}
-          onKeyDown={() => {}}
-        >
-          <div
-            className="so-staff-root"
-            style={{
-              background: '#fff',
-              borderRadius: 12,
-              padding: 20,
-              width: 'min(720px, 100%)',
-              boxShadow: '0 20px 50px rgba(0,0,0,0.25)',
-            }}
-            role="dialog"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={() => {}}
-          >
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>
-              Les 2 mots de passe — {`${owner.firstName || ''} ${owner.lastName || ''}`.trim() || 'PM'}
-            </div>
-            <div className="owner-form-hint" style={{ marginBottom: 12 }}>
-              Emails uniquement — les mots de passe ne sont plus affichés. Reset dashboard = lien
-              « mot de passe ». RU = champ dédié dans la fiche owner, jamais le mot de passe
-              dashboard.
-            </div>
-            {ruCredLoading ? <div>Chargement…</div> : null}
-            {!ruCredLoading && ruCredError ? (
-              <div className="owner-field-err" style={{ marginBottom: 12 }}>
-                {ruCredError}
-              </div>
-            ) : null}
-            {!ruCredLoading && ruCredData ? (
-              <div
-                style={{
-                  display: 'grid',
-                  gap: 12,
-                  gridTemplateColumns: '1fr 1fr',
-                }}
-              >
-                <div
-                  style={{
-                    border: '1px solid #e2e8f0',
-                    background: '#f8fafc',
-                    borderRadius: 8,
-                    padding: 12,
-                    display: 'grid',
-                    gap: 10,
-                  }}
-                >
-                  <div style={{ fontWeight: 700, color: '#334155' }}>1. Dashboard Sojori</div>
-                  <label className="field">
-                    <span className="owner-form-hint">Email dashboard</span>
-                    <input className="input" readOnly value={ruCredData.email || '—'} />
-                  </label>
-                  <label className="field">
-                    <span className="owner-form-hint">Mot de passe dashboard</span>
-                    <input
-                      className="input"
-                      readOnly
-                      value={
-                        ruCredData.hasSojoriPassword ? 'Enregistré (non affiché)' : '—'
-                      }
-                    />
-                  </label>
-                </div>
-                <div
-                  style={{
-                    border: '2px solid #f59e0b',
-                    background: '#fffbeb',
-                    borderRadius: 8,
-                    padding: 12,
-                    display: 'grid',
-                    gap: 10,
-                  }}
-                >
-                  <div style={{ fontWeight: 700, color: '#92400e' }}>2. Extranet R.U.</div>
-                  <label className="field">
-                    <span className="owner-form-hint">Email R.U.</span>
-                    <input className="input" readOnly value={ruCredData.ruEmail || '—'} />
-                  </label>
-                  <label className="field">
-                    <span className="owner-form-hint">Mot de passe R.U.</span>
-                    <input
-                      className="input"
-                      readOnly
-                      value={
-                        ruCredData.hasRuPassword
-                          ? 'Enregistré (non affiché)'
-                          : '(aucun ruPassword en base)'
-                      }
-                      style={{ fontWeight: 600 }}
-                    />
-                  </label>
-                  {ruCredData.ruOwnerId != null && ruCredData.ruOwnerId !== '' ? (
-                    <div className="owner-form-hint">RU OwnerId: {String(ruCredData.ruOwnerId)}</div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => {
-                  setRuCredOpen(false);
-                  setRuCredData(null);
-                  setRuCredError('');
-                }}
-              >
-                Fermer
-              </button>
-            </div>
-          </div>
-        </div>
       ) : null}
       <OwnerPasswordLinkDialog
         open={!!passwordLinkDialog}
