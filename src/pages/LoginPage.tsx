@@ -7,7 +7,6 @@ import {
   Button,
   Checkbox,
   Container,
-  Divider,
   FormControlLabel,
   InputAdornment,
   IconButton,
@@ -25,6 +24,7 @@ import {
 import { AUTH_CONFIG } from '../config/authConfig';
 import { isMockAuthEnabled } from '../services/authService';
 import { logAuth } from '../utils/dashboardDebug';
+import MfaCodeStep from '../components/auth/MfaCodeStep';
 
 interface LoginFormState {
   email: string;
@@ -41,9 +41,14 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof LoginFormState, string>>>({});
+  /** Défi 2FA en cours : tant qu'il est posé, on affiche la saisie du code. */
+  const [mfaChallenge, setMfaChallenge] = useState<{
+    method: 'totp' | 'whatsapp';
+    challengeToken: string;
+  } | null>(null);
 
   const navigate = useNavigate();
-  const { login, isAuthenticated, loading, error } = useAuth();
+  const { login, verifyMfa, isAuthenticated, loading, error } = useAuth();
   const mockAuth = isMockAuthEnabled();
 
   useEffect(() => {
@@ -94,9 +99,23 @@ export const LoginPage: React.FC = () => {
     }
 
     try {
-      await login(form);
+      // `login` ne renvoie une valeur que si un second facteur est requis :
+      // le mot de passe est bon, mais la session n'est pas encore ouverte.
+      const challenge = await login(form);
+      if (challenge) setMfaChallenge(challenge);
     } catch (err: any) {
       setLocalError(err?.message || err?.error || 'Connexion impossible. Vérifiez vos identifiants.');
+    }
+  };
+
+  const handleMfaSubmit = async (code: string) => {
+    setLocalError(null);
+    try {
+      await verifyMfa(mfaChallenge!.challengeToken, code);
+    } catch (err: any) {
+      setLocalError(err?.message || 'Code incorrect.');
+      // Défi brûlé ou expiré : on repart de la saisie du mot de passe.
+      if (/expir|Reconnectez/i.test(String(err?.message || ''))) setMfaChallenge(null);
     }
   };
 
@@ -149,6 +168,17 @@ export const LoginPage: React.FC = () => {
             </Alert>
           )}
 
+          {mfaChallenge ? (
+            <MfaCodeStep
+              method={mfaChallenge.method}
+              onSubmit={handleMfaSubmit}
+              onCancel={() => {
+                setMfaChallenge(null);
+                setLocalError(null);
+              }}
+              error={localError}
+            />
+          ) : (
           <form onSubmit={handleSubmit}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <TextField
@@ -291,6 +321,7 @@ export const LoginPage: React.FC = () => {
               </Typography>
             </Box>
           </form>
+          )}
         </Paper>
       </Container>
     </Box>

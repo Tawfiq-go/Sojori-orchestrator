@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import authService from '../services/authService';
+import { isMfaChallenge } from '../services/authService.real';
 import type {
   LoginCredentials,
   ResetPasswordPayload,
@@ -36,9 +37,16 @@ export interface AuthState {
   error: string | null;
 }
 
+export interface MfaChallenge {
+  method: 'totp' | 'whatsapp';
+  challengeToken: string;
+}
+
 export interface AuthContextType extends AuthState {
   isLoading: boolean;
-  login: (credentials: LoginCredentials) => Promise<void>;
+  /** Renvoie le défi 2FA si le compte en a un ; sinon la session est ouverte. */
+  login: (credentials: LoginCredentials) => Promise<MfaChallenge | null>;
+  verifyMfa: (challengeToken: string, code: string) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => void;
   updateToken: (newToken: string) => void;
@@ -199,11 +207,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
-  const login = async (credentials: LoginCredentials): Promise<void> => {
+  const verifyMfa = async (challengeToken: string, code: string): Promise<void> => {
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const response = await authService.verifyMfa(challengeToken, code);
+      const user = apiUserToMockUser(response.user as ApiUser, null);
+      persistUser(user);
+      setState({
+        user,
+        token: response.token,
+        refreshToken: response.refreshToken,
+        isAuthenticated: true,
+        loading: false,
+        error: null,
+      });
+    } catch (error: any) {
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: error?.message || 'Vérification impossible',
+        isAuthenticated: false,
+      }));
+      throw error;
+    }
+  };
+
+  const login = async (credentials: LoginCredentials): Promise<MfaChallenge | null> => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
       const response = await authService.login(credentials);
+
+      // Second facteur requis : le mot de passe est bon mais aucune session
+      // n'est ouverte. L'appelant affiche la saisie du code puis verifyMfa().
+      if (isMfaChallenge(response)) {
+        setState((prev) => ({ ...prev, loading: false, error: null }));
+        return { method: response.method, challengeToken: response.challengeToken };
+      }
+
       const user = apiUserToMockUser(response.user as ApiUser, null);
 
       // ✅ Persister le user dans localStorage pour le garder après reload
@@ -224,6 +265,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         loading: false,
         error: null,
       });
+      return null;
     } catch (error: any) {
       setState((prev) => ({
         ...prev,
@@ -376,6 +418,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       ...state,
       isLoading: state.loading,
       login,
+      verifyMfa,
       register,
       logout,
       updateToken,
