@@ -42,7 +42,7 @@ export type PartnerServiceOptionGroup = {
   choices: PartnerServiceOptionChoice[];
 };
 
-export type PartnerServiceKind = 'experience' | 'transport' | 'room_service';
+export type PartnerServiceKind = 'experience' | 'transport' | 'room_service' | 'villa_experience';
 
 export type PartnerServiceSlot = { time: string; label?: string };
 

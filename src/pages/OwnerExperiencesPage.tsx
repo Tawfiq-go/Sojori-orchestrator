@@ -222,7 +222,9 @@ function toDraft(s: PartnerService): Draft {
     : [];
   const pay = s.payment || DEFAULT_PAYMENT;
   const kind: PartnerServiceKind =
-    s.kind === 'transport' || s.kind === 'room_service' ? s.kind : 'experience';
+    s.kind === 'transport' || s.kind === 'room_service' || s.kind === 'villa_experience'
+      ? s.kind
+      : 'experience';
   return {
     partnerId: s.partnerId ? String(s.partnerId) : '',
     kind,
@@ -1411,6 +1413,7 @@ export function OwnerExperiencesPage() {
                   { v: 'experience' as const, l: '✨ Expérience' },
                   { v: 'transport' as const, l: '🚐 Transport / Navette' },
                   { v: 'room_service' as const, l: '🍽️ Room Service' },
+                  { v: 'villa_experience' as const, l: '🌹 Ambiance en villa' },
                 ]).map((t) => (
                   <button
                     key={t.v}
