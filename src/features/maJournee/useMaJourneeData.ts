@@ -624,6 +624,7 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
       let ready = 0;
       let hourTbd = 0;
       let dirty = 0;
+      let noCleanerIn = 0;
       let attendu = 0;
       let arrived = 0;
       for (const a of arrivals) {
@@ -636,6 +637,7 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
         if (regOk && cleanOk) ready += 1;
         if (!isArrived && a.timeTbd) hourTbd += 1;
         if (a.checks.some((c) => c.cls === 'bad')) dirty += 1;
+        if (a.cleanerName === UNASSIGNED) noCleanerIn += 1;
       }
       // En location courte duree il n'y a pas de reception : cet ecran EST
       // le filet qui rattrape les oublis. Ce qui manque passe donc devant —
@@ -643,6 +645,7 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
       // simple constat.
       const arrivalDetail = [
         dirty ? `⚠ ${dirty} logement${dirty > 1 ? 's' : ''} pas prêt${dirty > 1 ? 's' : ''}` : null,
+        noCleanerIn ? `⚠ ${noCleanerIn} ménage${noCleanerIn > 1 ? 's' : ''} non assigné${noCleanerIn > 1 ? 's' : ''}` : null,
         hourTbd ? `${hourTbd} sans heure déclarée` : null,
         attendu ? `${attendu} attendu${attendu > 1 ? 's' : ''}` : null,
         arrived ? `${arrived} arrivé${arrived > 1 ? 's' : ''}` : null,
@@ -655,12 +658,21 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
       const pending = Math.max(0, departures.length - left);
       // Un depart non constate apres l'heure de sortie bloque le menage, donc
       // l'arrivee suivante : c'est l'oubli le plus couteux de la journee.
+      // Un depart sans menage assigne bloque la remise en etat, donc
+      // l'arrivee suivante. C'est ce qu'un gestionnaire veut voir la VEILLE,
+      // quand il peut encore assigner quelqu'un — pas le jour meme.
+      const noCleaner = departures.filter((d) => d.cleanerName === UNASSIGNED).length;
+
       const departureDetail =
         departures.length === 0
           ? 'Aucun départ'
-          : pending
-            ? `⚠ ${pending} départ${pending > 1 ? 's' : ''} à constater${left ? ` · ${left} parti${left > 1 ? 's' : ''}` : ''}`
-            : `${left} parti${left > 1 ? 's' : ''}`;
+          : [
+              noCleaner ? `⚠ ${noCleaner} ménage${noCleaner > 1 ? 's' : ''} non assigné${noCleaner > 1 ? 's' : ''}` : null,
+              pending ? `${pending} à constater` : null,
+              left ? `${left} parti${left > 1 ? 's' : ''}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ');
 
       const created = createdRes?.data || [];
       const chans = new Set<string>();
