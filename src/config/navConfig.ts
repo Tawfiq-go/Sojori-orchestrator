@@ -480,6 +480,14 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         description: 'Le realise et ce qui est deja au carnet — portefeuille, proprietaire, bien',
         badge: 'NEW',
       },
+      {
+        id: 'reports2/clients',
+        label: 'Clients',
+        iconType: 'worker',
+        iconColor: '#E6B022',
+        description: 'D’ou viennent les reservations, et ce qu’elles rapportent',
+        badge: 'NEW',
+      },
     ],
   },
   {

@@ -150,6 +150,11 @@ const PerformancePage = lazyWithReload(() =>
     default: module.PerformancePage,
   })),
 );
+const ClientsLcdPage = lazyWithReload(() =>
+  import('./features/reports2/ClientsLcdPage').then((module) => ({
+    default: module.ClientsLcdPage,
+  })),
+);
 const DailySummaryPage = lazyWithReload(() =>
   import('./features/reports/DailySummaryPage').then((module) => ({
     default: module.DailySummaryPage,
@@ -481,6 +486,7 @@ function App() {
               <Route path="/reports/produits" element={<LazyRoute><ProductsPage /></LazyRoute>} />
               <Route path="/reports/annuel" element={<LazyRoute><AnnualTrendPage /></LazyRoute>} />
               <Route path="/reports2/performance" element={<LazyRoute><PerformancePage /></LazyRoute>} />
+              <Route path="/reports2/clients" element={<LazyRoute><ClientsLcdPage /></LazyRoute>} />
               <Route path="/reports2" element={<Navigate to="/reports2/performance" replace />} />
               <Route path="/reports/exploitation" element={<LazyRoute><OperationsReportPage /></LazyRoute>} />
               <Route path="/reports/origine" element={<Navigate to="/reports/clients" replace />} />
