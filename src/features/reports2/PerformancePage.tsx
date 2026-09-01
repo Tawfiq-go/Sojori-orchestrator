@@ -63,6 +63,20 @@ function revpar(revenue: number, monthKey: string | null, units: number): number
   return capacity > 0 ? revenue / capacity : null;
 }
 
+/**
+ * ADR — prix moyen d'une nuit REELLEMENT vendue.
+ *
+ * Complement du RevPAR : celui-ci mesure ce que rapporte chaque bien du
+ * parc, l'ADR ce que vaut une nuit vendue. L'ecart entre les deux, c'est
+ * l'occupation. Un ADR qui monte pendant que le RevPAR baisse signale un
+ * parc qui se vide au profit du prix.
+ *
+ * `null` sans nuit vendue — diviser par zero donnerait un prix invente.
+ */
+function adr(revenue: number, nights: number): number | null {
+  return nights > 0 ? revenue / nights : null;
+}
+
 function pct(v: number | null): string {
   return v == null ? '—' : `${Math.round(v * 100)} %`;
 }
@@ -118,19 +132,45 @@ export function PerformancePage() {
    * Mois affiche. Par defaut le dernier mois clos ; les fleches permettent
    * de remonter la saison, comme sur les rapports hoteliers.
    */
-  const lastClosed = useMemo(() => {
-    if (!past.length) return null;
-    const idx = past.length - 1 + offset;
-    return past[Math.min(past.length - 1, Math.max(0, idx))] ?? null;
-  }, [past, offset]);
+  /** Index du mois EN COURS dans la serie — le point de depart naturel. */
+  const currentIdx = useMemo(() => {
+    const key = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
+    const i = series.findIndex((c) => c.key === key);
+    return i >= 0 ? i : Math.max(0, past.length - 1);
+  }, [series, past, today]);
 
-  const canPrev = past.length > 0 && past.length - 1 + offset > 0;
-  const canNext = offset < 0;
+  /**
+   * Mois affiche. Par defaut le mois EN COURS, pas le dernier mois clos :
+   * le gestionnaire pilote ce qui vient — il agit encore sur septembre,
+   * plus sur juillet. Les fleches vont dans les deux sens, jusqu'au bout
+   * du carnet.
+   */
+  const lastClosed = useMemo(() => {
+    if (!series.length) return null;
+    const idx = Math.min(series.length - 1, Math.max(0, currentIdx + offset));
+    return series[idx] ?? null;
+  }, [series, currentIdx, offset]);
+
+  const canPrev = currentIdx + offset > 0;
+  const canNext = currentIdx + offset < series.length - 1;
 
   /** « août 2026 » — le mois lu par tout l'ecran, jamais implicite. */
   const monthLabel = lastClosed
     ? `${labelOf(lastClosed.key)} ${lastClosed.key.slice(0, 4)}`
-    : 'aucun mois clos';
+    : 'aucun mois';
+
+  /**
+   * Nature du mois affiche. Un mois en cours ou a venir montre ce qui est
+   * ENGAGE, pas encaisse — le dire evite de lire un chiffre partiel comme
+   * un resultat definitif.
+   */
+  const monthNature = useMemo(() => {
+    if (!lastClosed) return '';
+    const curKey = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
+    if (lastClosed.key > curKey) return 'au carnet — engagé, pas encore réalisé';
+    if (lastClosed.key === curKey) return 'mois en cours — réalisé à ce jour + carnet';
+    return 'mois clos';
+  }, [lastClosed, today]);
 
   /** Ce qui est deja engage sur les mois a venir. */
   const booked = useMemo(
@@ -180,6 +220,7 @@ export function PerformancePage() {
           // Capacite = nb de biens x jours des mois clos.
           occ: occupancy(nights, monthKeys, { units: ids.length }),
           revpar: revpar(revenue, lastClosed?.key ?? null, ids.length),
+          adr: adr(revenue, nights),
         };
       })
       .filter((g) => g.listings > 0)
@@ -200,6 +241,7 @@ export function PerformancePage() {
       listings,
       occ: occupancy(nights, monthKeys, { units: listings }),
       revpar: revpar(revenue, lastClosed?.key ?? null, listings),
+      adr: adr(revenue, nights),
     };
   }, [lastClosed, unitsByLandlord]);
 
@@ -253,9 +295,12 @@ export function PerformancePage() {
         >
           <Typography sx={{ fontSize: 15, color: canPrev ? T.ink2 : T.line, lineHeight: 1 }}>‹</Typography>
         </IconButton>
-        <Typography sx={{ fontSize: 14, fontWeight: 800, color: T.ink, minWidth: 120, textAlign: 'center' }}>
-          {monthLabel}
-        </Typography>
+        <Stack sx={{ minWidth: 150, alignItems: 'center' }}>
+          <Typography sx={{ fontSize: 14, fontWeight: 800, color: T.ink }}>{monthLabel}</Typography>
+          <Typography sx={{ fontSize: 10, color: T.ink3, whiteSpace: 'nowrap' }}>
+            {monthNature}
+          </Typography>
+        </Stack>
         <IconButton
           size="small"
           disabled={!canNext}
@@ -269,20 +314,25 @@ export function PerformancePage() {
             onClick={() => setOffset(0)}
             sx={{ fontSize: 11.5, color: T.gold, cursor: 'pointer', fontWeight: 600, ml: 0.5 }}
           >
-            revenir au dernier mois clos
+            revenir au mois en cours
           </Typography>
         ) : null}
       </Stack>
 
       <Stack direction="row" sx={{ gap: 1.5, flexWrap: 'wrap', mb: 2.5 }}>
-        <Kpi label="Occupation" hint={monthLabel} value={pct(totals.occ)} />
-        <Kpi label="Revenu" hint={monthLabel} value={`${money(lastClosed?.revenue ?? 0)} MAD`} />
+        <Kpi label="Occupation" hint={monthNature} value={pct(totals.occ)} />
+        <Kpi label="Revenu" hint={monthNature} value={`${money(lastClosed?.revenue ?? 0)} MAD`} />
         <Kpi
           label="RevPAR"
-          hint={`${monthLabel} · par bien et par nuit`}
+          hint={'par bien du parc, par nuit'}
           value={totals.revpar != null ? `${Math.round(totals.revpar)} MAD` : '—'}
         />
-        <Kpi label="Ménage OTA" hint={`encaissé · ${monthLabel}`} value={`${money(lastClosed?.cleaning ?? 0)} MAD`} />
+        <Kpi
+          label="ADR"
+          hint={'prix moyen d’une nuit vendue'}
+          value={totals.adr != null ? `${Math.round(totals.adr)} MAD` : '—'}
+        />
+        <Kpi label="Ménage OTA" hint={monthNature} value={`${money(lastClosed?.cleaning ?? 0)} MAD`} />
         <Kpi
           label="Déjà au carnet"
           hint={`${future.length} mois à venir`}
@@ -384,7 +434,16 @@ export function PerformancePage() {
       <Box sx={{ bgcolor: T.card, border: `1px solid ${T.line}`, borderRadius: 2, overflow: 'hidden' }}>
         <Row
           header
-          cells={['Portefeuille', 'Biens', 'Occupation', 'RevPAR', 'Revenu', 'Ménage OTA', 'Contrat']}
+          cells={[
+            'Portefeuille',
+            'Biens',
+            'Occupation',
+            'RevPAR',
+            'ADR',
+            'Revenu',
+            'Ménage OTA',
+            'Contrat',
+          ]}
         />
         <Row
           bold
@@ -393,6 +452,7 @@ export function PerformancePage() {
             String(totals.listings),
             pct(totals.occ),
             totals.revpar != null ? `${Math.round(totals.revpar)} MAD` : '—',
+            totals.adr != null ? `${Math.round(totals.adr)} MAD` : '—',
             `${money(totals.revenue)} MAD`,
             `${money(totals.cleaning)} MAD`,
             '—',
@@ -422,6 +482,7 @@ export function PerformancePage() {
                   String(g.listings),
                   pct(g.occ),
                   g.revpar != null ? `${Math.round(g.revpar)} MAD` : '—',
+                  g.adr != null ? `${Math.round(g.adr)} MAD` : '—',
                   `${money(g.revenue)} MAD`,
                   `${money(g.cleaning)} MAD`,
                   contractLabel,
@@ -439,6 +500,10 @@ export function PerformancePage() {
                         (() => {
                           const r = revpar(u.revenue, lastClosed?.key ?? null, 1);
                           return r != null ? `${Math.round(r)} MAD` : '—';
+                        })(),
+                        (() => {
+                          const a = adr(u.revenue, u.nights);
+                          return a != null ? `${Math.round(a)} MAD` : '—';
                         })(),
                         `${money(u.revenue)} MAD`,
                         `${money(u.cleaning)} MAD`,

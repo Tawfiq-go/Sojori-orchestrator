@@ -34,6 +34,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   reports: '/reports',
   'reports/clients': '/reports/clients',
   'reports2/performance': '/reports2/performance',
+  'reports2/clients': '/reports2/clients',
   'tasks/extras': '/tasks/extras/ventes',
   'tasks/extras/ventes': '/tasks/extras/ventes',
   'tasks/extras/configuration': '/tasks/extras/configuration',
