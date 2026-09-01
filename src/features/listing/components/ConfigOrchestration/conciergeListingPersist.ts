@@ -1,5 +1,7 @@
 import { listingsService } from '../../../../services/listingsService';
 
+export type RoomServiceBreakfastTimeMode = 'shared' | 'per_traveler';
+
 export type RoomServiceBreakfastConfig = {
   enabled: boolean;
   entitlement: 'per_traveler' | 'per_reservation';
@@ -7,6 +9,8 @@ export type RoomServiceBreakfastConfig = {
   endInclusive: boolean;
   includedServiceIds: string[];
   defaultTime?: string;
+  timeWindow?: { from: string; to: string };
+  timeMode?: RoomServiceBreakfastTimeMode;
   guestMustSelectDays: boolean;
 };
 
@@ -46,7 +50,15 @@ function normalizeBreakfast(raw: unknown): RoomServiceBreakfastConfig | null {
     defaultTime:
       typeof b.defaultTime === 'string' && b.defaultTime.trim()
         ? b.defaultTime.trim().slice(0, 8)
-        : '08:00',
+        : '09:00',
+    timeWindow: (() => {
+      const tw = b.timeWindow as { from?: string; to?: string } | undefined;
+      const from =
+        typeof tw?.from === 'string' && tw.from.trim() ? tw.from.trim().slice(0, 8) : '07:00';
+      const to = typeof tw?.to === 'string' && tw.to.trim() ? tw.to.trim().slice(0, 8) : '11:00';
+      return { from, to };
+    })(),
+    timeMode: b.timeMode === 'per_traveler' ? 'per_traveler' : 'shared',
     guestMustSelectDays: b.guestMustSelectDays !== false,
   };
 }
