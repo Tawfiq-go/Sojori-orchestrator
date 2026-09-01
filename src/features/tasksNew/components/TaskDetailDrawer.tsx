@@ -728,7 +728,7 @@ export default function TaskDetailDrawer({
             <Typography sx={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{task.guestName || '—'}</Typography>
           </FieldBox>
           <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.5, mb: 1, fontFamily: '"Geist Mono", monospace' }}>
-            {task.guestPhone || '—'}
+            Masqué
           </Typography>
 
           <SectionLabel>Logement & réservation</SectionLabel>

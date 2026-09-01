@@ -818,7 +818,7 @@ function WhitelistTable({
                   </Box>
                   <Box component="td">
                     <Typography sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 11.5, color: T.text2 }}>
-                      {r.phoneOta || '—'}
+                      Masqué
                     </Typography>
                   </Box>
                   <Box component="td">
@@ -915,7 +915,7 @@ function WhitelistMobileCard({
         {listingName && (
           <Typography sx={{ fontSize: 12, fontWeight: 600, color: T.text2, mb: 0.5 }}>{listingName}</Typography>
         )}
-        <Typography sx={{ fontSize: 12, color: T.text2, mb: 0.75 }}>{row.phoneOta}</Typography>
+        <Typography sx={{ fontSize: 12, color: T.text2, mb: 0.75 }}>Contact masqué</Typography>
         <Box sx={{ mb: 1 }}>
           <WhitelistLanguageCell
             guestLanguage={row.guestLanguage}

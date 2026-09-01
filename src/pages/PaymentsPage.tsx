@@ -121,8 +121,8 @@ function DetailGrid({ row }: { row: PaymentAuditRow }) {
     { label: 'Redirect fail hit', value: row.payment.redirectFail ? 'oui' : 'non' },
     { label: 'Méthode', value: row.payment.method },
     { label: 'Type', value: row.payment.type },
-    { label: 'Email', value: row.guestEmail },
-    { label: 'Téléphone', value: row.phone },
+    { label: 'Email', value: 'Masqué' },
+    { label: 'Téléphone', value: 'Masqué' },
   ];
 
   return (

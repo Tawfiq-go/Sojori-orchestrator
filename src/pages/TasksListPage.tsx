@@ -2407,7 +2407,7 @@ export function TasksListPage() {
         }
         const channel = otaChannelForRow(row);
         const countryLabel = countryNameWithoutFlag(row.guestCountry);
-        const tip = [row.guestName, countryLabel, channel, row.guestPhone, row.reservationNumber]
+        const tip = [row.guestName, countryLabel, channel, row.reservationNumber]
           .filter(Boolean)
           .join(' · ');
         return (
