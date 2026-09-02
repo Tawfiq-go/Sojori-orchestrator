@@ -16,6 +16,8 @@ export type RoomServiceBreakfastConfig = {
   timeMode?: RoomServiceBreakfastTimeMode;
   guestMustSelectDays: boolean;
   supplementMode: RoomServiceBreakfastSupplementMode;
+  /** Formules en inclus + supplément (parmi includedServiceIds). */
+  supplementServiceIds: string[];
 };
 
 export type ConciergeServicesSlice = {
@@ -65,6 +67,9 @@ function normalizeBreakfast(raw: unknown): RoomServiceBreakfastConfig | null {
     timeMode: b.timeMode === 'per_traveler' ? 'per_traveler' : 'shared',
     guestMustSelectDays: b.guestMustSelectDays !== false,
     supplementMode: b.supplementMode === 'with_supplement' ? 'with_supplement' : 'none',
+    supplementServiceIds: (Array.isArray(b.supplementServiceIds) ? b.supplementServiceIds : [])
+      .map(String)
+      .filter(Boolean),
   };
 }
 
