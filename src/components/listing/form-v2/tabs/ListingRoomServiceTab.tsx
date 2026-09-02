@@ -153,8 +153,8 @@ export default function ListingRoomServiceTab({
         Petit Déjeuner Inclus
       </Typography>
       <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 2, lineHeight: 1.5 }}>
-        Toutes les formules sont de type Inclus. Sans supplément est le chemin guest actuel
-        (prix 0). Avec supplément se configure ici ; la facturation sera branchée plus tard.
+        Type Inclus, servi par le staff (pas un provider). Sans supplément = guest à 0 MAD.
+        Les options de chaque formule (boisson, cuisson…) viennent du catalogue.
       </Typography>
 
       <Box
@@ -315,8 +315,8 @@ export default function ListingRoomServiceTab({
                 }))
               }
             >
-              <MenuItem value="shared">Même heure pour toute la commande (écran confirmation)</MenuItem>
-              <MenuItem value="per_traveler">Heure par jour (écran sélection)</MenuItem>
+              <MenuItem value="per_traveler">Même heure par jour (écran jours)</MenuItem>
+              <MenuItem value="shared">Choix heure par déjeuner (écran confirmation)</MenuItem>
             </Select>
           </FormControl>
         </Box>
