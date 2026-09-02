@@ -30,6 +30,23 @@ interface PromAlert {
   activeAt?: string;
 }
 
+interface SessionRow {
+  jti: string;
+  accountId: string;
+  ip?: string;
+  country?: string;
+  lastSeenAt?: string;
+}
+
+interface SuspiciousRow {
+  jti: string;
+  accountId: string;
+  reason: string;
+  detail: string;
+  ip?: string;
+  country?: string;
+}
+
 interface SecurityMetrics {
   auth_failures?: number;
   forbidden?: number;
@@ -47,6 +64,8 @@ function toneForSeverity(sev?: string): 'error' | 'warning' | 'neutral' {
 export default function SecurityMonitoringPage() {
   const [alerts, setAlerts] = useState<PromAlert[]>([]);
   const [metrics, setMetrics] = useState<SecurityMetrics | null>(null);
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [suspicious, setSuspicious] = useState<SuspiciousRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,10 +73,19 @@ export default function SecurityMonitoringPage() {
     setLoading(true);
     setError(null);
     try {
-      const [alertsRes, metricsRes] = await Promise.allSettled([
+      const [alertsRes, metricsRes, sessionsRes, suspiciousRes] = await Promise.allSettled([
         apiClient.get('/logs/api/prometheus-proxy/alerts'),
         apiClient.get('/logs/api/prometheus-proxy/security-metrics'),
+        apiClient.get('/user/user/sessions?limit=50'),
+        apiClient.get('/user/user/sessions/suspicious?hours=24'),
       ]);
+
+      if (sessionsRes.status === 'fulfilled') {
+        setSessions(sessionsRes.value?.data?.data?.sessions ?? []);
+      }
+      if (suspiciousRes.status === 'fulfilled') {
+        setSuspicious(suspiciousRes.value?.data?.data?.suspicious ?? []);
+      }
 
       if (alertsRes.status === 'fulfilled') {
         const raw = alertsRes.value?.data?.data?.alerts ?? alertsRes.value?.data?.alerts ?? [];
@@ -114,6 +142,16 @@ export default function SecurityMonitoringPage() {
             value: (metrics?.total_requests ?? 0).toFixed(1),
             tone: 'info',
           },
+          {
+            label: 'Sessions actives',
+            value: sessions.length,
+            tone: 'neutral',
+          },
+          {
+            label: 'Sessions suspectes',
+            value: suspicious.length,
+            tone: suspicious.length > 0 ? 'error' : 'success',
+          },
         ]}
       />
 
@@ -144,6 +182,47 @@ export default function SecurityMonitoringPage() {
                   {a.annotations?.description ?? a.annotations?.summary ?? ''}
                 </Typography>
               </Box>
+            ))}
+          </Stack>
+        )}
+      </MonitorSection>
+
+      <MonitorSection title="Sessions suspectes">
+        {suspicious.length === 0 ? (
+          <MonitorEmpty message="Aucune session suspecte sur 24 h." />
+        ) : (
+          <Stack spacing={1}>
+            {suspicious.map((s2) => (
+              <Box
+                key={s2.jti}
+                sx={{ p: 1.5, borderRadius: 1, border: `1px solid ${t.border}`, bgcolor: t.surface }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                  <Badge tone="error">
+                    {s2.reason === 'multi_country' ? 'multi-pays' : 'multi-IP'}
+                  </Badge>
+                  <Typography sx={{ fontSize: 13, fontWeight: 600, color: t.ink }}>
+                    compte {s2.accountId?.slice(-8)}
+                  </Typography>
+                </Stack>
+                <Typography sx={{ fontSize: 13, color: t.inkSoft }}>{s2.detail}</Typography>
+              </Box>
+            ))}
+          </Stack>
+        )}
+      </MonitorSection>
+
+      <MonitorSection title="Sessions actives">
+        {sessions.length === 0 ? (
+          <MonitorEmpty message="Aucune session enregistrée." />
+        ) : (
+          <Stack spacing={0.5}>
+            {sessions.slice(0, 20).map((s2) => (
+              <Typography key={s2.jti} sx={{ fontSize: 13, color: t.inkSoft }}>
+                {s2.country ? `[${s2.country}] ` : ''}
+                {s2.ip || '—'} · compte {s2.accountId?.slice(-8)} ·{' '}
+                {s2.lastSeenAt ? new Date(s2.lastSeenAt).toLocaleString('fr-FR') : '—'}
+              </Typography>
             ))}
           </Stack>
         )}
