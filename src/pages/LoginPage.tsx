@@ -25,6 +25,7 @@ import { AUTH_CONFIG } from '../config/authConfig';
 import { isMockAuthEnabled } from '../services/authService';
 import { logAuth } from '../utils/dashboardDebug';
 import MfaCodeStep from '../components/auth/MfaCodeStep';
+import MfaEnrollDialog from '../components/auth/MfaEnrollDialog';
 
 interface LoginFormState {
   email: string;
@@ -46,9 +47,11 @@ export const LoginPage: React.FC = () => {
     method: 'totp' | 'whatsapp';
     challengeToken: string;
   } | null>(null);
+  /** Admin sans 2FA : enrôlement obligatoire avant d'ouvrir la session. */
+  const [mfaEnrollToken, setMfaEnrollToken] = useState<string | null>(null);
 
   const navigate = useNavigate();
-  const { login, verifyMfa, isAuthenticated, loading, error } = useAuth();
+  const { login, verifyMfa, completeMfaEnrollment, isAuthenticated, loading, error } = useAuth();
   const mockAuth = isMockAuthEnabled();
 
   useEffect(() => {
@@ -101,8 +104,9 @@ export const LoginPage: React.FC = () => {
     try {
       // `login` ne renvoie une valeur que si un second facteur est requis :
       // le mot de passe est bon, mais la session n'est pas encore ouverte.
-      const challenge = await login(form);
-      if (challenge) setMfaChallenge(challenge);
+      const next = await login(form);
+      if (next && 'enroll' in next) setMfaEnrollToken(next.enrollToken);
+      else if (next) setMfaChallenge(next);
     } catch (err: any) {
       setLocalError(err?.message || err?.error || 'Connexion impossible. Vérifiez vos identifiants.');
     }
@@ -167,6 +171,16 @@ export const LoginPage: React.FC = () => {
               {error || localError}
             </Alert>
           )}
+
+          <MfaEnrollDialog
+            open={Boolean(mfaEnrollToken)}
+            authToken={mfaEnrollToken ?? undefined}
+            onClose={() => setMfaEnrollToken(null)}
+            onEnrolled={(session) => {
+              setMfaEnrollToken(null);
+              completeMfaEnrollment(session);
+            }}
+          />
 
           {mfaChallenge ? (
             <MfaCodeStep
