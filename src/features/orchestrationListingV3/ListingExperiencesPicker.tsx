@@ -37,6 +37,11 @@ function money(n: number) {
     .replace(/\u202f/g, ' ');
 }
 
+function optionSelectKind(g: { min?: number; max?: number; required?: boolean }): 'simple' | 'multiple' {
+  const max = Number(g.max ?? (g.required ? 1 : 0));
+  return max > 1 ? 'multiple' : 'simple';
+}
+
 /**
  * Picker listing : cartes 3/ligne + toggle Activer (own + marché forSale).
  * Opt-in strict — rien d’activé tant que non basculé + enregistré.
@@ -198,8 +203,8 @@ export function ListingExperiencesPicker({
       <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.55 }}>
         {kindFilter === 'room_service' ? (
           <>
-            Aucun plat Room Service pour ce listing. Créez-en dans{' '}
-            <b>Expériences → Catalogue</b> (type Room Service), puis activez-les ici.
+            Aucune formule petit déjeuner sur ce listing. Les plats et options (boisson,
+            cuisson…) sont gérés par le <b>staff</b>, pas un provider.
           </>
         ) : (
           <>
@@ -217,8 +222,8 @@ export function ListingExperiencesPicker({
       <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 1.5, lineHeight: 1.5 }}>
         {kindFilter === 'room_service' ? (
           <>
-            Activez sur <b>ce listing</b> les plats Room Service visibles pour le guest. Le
-            déclenchement WhatsApp se gère dans <b>Orchestration → Room Service</b>.
+            Formules <b>incluses</b> servies par le staff. Chaque plat montre ses options
+            (choix simple ou multiple, comme au McDo). Pas de provider.
           </>
         ) : (
           <>
@@ -236,6 +241,7 @@ export function ListingExperiencesPicker({
           mb: 1.25,
         }}
       >
+        {kindFilter === 'room_service' ? null : (
         <TextField
           select
           size="small"
@@ -250,6 +256,7 @@ export function ListingExperiencesPicker({
             </MenuItem>
           ))}
         </TextField>
+        )}
         <TextField
           select
           size="small"
@@ -298,12 +305,14 @@ export function ListingExperiencesPicker({
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: {
-                xs: 'repeat(2, 1fr)',
-                sm: 'repeat(3, 1fr)',
-                md: 'repeat(4, 1fr)',
-                lg: 'repeat(6, 1fr)',
-              },
+              gridTemplateColumns: kindFilter === 'room_service'
+                ? { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(2, 1fr)' }
+                : {
+                    xs: 'repeat(2, 1fr)',
+                    sm: 'repeat(3, 1fr)',
+                    md: 'repeat(4, 1fr)',
+                    lg: 'repeat(6, 1fr)',
+                  },
               gap: 1,
             }}
           >
@@ -370,6 +379,12 @@ export function ListingExperiencesPicker({
                     >
                       {r.title}
                     </Typography>
+                    {kindFilter === 'room_service' ? (
+                      <Typography sx={{ fontSize: 11.5, color: 'text.secondary', lineHeight: 1.35 }}>
+                        Staff
+                        {min > 0 ? ` · catalogue ${money(min)} MAD` : ''}
+                      </Typography>
+                    ) : (
                     <Typography sx={{ fontSize: 11.5, color: 'text.secondary', lineHeight: 1.35 }}>
                       <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
                         {provider}
@@ -377,6 +392,31 @@ export function ListingExperiencesPicker({
                       {r.category ? ` · ${r.category}` : ''}
                       {min > 0 ? ` · dès ${money(min)} MAD` : ''}
                     </Typography>
+                    )}
+                    {kindFilter === 'room_service' ? (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mt: 0.25 }}>
+                        {(r.optionGroups || []).length === 0 ? (
+                          <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>
+                            Aucune option sur cette formule
+                          </Typography>
+                        ) : (
+                          (r.optionGroups || []).map((g) => {
+                            const kind = optionSelectKind(g);
+                            return (
+                              <Box key={g.id || g.label}>
+                                <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: 'text.secondary' }}>
+                                  {g.label} · {kind === 'multiple' ? 'choix multiple' : 'choix simple'}
+                                  {g.required ? ' · obligatoire' : ''}
+                                </Typography>
+                                <Typography sx={{ fontSize: 11.5, lineHeight: 1.4 }}>
+                                  {(g.choices || []).map((c) => c.label).filter(Boolean).join(' · ') || '—'}
+                                </Typography>
+                              </Box>
+                            );
+                          })
+                        )}
+                      </Box>
+                    ) : null}
 
                     <Box
                       sx={{
