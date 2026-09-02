@@ -21,8 +21,14 @@ export function whatsappGuestCommsPath(
   const phone = p.guestPhone != null ? String(p.guestPhone).trim() : '';
   const reservation =
     p.reservationNumber != null ? String(p.reservationNumber).trim() : '';
-  if (phone) params.set('phone', phone);
-  if (reservation) params.set('reservation', reservation);
+  // La réservation suffit à retrouver la conversation : on ne met le téléphone
+  // dans l'URL qu'à défaut. Une URL fuite par l'historique, les logs et le
+  // Referer — le numéro du voyageur n'a pas à y figurer.
+  if (reservation) {
+    params.set('reservation', reservation);
+  } else if (phone) {
+    params.set('phone', phone);
+  }
   return `/communications?${params.toString()}`;
 }
 

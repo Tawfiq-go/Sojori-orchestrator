@@ -17,6 +17,7 @@ import * as fulltaskApi from '../../services/fulltaskApi';
 import { toast } from 'react-toastify';
 import { useSearchParams } from 'react-router-dom';
 import { ReservationRegistrationActions } from '../reservations/ReservationRegistrationActions';
+import RevealContactRow from './RevealContactRow';
 
 moment.locale('fr');
 
@@ -152,6 +153,9 @@ const EditableRow = ({
 };
 
 const formatDate = (date: any) => date ? moment(date).format('DD MMM YYYY') : '—';
+// Conservé : plus référencé depuis le retrait de l'affichage des documents,
+// mais la mise en forme des heures reste utile si la section revient.
+// @ts-expect-error — inutilisé pour l'instant, volontairement gardé
 const formatTime = (t: any) => {
   if (t == null || t === '' || typeof t === 'boolean') return '—';
   if (typeof t === 'number') {
@@ -559,8 +563,10 @@ export function GuestInfoTab({
         <Box>
           <SectionCard title="Voyageur">
             <EditableRow label="Nom" field="guestName" value={r.guestName || `${r.guestFirstName ?? ''} ${r.guestLastName ?? ''}`.trim()} {...rowProps} />
-            <Row label="Email" value="Masqué" />
-            <Row label="Téléphone" value="Masqué" />
+            {/* Coordonnées révélées à la demande, une par une, et journalisées
+                côté serveur — le dashboard ne les reçoit plus par défaut. */}
+            <RevealContactRow label="Email" reservationId={String(resaId)} field="guestEmail" />
+            <RevealContactRow label="Téléphone" reservationId={String(resaId)} field="phone" />
             <EditableRow label="Pays" field="guestCountry" value={r.guestCountry} {...rowProps} />
             {isEditMode ? (
               <>
@@ -626,8 +632,12 @@ export function GuestInfoTab({
                           <TableCell sx={{ fontSize: 12 }}>{m.first_name || m.firstName || '—'}</TableCell>
                           <TableCell sx={{ fontSize: 12 }}>{m.last_name || m.lastName || '—'}</TableCell>
                           <TableCell sx={{ fontSize: 12 }}>{m.nationality || '—'}</TableCell>
-                          <TableCell sx={{ fontSize: 12, fontFamily: '"Geist Mono", monospace' }}>
-                            {m.document_number || m.passport || '—'}
+                          {/* Les numéros de document ne sont plus transmis au
+                              dashboard : un passeport permet l'usurpation, et
+                              il n'a pas à s'afficher dans une liste. La fiche
+                              de police, elle, est générée côté serveur. */}
+                          <TableCell sx={{ fontSize: 12, color: 'text.disabled', fontStyle: 'italic' }}>
+                            Masqué
                           </TableCell>
                         </TableRow>
                       ))}

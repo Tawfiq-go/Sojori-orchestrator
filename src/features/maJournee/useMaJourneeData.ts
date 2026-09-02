@@ -18,6 +18,7 @@ import { isOtaUnreplied } from '../../components/unified-inbox/otaThreadFilters'
 import { isWaUnreplied } from '../../components/unified-inbox/waThreadFilters';
 import { inboxMessagePreview } from '../../components/unified-inbox/formatInboxMessageText';
 import { presenceMetaFromReservation } from '../../utils/reservationPresence';
+import { waInboxUrl } from '../../utils/commsDeepLinks';
 
 const UNASSIGNED = 'Non assigné';
 
@@ -764,7 +765,9 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
           preview,
           unread: unreplied,
           when: relativeWhen(ex?.timestamp || c.last_message_time),
-          href: `/communications?tab=whatsapp&phone=${encodeURIComponent(c.phone)}`,
+          // Par réservation quand elle est connue : une URL ne doit pas
+          // transporter le téléphone du voyageur.
+          href: waInboxUrl({ reservationNumber: c.reservation_number, phone: c.phone }),
         });
       }
 

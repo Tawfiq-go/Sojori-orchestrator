@@ -1,10 +1,24 @@
 /** Deep links Inbox Guest (WhatsApp / OTA / Résas). */
 
+/**
+ * Lien vers une conversation WhatsApp.
+ *
+ * On adresse la conversation par son NUMÉRO DE RÉSERVATION, jamais par le
+ * téléphone du voyageur : une URL se retrouve dans l'historique du navigateur,
+ * les logs serveur et l'en-tête `Referer` envoyé aux tiers. Un numéro de
+ * téléphone n'a rien à faire dans une barre d'adresse.
+ *
+ * `opts.phone` reste accepté pour ne pas casser les appelants, mais il n'est
+ * utilisé qu'en dernier recours, quand aucune réservation n'est connue.
+ */
 export function waInboxUrl(opts: { phone?: string; reservationNumber?: string }): string {
   const params = new URLSearchParams({ section: 'guest', tab: 'whatsapp' });
-  const digits = (opts.phone || '').replace(/\D/g, '');
-  if (digits) params.set('phone', digits);
-  if (opts.reservationNumber) params.set('reservation', opts.reservationNumber);
+  if (opts.reservationNumber) {
+    params.set('reservation', opts.reservationNumber);
+  } else {
+    const digits = (opts.phone || '').replace(/\D/g, '');
+    if (digits) params.set('phone', digits);
+  }
   return `/communications?${params.toString()}`;
 }
 

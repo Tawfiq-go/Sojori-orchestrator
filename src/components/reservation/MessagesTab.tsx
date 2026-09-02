@@ -38,6 +38,7 @@ import {
 import { mapReviewApiRows, type ReviewRow } from '../communications/reviewMappers';
 import type { Conversation, MessageExchange } from '../../types/messages.types';
 import type { Message, Thread } from '../../types/unifiedInbox.types';
+import { waInboxUrl } from '../../utils/commsDeepLinks';
 
 const T = {
   primary: '#b8851a',
@@ -428,8 +429,10 @@ export function MessagesTab({ reservationDetails }: MessagesTabProps) {
   ];
 
   const openInComms = () => {
-    if (channel === 'whatsapp' && (waPhone || guestPhone)) {
-      navigate(`/communications?section=guest&tab=whatsapp&phone=${encodeURIComponent(waPhone || guestPhone)}`);
+    if (channel === 'whatsapp' && (reservationNumber || waPhone || guestPhone)) {
+      // Adressage par numéro de réservation : le téléphone du voyageur n'a rien
+      // à faire dans une URL (historique, logs, en-tête Referer).
+      navigate(waInboxUrl({ reservationNumber, phone: waPhone || guestPhone }));
       return;
     }
     if (channel === 'ota' && otaRow?.threadId) {

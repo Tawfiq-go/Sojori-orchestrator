@@ -216,9 +216,11 @@ function TravelerCard({ traveler, onEdit, onDelete }: {
             {traveler.nationality && (
               <span>🌍 {traveler.nationality}</span>
             )}
-            {traveler.passportNumber && (
-              <span>🛂 {traveler.passportNumber}</span>
-            )}
+            {/* Le numéro de document n'est plus transmis au dashboard : un
+                passeport permet l'usurpation d'identité et n'a pas à figurer
+                dans une fiche consultable. La saisie reste possible, la
+                relecture non ; la fiche de police est rendue côté serveur. */}
+            {traveler.passportNumber && <span>🛂 Masqué</span>}
             {traveler.dateOfBirth && (
               <span>
                 🎂 {new Date(traveler.dateOfBirth).toLocaleDateString('fr-FR')}
