@@ -2,6 +2,9 @@ import { listingsService } from '../../../../services/listingsService';
 
 export type RoomServiceBreakfastTimeMode = 'shared' | 'per_traveler';
 
+/** Toutes les formules sont inclus. with_supplement = flag ; facturation plus tard. */
+export type RoomServiceBreakfastSupplementMode = 'none' | 'with_supplement';
+
 export type RoomServiceBreakfastConfig = {
   enabled: boolean;
   entitlement: 'per_traveler' | 'per_reservation';
@@ -12,6 +15,7 @@ export type RoomServiceBreakfastConfig = {
   timeWindow?: { from: string; to: string };
   timeMode?: RoomServiceBreakfastTimeMode;
   guestMustSelectDays: boolean;
+  supplementMode: RoomServiceBreakfastSupplementMode;
 };
 
 export type ConciergeServicesSlice = {
@@ -60,6 +64,7 @@ function normalizeBreakfast(raw: unknown): RoomServiceBreakfastConfig | null {
     })(),
     timeMode: b.timeMode === 'per_traveler' ? 'per_traveler' : 'shared',
     guestMustSelectDays: b.guestMustSelectDays !== false,
+    supplementMode: b.supplementMode === 'with_supplement' ? 'with_supplement' : 'none',
   };
 }
 

@@ -39,6 +39,7 @@ const DEFAULT_BREAKFAST: RoomServiceBreakfastConfig = {
   timeWindow: { from: '07:00', to: '11:00' },
   timeMode: 'shared',
   guestMustSelectDays: true,
+  supplementMode: 'none',
 };
 
 /**
@@ -152,8 +153,8 @@ export default function ListingRoomServiceTab({
         Petit Déjeuner Inclus
       </Typography>
       <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 2, lineHeight: 1.5 }}>
-        Formules PDJ incluses pour le guest WhatsApp + configuration des jours et horaires.
-        Les commandes créent des tâches staff (lettre R).
+        Toutes les formules sont de type Inclus. Sans supplément est le chemin guest actuel
+        (prix 0). Avec supplément se configure ici ; la facturation sera branchée plus tard.
       </Typography>
 
       <Box
@@ -189,6 +190,30 @@ export default function ListingRoomServiceTab({
             pointerEvents: breakfast.enabled ? 'auto' : 'none',
           }}
         >
+          <FormControl size="small" fullWidth>
+            <InputLabel id="rs-supplement">Variante inclus</InputLabel>
+            <Select
+              labelId="rs-supplement"
+              label="Variante inclus"
+              value={breakfast.supplementMode || 'none'}
+              onChange={(e) =>
+                setBreakfast((p) => ({
+                  ...p,
+                  supplementMode: e.target.value as RoomServiceBreakfastConfig['supplementMode'],
+                }))
+              }
+            >
+              <MenuItem value="none">Inclus — sans supplément</MenuItem>
+              <MenuItem value="with_supplement">Inclus — avec supplément</MenuItem>
+            </Select>
+          </FormControl>
+          {breakfast.supplementMode === 'with_supplement' ? (
+            <Typography sx={{ fontSize: 12, color: 'text.secondary', gridColumn: '1 / -1' }}>
+              Flag enregistré. Le guest WhatsApp reste en inclus (0 MAD) jusqu’au backend
+              supplément.
+            </Typography>
+          ) : null}
+
           <FormControl size="small" fullWidth>
             <InputLabel id="rs-entitlement">Quota</InputLabel>
             <Select
