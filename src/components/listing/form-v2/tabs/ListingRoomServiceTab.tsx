@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Box,
   Button,
-  Checkbox,
   CircularProgress,
   FormControl,
-  FormControlLabel,
-  FormGroup,
   InputLabel,
   MenuItem,
   Select,
@@ -15,13 +12,18 @@ import {
   Typography,
 } from '@mui/material';
 import { toast } from 'react-toastify';
-import { ListingExperiencesPicker } from '../../../../features/orchestrationListingV3/ListingExperiencesPicker';
 import {
   fetchListingConciergeArrays,
   persistListingConciergeSlice,
   type RoomServiceBreakfastConfig,
 } from '../../../../features/listing/components/ConfigOrchestration/conciergeListingPersist';
 import { partnersApi, type PartnerService } from '../../../../services/partnersApi';
+import {
+  ListingBreakfastFormulas,
+  draftFromDish,
+  sanitizeOptionGroups,
+  sortBreakfastDishes,
+} from './ListingBreakfastFormulas';
 
 type Props = {
   listingId?: string | null;
@@ -40,10 +42,14 @@ const DEFAULT_BREAKFAST: RoomServiceBreakfastConfig = {
   timeMode: 'shared',
   guestMustSelectDays: true,
   supplementMode: 'none',
+  supplementServiceIds: [],
 };
 
+type FormulaDraft = ReturnType<typeof draftFromDish>;
+
 /**
- * Onglet listing « Room Service » — PDJ inclus (staff) + catalogue plats.
+ * Onglet listing « PDJ Inclus » — une activation, puis chaque formule
+ * (description, supplément, options). Staff, pas de provider.
  */
 export default function ListingRoomServiceTab({
   listingId,
@@ -51,10 +57,12 @@ export default function ListingRoomServiceTab({
   listingOwnerId,
 }: Props) {
   const [loading, setLoading] = useState(true);
-  const [savingBreakfast, setSavingBreakfast] = useState(false);
-  const [enabledIds, setEnabledIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
   const [breakfast, setBreakfast] = useState<RoomServiceBreakfastConfig>(DEFAULT_BREAKFAST);
-  const [dishRows, setDishRows] = useState<PartnerService[]>([]);
+  const [dishes, setDishes] = useState<PartnerService[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, FormulaDraft>>({});
+  const [includedIds, setIncludedIds] = useState<Set<string>>(new Set());
+  const [supplementIds, setSupplementIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     if (!listingId) {
@@ -71,13 +79,30 @@ export default function ListingRoomServiceTab({
           ownerId: listingOwnerId || undefined,
         }),
       ]);
-      setEnabledIds(conc.enabledExperienceIds ?? []);
-      setBreakfast(conc.roomServiceBreakfast ?? { ...DEFAULT_BREAKFAST });
-      setDishRows(catalog.filter((r) => (r.kind || '') === 'room_service'));
+      const rows = sortBreakfastDishes(catalog.filter((r) => (r.kind || '') === 'room_service'));
+      setDishes(rows);
+      const nextDrafts: Record<string, FormulaDraft> = {};
+      for (const r of rows) nextDrafts[String(r.id)] = draftFromDish(r);
+      setDrafts(nextDrafts);
+
+      const b = conc.roomServiceBreakfast ?? { ...DEFAULT_BREAKFAST };
+      setBreakfast(b);
+      const included = new Set((b.includedServiceIds || []).map(String));
+      setIncludedIds(included);
+      const savedSupp = (b.supplementServiceIds || []).map(String).filter((id) => included.has(id));
+      if (savedSupp.length) {
+        setSupplementIds(new Set(savedSupp));
+      } else if (b.supplementMode === 'with_supplement') {
+        setSupplementIds(new Set(included));
+      } else {
+        setSupplementIds(new Set());
+      }
     } catch {
-      setEnabledIds([]);
+      setDishes([]);
+      setDrafts({});
       setBreakfast({ ...DEFAULT_BREAKFAST });
-      setDishRows([]);
+      setIncludedIds(new Set());
+      setSupplementIds(new Set());
     } finally {
       setLoading(false);
     }
@@ -87,41 +112,54 @@ export default function ListingRoomServiceTab({
     void load();
   }, [load]);
 
-  const enabledDishes = useMemo(() => {
-    const idSet = new Set(enabledIds.map(String));
-    return dishRows.filter((r) => idSet.has(String(r.id)));
-  }, [dishRows, enabledIds]);
-
-  const saveBreakfast = async () => {
+  const save = async () => {
     if (!listingId) return;
-    setSavingBreakfast(true);
+    setSaving(true);
     try {
-      const included = breakfast.includedServiceIds.filter((id) =>
-        enabledIds.map(String).includes(String(id)),
-      );
+      for (const dish of dishes) {
+        const id = String(dish.id);
+        const draft = drafts[id] || draftFromDish(dish);
+        const optionGroups = sanitizeOptionGroups(draft.optionGroups);
+        const desc = (draft.description || '').trim();
+        const sameDesc = (dish.description || '').trim() === desc;
+        const sameOpts = JSON.stringify(dish.optionGroups || []) === JSON.stringify(optionGroups);
+        if (sameDesc && sameOpts) continue;
+        await partnersApi.updateExperience(id, {
+          description: desc,
+          optionGroups,
+        });
+      }
+
+      const included = Array.from(includedIds);
+      const supplement = Array.from(supplementIds).filter((id) => includedIds.has(id));
+      const current = await fetchListingConciergeArrays(String(listingId));
+      const catalogIds = new Set(dishes.map((d) => String(d.id)));
+      const keptOther = (current.enabledExperienceIds ?? [])
+        .map(String)
+        .filter((id) => !catalogIds.has(id));
+
       await persistListingConciergeSlice(String(listingId), {
+        enabledExperienceIds: [...keptOther, ...included],
         roomServiceBreakfast: {
           ...breakfast,
           includedServiceIds: included,
+          supplementServiceIds: supplement,
+          supplementMode: supplement.length ? 'with_supplement' : 'none',
           guestMustSelectDays: true,
         },
       });
-      setBreakfast((prev) => ({ ...prev, includedServiceIds: included }));
+      setBreakfast((prev) => ({
+        ...prev,
+        includedServiceIds: included,
+        supplementServiceIds: supplement,
+        supplementMode: supplement.length ? 'with_supplement' : 'none',
+      }));
       toast.success('Petit déjeuner inclus enregistré');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Enregistrement impossible');
     } finally {
-      setSavingBreakfast(false);
+      setSaving(false);
     }
-  };
-
-  const toggleIncludedDish = (id: string, on: boolean) => {
-    setBreakfast((prev) => {
-      const set = new Set(prev.includedServiceIds.map(String));
-      if (on) set.add(String(id));
-      else set.delete(String(id));
-      return { ...prev, includedServiceIds: Array.from(set) };
-    });
   };
 
   if (!listingId) {
@@ -144,240 +182,170 @@ export default function ListingRoomServiceTab({
 
   return (
     <Box sx={{ p: { xs: 1.5, md: 2 }, width: '100%' }}>
-      <Typography
-        sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: 'text.secondary', mb: 0.5 }}
-      >
-        LISTING
-      </Typography>
-      <Typography sx={{ fontSize: 22, fontWeight: 750, mb: 0.75, lineHeight: 1.2 }}>
-        Petit Déjeuner Inclus
-      </Typography>
-      <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 2, lineHeight: 1.5 }}>
-        Type Inclus, servi par le staff (pas un provider). Sans supplément = guest à 0 MAD.
-        Les options de chaque formule (boisson, cuisson…) viennent du catalogue.
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+        <Typography sx={{ fontSize: 18, fontWeight: 750, lineHeight: 1.2 }}>
+          Petit déjeuner inclus
+        </Typography>
+        <Switch
+          checked={breakfast.enabled}
+          onChange={(_, checked) => setBreakfast((p) => ({ ...p, enabled: checked }))}
+          slotProps={{ input: { 'aria-label': 'Activer le petit déjeuner inclus' } }}
+        />
+      </Box>
 
       <Box
         sx={{
-          mb: 3,
-          p: 2,
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 1.5,
-          bgcolor: 'background.paper',
+          mt: 1.5,
+          display: 'grid',
+          gap: 1.25,
+          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(4, 1fr)' },
+          opacity: breakfast.enabled ? 1 : 0.45,
+          pointerEvents: breakfast.enabled ? 'auto' : 'none',
         }}
       >
-        <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 1 }}>
-          Petit déjeuner inclus
-        </Typography>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={breakfast.enabled}
-              onChange={(_, checked) => setBreakfast((p) => ({ ...p, enabled: checked }))}
-            />
-          }
-          label="Activer le petit déjeuner inclus (guest WhatsApp)"
-        />
-
-        <Box
-          sx={{
-            mt: 1.5,
-            display: 'grid',
-            gap: 1.5,
-            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-            opacity: breakfast.enabled ? 1 : 0.45,
-            pointerEvents: breakfast.enabled ? 'auto' : 'none',
-          }}
-        >
-          <FormControl size="small" fullWidth>
-            <InputLabel id="rs-supplement">Variante inclus</InputLabel>
-            <Select
-              labelId="rs-supplement"
-              label="Variante inclus"
-              value={breakfast.supplementMode || 'none'}
-              onChange={(e) =>
-                setBreakfast((p) => ({
-                  ...p,
-                  supplementMode: e.target.value as RoomServiceBreakfastConfig['supplementMode'],
-                }))
-              }
-            >
-              <MenuItem value="none">Inclus — sans supplément</MenuItem>
-              <MenuItem value="with_supplement">Inclus — avec supplément</MenuItem>
-            </Select>
-          </FormControl>
-          {breakfast.supplementMode === 'with_supplement' ? (
-            <Typography sx={{ fontSize: 12, color: 'text.secondary', gridColumn: '1 / -1' }}>
-              Flag enregistré. Le guest WhatsApp reste en inclus (0 MAD) jusqu’au backend
-              supplément.
-            </Typography>
-          ) : null}
-
-          <FormControl size="small" fullWidth>
-            <InputLabel id="rs-entitlement">Quota</InputLabel>
-            <Select
-              labelId="rs-entitlement"
-              label="Quota"
-              value={breakfast.entitlement}
-              onChange={(e) =>
-                setBreakfast((p) => ({
-                  ...p,
-                  entitlement: e.target.value as RoomServiceBreakfastConfig['entitlement'],
-                }))
-              }
-            >
-              <MenuItem value="per_traveler">Un par voyageur / jour</MenuItem>
-              <MenuItem value="per_reservation">Un par réservation / jour</MenuItem>
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" fullWidth>
-            <InputLabel id="rs-start">Début</InputLabel>
-            <Select
-              labelId="rs-start"
-              label="Début"
-              value={breakfast.start}
-              onChange={(e) =>
-                setBreakfast((p) => ({
-                  ...p,
-                  start: e.target.value as RoomServiceBreakfastConfig['start'],
-                }))
-              }
-            >
-              <MenuItem value="j_plus_1">J+1 (lendemain d’arrivée)</MenuItem>
-              <MenuItem value="arrival">Jour d’arrivée</MenuItem>
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" fullWidth>
-            <InputLabel id="rs-end">Fin</InputLabel>
-            <Select
-              labelId="rs-end"
-              label="Fin"
-              value={breakfast.endInclusive ? 'departure' : 'eve'}
-              onChange={(e) =>
-                setBreakfast((p) => ({
-                  ...p,
-                  endInclusive: e.target.value === 'departure',
-                }))
-              }
-            >
-              <MenuItem value="eve">Veille du départ</MenuItem>
-              <MenuItem value="departure">Jour de départ inclus</MenuItem>
-            </Select>
-          </FormControl>
-
-          <TextField
-            size="small"
-            label="Heure par défaut"
-            value={breakfast.defaultTime || '09:00'}
-            onChange={(e) => setBreakfast((p) => ({ ...p, defaultTime: e.target.value }))}
-            placeholder="09:00"
-          />
-
-          <TextField
-            size="small"
-            label="Heure min (7h–11h)"
-            value={breakfast.timeWindow?.from || '07:00'}
+        <FormControl size="small" fullWidth>
+          <InputLabel id="rs-entitlement">Quota</InputLabel>
+          <Select
+            labelId="rs-entitlement"
+            label="Quota"
+            value={breakfast.entitlement}
             onChange={(e) =>
               setBreakfast((p) => ({
                 ...p,
-                timeWindow: { from: e.target.value, to: p.timeWindow?.to || '11:00' },
+                entitlement: e.target.value as RoomServiceBreakfastConfig['entitlement'],
               }))
             }
-            placeholder="07:00"
-          />
-
-          <TextField
-            size="small"
-            label="Heure max (7h–11h)"
-            value={breakfast.timeWindow?.to || '11:00'}
-            onChange={(e) =>
-              setBreakfast((p) => ({
-                ...p,
-                timeWindow: { from: p.timeWindow?.from || '07:00', to: e.target.value },
-              }))
-            }
-            placeholder="11:00"
-          />
-
-          <FormControl size="small" fullWidth>
-            <InputLabel id="rs-time-mode">Mode heure guest</InputLabel>
-            <Select
-              labelId="rs-time-mode"
-              label="Mode heure guest"
-              value={breakfast.timeMode || 'shared'}
-              onChange={(e) =>
-                setBreakfast((p) => ({
-                  ...p,
-                  timeMode: e.target.value as RoomServiceBreakfastConfig['timeMode'],
-                }))
-              }
-            >
-              <MenuItem value="per_traveler">Même heure par jour (écran jours)</MenuItem>
-              <MenuItem value="shared">Choix heure par déjeuner (écran confirmation)</MenuItem>
-            </Select>
-          </FormControl>
-        </Box>
-
-        <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 2, mb: 0.5 }}>
-          Plats inclus (parmi le catalogue activé ci-dessous)
-        </Typography>
-        <FormGroup sx={{ opacity: breakfast.enabled ? 1 : 0.45, pointerEvents: breakfast.enabled ? 'auto' : 'none' }}>
-          {enabledDishes.length === 0 ? (
-            <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-              Activez d’abord des plats Room Service dans le catalogue.
-            </Typography>
-          ) : (
-            enabledDishes.map((d) => (
-              <FormControlLabel
-                key={String(d.id)}
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={breakfast.includedServiceIds.map(String).includes(String(d.id))}
-                    onChange={(_, checked) => toggleIncludedDish(String(d.id), checked)}
-                  />
-                }
-                label={d.title}
-              />
-            ))
-          )}
-        </FormGroup>
-
-        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="contained"
-            size="small"
-            disabled={savingBreakfast}
-            onClick={() => void saveBreakfast()}
           >
-            {savingBreakfast ? '…' : 'Enregistrer PDJ inclus'}
-          </Button>
-        </Box>
+            <MenuItem value="per_traveler">Un par voyageur / jour</MenuItem>
+            <MenuItem value="per_reservation">Un par réservation / jour</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" fullWidth>
+          <InputLabel id="rs-start">Début</InputLabel>
+          <Select
+            labelId="rs-start"
+            label="Début"
+            value={breakfast.start}
+            onChange={(e) =>
+              setBreakfast((p) => ({
+                ...p,
+                start: e.target.value as RoomServiceBreakfastConfig['start'],
+              }))
+            }
+          >
+            <MenuItem value="j_plus_1">J+1</MenuItem>
+            <MenuItem value="arrival">Jour d’arrivée</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" fullWidth>
+          <InputLabel id="rs-end">Fin</InputLabel>
+          <Select
+            labelId="rs-end"
+            label="Fin"
+            value={breakfast.endInclusive ? 'departure' : 'eve'}
+            onChange={(e) =>
+              setBreakfast((p) => ({
+                ...p,
+                endInclusive: e.target.value === 'departure',
+              }))
+            }
+          >
+            <MenuItem value="eve">Veille du départ</MenuItem>
+            <MenuItem value="departure">Jour de départ</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" fullWidth>
+          <InputLabel id="rs-time-mode">Heure guest</InputLabel>
+          <Select
+            labelId="rs-time-mode"
+            label="Heure guest"
+            value={breakfast.timeMode || 'shared'}
+            onChange={(e) =>
+              setBreakfast((p) => ({
+                ...p,
+                timeMode: e.target.value as RoomServiceBreakfastConfig['timeMode'],
+              }))
+            }
+          >
+            <MenuItem value="per_traveler">Même heure par jour</MenuItem>
+            <MenuItem value="shared">Heure à la confirmation</MenuItem>
+          </Select>
+        </FormControl>
+        <TextField
+          size="small"
+          label="Heure défaut"
+          value={breakfast.defaultTime || '09:00'}
+          onChange={(e) => setBreakfast((p) => ({ ...p, defaultTime: e.target.value }))}
+        />
+        <TextField
+          size="small"
+          label="De"
+          value={breakfast.timeWindow?.from || '07:00'}
+          onChange={(e) =>
+            setBreakfast((p) => ({
+              ...p,
+              timeWindow: { from: e.target.value, to: p.timeWindow?.to || '11:00' },
+            }))
+          }
+        />
+        <TextField
+          size="small"
+          label="À"
+          value={breakfast.timeWindow?.to || '11:00'}
+          onChange={(e) =>
+            setBreakfast((p) => ({
+              ...p,
+              timeWindow: { from: p.timeWindow?.from || '07:00', to: e.target.value },
+            }))
+          }
+        />
       </Box>
 
-      <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 1 }}>Catalogue plats</Typography>
-      <ListingExperiencesPicker
-        listingId={String(listingId)}
-        listingCityId={listingCityId || null}
-        listingOwnerId={listingOwnerId || null}
-        enabledIds={enabledIds}
-        onSaved={(ids) => {
-          setEnabledIds(ids);
-          void partnersApi
-            .listExperienceCatalog({
-              scope: 'all',
-              cityId: listingCityId || undefined,
-              ownerId: listingOwnerId || undefined,
-            })
-            .then((list) => setDishRows(list.filter((r) => (r.kind || '') === 'room_service')))
-            .catch(() => undefined);
+      <Typography sx={{ fontSize: 13, fontWeight: 700, mt: 2.5, mb: 0.25 }}>Formules</Typography>
+      <ListingBreakfastFormulas
+        dishes={dishes}
+        drafts={drafts}
+        includedIds={includedIds}
+        supplementIds={supplementIds}
+        onToggleIncluded={(id, on) => {
+          setIncludedIds((prev) => {
+            const next = new Set(prev);
+            if (on) next.add(id);
+            else next.delete(id);
+            return next;
+          });
+          if (on) setBreakfast((p) => (p.enabled ? p : { ...p, enabled: true }));
+          if (!on) {
+            setSupplementIds((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+          }
         }}
-        kindFilter="room_service"
-        maxHeight={560}
+        onToggleSupplement={(id, on) => {
+          setSupplementIds((prev) => {
+            const next = new Set(prev);
+            if (on) next.add(id);
+            else next.delete(id);
+            return next;
+          });
+        }}
+        onDraftChange={(id, patch) => {
+          setDrafts((prev) => {
+            const dish = dishes.find((d) => String(d.id) === id);
+            const base = prev[id] || (dish ? draftFromDish(dish) : undefined);
+            if (!base) return prev;
+            return { ...prev, [id]: { ...base, ...patch } };
+          });
+        }}
       />
+
+      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button variant="contained" size="small" disabled={saving} onClick={() => void save()}>
+          {saving ? '…' : 'Enregistrer'}
+        </Button>
+      </Box>
     </Box>
   );
 }
