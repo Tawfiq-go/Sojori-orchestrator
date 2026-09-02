@@ -8,6 +8,9 @@ interface Props {
   error?: string | null;
 }
 
+/** Durée de vie du défi côté serveur (utils/mfa/challenge.ts). */
+const CHALLENGE_TTL_SECONDS = 5 * 60;
+
 /**
  * Deuxième étape du login : saisie du code.
  *
@@ -18,11 +21,22 @@ interface Props {
 export default function MfaCodeStep({ method, onSubmit, onCancel, error }: Props) {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [remaining, setRemaining] = useState(CHALLENGE_TTL_SECONDS);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Compte à rebours : sans lui, l'utilisateur saisit un code déjà périmé et
+  // ne comprend pas le refus. À zéro, seul le serveur tranche — on n'annule
+  // rien côté client, on affiche.
+  useEffect(() => {
+    const id = setInterval(() => setRemaining((r) => (r > 0 ? r - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const mmss = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,6 +85,13 @@ export default function MfaCodeStep({ method, onSubmit, onCancel, error }: Props
         placeholder="123456"
         sx={{ mb: 2 }}
       />
+
+      <Typography
+        variant="caption"
+        sx={{ display: 'block', mb: 2, color: remaining === 0 ? 'error.main' : 'text.secondary' }}
+      >
+        {remaining > 0 ? `Code valable encore ${mmss}` : 'Code expiré — reconnectez-vous.'}
+      </Typography>
 
       <Button type="submit" variant="contained" fullWidth disabled={busy || code.length < 6}>
         {busy ? 'Vérification…' : 'Valider'}
