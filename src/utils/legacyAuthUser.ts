@@ -27,6 +27,7 @@ export function toLegacyAuthUser(user: MockUser | ApiUser | null): Record<string
     _id: id,
     id,
     email: user.email,
+    mfaEnabled: Boolean((user as { mfaEnabled?: boolean }).mfaEnabled),
     firstName: user.firstName,
     lastName: user.lastName,
     role,
