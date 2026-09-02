@@ -5,6 +5,7 @@ import { DashboardWrapper } from '../../components/DashboardWrapper';
 import { ViewToggle, monitorTokens as t } from '../../features/monitoring/shared/MonitorDesign';
 import { MonitorAdminGate } from '../../features/monitoring/shared/MonitorAdminGate';
 import UnifiedMonitoringPage from './UnifiedMonitoringPage';
+import SecurityMonitoringPage from './SecurityMonitoringPage';
 import LogsPage from './LogsPage';
 import MetricsPageUltra from './MetricsPageUltra';
 import RabbitMQPage from './RabbitMQPage';
@@ -29,6 +30,7 @@ const TAB_OPTIONS = [
   { value: 'AI', label: '🤖 IA' },
   { value: 'OCR', label: '🪪 OCR' },
   { value: 'Infrastructure', label: '🏗️ Infra' },
+  { value: 'Security', label: '🛡️ Sécurité' },
   { value: 'Pods', label: '🧩 Pods' },
   { value: 'ReservationSync', label: '🔄 Sync résa' },
   { value: 'Cron', label: '⏱️ Cron' },
@@ -37,7 +39,7 @@ const TAB_OPTIONS = [
 type MonitorTab = (typeof TAB_OPTIONS)[number]['value'];
 
 const VALID = new Set<string>(TAB_OPTIONS.map((o) => o.value));
-const LEGACY_TAB = new Set(['Unified', 'Alertes', 'RU', 'Security']);
+const LEGACY_TAB = new Set(['Unified', 'Alertes', 'RU']);
 
 const TAB_BY_LOWER: Record<string, MonitorTab> = {
   summary: 'Summary',
@@ -50,6 +52,8 @@ const TAB_BY_LOWER: Record<string, MonitorTab> = {
   ai: 'AI',
   ocr: 'OCR',
   infrastructure: 'Infrastructure',
+  security: 'Security',
+  securite: 'Security',
   pods: 'Pods',
   'reservation-sync': 'ReservationSync',
   cron: 'Cron',
@@ -121,6 +125,7 @@ export default function MonitoringHubPage() {
             {tab === 'AI' && <AIMonitoringPage />}
             {tab === 'OCR' && <OcrBenchmarkTab />}
             {tab === 'Infrastructure' && <InfrastructureMonitoringPage />}
+            {tab === 'Security' && <SecurityMonitoringPage />}
             {tab === 'Pods' && <PodsMonitoringPage />}
             {tab === 'ReservationSync' && <ReservationSyncMonitorTab />}
             {tab === 'Cron' && <CronMonitoringPage />}
