@@ -149,7 +149,7 @@ export const LoginPage: React.FC = () => {
             <Typography variant="body1" color="text.secondary">
               {mockAuth
                 ? 'Mode démo mock (VITE_USE_MOCK_AUTH).'
-                : 'Connexion via dev.sojori.com (proxy local Vite, comptes prod).'}
+                : 'Espace propriétaires et gestionnaires.'}
             </Typography>
           </Box>
 
