@@ -62,7 +62,10 @@ export default function MfaCodeStep({ method, onSubmit, onCancel, error }: Props
             reçus.
           </>
         ) : (
-          <>Saisissez le code à 6 chiffres affiché par votre application d'authentification.</>
+          <>
+            Saisissez le code à 6 chiffres affiché par Google Authenticator (ou votre application
+            d'authentification).
+          </>
         )}
       </Typography>
 
