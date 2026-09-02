@@ -15,11 +15,21 @@ import {
 import { useEffect, useState } from 'react';
 import apiClient from '../../services/apiClient';
 import { AUTH_CONFIG } from '../../config/authConfig';
+import type { AuthResponse } from '../../services/authService.real';
+import { setTokens } from '../../utils/authUtils';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onDone?: () => void;
+  /**
+   * Enrôlement forcé au login : jeton d'enrôlement rendu par `/login`, seul
+   * accepté sur setup/confirm-totp. Sans session, il n'y a pas de cookie à
+   * injecter par l'intercepteur — l'en-tête explicite reste.
+   */
+  authToken?: string;
+  /** Session rendue par confirm-totp (token + refreshToken + user). */
+  onEnrolled?: (session: AuthResponse) => void;
 }
 
 /**
@@ -29,7 +39,8 @@ interface Props {
  * qu'après qu'un premier code a été validé. Activer dès le scan verrouillerait
  * un utilisateur dont l'application est mal enrôlée ou l'horloge décalée.
  */
-export default function MfaEnrollDialog({ open, onClose, onDone }: Props) {
+export default function MfaEnrollDialog({ open, onClose, onDone, authToken, onEnrolled }: Props) {
+  const authHeaders = authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : undefined;
   const [step, setStep] = useState(0);
   const [secret, setSecret] = useState('');
   const [qrSvg, setQrSvg] = useState('');
@@ -48,7 +59,7 @@ export default function MfaEnrollDialog({ open, onClose, onDone }: Props) {
     (async () => {
       setBusy(true);
       try {
-        const { data } = await apiClient.post(AUTH_CONFIG.API_URL + '/mfa/setup-totp', {});
+        const { data } = await apiClient.post(AUTH_CONFIG.API_URL + '/mfa/setup-totp', {}, authHeaders);
         setSecret(data.secret);
         setQrSvg(data.qrSvg || '');
       } catch (e: any) {
@@ -67,10 +78,20 @@ export default function MfaEnrollDialog({ open, onClose, onDone }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const { data } = await apiClient.post(AUTH_CONFIG.API_URL + '/mfa/confirm-totp', {
-        code: code.trim(),
-      });
+      const { data } = await apiClient.post(
+        AUTH_CONFIG.API_URL + '/mfa/confirm-totp',
+        { code: code.trim() },
+        authHeaders,
+      );
       setBackupCodes(data.backupCodes || []);
+      // confirm-totp ouvre la session avec la preuve 2FA : la garder, sinon le
+      // token courant (sans second facteur) resterait celui d'avant.
+      if (data.token && data.refreshToken) {
+        setTokens(data.token, data.refreshToken);
+        if (data.user) {
+          onEnrolled?.({ token: data.token, refreshToken: data.refreshToken, user: data.user });
+        }
+      }
       setStep(2);
     } catch (e: any) {
       setError(

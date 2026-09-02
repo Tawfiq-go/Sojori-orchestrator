@@ -51,10 +51,26 @@ export interface MfaChallengeResponse {
   challengeToken: string;
 }
 
-export type LoginResult = AuthResponse | MfaChallengeResponse;
+/**
+ * Réponse de `/login` pour un admin qui n'a PAS encore activé le second facteur
+ * (obligatoire pour ce rôle). Aucune session : `enrollToken` n'ouvre que
+ * `/mfa/setup-totp` et `/mfa/confirm-totp`, et c'est confirm-totp qui rend la
+ * session une fois le premier code validé.
+ */
+export interface MfaEnrollmentResponse {
+  mfaEnrollmentRequired: true;
+  method: 'totp';
+  enrollToken: string;
+}
+
+export type LoginResult = AuthResponse | MfaChallengeResponse | MfaEnrollmentResponse;
 
 export function isMfaChallenge(r: LoginResult): r is MfaChallengeResponse {
   return (r as MfaChallengeResponse)?.mfaRequired === true;
+}
+
+export function isMfaEnrollment(r: LoginResult): r is MfaEnrollmentResponse {
+  return (r as MfaEnrollmentResponse)?.mfaEnrollmentRequired === true;
 }
 
 export interface ValidateTokenResponse {
@@ -205,6 +221,15 @@ const authService = {
         };
       }
 
+      // Admin sans 2FA : enrôlement obligatoire avant toute session.
+      if (response.data?.mfaEnrollmentRequired) {
+        return {
+          mfaEnrollmentRequired: true,
+          method: 'totp',
+          enrollToken: response.data.enrollToken,
+        };
+      }
+
       const { token, refreshToken, user } = response.data;
 
       if (!token || !user) {
@@ -235,8 +260,12 @@ const authService = {
           error.response?.data?.error ||
           error.response?.data?.message;
         if (apiError?.includes('Role not allowed from this origin')) {
+          const host = typeof window !== 'undefined' ? window.location.hostname : '';
+          const isLocal = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(host);
           throw new Error(
-            'Connexion refusée depuis ce port local. Redémarrez srv-user ou utilisez le port 4174.',
+            isLocal
+              ? 'Connexion refusée depuis ce port local. Redémarrez srv-user ou utilisez le port 4174.'
+              : `Ce compte ne peut pas se connecter depuis ${host}. Comptes admin : admin.sojori.com. Propriétaires : app.sojori.com.`,
           );
         }
         throw new Error(apiError || 'Email ou mot de passe incorrect');

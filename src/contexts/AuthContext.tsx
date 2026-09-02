@@ -6,7 +6,8 @@ import React, {
   useState,
 } from 'react';
 import authService from '../services/authService';
-import { isMfaChallenge } from '../services/authService.real';
+import { isMfaChallenge, isMfaEnrollment } from '../services/authService.real';
+import type { AuthResponse } from '../services/authService.real';
 import type {
   LoginCredentials,
   ResetPasswordPayload,
@@ -42,11 +43,19 @@ export interface MfaChallenge {
   challengeToken: string;
 }
 
+/** Admin sans 2FA : le login rend un jeton d'enrôlement, pas une session. */
+export interface MfaEnrollment {
+  enroll: true;
+  enrollToken: string;
+}
+
 export interface AuthContextType extends AuthState {
   isLoading: boolean;
   /** Renvoie le défi 2FA si le compte en a un ; sinon la session est ouverte. */
-  login: (credentials: LoginCredentials) => Promise<MfaChallenge | null>;
+  login: (credentials: LoginCredentials) => Promise<MfaChallenge | MfaEnrollment | null>;
   verifyMfa: (challengeToken: string, code: string) => Promise<void>;
+  /** Ouvre la session rendue par confirm-totp (enrôlement forcé au login). */
+  completeMfaEnrollment: (response: AuthResponse) => void;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => void;
   updateToken: (newToken: string) => void;
@@ -232,7 +241,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const login = async (credentials: LoginCredentials): Promise<MfaChallenge | null> => {
+  const completeMfaEnrollment = (response: AuthResponse): void => {
+    setTokens(response.token, response.refreshToken);
+    const user = apiUserToMockUser(response.user as ApiUser, null);
+    persistUser(user);
+    setState({
+      user,
+      token: response.token,
+      refreshToken: response.refreshToken,
+      isAuthenticated: true,
+      loading: false,
+      error: null,
+    });
+  };
+
+  const login = async (
+    credentials: LoginCredentials,
+  ): Promise<MfaChallenge | MfaEnrollment | null> => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
@@ -243,6 +268,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (isMfaChallenge(response)) {
         setState((prev) => ({ ...prev, loading: false, error: null }));
         return { method: response.method, challengeToken: response.challengeToken };
+      }
+
+      // Enrôlement 2FA obligatoire (admin) : pas de session tant que le premier
+      // code n'est pas validé. L'appelant affiche le dialogue d'activation.
+      if (isMfaEnrollment(response)) {
+        setState((prev) => ({ ...prev, loading: false, error: null }));
+        return { enroll: true, enrollToken: response.enrollToken };
       }
 
       const user = apiUserToMockUser(response.user as ApiUser, null);
@@ -419,6 +451,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       isLoading: state.loading,
       login,
       verifyMfa,
+      completeMfaEnrollment,
       register,
       logout,
       updateToken,
