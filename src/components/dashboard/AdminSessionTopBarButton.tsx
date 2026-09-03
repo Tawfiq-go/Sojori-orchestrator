@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../hooks/useAuth';
+import { useRealAuth } from '../../hooks/useAuth';
 import { useAdminOwnerFilter } from '../../context/AdminOwnerFilterContext';
 import { isPlatformAdminRole } from '../../utils/taskScope.utils';
 import { buildAdminSessionViewModel } from './adminSessionDetails.shared';
@@ -22,7 +22,8 @@ const iconBtnSx = {
 
 /** Icône statut session admin (top bar droite) — SuperAdmin / Admin uniquement. */
 export function AdminSessionTopBarButton() {
-  const { user } = useAuth();
+  // Compte réel : cette icône décrit la session admin, pas la vue.
+  const { user } = useRealAuth();
   const { i18n } = useTranslation();
   const { ownerScopeUnset, ownerScopeAll, requestOwnerId, adminScopeMode } = useAdminOwnerFilter();
   const [open, setOpen] = useState(false);

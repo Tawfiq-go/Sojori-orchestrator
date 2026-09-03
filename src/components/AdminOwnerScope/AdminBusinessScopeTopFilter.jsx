@@ -6,7 +6,7 @@ import { useAdminOwnerFilter } from '../../context/AdminOwnerFilterContext';
 import TemplateAdminSyncPmsButton from './TemplateAdminSyncPmsButton';
 
 /** Pages où le scope = Template Admin (référence) + PMs — pas « Tous (plateforme) ». */
-function isTemplateAdminScopePath(pathname) {
+export function isTemplateAdminScopePath(pathname) {
   const p = String(pathname || '');
   return (
     p.startsWith('/listings/orchestration-model') ||
