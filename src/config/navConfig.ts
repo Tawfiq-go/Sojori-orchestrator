@@ -456,13 +456,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         iconColor: '#2d4a6b',
         description: 'Occupation, revenu et encaissements',
       },
-      {
-        id: 'reports/clients',
-        label: 'Clients',
-        iconType: 'worker',
-        iconColor: '#E6B022',
-        description: 'D’où viennent les réservations, et ce qu’elles rapportent',
-      },
+      // "Clients" fusionne avec Rapports 2 (meme ecran LCD/hotel) — voir reports2/clients.
     ],
   },
   {
