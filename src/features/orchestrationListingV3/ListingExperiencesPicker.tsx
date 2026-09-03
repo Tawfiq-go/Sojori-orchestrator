@@ -9,7 +9,7 @@ import {
   Typography,
 } from '@mui/material';
 import { toast } from 'react-toastify';
-import { partnersApi, type PartnerService } from '../../services/partnersApi';
+import { partnersApi, type PartnerService, GUEST_EXPERIENCE_KINDS } from '../../services/partnersApi';
 import {
   fetchListingConciergeArrays,
   persistListingConciergeSlice,
@@ -25,8 +25,8 @@ type Props = {
   /** Hauteur max de la grille (sidebar listing = plus haute). */
   maxHeight?: number;
   /**
-   * Filtre catalogue : expériences J3 (hors transport/room_service),
-   * ou plats Room Service uniquement.
+   * Filtre catalogue : expériences guest (J3) + navette,
+   * plats Room Service, ou ambiances villa.
    */
   kindFilter?: 'experience' | 'room_service' | 'villa_experience';
 };
@@ -66,16 +66,24 @@ export function ListingExperiencesPicker({
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const kinds =
+        kindFilter === 'room_service'
+          ? (['room_service'] as const)
+          : kindFilter === 'villa_experience'
+            ? (['villa_experience'] as const)
+            : GUEST_EXPERIENCE_KINDS;
       const list = await partnersApi.listExperienceCatalog({
-        scope: 'all',
+        scope: kindFilter === 'experience' ? 'all' : 'own',
         cityId: listingCityId || undefined,
         ownerId: listingOwnerId || undefined,
+        marketMode: kindFilter === 'experience' ? 'browse' : undefined,
+        kinds: [...kinds],
       });
       const byKind = list.filter((r) => {
         const k = r.kind || 'experience';
         if (kindFilter === 'room_service') return k === 'room_service';
         if (kindFilter === 'villa_experience') return k === 'villa_experience';
-        return k !== 'room_service' && k !== 'transport' && k !== 'villa_experience';
+        return k === 'experience' || k === 'transport';
       });
       setRows(byKind);
       const kindIdSet = new Set(byKind.map((r) => String(r.id)));
@@ -209,8 +217,8 @@ export function ListingExperiencesPicker({
         ) : (
           <>
             Aucune expérience pour la ville de ce listing. Créez les vôtres dans{' '}
-            <b>Expériences → Catalogue</b>, ou activez des activités for sale du Marché puis
-            activez-les ici.
+            <b>Expériences</b> (activités guest + navette), ou cochez ici les
+            for sale des autres owners.
           </>
         )}
       </Typography>
@@ -227,8 +235,8 @@ export function ListingExperiencesPicker({
           </>
         ) : (
           <>
-            Activez sur <b>ce listing</b> les expériences visibles pour le guest (vos activités +
-            for sale). Rien n’est activé automatiquement.
+            Activez sur <b>ce listing</b> vos expériences et navettes, plus les
+            for sale des autres owners. Rien n’est activé automatiquement.
           </>
         )}
       </Typography>
@@ -322,6 +330,11 @@ export function ListingExperiencesPicker({
               const provider = r.providerName || (r.partnerId ? 'Sojori' : 'Mes expériences');
               const on = selected.has(r.id);
               const photo = Array.isArray(r.photos) ? r.photos.find(Boolean) : undefined;
+              const isMarket =
+                r.providerKind === 'partner' ||
+                Boolean(
+                  listingOwnerId && r.ownerId && String(r.ownerId) !== String(listingOwnerId),
+                );
               return (
                 <Box
                   key={r.id}
@@ -390,6 +403,7 @@ export function ListingExperiencesPicker({
                         {provider}
                       </Box>
                       {r.category ? ` · ${r.category}` : ''}
+                      {isMarket ? ' · For sale' : ''}
                       {min > 0 ? ` · dès ${money(min)} MAD` : ''}
                     </Typography>
                     )}
