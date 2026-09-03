@@ -51,6 +51,12 @@ function isInboxSoftFailEndpoint(url: string): boolean {
   );
 }
 
+/** Seules routes qui ont besoin du refresh token : rafraîchissement et déconnexion (srv-user). */
+export function isRefreshTokenRoute(url: string | undefined): boolean {
+  const u = String(url || '');
+  return u.includes('/valid-token-check') || u.includes('/auth/logout');
+}
+
 async function refreshSessionViaValidTokenCheck(): Promise<string | null> {
   const token = getToken();
   const refreshToken = getRefreshToken();
@@ -180,7 +186,11 @@ apiClient.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    if (refreshToken && config.headers) {
+    // Le refresh token (7 jours) ne part QUE vers la route qui rafraîchit et
+    // vers le logout. Avant, il accompagnait chaque requête vers chaque
+    // microservice : l'access token de 15 min ne protégeait rien, et le
+    // secret long traînait dans tous les logs d'accès.
+    if (refreshToken && config.headers && isRefreshTokenRoute(config.url)) {
       config.headers['x-refresh-token'] = refreshToken;
     }
 
@@ -318,7 +328,7 @@ apiClient.interceptors.response.use(
             if (tokenForRetry) {
               originalRequest.headers = originalRequest.headers ?? {};
               originalRequest.headers.Authorization = `Bearer ${tokenForRetry}`;
-              originalRequest.headers['x-refresh-token'] = getRefreshToken() || '';
+              delete originalRequest.headers['x-refresh-token'];
               return apiClient(originalRequest);
             }
           } catch {
@@ -356,7 +366,7 @@ apiClient.interceptors.response.use(
         }
         originalRequest.headers = originalRequest.headers ?? {};
         originalRequest.headers.Authorization = `Bearer ${tokenForRetry}`;
-        originalRequest.headers['x-refresh-token'] = getRefreshToken() || '';
+        delete originalRequest.headers['x-refresh-token'];
         return apiClient(originalRequest);
       } catch (refreshError) {
         const refreshErrData = (refreshError as { response?: { data?: Record<string, unknown> } })

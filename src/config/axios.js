@@ -2,6 +2,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from './backendServer.config';
 import { getToken, getRefreshToken, setTokens } from '../utils/authUtils';
+import { isRefreshTokenRoute } from '../services/apiClient';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -16,7 +17,8 @@ apiClient.interceptors.request.use((config) => {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
   }
-  if (refreshToken) {
+  // Refresh token réservé à la route de rafraîchissement (voir apiClient.isRefreshTokenRoute).
+  if (refreshToken && isRefreshTokenRoute(config.url)) {
     config.headers = config.headers ?? {};
     config.headers['x-refresh-token'] = refreshToken;
   }
