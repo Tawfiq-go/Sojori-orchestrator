@@ -1,4 +1,4 @@
-import { getToken, getRefreshToken } from '../auth/auth.utils';
+import { getToken } from '../auth/auth.utils';
 import { logListingMedia } from './helpers';
 
 interface PostFormDataOptions {
@@ -20,14 +20,10 @@ export async function postFormDataAsMultipart(
   // Récupération des tokens
   const devTok = import.meta.env.DEV ? (import.meta.env.VITE_DEV_TOKEN || '').trim() : '';
   const token = getToken() || devTok || '';
-  const refreshToken = getRefreshToken();
 
   const headers: Record<string, string> = {};
   if (token) {
     headers.Authorization = `Bearer ${token}`;
-  }
-  if (refreshToken) {
-    headers['x-refresh-token'] = refreshToken;
   }
 
   const ctrl = new AbortController();
