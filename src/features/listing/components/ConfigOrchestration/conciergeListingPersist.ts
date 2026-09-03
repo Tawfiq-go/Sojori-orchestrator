@@ -29,6 +29,8 @@ export type ConciergeServicesSlice = {
   conciergePartnerId?: string | null;
   /** Ids PartnerService cochés sur le listing (absent / [] = aucune expérience guest). */
   enabledExperienceIds?: string[];
+  /** Menus guest J3. Ex. EE$autres */
+  experienceGuestBlocs?: string;
   roomServiceBreakfast?: RoomServiceBreakfastConfig | null;
 };
 
@@ -39,6 +41,7 @@ export type ConciergeServicesArrays = {
   conciergeSource?: 'own' | 'partner';
   conciergePartnerId?: string | null;
   enabledExperienceIds?: string[] | null;
+  experienceGuestBlocs?: string;
   roomServiceBreakfast?: RoomServiceBreakfastConfig | null;
 };
 
@@ -80,6 +83,7 @@ export async function fetchListingConciergeArrays(
   const res = await listingsService.getListingConciergeConfig(listingId);
   const doc = (res.data || {}) as ConciergeServicesSlice & {
     enabledExperienceIds?: unknown;
+    experienceGuestBlocs?: unknown;
     roomServiceBreakfast?: unknown;
   };
   const enabledRaw = doc.enabledExperienceIds;
@@ -94,6 +98,7 @@ export async function fetchListingConciergeArrays(
     conciergeSource: doc.conciergeSource === 'partner' ? 'partner' : 'own',
     conciergePartnerId: doc.conciergePartnerId ?? null,
     enabledExperienceIds,
+    experienceGuestBlocs: String(doc.experienceGuestBlocs || '').trim(),
     roomServiceBreakfast: normalizeBreakfast(doc.roomServiceBreakfast),
   };
 }
@@ -125,6 +130,11 @@ export async function persistListingConciergeSlice(
   if (slice.enabledExperienceIds !== undefined) {
     body.enabledExperienceIds = slice.enabledExperienceIds;
   }
+  if (slice.experienceGuestBlocs !== undefined) {
+    body.experienceGuestBlocs = slice.experienceGuestBlocs;
+  } else if (existing.experienceGuestBlocs) {
+    body.experienceGuestBlocs = existing.experienceGuestBlocs;
+  }
   if (slice.roomServiceBreakfast !== undefined) {
     body.roomServiceBreakfast = slice.roomServiceBreakfast;
   } else if (existing.roomServiceBreakfast) {
@@ -142,6 +152,10 @@ export async function persistListingConciergeSlice(
       body.enabledExperienceIds !== undefined
         ? body.enabledExperienceIds
         : existing.enabledExperienceIds,
+    experienceGuestBlocs:
+      body.experienceGuestBlocs !== undefined
+        ? body.experienceGuestBlocs
+        : existing.experienceGuestBlocs,
     roomServiceBreakfast:
       body.roomServiceBreakfast !== undefined
         ? body.roomServiceBreakfast
