@@ -28,6 +28,15 @@ export function RouteAccessGuard() {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
+  // hasDevTokenBypass() (VITE_DEV_TOKEN) fait passer canAccessProtectedRoutes même
+  // sans session réelle — le X-Dev-Token reste nécessaire aux appels API en dev
+  // local, mais ne doit jamais dispenser d'une vraie session utilisateur ici.
+  // Sans ce garde, une session expirée atterrissait sur /forbidden ("Votre rôle
+  // ne permet pas") au lieu de /login — message trompeur, cause invisible.
+  if (!user?.role) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
   if (location.pathname === '/forbidden') {
     return <Outlet />;
   }

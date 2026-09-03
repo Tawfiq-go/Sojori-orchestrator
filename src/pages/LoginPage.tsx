@@ -153,7 +153,7 @@ export const LoginPage: React.FC = () => {
             <Typography variant="body1" color="text.secondary">
               {mockAuth
                 ? 'Mode démo mock (VITE_USE_MOCK_AUTH).'
-                : 'Espace propriétaires et gestionnaires.'}
+                : 'Connectez-vous à votre espace.'}
             </Typography>
           </Box>
 
@@ -163,7 +163,7 @@ export const LoginPage: React.FC = () => {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             {mockAuth
               ? 'Comptes démo ou tout email valide avec mot de passe ≥ 3 caractères.'
-              : 'Utilisez l’email et le mot de passe de votre compte admin ou owner.'}
+              : 'Utilisez l’email et le mot de passe de votre compte.'}
           </Typography>
 
           {(error || localError) && (
@@ -204,7 +204,7 @@ export const LoginPage: React.FC = () => {
                 onChange={(e) => updateForm('email', e.target.value)}
                 required
                 error={!!fieldErrors.email}
-                helperText={fieldErrors.email || 'Ex: gouachadmin@sojori.com'}
+                helperText={fieldErrors.email}
                 slotProps={{
                   input: {
                     startAdornment: (

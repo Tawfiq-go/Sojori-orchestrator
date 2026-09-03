@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, CircularProgress, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, CircularProgress, Paper, Stack, Typography } from '@mui/material';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 import { fetchOperationsReport, type OperationsReport } from '../../services/revenueApi';
+import { useFinancesOwnerScope } from '../finances/useFinancesOwnerScope';
 
 /**
  * Rapport d'exploitation — les chiffres de gestion, sans interprétation.
@@ -151,13 +152,19 @@ function Row({
 }
 
 export function OperationsReportPage() {
+  const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
   const [report, setReport] = useState<OperationsReport | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!ownerId) {
+      setReport(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    fetchOperationsReport()
+    fetchOperationsReport({ ownerId })
       .then((d) => {
         if (!cancelled) setReport(d);
       })
@@ -167,7 +174,7 @@ export function OperationsReportPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ownerId]);
 
   const cols = useMemo(() => report?.periods ?? [], [report]);
 
@@ -187,6 +194,14 @@ export function OperationsReportPage() {
     const y = (v: number) => pt + (H - pt - pb) - (v / max) * (H - pt - pb);
     return { days, W, H, pl, pr, pt, pb, max, slot, bw, y };
   }, [report]);
+
+  if (needsOwnerPick) {
+    return (
+      <DashboardWrapper breadcrumb={['Rapports', 'Exploitation']}>
+        <Alert severity="info">Choisissez un gestionnaire dans le filtre en haut de page.</Alert>
+      </DashboardWrapper>
+    );
+  }
 
   if (loading) {
     return (

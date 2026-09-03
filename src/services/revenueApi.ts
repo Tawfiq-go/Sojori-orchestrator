@@ -80,12 +80,13 @@ export type RevenueSummary = {
 
 /** Ventilation USALI sur une période. */
 export async function fetchRevenueSummary(params: {
+  ownerId: string;
   from: string;
   to: string;
   listingId?: string;
 }): Promise<RevenueSummary | null> {
   try {
-    const search = new URLSearchParams({ from: params.from, to: params.to });
+    const search = new URLSearchParams({ ownerId: params.ownerId, from: params.from, to: params.to });
     if (params.listingId) search.set('listingId', params.listingId);
     const res = await apiClient.get(
       `${REVENUE_BASE}/revenue/summary?${search.toString()}`,
@@ -127,6 +128,7 @@ export type RevenueLinesPage = {
 
 /** Détail ligne par ligne des ventes d'extras — filtrable par département. */
 export async function fetchRevenueLines(params: {
+  ownerId: string;
   from: string;
   to: string;
   department?: string;
@@ -135,7 +137,7 @@ export async function fetchRevenueLines(params: {
   limit?: number;
 }): Promise<RevenueLinesPage | null> {
   try {
-    const search = new URLSearchParams({ from: params.from, to: params.to });
+    const search = new URLSearchParams({ ownerId: params.ownerId, from: params.from, to: params.to });
     if (params.department) search.set('department', params.department);
     if (params.search?.trim()) search.set('search', params.search.trim());
     if (params.page) search.set('page', String(params.page));
@@ -183,6 +185,7 @@ export type RevenueBillsPage = {
 
 /** Ventes regroupées par note client — une ligne par facture. */
 export async function fetchRevenueBills(params: {
+  ownerId: string;
   from: string;
   to: string;
   department?: string;
@@ -191,7 +194,7 @@ export async function fetchRevenueBills(params: {
   limit?: number;
 }): Promise<RevenueBillsPage | null> {
   try {
-    const search = new URLSearchParams({ from: params.from, to: params.to });
+    const search = new URLSearchParams({ ownerId: params.ownerId, from: params.from, to: params.to });
     if (params.department) search.set('department', params.department);
     if (params.search?.trim()) search.set('search', params.search.trim());
     if (params.page) search.set('page', String(params.page));
@@ -209,12 +212,14 @@ export async function fetchRevenueBills(params: {
 
 /** Articles d'une note — alimente le panneau de détail. */
 export async function fetchBillLines(params: {
+  ownerId: string;
   from: string;
   to: string;
   billRef: string;
 }): Promise<RevenueLineRow[]> {
   try {
     const search = new URLSearchParams({
+      ownerId: params.ownerId,
       from: params.from,
       to: params.to,
       billRef: params.billRef,
@@ -379,15 +384,15 @@ export type OperationsReport = {
 };
 
 /** Rapport d'exploitation — occupation, revenu, extras, encaissements. */
-export async function fetchOperationsReport(params?: {
+export async function fetchOperationsReport(params: {
+  ownerId: string;
   asOf?: string;
 }): Promise<OperationsReport | null> {
   try {
-    const search = new URLSearchParams();
-    if (params?.asOf) search.set('asOf', params.asOf);
-    const qs = search.toString();
+    const search = new URLSearchParams({ ownerId: params.ownerId });
+    if (params.asOf) search.set('asOf', params.asOf);
     const res = await apiClient.get(
-      `${REVENUE_BASE}/reports/operations${qs ? `?${qs}` : ''}`,
+      `${REVENUE_BASE}/reports/operations?${search.toString()}`,
       { timeout: 30000 },
     );
     return res?.data?.success ? (res.data as OperationsReport) : null;
@@ -537,15 +542,15 @@ export type DailySummary = {
 };
 
 /** Résumé quotidien — le rapport du matin. */
-export async function fetchDailySummary(params?: {
+export async function fetchDailySummary(params: {
+  ownerId: string;
   asOf?: string;
 }): Promise<DailySummary | null> {
   try {
-    const search = new URLSearchParams();
-    if (params?.asOf) search.set('asOf', params.asOf);
-    const qs = search.toString();
+    const search = new URLSearchParams({ ownerId: params.ownerId });
+    if (params.asOf) search.set('asOf', params.asOf);
     const res = await apiClient.get(
-      `${REVENUE_BASE}/reports/daily-summary${qs ? `?${qs}` : ''}`,
+      `${REVENUE_BASE}/reports/daily-summary?${search.toString()}`,
       { timeout: 30000 },
     );
     return res?.data?.success ? (res.data as DailySummary) : null;
@@ -605,15 +610,15 @@ export type AnnualTrend = {
 };
 
 /** Tendance annuelle — matrice mois × indicateur. */
-export async function fetchAnnualTrend(params?: {
+export async function fetchAnnualTrend(params: {
+  ownerId: string;
   year?: number;
 }): Promise<AnnualTrend | null> {
   try {
-    const search = new URLSearchParams();
-    if (params?.year) search.set('year', String(params.year));
-    const qs = search.toString();
+    const search = new URLSearchParams({ ownerId: params.ownerId });
+    if (params.year) search.set('year', String(params.year));
     const res = await apiClient.get(
-      `${REVENUE_BASE}/reports/annual-trend${qs ? `?${qs}` : ''}`,
+      `${REVENUE_BASE}/reports/annual-trend?${search.toString()}`,
       { timeout: 30000 },
     );
     return res?.data?.success ? (res.data as AnnualTrend) : null;
@@ -658,19 +663,19 @@ export type ProductsReport = {
 };
 
 /** Rotation du catalogue — ce qui se vend, ce qui dort. */
-export async function fetchProductsReport(params?: {
+export async function fetchProductsReport(params: {
+  ownerId: string;
   from?: string;
   to?: string;
 }): Promise<ProductsReport | null> {
   try {
-    const search = new URLSearchParams();
-    if (params?.from && params?.to) {
+    const search = new URLSearchParams({ ownerId: params.ownerId });
+    if (params.from && params.to) {
       search.set('from', params.from);
       search.set('to', params.to);
     }
-    const qs = search.toString();
     const res = await apiClient.get(
-      `${REVENUE_BASE}/reports/products${qs ? `?${qs}` : ''}`,
+      `${REVENUE_BASE}/reports/products?${search.toString()}`,
       { timeout: 30000 },
     );
     return res?.data?.success ? (res.data as ProductsReport) : null;
@@ -717,17 +722,17 @@ export type ArrivalsReport = {
 };
 
 /** Arrivées et départs nominatifs — la liste de la réception. */
-export async function fetchArrivalsReport(params?: {
+export async function fetchArrivalsReport(params: {
+  ownerId: string;
   asOf?: string;
   days?: number;
 }): Promise<ArrivalsReport | null> {
   try {
-    const search = new URLSearchParams();
-    if (params?.asOf) search.set('asOf', params.asOf);
-    if (params?.days) search.set('days', String(params.days));
-    const qs = search.toString();
+    const search = new URLSearchParams({ ownerId: params.ownerId });
+    if (params.asOf) search.set('asOf', params.asOf);
+    if (params.days) search.set('days', String(params.days));
     const res = await apiClient.get(
-      `${REVENUE_BASE}/reports/arrivals-departures${qs ? `?${qs}` : ''}`,
+      `${REVENUE_BASE}/reports/arrivals-departures?${search.toString()}`,
       { timeout: 30000 },
     );
     return res?.data?.success ? (res.data as ArrivalsReport) : null;
