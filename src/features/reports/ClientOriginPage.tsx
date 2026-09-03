@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Chip, CircularProgress, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Chip, CircularProgress, Paper, Stack, Typography } from '@mui/material';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 import { NationalityMap } from './NationalityMap';
 import { countryFlag, countryName } from './countryCodes';
 import { fetchClientOrigin, type ClientOriginReport, type OriginCountry } from '../../services/revenueApi';
+import { useFinancesOwnerScope } from '../finances/useFinancesOwnerScope';
 
 /**
  * Origine des clients — pilotée par les réservations.
@@ -101,6 +102,7 @@ type MetricId = (typeof METRICS)[number]['id'];
 const NF = new Intl.NumberFormat('fr-FR');
 
 export function ClientOriginPage() {
+  const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
   const [monthOffset, setMonthOffset] = useState(0);
   /** null = navigation mensuelle ; sinon une période longue est active. */
   const [span, setSpan] = useState<SpanId | null>(null);
@@ -118,9 +120,14 @@ export function ClientOriginPage() {
   );
 
   useEffect(() => {
+    if (!ownerId) {
+      setReport(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    fetchClientOrigin(range)
+    fetchClientOrigin({ ownerId, ...range })
       .then((d) => {
         if (!cancelled) setReport(d);
       })
@@ -130,7 +137,7 @@ export function ClientOriginPage() {
     return () => {
       cancelled = true;
     };
-  }, [range]);
+  }, [ownerId, range]);
 
   const active = METRICS.find((m) => m.id === metric) ?? METRICS[0];
 
@@ -181,6 +188,14 @@ export function ClientOriginPage() {
   }, [rows, metric, report]);
 
   const share = (v: number) => (metricTotal > 0 ? Math.round((v / metricTotal) * 100) : 0);
+
+  if (needsOwnerPick) {
+    return (
+      <DashboardWrapper breadcrumb={['Rapports', 'Origine des clients']}>
+        <Alert severity="info">Choisissez un gestionnaire dans le filtre en haut de page.</Alert>
+      </DashboardWrapper>
+    );
+  }
 
   if (loading) {
     return (

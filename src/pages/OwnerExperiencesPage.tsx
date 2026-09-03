@@ -20,6 +20,8 @@ import {
   DEFAULT_CONFIRMATION,
   DEFAULT_PROVIDER_REMINDER,
   DEFAULT_SHARE_GUEST_CONTACT,
+  GUEST_EXPERIENCE_KINDS,
+  isGuestExperienceKind,
 } from '../services/partnersApi';
 import { postFormDataAsMultipart } from '../utils/upload/postFormData';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
@@ -92,7 +94,7 @@ const CATS = [
   { v: 'Vue d’en haut', l: 'Vue d’en haut' },
   { v: 'Culture & nature', l: 'Culture & nature' },
   { v: 'Mobilité', l: 'Mobilité' },
-  { v: 'Food', l: 'Food / Room Service' },
+  { v: 'Food', l: 'Food' },
   { v: 'Soirée', l: 'Soirée' },
 ];
 
@@ -336,12 +338,13 @@ export function OwnerExperiencesPage() {
     try {
       const ownerParams = requestOwnerId ? { ownerId: String(requestOwnerId) } : undefined;
       const [ownList, marketList, partnersList, citiesRes, adoptedIds] = await Promise.all([
-        partnersApi.listExperiences(ownerParams),
+        partnersApi.listExperiences({ ...ownerParams, kinds: GUEST_EXPERIENCE_KINDS }),
         partnersApi
           .listExperienceCatalog({
             scope: 'sojori',
             marketMode: 'browse',
             ownerId: requestOwnerId ? String(requestOwnerId) : undefined,
+            kinds: GUEST_EXPERIENCE_KINDS,
           })
           .catch(() => [] as PartnerService[]),
         partnersApi
@@ -417,8 +420,14 @@ export function OwnerExperiencesPage() {
     return map;
   }, [partners]);
 
-  const ownRows = useMemo(() => rows.filter(isOwnExperience), [rows]);
-  const sojoriRows = useMemo(() => rows.filter((r) => !isOwnExperience(r)), [rows]);
+  const ownRows = useMemo(
+    () => rows.filter((r) => isOwnExperience(r) && isGuestExperienceKind(r.kind)),
+    [rows],
+  );
+  const sojoriRows = useMemo(
+    () => rows.filter((r) => !isOwnExperience(r) && isGuestExperienceKind(r.kind)),
+    [rows],
+  );
   const scopedRows = catalogTab === 'own' ? ownRows : sojoriRows;
   const canEditCatalog = catalogTab === 'own';
 
@@ -917,8 +926,8 @@ export function OwnerExperiencesPage() {
           </h1>
           <p style={{ margin: 0, color: 'var(--pa-ink3)', fontSize: 14, maxWidth: 640 }}>
             {catalogTab === 'own'
-              ? 'Activer → dispo pour vos listings. For sale = raccourci carte (déjà géré). Ensuite chaque listing coche.'
-              : 'Même chose : Activer → pousse l’activité marché vers vos listings. Puis chaque listing coche.'}
+              ? 'Expériences bookables par le guest + navette. Activer → dispo pour vos listings. For sale = visible chez les autres owners. Ambiances villa et petit déjeuner se gèrent sur le listing, pas ici.'
+              : 'For sale des autres owners (expériences + navettes). Activer pousse l’activité vers vos listings ; chaque listing coche ensuite.'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -1412,8 +1421,6 @@ export function OwnerExperiencesPage() {
                 {([
                   { v: 'experience' as const, l: '✨ Expérience' },
                   { v: 'transport' as const, l: '🚐 Transport / Navette' },
-                  { v: 'room_service' as const, l: '🍽️ Room Service' },
-                  { v: 'villa_experience' as const, l: '🌹 Ambiance en villa' },
                 ]).map((t) => (
                   <button
                     key={t.v}

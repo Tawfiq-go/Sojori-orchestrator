@@ -44,6 +44,14 @@ export type PartnerServiceOptionGroup = {
 
 export type PartnerServiceKind = 'experience' | 'transport' | 'room_service' | 'villa_experience';
 
+/** Catalogue /experiences : vraies activités guest + navette (pas ambiance villa / PDJ). */
+export const GUEST_EXPERIENCE_KINDS: PartnerServiceKind[] = ['experience', 'transport'];
+
+export function isGuestExperienceKind(kind?: string | null): boolean {
+  const k = kind || 'experience';
+  return k === 'experience' || k === 'transport';
+}
+
 export type PartnerServiceSlot = { time: string; label?: string };
 
 export type PartnerServiceSchedule = {
@@ -257,28 +265,35 @@ export const partnersApi = {
   },
 
   /** Expériences PM (partnerId null) — même structure PartnerService */
-  async listExperiences(params?: { ownerId?: string; active?: boolean }): Promise<PartnerService[]> {
+  async listExperiences(params?: {
+    ownerId?: string;
+    active?: boolean;
+    kinds?: PartnerServiceKind[];
+  }): Promise<PartnerService[]> {
     const q = new URLSearchParams();
     if (params?.ownerId) q.set('ownerId', params.ownerId);
     if (params?.active) q.set('active', 'true');
+    if (params?.kinds?.length) q.set('kinds', params.kinds.join(','));
     const url = q.toString() ? `${BASE}/experiences?${q}` : `${BASE}/experiences`;
     const res = await apiClient.get(url);
     return unwrap<PartnerService[]>(res) || [];
   },
 
-  /** Catalogue pour picker listing (all = own actives + marché adopté). */
+  /** Catalogue pour picker listing (all = own actives + marché). */
   async listExperienceCatalog(params: {
     scope?: 'own' | 'sojori' | 'all';
     cityId?: string | null;
     ownerId?: string;
     /** browse = tout le marché · adopted = seulement Activées par moi */
     marketMode?: 'browse' | 'adopted';
+    kinds?: PartnerServiceKind[];
   }): Promise<PartnerService[]> {
     const q = new URLSearchParams();
     q.set('scope', params.scope || 'all');
     if (params.cityId) q.set('cityId', params.cityId);
     if (params.ownerId) q.set('ownerId', params.ownerId);
     if (params.marketMode) q.set('marketMode', params.marketMode);
+    if (params.kinds?.length) q.set('kinds', params.kinds.join(','));
     const res = await apiClient.get(`${BASE}/experiences/catalog?${q}`);
     return unwrap<PartnerService[]>(res) || [];
   },
