@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Chip, CircularProgress, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Chip, CircularProgress, Paper, Stack, Typography } from '@mui/material';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 import { fetchProductsReport, type ProductsReport, type ProductRow } from '../../services/revenueApi';
+import { useFinancesOwnerScope } from '../finances/useFinancesOwnerScope';
 
 /**
  * Rotation du catalogue — ce qui se vend, ce qui dort.
@@ -34,14 +35,20 @@ const DEPARTMENT_LABEL: Record<string, string> = {
 };
 
 export function ProductsPage() {
+  const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
   const [report, setReport] = useState<ProductsReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'sold' | 'dormant'>('sold');
 
   useEffect(() => {
+    if (!ownerId) {
+      setReport(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    fetchProductsReport()
+    fetchProductsReport({ ownerId })
       .then((d) => {
         if (!cancelled) setReport(d);
       })
@@ -51,10 +58,18 @@ export function ProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ownerId]);
 
   const items = useMemo(() => report?.items ?? [], [report]);
   const maxGross = items.length ? items[0].gross : 0;
+
+  if (needsOwnerPick) {
+    return (
+      <DashboardWrapper breadcrumb={['Rapports', 'Produits']}>
+        <Alert severity="info">Choisissez un gestionnaire dans le filtre en haut de page.</Alert>
+      </DashboardWrapper>
+    );
+  }
 
   if (loading) {
     return (

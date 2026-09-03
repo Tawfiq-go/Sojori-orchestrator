@@ -300,11 +300,13 @@ export function ClientsLcdPage() {
 
       {/* Ce que couvre exactement la période affichée */}
       <Typography sx={{ fontSize: 11.5, color: T.text3, mb: 2, fontStyle: 'italic' }}>
-        {current.future
-          ? 'Mois à venir — nationalité non encore saisie, l’origine se lit par canal.'
-          : span
-            ? `${current.label} — mois entiers, mois en cours compris. Les parts sont arrondies à l’unité.`
-            : `${current.label}`}
+        {!rows.length && report?.channels.length
+          ? 'Séjours pas encore consommés — nationalité non encore saisie, l’origine se lit par canal en attendant.'
+          : current.future
+            ? 'Mois à venir — nationalité non encore saisie, l’origine se lit par canal.'
+            : span
+              ? `${current.label} — mois entiers, mois en cours compris. Les parts sont arrondies à l’unité.`
+              : `${current.label}`}
       </Typography>
 
       {/* Indicateurs */}
