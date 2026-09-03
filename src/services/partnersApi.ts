@@ -183,6 +183,8 @@ export type PartnerService = {
   active: boolean;
   sortOrder: number;
   forSale?: boolean;
+  /** Menu guest J3 : EE (essentielles) ou autres. */
+  guestBloc?: string;
 };
 
 function unwrap<T>(res: { data?: { success?: boolean; data?: T; error?: string } }): T {
