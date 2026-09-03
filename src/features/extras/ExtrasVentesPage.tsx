@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -30,6 +31,7 @@ import {
   type RevenueLinesPage,
   type RevenueSummary,
 } from '../../services/revenueApi';
+import { useFinancesOwnerScope } from '../finances/useFinancesOwnerScope';
 
 /**
  * Ventes d'extras — totaux par type, puis détail ligne par ligne.
@@ -280,6 +282,7 @@ function shortDate(iso: string | null): string {
 }
 
 export function ExtrasVentesPage() {
+  const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
   const [periodId, setPeriodId] = useState('last7');
   const [department, setDepartment] = useState('');
   const [search, setSearch] = useState('');
@@ -310,12 +313,19 @@ export function ExtrasVentesPage() {
   }, [periodId]);
 
   useEffect(() => {
+    if (!ownerId) {
+      setSummary(null);
+      setBills(null);
+      setLines(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    const common = { ...range, department, search };
+    const common = { ownerId, ...range, department, search };
 
     Promise.all([
-      fetchRevenueSummary(range),
+      fetchRevenueSummary({ ownerId, ...range }),
       view === 'bills'
         ? fetchRevenueBills({ ...common, page, limit: perPage })
         : Promise.resolve(null),
@@ -335,17 +345,17 @@ export function ExtrasVentesPage() {
     return () => {
       cancelled = true;
     };
-  }, [range, department, search, view, page, perPage]);
+  }, [ownerId, range, department, search, view, page, perPage]);
 
   /** Charge les articles à l'ouverture d'une note. */
   useEffect(() => {
-    if (!openBill?.billRef) {
+    if (!openBill?.billRef || !ownerId) {
       setBillLines([]);
       return;
     }
     let cancelled = false;
     setBillLoading(true);
-    fetchBillLines({ ...range, billRef: openBill.billRef })
+    fetchBillLines({ ownerId, ...range, billRef: openBill.billRef })
       .then((rows) => {
         if (!cancelled) setBillLines(rows);
       })
@@ -355,7 +365,7 @@ export function ExtrasVentesPage() {
     return () => {
       cancelled = true;
     };
-  }, [openBill, range]);
+  }, [openBill, range, ownerId]);
 
   /** Montant par type — affiché sur chaque pastille pour situer les parts. */
   const totalsByDepartment = useMemo(() => {
@@ -373,6 +383,14 @@ export function ExtrasVentesPage() {
   const totalGross = active?.totalGross ?? 0;
   const totalNet = active?.totalNet ?? 0;
   const count = active?.total ?? 0;
+
+  if (needsOwnerPick) {
+    return (
+      <DashboardWrapper breadcrumb={['Extra', 'Ventes']}>
+        <Alert severity="info">Choisissez un gestionnaire dans le filtre en haut de page.</Alert>
+      </DashboardWrapper>
+    );
+  }
 
   return (
     <DashboardWrapper breadcrumb={['Extra', 'Ventes']}>
