@@ -74,9 +74,10 @@ export default function ListingRoomServiceTab({
       const [conc, catalog] = await Promise.all([
         fetchListingConciergeArrays(String(listingId)),
         partnersApi.listExperienceCatalog({
-          scope: 'all',
+          scope: 'own',
           cityId: listingCityId || undefined,
           ownerId: listingOwnerId || undefined,
+          kinds: ['room_service'],
         }),
       ]);
       const rows = sortBreakfastDishes(catalog.filter((r) => (r.kind || '') === 'room_service'));
