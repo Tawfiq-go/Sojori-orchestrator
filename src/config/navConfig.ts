@@ -59,29 +59,17 @@ const WORKER_ONLY: NavRole[] = [Roles.Worker];
  */
 export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
   {
-    group: 'Dashboard',
+    group: 'Reports',
     roles: PM_ROLES,
     items: [
       {
-        id: 'ma-journee',
-        label: 'Ma journée',
-        iconType: 'calendar',
-        iconColor: '#B8881A',
+        id: 'reports',
+        label: 'Reports',
+        iconType: 'document',
+        iconColor: '#b8851a',
         badge: 'Live',
-        description: 'Arrivées, départs, ménage, expériences et messages — écran d’atterrissage',
+        description: 'Ma journée, tableau de bord, analytics et tous les rapports — filtré hôtel/LCD',
       },
-      {
-        id: 'admin/owner-monitor',
-        label: 'Monitor',
-        iconType: 'monitor',
-        iconColor: '#C81E1E',
-        badge: 'Live',
-        /** Sécurité max : SuperAdmin / Admin uniquement — jamais Owner / Worker / Landlord. */
-        roles: ADMIN_ROLES,
-        description: 'Activité des owners (Admin only) — résas, messages, prix, sync',
-      },
-      { id: 'dashboard', label: 'Tableau de bord', iconType: 'dashboard', iconColor: '#D4A574', badge: 'Live' },
-      { id: 'analytics', label: 'Analytics', iconType: 'chart', iconColor: '#5B9BD5' },
     ],
   },
   {
@@ -410,80 +398,9 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
       { id: 'my-sched', label: 'Mon planning', iconType: 'calendar', iconColor: '#E06666', roles: WORKER_ONLY },
     ],
   },
-  {
-    group: 'Rapports',
-    roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
-    items: [
-      {
-        id: 'reports',
-        label: 'Tous les rapports',
-        iconType: 'document',
-        iconColor: '#b8851a',
-        description: 'Lancer un rapport — exploitation, clients, ventes',
-      },
-      {
-        id: 'reports/quotidien',
-        label: 'Résumé quotidien',
-        iconType: 'calendar',
-        iconColor: '#b8851a',
-        description: 'Le rapport du matin — mouvement, semaine, rythme de prise',
-      },
-      {
-        id: 'reports/arrivees',
-        label: 'Arrivées et départs',
-        iconType: 'calendar',
-        iconColor: '#93C47D',
-        description: 'Qui arrive, qui part, et ce qui reste à faire',
-      },
-      {
-        id: 'reports/produits',
-        label: 'Produits',
-        iconType: 'document',
-        iconColor: '#C81E1E',
-        description: 'Ce qui se vend, ce qui dort',
-      },
-      {
-        id: 'reports/annuel',
-        label: 'Tendance annuelle',
-        iconType: 'chart',
-        iconColor: '#2d4a6b',
-        description: 'La saison mois par mois, et ce que les blocages coûtent',
-      },
-      {
-        id: 'reports/exploitation',
-        label: 'Exploitation',
-        iconType: 'document',
-        iconColor: '#2d4a6b',
-        description: 'Occupation, revenu et encaissements',
-      },
-      // "Clients" fusionne avec Rapports 2 (meme ecran LCD/hotel) — voir reports2/clients.
-    ],
-  },
-  {
-    // Lecture orientee location courte duree : le PM pilote au MOIS (il doit
-    // couvrir un loyer ou justifier sa commission), la ou l'hotel pilote au
-    // JOUR. Les rapports ci-dessus restent inchanges — ceux-ci s'y ajoutent.
-    group: 'Rapports 2',
-    roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
-    items: [
-      {
-        id: 'reports2/performance',
-        label: 'Performance & projection',
-        iconType: 'chart',
-        iconColor: '#b8851a',
-        description: 'Le realise et ce qui est deja au carnet — portefeuille, proprietaire, bien',
-        badge: 'NEW',
-      },
-      {
-        id: 'reports2/clients',
-        label: 'Clients',
-        iconType: 'worker',
-        iconColor: '#E6B022',
-        description: 'D’ou viennent les reservations, et ce qu’elles rapportent',
-        badge: 'NEW',
-      },
-    ],
-  },
+  // "Rapports" et "Rapports 2" fusionnés dans le groupe "Reports" (voir plus haut,
+  // à côté de Dashboard) — tous les rapports vivent maintenant sur /reports,
+  // filtrés dynamiquement par reportsConfig.ts selon le tag hôtel/LCD du PM.
   {
     group: 'Finances',
     roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner, Roles.Landlord],
@@ -826,7 +743,7 @@ export function navGroupsForRole(
 
 /** État collapsed par défaut — groupes secondaires repliés au premier login. */
 export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
-  Dashboard: false,
+  Reports: false,
   Calendrier: false,
   'Prix dynamique': false,
   Pricing: false,
