@@ -1,4 +1,5 @@
 import axios, { AxiosHeaders } from 'axios';
+import { applyAdminViewScope, type ScopableRequest } from '../utils/adminViewScope';
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { clearTokens, getToken, getRefreshToken, setTokens, isAppEmbeddedInIframe } from '../utils/authUtils';
 import { AUTH_CONFIG } from '../config/authConfig';
@@ -194,8 +195,10 @@ apiClient.interceptors.request.use(
       config.headers['x-refresh-token'] = refreshToken;
     }
 
-    // Scope PM simulation via ownerId query param (AdminOwnerFilter) — pas de header custom
-    // (X-Sojori-View-As-Owner bloque le preflight CORS localhost → dev.sojori.com).
+    // Vue owner : scope automatique `ownerId` sur les GET de données qui n'en
+    // portent pas (voir utils/adminViewScope). Un paramètre de requête, pas un
+    // en-tête : l'en-tête X-Sojori-View-As-Owner bloquait le preflight CORS.
+    applyAdminViewScope(config as ScopableRequest);
 
     if (
       import.meta.env.VITE_DASHBOARD_DEBUG === 'true' &&

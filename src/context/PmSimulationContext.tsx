@@ -12,6 +12,8 @@ import { useLocation } from 'react-router-dom';
 import { useRealAuth } from '../hooks/useAuth';
 import { AdminViewOverrideContext, type AdminViewIdentity } from '../contexts/AdminViewOverrideContext';
 import { hasAdminAccess } from '../utils/rbac.utils';
+import { resolveRouteAccess } from '../utils/resolveRouteAccess';
+import { Roles } from '../constants/roles';
 import { getOwnersAllPages } from '../services/teamDashboardApi';
 import { postPmSimulationAudit } from '../services/pmSimulationApi';
 import {
@@ -313,10 +315,17 @@ export function PmSimulationProvider({ children }: { children: ReactNode }) {
     ],
   );
 
+  // La vue ne s'applique qu'aux écrans qu'un Owner peut voir. Sur les écrans
+  // réservés à la plateforme (monitor, /admin/*, channels, crm), l'admin reste
+  // admin : ils restent joignables par URL pendant la vue, comme avant.
+  const pathname = location.pathname;
+  const search = location.search;
   const viewIdentity = useMemo<AdminViewIdentity | null>(() => {
     if (!canSimulate || !snapshot?.ownerId) return null;
+    const asOwner = resolveRouteAccess({ pathname, search, role: Roles.Owner });
+    if (!asOwner.allowed && asOwner.zone === 'platform_admin') return null;
     return { ownerId: snapshot.ownerId, ownerLabel: snapshot.ownerLabel, ownerEmail: snapshot.ownerEmail };
-  }, [canSimulate, snapshot]);
+  }, [canSimulate, snapshot, pathname, search]);
 
   return (
     <PmSimulationContext.Provider value={value}>
