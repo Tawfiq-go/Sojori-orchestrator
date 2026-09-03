@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Chip, CircularProgress, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Chip, CircularProgress, Paper, Stack, Typography } from '@mui/material';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 import { fetchArrivalsReport, type ArrivalsReport, type MovementEntry } from '../../services/revenueApi';
+import { useFinancesOwnerScope } from '../finances/useFinancesOwnerScope';
 
 /**
  * Arrivées et départs — la liste que la réception prépare le matin.
@@ -100,6 +101,7 @@ function Entry({ e }: { e: MovementEntry }) {
 }
 
 export function ArrivalsPage() {
+  const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
   const [report, setReport] = useState<ArrivalsReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(3);
@@ -111,9 +113,14 @@ export function ArrivalsPage() {
   );
 
   useEffect(() => {
+    if (!ownerId) {
+      setReport(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    fetchArrivalsReport({ asOf, days })
+    fetchArrivalsReport({ ownerId, asOf, days })
       .then((d) => {
         if (!cancelled) setReport(d);
       })
@@ -123,7 +130,15 @@ export function ArrivalsPage() {
     return () => {
       cancelled = true;
     };
-  }, [asOf, days]);
+  }, [ownerId, asOf, days]);
+
+  if (needsOwnerPick) {
+    return (
+      <DashboardWrapper breadcrumb={['Rapports', 'Arrivées et départs']}>
+        <Alert severity="info">Choisissez un gestionnaire dans le filtre en haut de page.</Alert>
+      </DashboardWrapper>
+    );
+  }
 
   if (loading) {
     return (

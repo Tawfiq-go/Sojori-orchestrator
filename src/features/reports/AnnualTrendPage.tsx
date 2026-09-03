@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Chip, CircularProgress, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Chip, CircularProgress, Paper, Stack, Typography } from '@mui/material';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 import { fetchAnnualTrend, type AnnualTrend, type TrendMonth } from '../../services/revenueApi';
+import { useFinancesOwnerScope } from '../finances/useFinancesOwnerScope';
 
 /**
  * Tendance annuelle — la matrice mois × indicateur.
@@ -37,14 +38,20 @@ const fmtMonthLong = (ym: string) =>
   );
 
 export function AnnualTrendPage() {
+  const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
   const [year, setYear] = useState(new Date().getFullYear());
   const [report, setReport] = useState<AnnualTrend | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!ownerId) {
+      setReport(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    fetchAnnualTrend({ year })
+    fetchAnnualTrend({ ownerId, year })
       .then((d) => {
         if (!cancelled) setReport(d);
       })
@@ -54,7 +61,7 @@ export function AnnualTrendPage() {
     return () => {
       cancelled = true;
     };
-  }, [year]);
+  }, [ownerId, year]);
 
   const months = useMemo(() => report?.months ?? [], [report]);
 
@@ -75,6 +82,14 @@ export function AnnualTrendPage() {
     const x = (i: number) => pl + slot * i;
     return { W, H, pl, pr, pt, pb, h, maxMoney, slot, yOcc, yMoney, x };
   }, [months]);
+
+  if (needsOwnerPick) {
+    return (
+      <DashboardWrapper breadcrumb={['Rapports', 'Tendance annuelle']}>
+        <Alert severity="info">Choisissez un gestionnaire dans le filtre en haut de page.</Alert>
+      </DashboardWrapper>
+    );
+  }
 
   if (loading) {
     return (
