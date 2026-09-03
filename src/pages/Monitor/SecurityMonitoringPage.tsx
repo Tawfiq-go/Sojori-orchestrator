@@ -12,6 +12,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Box, Stack, Typography } from '@mui/material';
 import apiClient from '../../services/apiClient';
+import { MICROSERVICE_BASE_URL } from '../../config/authConfig';
+import { prometheusGet } from '../../utils/monitoringApi';
 import {
   Badge,
   MonitorEmpty,
@@ -112,6 +114,9 @@ const FAILURE_EVENTS = new Set([
   'login_admin_email_refused',
 ]);
 
+/** srv-user : `${API}/api/v1/user` (routes /sessions, /security/*). */
+const USER_API = MICROSERVICE_BASE_URL.SRV_USER;
+
 function fmtDate(iso?: string): string {
   return iso ? new Date(iso).toLocaleString('fr-FR') : '—';
 }
@@ -122,6 +127,34 @@ interface SecurityMetrics {
   total_requests?: number;
   client_errors?: Array<{ host?: string; value?: number }>;
   server_errors?: Array<{ host?: string; value?: number }>;
+}
+
+/** Forme brute du proxy Prometheus : vecteur instantané, valeur = [timestamp, "nombre"]. */
+type PromVector = { result?: Array<{ metric?: { host?: string }; value?: [number, string] }> };
+
+function vectorScalar(v: unknown): number {
+  const first = (v as PromVector | undefined)?.result?.[0]?.value?.[1];
+  const n = Number(first ?? (typeof v === 'number' ? v : 0));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function vectorByHost(v: unknown): Array<{ host?: string; value?: number }> {
+  if (Array.isArray(v)) return v as Array<{ host?: string; value?: number }>;
+  const rows = (v as PromVector | undefined)?.result ?? [];
+  return rows.map((r) => ({ host: r.metric?.host, value: Number(r.value?.[1] ?? 0) }));
+}
+
+/** Le proxy renvoie les vecteurs Prometheus tels quels : on les aplatit en nombres. */
+function normalizeSecurityMetrics(raw: unknown): SecurityMetrics | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  return {
+    auth_failures: vectorScalar(r.auth_failures),
+    forbidden: vectorScalar(r.forbidden),
+    total_requests: vectorScalar(r.total_requests),
+    client_errors: vectorByHost(r.client_errors).filter((e) => (e.value ?? 0) > 0),
+    server_errors: vectorByHost(r.server_errors).filter((e) => (e.value ?? 0) > 0),
+  };
 }
 
 function toneForSeverity(sev?: string): 'error' | 'warning' | 'neutral' {
@@ -147,13 +180,16 @@ export default function SecurityMonitoringPage() {
     try {
       const [alertsRes, metricsRes, sessionsRes, suspiciousRes, eventsRes, activityRes, accessRes] =
         await Promise.allSettled([
-          apiClient.get('/logs/api/prometheus-proxy/alerts'),
-          apiClient.get('/logs/api/prometheus-proxy/security-metrics'),
-          apiClient.get('/user/user/sessions?limit=50'),
-          apiClient.get('/user/user/sessions/suspicious?hours=24'),
-          apiClient.get('/user/user/security/auth-events?hours=168&limit=100'),
-          apiClient.get('/user/user/security/admin-activity?hours=720&limit=50'),
-          apiClient.get('/user/user/security/admin-access?hours=720&limit=100'),
+          // Chemins absolus (2026-09-03) : les anciens '/user/user/…' et
+          // '/logs/api/…' étaient relatifs à l'origine du front, donc jamais
+          // servis par l'API — les blocs sessions restaient vides.
+          prometheusGet('/alerts'),
+          prometheusGet('/security-metrics'),
+          apiClient.get(`${USER_API}/sessions?limit=50`),
+          apiClient.get(`${USER_API}/sessions/suspicious?hours=24`),
+          apiClient.get(`${USER_API}/security/auth-events?hours=168&limit=100`),
+          apiClient.get(`${USER_API}/security/admin-activity?hours=720&limit=50`),
+          apiClient.get(`${USER_API}/security/admin-access?hours=720&limit=100`),
         ]);
 
       if (accessRes.status === 'fulfilled') {
@@ -179,7 +215,7 @@ export default function SecurityMonitoringPage() {
         setAlerts(Array.isArray(raw) ? raw : []);
       }
       if (metricsRes.status === 'fulfilled') {
-        setMetrics(metricsRes.value?.data?.data ?? metricsRes.value?.data ?? null);
+        setMetrics(normalizeSecurityMetrics(metricsRes.value?.data?.data ?? metricsRes.value?.data));
       }
       if (alertsRes.status === 'rejected' && metricsRes.status === 'rejected') {
         setError("Impossible de joindre Prometheus — vérifier srv-logs-proxy.");
@@ -217,17 +253,17 @@ export default function SecurityMonitoringPage() {
           },
           {
             label: 'Auth refusées (1 h)',
-            value: Math.round(metrics?.auth_failures ?? 0),
+            value: Math.round(Number(metrics?.auth_failures ?? 0)),
             tone: (metrics?.auth_failures ?? 0) > 50 ? 'warning' : 'neutral',
           },
           {
             label: 'Accès interdits (1 h)',
-            value: Math.round(metrics?.forbidden ?? 0),
+            value: Math.round(Number(metrics?.forbidden ?? 0)),
             tone: (metrics?.forbidden ?? 0) > 50 ? 'warning' : 'neutral',
           },
           {
             label: 'Requêtes/s',
-            value: (metrics?.total_requests ?? 0).toFixed(1),
+            value: Number(metrics?.total_requests ?? 0).toFixed(1),
             tone: 'info',
           },
           {
@@ -450,12 +486,12 @@ export default function SecurityMonitoringPage() {
           <Stack spacing={0.5}>
             {(metrics?.server_errors ?? []).map((e, i) => (
               <Typography key={`s${i}`} sx={{ fontSize: 13, color: t.ink }}>
-                <Badge variant="error">5xx</Badge> {e.host ?? '—'} : {(e.value ?? 0).toFixed(2)}/s
+                <Badge variant="error">5xx</Badge> {e.host ?? '—'} : {Number(e.value ?? 0).toFixed(2)}/s
               </Typography>
             ))}
             {(metrics?.client_errors ?? []).map((e, i) => (
               <Typography key={`c${i}`} sx={{ fontSize: 13, color: t.inkSoft }}>
-                <Badge variant="warning">4xx</Badge> {e.host ?? '—'} : {(e.value ?? 0).toFixed(2)}/s
+                <Badge variant="warning">4xx</Badge> {e.host ?? '—'} : {Number(e.value ?? 0).toFixed(2)}/s
               </Typography>
             ))}
           </Stack>

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { API_BASE_URL } from './backendServer.config';
 import { getToken, getRefreshToken, setTokens } from '../utils/authUtils';
 import { isRefreshTokenRoute } from '../services/apiClient';
+import { applyAdminViewScope } from '../utils/adminViewScope';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -11,6 +12,7 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
+  applyAdminViewScope(config);
   const token = getToken();
   const refreshToken = getRefreshToken();
   if (token) {

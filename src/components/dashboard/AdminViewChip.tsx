@@ -84,6 +84,9 @@ export function AdminViewChip() {
   const { resetAdminScope } = useAdminOwnerFilter();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [search, setSearch] = useState('');
+  // Texte du champ contrôlé : MUI remet sinon le libellé de la valeur
+  // sélectionnée à chaque rafraîchissement des options (chaque frappe).
+  const [inputValue, setInputValue] = useState('');
   const [options, setOptions] = useState<OwnerRow[]>([]);
   const [loading, setLoading] = useState(false);
   const open = Boolean(anchor);
@@ -119,6 +122,13 @@ export function AdminViewChip() {
     return () => clearTimeout(timer);
   }, [open, search, fetchOwners]);
 
+  const openPopover = useCallback((el: HTMLElement) => {
+    // Champ vide à l'ouverture : on tape directement le nom cherché.
+    setInputValue('');
+    setSearch('');
+    setAnchor(el);
+  }, []);
+
   const currentOption = useMemo<Option>(() => {
     if (!isActive || !snapshot) return PLATFORM;
     return (
@@ -132,20 +142,33 @@ export function AdminViewChip() {
 
   const choose = useCallback(
     (option: Option | null) => {
+      const current = snapshot?.ownerId || '';
       if (!option || isPlatform(option)) {
+        if (!current) {
+          setAnchor(null);
+          return;
+        }
         stopSimulation();
         resetAdminScope();
       } else {
         const id = ownerRowId(option);
-        if (!id) return;
+        if (!id || id === current) {
+          setAnchor(null);
+          return;
+        }
         // Un seul état : l'owner sélectionné vit dans la simulation, le filtre
         // historique repasse sur « plateforme » pour ne pas garder deux vérités.
         resetAdminScope();
         startSimulation(id, { label: getOwnerListLabel(option), email: option.email });
       }
       setAnchor(null);
+      // Rechargement complet, même URL : chaque page garde ses propres caches
+      // (react-query, stores, hooks maison) et toutes ne réagissent pas au
+      // changement de vue. Un reload garantit que TOUT ce qui est affiché
+      // vient de la nouvelle identité. Le délai laisse partir l'audit start/stop.
+      window.setTimeout(() => window.location.reload(), 400);
     },
-    [startSimulation, stopSimulation, resetAdminScope],
+    [snapshot?.ownerId, startSimulation, stopSimulation, resetAdminScope],
   );
 
   if (!canSimulate) return null;
@@ -173,7 +196,7 @@ export function AdminViewChip() {
         }
       >
         <ButtonBase
-          onClick={(e) => setAnchor(e.currentTarget)}
+          onClick={(e) => openPopover(e.currentTarget)}
           aria-label="Choisir la vue : owner et sidebar"
           aria-haspopup="dialog"
           aria-expanded={open ? 'true' : undefined}
@@ -236,15 +259,21 @@ export function AdminViewChip() {
       >
         <Typography sx={sectionLabelSx}>Je regarde</Typography>
         <Autocomplete<Option, false, true, false>
-          openOnFocus
           autoHighlight
           disableClearable
           loading={loading}
           options={[PLATFORM, ...options]}
           value={currentOption}
+          inputValue={inputValue}
           onChange={(_, option) => choose(option)}
           onInputChange={(_, next, reason) => {
-            if (reason === 'input') setSearch(next);
+            if (reason === 'input') {
+              setInputValue(next);
+              setSearch(next);
+            } else if (reason === 'clear') {
+              setInputValue('');
+              setSearch('');
+            }
           }}
           filterOptions={(rows) => rows}
           getOptionLabel={(o) => (isPlatform(o) ? 'Plateforme (tous les owners)' : getOwnerListLabel(o))}
@@ -255,7 +284,11 @@ export function AdminViewChip() {
           size="small"
           slotProps={{ listbox: { style: { maxHeight: 280 } }, popper: { sx: { zIndex: 1500 } } }}
           renderInput={(params) => (
-            <TextField {...params} placeholder="Rechercher un owner…" autoFocus />
+            <TextField
+              {...params}
+              placeholder={isActive && snapshot ? `${snapshot.ownerLabel} · changer d'owner…` : 'Rechercher un owner…'}
+              autoFocus
+            />
           )}
           renderOption={(props, option) => {
             const { key, liProps } = autocompleteOptionLiProps(props);
