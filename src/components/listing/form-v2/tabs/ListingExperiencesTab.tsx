@@ -10,8 +10,8 @@ type Props = {
 };
 
 /**
- * Onglet listing « Expériences » — active les expériences cochées pour le guest (J3).
- * Hors orchestration : Transport / Courses restent dans Orchestration V3.
+ * Onglet listing « Expériences » — activités guest + navette cochées (J3 / navette).
+ * Ambiances villa et PDJ ont leurs propres onglets.
  */
 export default function ListingExperiencesTab({
   listingId,
