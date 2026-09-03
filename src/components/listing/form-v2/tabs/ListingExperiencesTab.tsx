@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, TextField, Typography } from '@mui/material';
 import { ListingExperiencesPicker } from '../../../../features/orchestrationListingV3/ListingExperiencesPicker';
-import { fetchListingConciergeArrays } from '../../../../features/listing/components/ConfigOrchestration/conciergeListingPersist';
+import {
+  fetchListingConciergeArrays,
+  persistListingConciergeSlice,
+} from '../../../../features/listing/components/ConfigOrchestration/conciergeListingPersist';
 
 type Props = {
   listingId?: string | null;
@@ -20,6 +23,8 @@ export default function ListingExperiencesTab({
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [enabledIds, setEnabledIds] = useState<string[]>([]);
+  const [guestBlocs, setGuestBlocs] = useState('');
+  const [savingBlocs, setSavingBlocs] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,9 +38,13 @@ export default function ListingExperiencesTab({
         const conc = await fetchListingConciergeArrays(String(listingId));
         if (!cancelled) {
           setEnabledIds(conc.enabledExperienceIds ?? []);
+          setGuestBlocs(conc.experienceGuestBlocs || '');
         }
       } catch {
-        if (!cancelled) setEnabledIds([]);
+        if (!cancelled) {
+          setEnabledIds([]);
+          setGuestBlocs('');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -71,6 +80,35 @@ export default function ListingExperiencesTab({
       <Typography sx={{ fontSize: 22, fontWeight: 750, mb: 0.75, lineHeight: 1.2 }}>
         Expériences
       </Typography>
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 2, maxWidth: 520 }}>
+        <TextField
+          size="small"
+          fullWidth
+          label="Menus guest"
+          placeholder="EE$autres"
+          helperText="EE$autres = essentielles + autres. Vide = un seul bouton Expériences."
+          value={guestBlocs}
+          onChange={(e) => setGuestBlocs(e.target.value)}
+        />
+        <Button
+          variant="outlined"
+          size="small"
+          disabled={savingBlocs}
+          sx={{ mt: 0.5, whiteSpace: 'nowrap' }}
+          onClick={async () => {
+            setSavingBlocs(true);
+            try {
+              await persistListingConciergeSlice(String(listingId), {
+                experienceGuestBlocs: guestBlocs.trim(),
+              });
+            } finally {
+              setSavingBlocs(false);
+            }
+          }}
+        >
+          OK
+        </Button>
+      </Box>
       <ListingExperiencesPicker
         listingId={String(listingId)}
         listingCityId={listingCityId || null}

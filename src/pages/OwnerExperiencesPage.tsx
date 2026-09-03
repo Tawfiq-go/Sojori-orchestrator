@@ -51,6 +51,7 @@ type Draft = {
   active: boolean;
   sortOrder: number;
   forSale: boolean;
+  guestBloc: string;
 };
 
 function newOptionGroupId(): string {
@@ -200,6 +201,7 @@ function emptyDraft(): Draft {
     active: true,
     sortOrder: 0,
     forSale: false,
+    guestBloc: '',
   };
 }
 
@@ -259,6 +261,7 @@ function toDraft(s: PartnerService): Draft {
     active: s.active !== false,
     sortOrder: Number(s.sortOrder) || 0,
     forSale: Boolean(s.forSale),
+    guestBloc: String(s.guestBloc || ''),
   };
 }
 
@@ -691,6 +694,7 @@ export function OwnerExperiencesPage() {
       active: draft.active,
       sortOrder: draft.sortOrder,
       forSale: draft.forSale,
+      guestBloc: draft.guestBloc,
       ...(requestOwnerId ? { ownerId: String(requestOwnerId) } : {}),
     };
     setSaving(true);
@@ -2430,6 +2434,24 @@ export function OwnerExperiencesPage() {
                 onChange={(e) => setDraft((d) => ({ ...d, forSale: e.target.checked }))}
               />
               <span>For sale — visible aux autres owners (marché)</span>
+            </label>
+            <label style={{ display: 'block', marginBottom: 18 }}>
+              <span style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
+                Menu guest (WhatsApp)
+              </span>
+              <select
+                className="pa-in"
+                style={inpBase}
+                value={draft.guestBloc}
+                onChange={(e) => setDraft((d) => ({ ...d, guestBloc: e.target.value }))}
+              >
+                <option value="">— (catalogue unique)</option>
+                <option value="EE">EE — Essentielles</option>
+                <option value="autres">Autres</option>
+              </select>
+              <div style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}>
+                Listing : champ EE$autres (essentielles + autres).
+              </div>
             </label>
             </fieldset>
 
