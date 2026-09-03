@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Chip, CircularProgress, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Chip, CircularProgress, Paper, Stack, Typography } from '@mui/material';
 import { DashboardWrapper } from '../../components/DashboardWrapper';
 import { fetchDailySummary, type DailyStats, type DailySummary } from '../../services/revenueApi';
+import { useFinancesOwnerScope } from '../finances/useFinancesOwnerScope';
 
 /**
  * Résumé quotidien — ce que l'équipe lit chaque matin.
@@ -148,6 +149,7 @@ function DayCard({ label, d, highlight }: { label: string; d: DailyStats; highli
 }
 
 export function DailySummaryPage() {
+  const { ownerId, needsOwnerPick } = useFinancesOwnerScope();
   const [report, setReport] = useState<DailySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [offset, setOffset] = useState(0);
@@ -158,9 +160,14 @@ export function DailySummaryPage() {
   }, [offset]);
 
   useEffect(() => {
+    if (!ownerId) {
+      setReport(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    fetchDailySummary({ asOf })
+    fetchDailySummary({ ownerId, asOf })
       .then((d) => {
         if (!cancelled) setReport(d);
       })
@@ -170,7 +177,7 @@ export function DailySummaryPage() {
     return () => {
       cancelled = true;
     };
-  }, [asOf]);
+  }, [ownerId, asOf]);
 
   /** Graphe de la semaine : occupation et ADR, comme le rapport de référence. */
   const chart = useMemo(() => {
@@ -186,6 +193,14 @@ export function DailySummaryPage() {
     const slot = (W - pl - pr) / w.length;
     return { w, W, H, pl, pr, pt, pb, maxAdr, slot };
   }, [report]);
+
+  if (needsOwnerPick) {
+    return (
+      <DashboardWrapper breadcrumb={['Rapports', 'Résumé quotidien']}>
+        <Alert severity="info">Choisissez un gestionnaire dans le filtre en haut de page.</Alert>
+      </DashboardWrapper>
+    );
+  }
 
   if (loading) {
     return (
