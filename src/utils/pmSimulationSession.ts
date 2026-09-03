@@ -60,3 +60,32 @@ export function createSimulationSessionId(): string {
   }
   return `sim-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
+
+/**
+ * Mode de sidebar choisi par l'admin (2026-09-03) — indépendant de l'owner
+ * sélectionné : on peut regarder la plateforme avec la sidebar admin seule,
+ * ou un owner avec les deux sidebars.
+ *   owner : exactement la sidebar d'un Owner
+ *   admin : uniquement les groupes infra (Logs, Monitor, Cost, Administration…)
+ *   both  : comportement historique (owner + infra)
+ */
+export type AdminSidebarMode = 'owner' | 'admin' | 'both';
+const SIDEBAR_MODE_KEY = 'sojori.adminView.sidebarMode';
+
+export function readAdminSidebarMode(): AdminSidebarMode | null {
+  try {
+    const raw = sessionStorage.getItem(SIDEBAR_MODE_KEY);
+    return raw === 'owner' || raw === 'admin' || raw === 'both' ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function persistAdminSidebarMode(mode: AdminSidebarMode | null): void {
+  try {
+    if (!mode) sessionStorage.removeItem(SIDEBAR_MODE_KEY);
+    else sessionStorage.setItem(SIDEBAR_MODE_KEY, mode);
+  } catch {
+    /* ignore quota */
+  }
+}

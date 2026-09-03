@@ -20,7 +20,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { NAV_DEFAULT_COLLAPSED } from '../../config/navConfig';
 import { useSidebarNav } from '../../hooks/useSidebarNav';
 import { usePmSimulation } from '../../context/PmSimulationContext';
-import { PmSimulationBanner } from '../simulation/PmSimulationBanner';
+import { AdminViewChip } from './AdminViewChip';
 import { AdminBusinessScopeTopFilter } from '../AdminOwnerScope/AdminBusinessScopeTopFilter';
 import { AdminSessionTopBarButton } from './AdminSessionTopBarButton';
 import { SidebarUserProfileMenu } from './SidebarUserProfileMenu';
@@ -95,13 +95,10 @@ export function DashboardLayout({
   const { isActive: simulationActive } = usePmSimulation();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
-  const gridRows = simulationActive ? `auto ${t.topbarH}px 1fr` : `${t.topbarH}px 1fr`;
-  const gridAreas = simulationActive
-    ? {
-        xs: `"banner" "topbar" "main"`,
-        md: `"banner banner" "sidebar topbar" "sidebar main"`,
-      }
-    : { xs: `"topbar" "main"`, md: `"sidebar topbar" "sidebar main"` };
+  // Plus de ligne « bannière » (2026-09-03) : la vue owner se signale par le
+  // chip de la topbar et un filet sous celle-ci, pas par un bandeau.
+  const gridRows = `${t.topbarH}px 1fr`;
+  const gridAreas = { xs: `"topbar" "main"`, md: `"sidebar topbar" "sidebar main"` };
 
   React.useEffect(() => {
     setMobileNavOpen(false);
@@ -127,18 +124,12 @@ export function DashboardLayout({
       fontFamily: 'Geist, system-ui, sans-serif',
       color: t.text, bgcolor: t.bg0,
     }}>
-      {simulationActive ? (
-        <Box sx={{ gridArea: 'banner' }}>
-          <PmSimulationBanner />
-        </Box>
-      ) : null}
       <AppSidebar
         user={user}
         activePath={activePath}
         onNavigate={handleNavigate}
         onLogout={onLogout}
         simulationActive={simulationActive}
-        sidebarRowSpan={simulationActive ? 2 : 1}
         variant="rail"
       />
       <Drawer
@@ -873,6 +864,7 @@ export function TopBar({
               <HelpOutlineOutlined sx={{ fontSize: 20 }} />
             </IconButton>
           </Tooltip>
+          <AdminViewChip />
           <Tooltip title="Paramètres">
             <IconButton sx={iconBtnSx} aria-label="Paramètres">
               <SettingsOutlined sx={{ fontSize: 20 }} />

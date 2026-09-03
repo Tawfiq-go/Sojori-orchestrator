@@ -764,6 +764,18 @@ function normalizeNavRole(role: string | null | undefined): string | null | unde
   return r;
 }
 
+/** Sidebar « admin seule » : uniquement les sections infra (Logs, Monitor, Cost, Administration…). */
+export function navGroupsForAdminOnly(
+  role: string | null | undefined,
+  email?: string | null,
+): NavGroupConfig[] {
+  const navRole = normalizeNavRole(role);
+  if (!roleAllowed(ADMIN_ROLES, navRole)) return [];
+  return ADMIN_NAV_GROUPS.filter((g) => roleAllowed(g.roles, navRole))
+    .map((g) => filterGroup(g, navRole, email))
+    .filter((g) => g.items.length > 0);
+}
+
 /** Sidebar filtrée par rôle (+ droits worker si role Worker). */
 export function navGroupsForRole(
   role: string | null | undefined,
