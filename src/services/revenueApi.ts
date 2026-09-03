@@ -80,12 +80,13 @@ export type RevenueSummary = {
 
 /** Ventilation USALI sur une période. */
 export async function fetchRevenueSummary(params: {
+  ownerId: string;
   from: string;
   to: string;
   listingId?: string;
 }): Promise<RevenueSummary | null> {
   try {
-    const search = new URLSearchParams({ from: params.from, to: params.to });
+    const search = new URLSearchParams({ ownerId: params.ownerId, from: params.from, to: params.to });
     if (params.listingId) search.set('listingId', params.listingId);
     const res = await apiClient.get(
       `${REVENUE_BASE}/revenue/summary?${search.toString()}`,
@@ -127,6 +128,7 @@ export type RevenueLinesPage = {
 
 /** Détail ligne par ligne des ventes d'extras — filtrable par département. */
 export async function fetchRevenueLines(params: {
+  ownerId: string;
   from: string;
   to: string;
   department?: string;
@@ -135,7 +137,7 @@ export async function fetchRevenueLines(params: {
   limit?: number;
 }): Promise<RevenueLinesPage | null> {
   try {
-    const search = new URLSearchParams({ from: params.from, to: params.to });
+    const search = new URLSearchParams({ ownerId: params.ownerId, from: params.from, to: params.to });
     if (params.department) search.set('department', params.department);
     if (params.search?.trim()) search.set('search', params.search.trim());
     if (params.page) search.set('page', String(params.page));
@@ -183,6 +185,7 @@ export type RevenueBillsPage = {
 
 /** Ventes regroupées par note client — une ligne par facture. */
 export async function fetchRevenueBills(params: {
+  ownerId: string;
   from: string;
   to: string;
   department?: string;
@@ -191,7 +194,7 @@ export async function fetchRevenueBills(params: {
   limit?: number;
 }): Promise<RevenueBillsPage | null> {
   try {
-    const search = new URLSearchParams({ from: params.from, to: params.to });
+    const search = new URLSearchParams({ ownerId: params.ownerId, from: params.from, to: params.to });
     if (params.department) search.set('department', params.department);
     if (params.search?.trim()) search.set('search', params.search.trim());
     if (params.page) search.set('page', String(params.page));
@@ -209,12 +212,14 @@ export async function fetchRevenueBills(params: {
 
 /** Articles d'une note — alimente le panneau de détail. */
 export async function fetchBillLines(params: {
+  ownerId: string;
   from: string;
   to: string;
   billRef: string;
 }): Promise<RevenueLineRow[]> {
   try {
     const search = new URLSearchParams({
+      ownerId: params.ownerId,
       from: params.from,
       to: params.to,
       billRef: params.billRef,
