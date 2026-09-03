@@ -386,18 +386,25 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // 401 après refresh OK = refus endpoint (scope / droits), pas fin de session globale.
-    if (
+    // 401 après refresh OK = refus endpoint (scope / droits), pas fin de session globale —
+    // sauf si le 401 persiste malgré un retry déjà tenté : là, mieux vaut renvoyer vers /login
+    // que de laisser l'utilisateur bloqué sur une sidebar vide sans échappatoire (cf. incident
+    // "Erreur owners" 401 sans corps reconnu par isSessionInvalidBody).
+    const softFailEndpoint = isInboxSoftFailEndpoint(url);
+    const persistentUnauthorized =
       error.response?.status === 401 &&
       !isAuthRoute &&
-      isSessionInvalidResponse &&
+      !softFailEndpoint &&
       !isAppEmbeddedInIframe() &&
-      !hasDevTokenBypass()
-    ) {
-      logAuthWarn('HTTP 401 — session invalidée (corps explicite)', {
+      !hasDevTokenBypass() &&
+      (isSessionInvalidResponse || Boolean(originalRequest._retry));
+
+    if (persistentUnauthorized) {
+      logAuthWarn('HTTP 401 — session invalidée', {
         url: originalRequest?.url,
         method: originalRequest?.method,
         retried: Boolean(originalRequest._retry),
+        explicitBody: isSessionInvalidResponse,
       });
       invalidateSession('http_401');
     }

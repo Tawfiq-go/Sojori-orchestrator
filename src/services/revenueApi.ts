@@ -453,11 +453,16 @@ export type ClientOriginReport = {
 
 /** Origine des clients, pondérée par les réservations. */
 export async function fetchClientOrigin(params: {
+  ownerId: string;
   from: string;
   to: string;
 }): Promise<ClientOriginReport | null> {
   try {
-    const search = new URLSearchParams({ from: params.from, to: params.to });
+    const search = new URLSearchParams({
+      ownerId: params.ownerId,
+      from: params.from,
+      to: params.to,
+    });
     const res = await apiClient.get(
       `${REVENUE_BASE}/reports/client-origin?${search.toString()}`,
       { timeout: 30000 },
