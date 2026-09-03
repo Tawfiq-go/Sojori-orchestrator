@@ -160,11 +160,6 @@ const DailySummaryPage = lazyWithReload(() =>
     default: module.DailySummaryPage,
   })),
 );
-const ClientOriginPage = lazyWithReload(() =>
-  import('./features/reports/ClientOriginPage').then((module) => ({
-    default: module.ClientOriginPage,
-  })),
-);
 const OperationsReportPage = lazyWithReload(() =>
   import('./features/reports/OperationsReportPage').then((module) => ({
     default: module.OperationsReportPage,
@@ -479,7 +474,8 @@ function App() {
               {/* Claude Design V2 - Remplace les anciennes vues */}
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
               <Route path="/reports" element={<LazyRoute><ReportsHubPage /></LazyRoute>} />
-              <Route path="/reports/clients" element={<LazyRoute><ClientOriginPage /></LazyRoute>} />
+              {/* Fusionnee dans /reports2/clients (meme ecran, LCD et hotel unifies). */}
+              <Route path="/reports/clients" element={<Navigate to="/reports2/clients" replace />} />
               <Route path="/reports/quotidien" element={<LazyRoute><DailySummaryPage /></LazyRoute>} />
               <Route path="/reception/rack" element={<LazyRoute><ReceptionRackPage /></LazyRoute>} />
               <Route path="/reports/arrivees" element={<LazyRoute><ArrivalsPage /></LazyRoute>} />
