@@ -26,6 +26,7 @@ import { clearPersistedAdminScope } from '../utils/adminOwnerFilter.utils';
 import { apiUserToMockUser } from '../utils/apiUserToMockUser';
 import { logAuth, logAuthError, logAuthWarn, maskToken } from '../utils/dashboardDebug';
 import { SESSION_EXPIRED_EVENT } from '../utils/devApiAccess';
+import { readTokenExpiryMs, renewAccessTokenEarly } from '../services/apiClient';
 
 export type User = MockUser;
 
@@ -415,6 +416,56 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
   }, []);
+
+  /**
+   * Renouvellement anticipé de l'access token (2026-09-03).
+   *
+   * Le refresh token n'accompagne plus chaque requête ; seul apiClient sait
+   * rejouer après un 401. Les appels axios globaux et fetch (≈50 fichiers
+   * legacy) verraient donc un jeton expiré toutes les 15 min. Ici on renouvelle
+   * 90 s avant l'expiration, et au réveil de l'onglet si l'échéance est passée.
+   */
+  useEffect(() => {
+    if (!state.isAuthenticated) return;
+    let timer: number | null = null;
+    let cancelled = false;
+
+    const renew = async () => {
+      try {
+        const next = await renewAccessTokenEarly();
+        if (!cancelled && next) {
+          setState((prev) => ({ ...prev, token: next }));
+        }
+      } catch (err) {
+        logAuthWarn('renouvellement anticipé échoué — le 401 suivant tentera le refresh', {
+          message: (err as { message?: string })?.message,
+        });
+      }
+    };
+
+    const schedule = () => {
+      if (timer) window.clearTimeout(timer);
+      const exp = readTokenExpiryMs(getToken());
+      if (!exp) return;
+      const delay = Math.max(exp - Date.now() - 90_000, 5_000);
+      timer = window.setTimeout(() => void renew(), delay);
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const exp = readTokenExpiryMs(getToken());
+      if (exp && exp - Date.now() < 120_000) void renew();
+      else schedule();
+    };
+
+    schedule();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [state.isAuthenticated, state.token]);
 
   useEffect(() => {
     const token = getToken();
