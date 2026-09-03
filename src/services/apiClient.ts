@@ -58,6 +58,40 @@ export function isRefreshTokenRoute(url: string | undefined): boolean {
   return u.includes('/valid-token-check') || u.includes('/auth/logout');
 }
 
+/**
+ * Renouvellement anticipé (2026-09-03) : on appelle /valid-token-check SANS
+ * Authorization et AVEC le refresh token → srv-user passe par sa voie refresh
+ * et rend un access token neuf, même si l'actuel est encore valable. Sert à
+ * ce que les clients hors apiClient (axios global, fetch) ne voient jamais un
+ * jeton expiré, maintenant que le refresh ne les accompagne plus.
+ */
+export async function renewAccessTokenEarly(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+  const response = await apiClient.get(`${AUTH_CONFIG.API_URL}/valid-token-check`, {
+    headers: { 'x-refresh-token': refreshToken },
+    _internalTokenRefresh: true,
+    _skipAuthHeader: true,
+  } as InternalAxiosRequestConfig);
+  const refreshedToken = response.data?.newToken as string | undefined;
+  if (!refreshedToken) return null;
+  setTokens(refreshedToken, refreshToken);
+  apiClient.defaults.headers.common['Authorization'] = `Bearer ${refreshedToken}`;
+  return refreshedToken;
+}
+
+/** Instant d'expiration (ms) lu dans le JWT — `exp` est en clair, seul `data` est chiffré. */
+export function readTokenExpiryMs(token: string | null | undefined): number | null {
+  try {
+    const payload = String(token || '').split('.')[1];
+    if (!payload) return null;
+    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof json?.exp === 'number' ? json.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 async function refreshSessionViaValidTokenCheck(): Promise<string | null> {
   const token = getToken();
   const refreshToken = getRefreshToken();
@@ -184,7 +218,7 @@ apiClient.interceptors.request.use(
     const token = getToken();
     const refreshToken = getRefreshToken();
 
-    if (token && config.headers) {
+    if (token && config.headers && !(config as { _skipAuthHeader?: boolean })._skipAuthHeader) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     // Le refresh token (7 jours) ne part QUE vers la route qui rafraîchit et
@@ -316,14 +350,11 @@ apiClient.interceptors.response.use(
       }
 
       if (!isAppEmbeddedInIframe()) {
-        if (hasDevTokenBypass() && !originalRequest._devAuthRetry) {
-          originalRequest._devAuthRetry = true;
-          clearTokens();
-          delete originalRequest.headers?.Authorization;
-          delete originalRequest.headers?.authorization;
-          delete originalRequest.headers?.['x-refresh-token'];
-          return apiClient(originalRequest);
-        }
+        // D'abord rafraîchir la session (access expiré, refresh encore valable) :
+        // depuis que le refresh token n'accompagne plus chaque requête, ce cas est
+        // la norme toutes les 15 min. Avant ce réordonnancement, en dev local avec
+        // VITE_DEV_TOKEN, on effaçait les cookies AVANT d'essayer — déconnexion
+        // garantie au premier jeton expiré.
         if (!originalRequest._sessionRefreshRetry && getToken() && getRefreshToken()) {
           originalRequest._sessionRefreshRetry = true;
           try {
@@ -335,8 +366,16 @@ apiClient.interceptors.response.use(
               return apiClient(originalRequest);
             }
           } catch {
-            /* refresh impossible — logout ci-dessous sauf inbox soft-fail */
+            /* refresh impossible — dev bypass ou logout ci-dessous sauf inbox soft-fail */
           }
+        }
+        if (hasDevTokenBypass() && !originalRequest._devAuthRetry) {
+          originalRequest._devAuthRetry = true;
+          clearTokens();
+          delete originalRequest.headers?.Authorization;
+          delete originalRequest.headers?.authorization;
+          delete originalRequest.headers?.['x-refresh-token'];
+          return apiClient(originalRequest);
         }
         if (inboxSoftFail) {
           logApiHttpFailure(error, { inboxSoftFail: true });
