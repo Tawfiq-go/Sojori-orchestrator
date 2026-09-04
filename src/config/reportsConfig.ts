@@ -89,7 +89,10 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Occupation, prix et rendement sur l’année, plus ce qu’aucun PMS ne calcule : ce que les villas retirées de la vente représentent.',
     accent: T.primary,
     route: '/reports/annuel',
-    mode: 'both',
+    // DailyInventorySnapshot (parc/occupation/ADR/RevPAR) n'est peuplé que
+    // pour Nommos — InventoryUnit/UnitBlock n'ont jamais de listingId en
+    // base (0/14 unités taguées). Vide en LCD, pas un bug de filtrage.
+    mode: 'hotel',
   },
   {
     id: 'reports/exploitation',
@@ -99,7 +102,8 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Six blocs de gestion sur quatre périodes. Ventile les nuitées retirées de la vente par motif — ce que le PMS range sous un type unique.',
     accent: T.blue,
     route: '/reports/exploitation',
-    mode: 'both',
+    // Même dépendance structurelle que Tendance annuelle.
+    mode: 'hotel',
   },
   {
     id: 'reports/arrivees',
