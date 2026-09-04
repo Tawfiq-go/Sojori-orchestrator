@@ -688,6 +688,8 @@ export type MovementEntry = {
   kind: 'arrival' | 'departure';
   guestName: string;
   unit: string | null;
+  /** Nom du listing — renseigné seulement quand plusieurs biens sont regroupés (LCD). */
+  listingName?: string | null;
   channel: string;
   guests: number;
   nights: number;
