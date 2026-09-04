@@ -36,17 +36,8 @@ const T = {
 
 export const REPORTS_CATALOG: ReportEntry[] = [
   // Live — écrans d'action / pilotage temps réel
-  {
-    id: 'ma-journee',
-    title: 'Ma journée',
-    pitch: 'Ce que l’équipe fait maintenant',
-    detail:
-      'Arrivées, départs, ménage, expériences et messages — l’écran d’atterrissage opérationnel du jour.',
-    accent: T.gold,
-    route: '/ma-journee',
-    mode: 'both',
-    featured: true,
-  },
+  // Ma journée n'apparaît pas ici : elle a sa propre entrée dans le menu
+  // latéral (à côté de "Reports"), la remontrer dans ce hub serait redondant.
   {
     id: 'dashboard',
     title: 'Tableau de bord',

@@ -63,12 +63,19 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     roles: PM_ROLES,
     items: [
       {
+        id: 'ma-journee',
+        label: 'Ma journée',
+        iconType: 'calendar',
+        iconColor: '#B8881A',
+        badge: 'Live',
+        description: 'Arrivées, départs, ménage, expériences et messages — écran d’atterrissage',
+      },
+      {
         id: 'reports',
         label: 'Reports',
         iconType: 'document',
         iconColor: '#b8851a',
-        badge: 'Live',
-        description: 'Ma journée, tableau de bord, analytics et tous les rapports — filtré hôtel/LCD',
+        description: 'Tableau de bord, analytics et tous les rapports — filtré hôtel/LCD',
       },
     ],
   },
