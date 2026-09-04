@@ -15,12 +15,13 @@
  * Les états de ménage viennent de Mews par webhook : lecture seule ici, on ne
  * les écrase pas depuis cet écran.
  */
-import { Box, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Stack, Switch, Tooltip, Typography } from '@mui/material';
 import type {
   ListingStructure,
   ListingStructureRoom,
   ListingStructureRoomType,
 } from '../../../types/listings.types';
+import listingsService from '../../../services/listingsService';
 import { T, cardSx, kickerSx } from '../tokens';
 
 type Props = { structure: ListingStructure; onChanged?: () => void };
@@ -39,6 +40,36 @@ const HK: Record<string, { label: string; color: string; bg: string; border: str
 };
 const UNKNOWN = { label: 'État inconnu', color: T.ink4, bg: T.bg2, border: T.line };
 const hk = (s?: string | null) => HK[String(s || '')] ?? UNKNOWN;
+
+function PoolToggle({
+  checked,
+  priceMad,
+  savingLabel,
+  onToggle,
+}: {
+  checked: boolean;
+  priceMad: number;
+  savingLabel?: string;
+  onToggle: (next: boolean) => Promise<void>;
+}) {
+  return (
+    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, mt: 1.25 }}>
+      <Box>
+        <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.ink }}>Piscine privée</Typography>
+        <Typography sx={{ fontSize: 11.5, color: T.ink3 }}>
+          Option WhatsApp · {priceMad} DH / jour{savingLabel ? ` · ${savingLabel}` : ''}
+        </Typography>
+      </Box>
+      <Switch
+        checked={checked}
+        onChange={(e) => {
+          void onToggle(e.target.checked);
+        }}
+        inputProps={{ 'aria-label': 'Piscine privée payante' }}
+      />
+    </Stack>
+  );
+}
 
 function RoomChip({ room }: { room: ListingStructureRoom }) {
   const s = hk(room.housekeepingState);
@@ -71,7 +102,15 @@ function RoomChip({ room }: { room: ListingStructureRoom }) {
   );
 }
 
-function RoomTypeCard({ rt }: { rt: ListingStructureRoomType }) {
+function RoomTypeCard({
+  rt,
+  listingId,
+  onChanged,
+}: {
+  rt: ListingStructureRoomType;
+  listingId: string;
+  onChanged?: () => void;
+}) {
   const none = rt.sellableRooms === 0;
   const label = rt.otaDisplayName || rt.name || 'Type sans nom';
   return (
@@ -149,6 +188,17 @@ function RoomTypeCard({ rt }: { rt: ListingStructureRoomType }) {
           {rt.declaredUnits > 1 ? 's' : ''}, mais rien n'est assignable.
         </Typography>
       )}
+      <PoolToggle
+        checked={rt.paidPrivatePool === true}
+        priceMad={rt.privatePoolPricePerDayMad || 1000}
+        onToggle={async (next) => {
+          const r = await listingsService.patchListingConfiguration(listingId, {
+            roomTypeId: rt.id,
+            roomType: { paidPrivatePool: next, privatePoolPricePerDayMad: rt.privatePoolPricePerDayMad || 1000 },
+          });
+          if (r.success) onChanged?.();
+        }}
+      />
     </Box>
   );
 }
@@ -169,6 +219,20 @@ export default function SectionStructure({ structure }: Props) {
           Ce logement est <b>son propre type de vente</b> : ce que le client achète et l'unité
           physique ne font qu'un. Il n'y a ni types multiples ni chambres à gérer séparément.
         </Typography>
+        <PoolToggle
+          checked={building.paidPrivatePool === true}
+          priceMad={building.privatePoolPricePerDayMad || 1000}
+          savingLabel="listing"
+          onToggle={async (next) => {
+            const r = await listingsService.patchListingConfiguration(building.id, {
+              building: {
+                paidPrivatePool: next,
+                privatePoolPricePerDayMad: building.privatePoolPricePerDayMad || 1000,
+              },
+            });
+            if (r.success) onChanged?.();
+          }}
+        />
       </Box>
     );
   }
@@ -220,7 +284,7 @@ export default function SectionStructure({ structure }: Props) {
         }}
       >
         {roomTypes.map((rt) => (
-          <RoomTypeCard key={rt.id} rt={rt} />
+          <RoomTypeCard key={rt.id} rt={rt} listingId={building.id} onChanged={onChanged} />
         ))}
       </Box>
 
