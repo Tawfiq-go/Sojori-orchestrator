@@ -23,6 +23,12 @@ export type ReportEntry = {
   featured?: boolean;
   /** Réservé à un rôle précis (ex. Monitor = Admin/SuperAdmin uniquement). */
   adminOnly?: boolean;
+  /**
+   * Retiré du hub pour les deux modes — donnée source structurellement
+   * vide (pas un problème de filtrage par PM). Le champ `mode` reste
+   * renseigné pour documenter l'intention si la source est réparée.
+   */
+  hidden?: boolean;
 };
 
 const T = {
@@ -78,6 +84,11 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Mouvement du jour, villas immobilisées et pourquoi, semaine à venir, rythme de prise. Le PMS donne les chiffres ; celui-ci nomme les villas.',
     accent: T.gold,
     route: '/reports/quotidien',
+    // Audit 2026-09-04 : le mouvement/ADR n'utilise qu'un listingId
+    // SINGULIER (pas scope.listingIds) — pour un PM à N listings, seul le
+    // premier est couvert. "hotel" tient ici car Nommos n'a qu'1 listing,
+    // pas parce que le code est structurellement hôtel-only. À corriger :
+    // adapter getDailyMovement/getOccupiedNights au multi-listing.
     mode: 'hotel',
     featured: true,
   },
@@ -89,7 +100,12 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Occupation, prix et rendement sur l’année, plus ce qu’aucun PMS ne calcule : ce que les villas retirées de la vente représentent.',
     accent: T.primary,
     route: '/reports/annuel',
-    mode: 'both',
+    // Audit 2026-09-04 : daily_inventory_snapshots.listingId est null sur
+    // 100% des 738 documents, POUR TOUS LES PM (y compris Nommos) — bug
+    // d'ingestion, pas un problème hôtel/LCD. Masqué partout tant que
+    // dailyInventorySnapshotService n'écrit pas ce champ.
+    mode: 'hotel',
+    hidden: true,
   },
   {
     id: 'reports/exploitation',
@@ -99,7 +115,10 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Six blocs de gestion sur quatre périodes. Ventile les nuitées retirées de la vente par motif — ce que le PMS range sous un type unique.',
     accent: T.blue,
     route: '/reports/exploitation',
-    mode: 'both',
+    // Audit 2026-09-04 : occupation/ADR/RevPAR à zéro (même cause que
+    // Tendance annuelle), mais revenu/encaissements réels et affichés
+    // clairement en « — » quand vides — gardé visible, pas totalement vide.
+    mode: 'hotel',
   },
   {
     id: 'reports/arrivees',
@@ -109,6 +128,8 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Qui arrive, qui part, et ce qui reste à faire : fiche de police à signer, séjour non soldé. La liste que la réception prépare le matin.',
     accent: T.green,
     route: '/reports/arrivees',
+    // Même limitation que Résumé quotidien : listingId singulier obligatoire
+    // côté getArrivalsDepartures — ne couvre qu'1 bien sur N en LCD.
     mode: 'hotel',
   },
   {
@@ -119,8 +140,10 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Rotation par article et articles jamais vendus. Révèle l’écart entre le catalogue déclaré et ce qui sort réellement.',
     accent: T.red,
     route: '/reports/produits',
-    // Catalogue ExtraProduct (Mews) non filtrable par owner — hôtel uniquement.
-    mode: 'hotel',
+    // Audit 2026-09-04 : les ventes (RevenueLine, filtrées par listingIds)
+    // sont réelles pour les deux modes. Le catalogue ExtraProduct est
+    // global (sans ownerId) mais reste lisible — pas un blocage.
+    mode: 'both',
   },
 
   // Rapports 2 — pensés multi-biens dès le départ
@@ -160,5 +183,5 @@ export const REPORTS_CATALOG: ReportEntry[] = [
 
 export function reportsForMode(reportsMode: 'hotel' | 'lcd' | undefined | null): ReportEntry[] {
   const mode = reportsMode === 'hotel' ? 'hotel' : 'lcd';
-  return REPORTS_CATALOG.filter((r) => r.mode === 'both' || r.mode === mode);
+  return REPORTS_CATALOG.filter((r) => !r.hidden && (r.mode === 'both' || r.mode === mode));
 }
