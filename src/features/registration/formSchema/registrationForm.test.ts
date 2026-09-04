@@ -55,6 +55,9 @@ const janeComplete = {
   coming_from: 'Paris',
   going_to: 'Marrakech',
   phone: '33619252954',
+  domicile: '12 rue des Lilas',
+  city: 'Paris',
+  country: 'France',
 }
 
 const aminePartial = {
@@ -95,13 +98,20 @@ describe('old simple configuration', () => {
 })
 
 describe('old complete configuration', () => {
-  it('keeps police extras enabled but optional (do not block enregistrement)', () => {
+  it('requires police extras except entry number and phone', () => {
     const schema = completePresetSchema()
     const required = requiredEnabledFields(schema).map((f) => f.id)
     for (const key of ['passport_photo', 'first_name', 'last_name', 'document_number']) {
       assert.ok(required.includes(key), key)
     }
-    for (const key of ['profession', 'coming_from', 'going_to', 'phone']) {
+    for (const key of ['profession', 'coming_from', 'going_to', 'domicile', 'city', 'country']) {
+      const field = schema.fields.find((f) => f.id === key)
+      assert.ok(field, key)
+      assert.equal(field!.enabled, true)
+      assert.equal(field!.required, true)
+      assert.equal(required.includes(key), true)
+    }
+    for (const key of ['phone', 'entry_number_morocco', 'arrival_time']) {
       const field = schema.fields.find((f) => f.id === key)
       assert.ok(field, key)
       assert.equal(field!.enabled, true)
@@ -167,7 +177,7 @@ describe('owner inheritance and listing override', () => {
     const profession = effective.schema.fields.find((f) => f.id === 'profession')
     assert.ok(profession)
     assert.equal(profession!.enabled, true)
-    assert.equal(profession!.required, false)
+    assert.equal(profession!.required, true)
   })
 })
 

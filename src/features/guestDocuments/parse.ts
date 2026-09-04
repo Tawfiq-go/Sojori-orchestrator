@@ -11,6 +11,7 @@ import {
   POLICE_FORM_DOCUMENT_ID,
   assembleContent,
   defaultGuestDocuments,
+  defaultIncludeFormulaire,
   documentTypeForGuestDocument,
 } from './catalog';
 import {
@@ -23,9 +24,10 @@ import {
 const MAX_CLAUSES = 12;
 
 /** Parsed document before kind-default policy fill / inheritance. */
-export type ParsedGuestDocument = Omit<GuestDocument, 'requiredBeforeArrival' | 'blocksAccess'> & {
+export type ParsedGuestDocument = Omit<GuestDocument, 'requiredBeforeArrival' | 'blocksAccess' | 'includeFormulaire'> & {
   requiredBeforeArrival?: boolean;
   blocksAccess?: boolean;
+  includeFormulaire?: boolean;
 };
 
 function parseClauses(raw: unknown, fallbackContent: string): GuestDocumentClause[] {
@@ -81,6 +83,11 @@ export function finalizeGuestDocument(doc: ParsedGuestDocument): GuestDocument {
     ...doc,
     requiredBeforeArrival: resolvePolicyFlag(doc.requiredBeforeArrival, undefined, defaults.requiredBeforeArrival),
     blocksAccess: resolvePolicyFlag(doc.blocksAccess, undefined, defaults.blocksAccess),
+    includeFormulaire: resolvePolicyFlag(
+      doc.includeFormulaire,
+      undefined,
+      defaultIncludeFormulaire(doc.kind),
+    ),
   });
 }
 
@@ -117,6 +124,7 @@ export function parseGuestDocumentLoose(raw: unknown): ParsedGuestDocument | nul
     requiresSignature: rec.requiresSignature === true,
     requiredBeforeArrival: readOptionalBoolean(rec.requiredBeforeArrival),
     blocksAccess: readOptionalBoolean(rec.blocksAccess),
+    includeFormulaire: readOptionalBoolean(rec.includeFormulaire),
     autoSendAfterRegistration: rec.autoSendAfterRegistration === true,
     signerPolicy,
     fieldKeys,
@@ -247,6 +255,11 @@ export function mergeGuestDocumentsInheritance(
           listingDoc.blocksAccess,
           ownerDoc?.blocksAccess,
           defaults.blocksAccess,
+        ),
+        includeFormulaire: resolvePolicyFlag(
+          listingDoc.includeFormulaire,
+          ownerDoc?.includeFormulaire,
+          defaultIncludeFormulaire(listingDoc.kind),
         ),
       });
     });
