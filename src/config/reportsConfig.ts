@@ -55,6 +55,16 @@ export const REPORTS_CATALOG: ReportEntry[] = [
     mode: 'both',
   },
   {
+    id: 'dashboard/performance-par-bien',
+    title: 'Performance par bien',
+    pitch: 'Occupation, ADR, RevPAR — mois par mois, bien par bien',
+    detail:
+      'Matrice bien × mois : nuits ouvertes/vendues, revenu, ADR, RevPAR, pickup 7/30j, lead time, canaux — vues Mois, Année et Avis. Basé sur le calendrier de disponibilité (source alimentée pour tous les PM, vérifié en base 2026-09-04).',
+    accent: T.primary,
+    route: '/dashboard/performance-par-bien',
+    mode: 'both',
+  },
+  {
     id: 'analytics',
     title: 'Analytics',
     pitch: 'Saisonnalité, démographie, lead time',
@@ -84,11 +94,12 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Mouvement du jour, villas immobilisées et pourquoi, semaine à venir, rythme de prise. Le PMS donne les chiffres ; celui-ci nomme les villas.',
     accent: T.gold,
     route: '/reports/quotidien',
-    // Audit 2026-09-04 : le mouvement/ADR n'utilise qu'un listingId
-    // SINGULIER (pas scope.listingIds) — pour un PM à N listings, seul le
-    // premier est couvert. "hotel" tient ici car Nommos n'a qu'1 listing,
-    // pas parce que le code est structurellement hôtel-only. À corriger :
-    // adapter getDailyMovement/getOccupiedNights au multi-listing.
+    // Corrigé 2026-09-04 : mouvement/ADR/extras couvrent maintenant tout
+    // le parc (scope.listingIds). Reste vide en LCD : parc/immobilisations
+    // (InventoryUnit/UnitBlock) et performance mensuelle
+    // (DailyInventorySnapshot) — aucun listingId renseigné en base, ces
+    // deux collections ne sont alimentées que pour Nommos par Mews. Gardé
+    // hôtel tant que ces deux blocs restent structurellement vides ailleurs.
     mode: 'hotel',
     featured: true,
   },
@@ -128,9 +139,10 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Qui arrive, qui part, et ce qui reste à faire : fiche de police à signer, séjour non soldé. La liste que la réception prépare le matin.',
     accent: T.green,
     route: '/reports/arrivees',
-    // Même limitation que Résumé quotidien : listingId singulier obligatoire
-    // côté getArrivalsDepartures — ne couvre qu'1 bien sur N en LCD.
-    mode: 'hotel',
+    // Corrigé 2026-09-04 : getArrivalsDepartures accepte maintenant
+    // listingIds (tout le parc), avec listingName par ligne pour
+    // distinguer les villas. Vérifié en direct (5 listings, 2 PM).
+    mode: 'both',
   },
   {
     id: 'reports/produits',
