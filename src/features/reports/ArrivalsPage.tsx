@@ -59,7 +59,7 @@ function Entry({ e }: { e: MovementEntry }) {
             {e.guestName}
           </Typography>
           <Typography sx={{ fontSize: 11.5, color: T.ink3, mt: 0.15 }}>
-            {e.unit ?? 'Villa non assignée'} · {e.channel} · {e.guests} pers.
+            {e.unit ?? e.listingName ?? 'Villa non assignée'} · {e.channel} · {e.guests} pers.
             {e.nights > 0 ? ` · ${e.nights} n.` : ''}
           </Typography>
         </Box>
