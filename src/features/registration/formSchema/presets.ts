@@ -73,6 +73,26 @@ export const COMPLETE_EXTRA_OPTIONAL_KEYS = [
   'entry_number_morocco',
   'arrival_time',
 ] as const
+
+/** Toggle WhatsApp-required on a builtin field; adds the complete-preset field if missing. */
+export function setBuiltinRequired(
+  schema: RegistrationFormSchema,
+  binding: string,
+  required: boolean,
+): RegistrationFormSchema {
+  const fromComplete = completePresetSchema().fields.find((f) => f.binding === binding)
+  let found = false
+  const fields = schema.fields.map((f) => {
+    if ((f.binding || f.id) !== binding) return f
+    found = true
+    return { ...f, required, enabled: required ? true : f.enabled }
+  })
+  if (!found && fromComplete) {
+    fields.push({ ...fromComplete, required, enabled: true, order: fields.length })
+  }
+  return { ...schema, version: 2, fields: fields.map((f, i) => ({ ...f, order: i })) }
+}
+
 const MAX_PASSPORT_CORE_REQUIRED = new Set([
   'first_name',
   'last_name',
