@@ -27,6 +27,7 @@ import {
   reconstructSlotMapping,
   requiredEnabledFields,
   resolveEffectiveRegistrationForm,
+  setBuiltinRequired,
   screenshotHotelRegistrationSchema,
   simplePresetSchema,
   slotBindingsForPage,
@@ -123,6 +124,15 @@ describe('old complete configuration', () => {
 
   it('marks Jane+police complete without issued place', () => {
     assert.deepEqual(missingFieldsForMember(janeComplete, completePresetSchema()), [])
+  })
+
+  it('setBuiltinRequired adds a missing complete extra and toggles required', () => {
+    const added = setBuiltinRequired(simplePresetSchema(), 'profession', true)
+    const profession = added.fields.find((f) => f.id === 'profession')
+    assert.equal(profession?.required, true)
+    assert.equal(profession?.enabled, true)
+    const relaxed = setBuiltinRequired(added, 'profession', false)
+    assert.equal(relaxed.fields.find((f) => f.id === 'profession')?.required, false)
   })
 })
 
