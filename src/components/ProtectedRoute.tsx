@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useRealAuth } from '../hooks/useAuth';
 import { AUTH_CONFIG } from '../config/authConfig';
 import { logAuth, maskToken } from '../utils/dashboardDebug';
 import { getToken } from '../utils/authUtils';
@@ -12,7 +12,7 @@ import { CircularProgress, Box, Typography } from '@mui/material';
  * VITE_DISABLE_AUTH ne contourne plus le garde sans jeton — évite l’écran « fantôme » sans sidebar.
  */
 export const ProtectedRoute: React.FC = () => {
-  const { isAuthenticated, loading, error, user } = useAuth();
+  const { isAuthenticated, loading, error, user } = useRealAuth();
   const location = useLocation();
 
   useEffect(() => {
