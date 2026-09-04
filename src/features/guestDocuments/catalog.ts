@@ -36,6 +36,10 @@ export type GuestDocument = {
   notice: string;
   enabled: boolean;
   requiresSignature: boolean;
+  /** Counts toward Enregistrement x/y when enabled. */
+  requiredBeforeArrival: boolean;
+  /** Locks menu F / access until this document is fully signed (implies required + signature). */
+  blocksAccess: boolean;
   autoSendAfterRegistration: boolean;
   signerPolicy: GuestDocumentSignerPolicy;
   fieldKeys: string[];
@@ -354,6 +358,10 @@ function withAssembled(doc: GuestDocument): GuestDocument {
   return { ...doc, content: assembleContent(doc) };
 }
 
+/**
+ * Templates shown when no guestDocuments are stored.
+ * All inactive — nothing is silently persisted as active.
+ */
 export function defaultGuestDocuments(): GuestDocument[] {
   return [
     withAssembled({
@@ -365,8 +373,10 @@ export function defaultGuestDocuments(): GuestDocument[] {
       clauses: [],
       closing: DEFAULT_POLICE_CLOSING,
       notice: DEFAULT_POLICE_NOTICE,
-      enabled: true,
+      enabled: false,
       requiresSignature: true,
+      requiredBeforeArrival: true,
+      blocksAccess: false,
       autoSendAfterRegistration: false,
       signerPolicy: 'primary_guest',
       fieldKeys: [...POLICE_FORM_FIELD_KEYS],
@@ -380,8 +390,10 @@ export function defaultGuestDocuments(): GuestDocument[] {
       clauses: DEFAULT_DISCLAIMER_CLAUSES.map((c) => ({ ...c })),
       closing: DEFAULT_DISCLAIMER_CLOSING,
       notice: '',
-      enabled: true,
+      enabled: false,
       requiresSignature: true,
+      requiredBeforeArrival: true,
+      blocksAccess: false,
       autoSendAfterRegistration: false,
       signerPolicy: 'primary_guest',
       fieldKeys: [...DISCLAIMER_FIELD_KEYS],
@@ -396,8 +408,10 @@ export function defaultGuestDocuments(): GuestDocument[] {
       closing: DEFAULT_SHORT_TERM_RENTAL_CLOSING,
       notice:
         'Modèle type Maroc (Loi 80-14) — à adapter avec votre conseil juridique. Signature électronique simple.',
-      enabled: true,
+      enabled: false,
       requiresSignature: true,
+      requiredBeforeArrival: true,
+      blocksAccess: false,
       autoSendAfterRegistration: false,
       signerPolicy: 'primary_guest',
       fieldKeys: [...SHORT_TERM_RENTAL_FIELD_KEYS],
@@ -428,6 +442,11 @@ export function documentTypeLabel(documentType: string): string {
 
 export function blankContract(partial?: Partial<GuestDocument>): GuestDocument {
   const stamp = Date.now().toString(36);
+  const kind = partial?.kind ?? 'contract';
+  const policies =
+    kind === 'contract'
+      ? { requiredBeforeArrival: true, blocksAccess: false }
+      : { requiredBeforeArrival: true, blocksAccess: true };
   const base: GuestDocument = {
     id: `doc_contract_${stamp}`,
     kind: 'contract',
@@ -439,12 +458,14 @@ export function blankContract(partial?: Partial<GuestDocument>): GuestDocument {
     notice: '',
     enabled: true,
     requiresSignature: true,
+    requiredBeforeArrival: policies.requiredBeforeArrival,
+    blocksAccess: policies.blocksAccess,
     autoSendAfterRegistration: false,
     signerPolicy: 'primary_guest',
     fieldKeys: [],
     ...partial,
   };
-  return withAssembled({ ...base, kind: partial?.kind ?? 'contract' });
+  return withAssembled({ ...base, kind });
 }
 
 export function disclaimerContract(): GuestDocument {
