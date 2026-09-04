@@ -28,20 +28,19 @@ export function simplePresetSchema(): RegistrationFormSchema {
 
 /**
  * “Complete” = fiche police field set.
- * Extras (profession, provenance, allant à, téléphone) stay visible for the PDF
- * but are optional — they must not block enregistrement when OCR identity is done.
+ * Formulaire extras are required except n° d’entrée au Maroc (often unknown until arrival)
+ * and phone / arrival time.
  */
 export function completePresetSchema(): RegistrationFormSchema {
   const fields = [
     ...simplePresetSchema().fields,
-    builtinField('profession', { required: false, enabled: true, order: 13 }),
-    builtinField('coming_from', { required: false, enabled: true, order: 14 }),
-    builtinField('going_to', { required: false, enabled: true, order: 15 }),
+    builtinField('profession', { required: true, enabled: true, order: 13 }),
+    builtinField('coming_from', { required: true, enabled: true, order: 14 }),
+    builtinField('going_to', { required: true, enabled: true, order: 15 }),
     builtinField('phone', { required: false, enabled: true, order: 16 }),
-    builtinField('domicile', { required: false, enabled: true, order: 17 }),
-    builtinField('city', { required: false, enabled: true, order: 18 }),
-    builtinField('country', { required: false, enabled: true, order: 19 }),
-    // Shown on WhatsApp by default, never required — guest often gets it only on arrival in Morocco.
+    builtinField('domicile', { required: true, enabled: true, order: 17 }),
+    builtinField('city', { required: true, enabled: true, order: 18 }),
+    builtinField('country', { required: true, enabled: true, order: 19 }),
     builtinField('entry_number_morocco', { required: false, enabled: true, order: 20 }),
     builtinField('arrival_time', { required: false, enabled: true, order: 21 }),
   ]
@@ -61,33 +60,19 @@ export const SIMPLE_REQUIRED_KEYS = [
   'passport_photo',
 ] as const
 
-/** Kept for callers that still list “extra” complete fields (all optional now). */
-export const COMPLETE_EXTRA_REQUIRED_KEYS = [] as const
-export const COMPLETE_EXTRA_OPTIONAL_KEYS = [
+export const COMPLETE_EXTRA_REQUIRED_KEYS = [
   'profession',
   'coming_from',
   'going_to',
-  'phone',
+  'domicile',
+  'city',
+  'country',
 ] as const
-
-const OPTIONAL_COMPLETE_EXTRA = new Set<string>(COMPLETE_EXTRA_OPTIONAL_KEYS)
-
-/**
- * Soft-migrate persisted listing schemas that still mark complete extras as required.
- * Profession / provenance / allant à / téléphone must never block enregistrement.
- */
-export function relaxCompleteExtraRequired(schema: RegistrationFormSchema): RegistrationFormSchema {
-  let changed = false
-  const fields = schema.fields.map((f) => {
-    const key = f.binding || f.id
-    if (OPTIONAL_COMPLETE_EXTRA.has(key) && f.required) {
-      changed = true
-      return { ...f, required: false }
-    }
-    return f
-  })
-  return changed ? { ...schema, fields } : schema
-}
+export const COMPLETE_EXTRA_OPTIONAL_KEYS = [
+  'phone',
+  'entry_number_morocco',
+  'arrival_time',
+] as const
 const MAX_PASSPORT_CORE_REQUIRED = new Set([
   'first_name',
   'last_name',
