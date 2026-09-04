@@ -160,7 +160,10 @@
 
 .mj .nums {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  /* 7 compteurs fixes — les paliers ci-dessous (7 puis 4+3 via 2 lignes de
+     grid-template-columns imbriquées ne marchant pas en CSS pur) sont donc
+     7 colonnes ou 1 seule : jamais un reste isolé avec un espace vide. */
+  grid-template-columns: repeat(7, 1fr);
   gap: 1px;
   background: var(--line);
   border: 1px solid var(--line);
@@ -564,12 +567,6 @@
   color: var(--mut);
 }
 
-@media (max-width: 1200px) {
-  .mj .nums {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
 @media (max-width: 960px) {
   .mj {
     margin: -8px -12px 0;
@@ -579,10 +576,12 @@
   .mj .cols {
     grid-template-columns: 1fr;
   }
-}
-
-@media (max-width: 520px) {
+  /* 7 ne se divise proprement qu'en 7 ou 1 : sous 960px, une carte par
+     ligne plutôt qu'un reste isolé avec un espace vide à côté. */
   .mj .nums {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
+  }
+  .mj .num {
+    min-height: auto;
   }
 }
