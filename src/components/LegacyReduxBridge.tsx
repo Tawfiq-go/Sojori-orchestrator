@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import axios from 'axios';
+import { isRefreshTokenRoute } from '../services/apiClient';
 import { Provider, useDispatch } from 'react-redux';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -41,7 +42,8 @@ export function setupLegacyAxiosAuth() {
       config.headers = config.headers ?? {};
       config.headers.Authorization = `Bearer ${token}`;
     }
-    if (refreshToken) {
+    // Refresh token réservé à la route de rafraîchissement (voir apiClient.isRefreshTokenRoute).
+    if (refreshToken && isRefreshTokenRoute(config.url)) {
       config.headers = config.headers ?? {};
       config.headers['x-refresh-token'] = refreshToken;
     }

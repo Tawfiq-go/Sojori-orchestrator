@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Box, CircularProgress, Typography } from '@mui/material';
-import { useAuth } from '../hooks/useAuth';
+import { useRealAuth } from '../hooks/useAuth';
 import { hasAdminAccess } from '../utils/rbac.utils';
 
 /**
@@ -9,7 +9,7 @@ import { hasAdminAccess } from '../utils/rbac.utils';
  * Les PM (Owner) ne doivent pas voir le mapping — seulement le formulaire listing.
  */
 export const AdminRoute: React.FC = () => {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { user, loading, isAuthenticated } = useRealAuth();
   const location = useLocation();
   const devBypass = import.meta.env.VITE_DISABLE_AUTH === 'true';
 

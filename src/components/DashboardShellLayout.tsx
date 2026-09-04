@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { Outlet, useLocation } from 'react-router-dom';
 import { DashboardLayout } from './dashboard/DashboardV2.components';
 import { isListingCataloguePath } from '../constants/listingLayout';
-import { isPmBusinessPath } from '../config/routeAccessPolicy';
+import { isTemplateAdminScopePath } from './AdminOwnerScope/AdminBusinessScopeTopFilter';
 import { resolvePageChrome } from '../config/pageChromeRegistry';
 import { useDashboardChrome } from './useDashboardChrome';
 import { PmSimulationProvider } from '../context/PmSimulationContext';
@@ -34,9 +34,12 @@ function ShellTopBarScope({ children }: { children: ReactNode }) {
   const { user: authUser } = useAuth();
   const user = useMemo(() => toLegacyAuthUser(authUser), [authUser]);
   const { simulatedOwnerId } = useAdminOwnerFilter();
+  // Depuis le 2026-09-03 le choix d'owner passe par le chip « la vue » (AdminViewChip).
+  // Le sélecteur central ne reste que sur les écrans « Template Admin vs PM »
+  // (modèle d'orchestration, config) où « Template Admin » est une option à part.
   const showAdminScopeInTopBar = useMemo(() => {
     if (!canSelectOwnerInAdminFilter(user) || simulatedOwnerId) return false;
-    return isPmBusinessPath(location.pathname);
+    return isTemplateAdminScopePath(location.pathname);
   }, [user, simulatedOwnerId, location.pathname]);
 
   return (
