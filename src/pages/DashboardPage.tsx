@@ -27,23 +27,14 @@ import {
 } from 'recharts';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import {
-  Badge,
-  FilterBar,
-  FilterChip,
   PageHeader,
-  Panel,
   StableChart,
-  StatCard,
-  StatsRow,
   btnGhostSx,
   btnPrimarySx,
-  tokens as t,
 } from '../components/dashboard/DashboardV2.components';
+import { T } from '../features/dynamic-pricing/_tokens';
 import { dashboardPeriods } from '../data/mockDashboard';
 
-const ListingPerformanceTab = lazyWithReload(() =>
-  import('../features/listingPerformance/ListingPerformanceTab').then((m) => ({ default: m.default }))
-);
 const OrchestrationOpsCards = lazyWithReload(() =>
   import('../features/dashboardOps/OrchestrationOpsCards').then((m) => ({ default: m.default }))
 );
@@ -85,7 +76,9 @@ import type {
 } from '../types/dashboard.types';
 
 
-const chartColors = ['#e6b022', '#8b5cf6', '#10b981', '#06b6d4'];
+const MONO = 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace';
+/** Palette Atelier — alignée sur T.gold/T.ai/T.success/T.info (dynamic-pricing). */
+const chartColors = [T.gold, T.ai, T.success, T.info];
 
 const currency = new Intl.NumberFormat('fr-FR', {
   style: 'currency',
@@ -98,6 +91,167 @@ const VISIBLE_LIST_HINT = '4 visibles · scroll';
 /** Au-delà : pas de % sur les barres (illisibles) — hover = nom + %. */
 const OCCUPANCY_BAR_LABEL_MAX = 12;
 const OCCUPANCY_CHART_HINT = 'initiales · % sur barres si ≤12 · hover = nom + %';
+
+/* ─── Présentation Atelier locale (reskin pur — même logique React) ─── */
+
+function AtelierStatsRow({ children }: { children: ReactNode }) {
+  return (
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1.75, mb: 2.75 }}>
+      {children}
+    </Box>
+  );
+}
+
+function AtelierStatCard({
+  value,
+  label,
+  trend,
+  trendUp,
+  accent = T.gold,
+}: {
+  value: string;
+  label: string;
+  trend?: string;
+  trendUp?: boolean;
+  accent?: string;
+}) {
+  const trendStr = String(trend ?? '').trim();
+  const hasDelta = /[-+−]?\d/.test(trendStr) && trendStr !== '—' && !/MAD$/.test(trendStr);
+  const isNegative = /^[-−]/.test(trendStr);
+  const isZero = /^[+-−]?0([.,]0+)?\s*%?$/.test(trendStr);
+  const up = typeof trendUp === 'boolean' ? trendUp : !isNegative;
+  return (
+    <Box
+      sx={{
+        bgcolor: T.bg1,
+        border: `1px solid ${T.border}`,
+        borderTop: `3px solid ${accent}`,
+        borderRadius: '12px',
+        p: 2.25,
+        transition: 'box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1), transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
+        '&:hover': {
+          boxShadow: '0 10px 28px rgba(20,17,10,0.08)',
+          transform: 'translateY(-2px)',
+        },
+      }}
+    >
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.25 }}>
+        <Typography sx={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.text3 }}>
+          {label}
+        </Typography>
+        {hasDelta ? (
+          <Box
+            component="span"
+            sx={{
+              fontFamily: MONO, fontSize: 10.5, fontWeight: 700, borderRadius: '99px', px: 1, py: 0.25,
+              color: isZero ? T.text3 : up ? T.success : T.error,
+              bgcolor: isZero ? T.bg3 : up ? T.successTint : T.errorTint,
+            }}
+          >
+            {isZero ? '= stable' : up ? `▲ +${trendStr.replace(/^[+]/, '')}` : `▼ ${trendStr}`}
+          </Box>
+        ) : null}
+      </Stack>
+      <Typography sx={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </Typography>
+    </Box>
+  );
+}
+
+function AtelierPanel({
+  title,
+  desc,
+  headRight,
+  children,
+  sx,
+}: {
+  title?: string;
+  desc?: string;
+  headRight?: ReactNode;
+  children: ReactNode;
+  sx?: object;
+}) {
+  return (
+    <Box
+      sx={{
+        bgcolor: T.bg1,
+        border: `1px solid ${T.border}`,
+        borderRadius: '16px',
+        p: 2.25,
+        ...sx,
+      }}
+    >
+      {title ? (
+        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'baseline', mb: 2, pb: 1.5, borderBottom: `1px dashed ${T.border}` }}>
+          <Typography sx={{ fontSize: 13.5, fontWeight: 800 }}>{title}</Typography>
+          {desc ? (
+            <Typography sx={{ ml: 'auto !important', fontFamily: MONO, fontSize: 11, color: T.text3 }}>{desc}</Typography>
+          ) : null}
+          {headRight}
+        </Stack>
+      ) : null}
+      {children}
+    </Box>
+  );
+}
+
+function AtelierFilterBar({ children }: { children: ReactNode }) {
+  return (
+    <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 1.75, rowGap: 1 }}>
+      {children}
+    </Stack>
+  );
+}
+
+function AtelierFilterChip({ label, active, onClick }: { label: string; active?: boolean; onClick?: () => void }) {
+  return (
+    <Box
+      component="button"
+      onClick={onClick}
+      sx={{
+        all: 'unset', cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+        px: 1.5, py: 0.75, borderRadius: '99px',
+        fontSize: 12, fontWeight: active ? 800 : 600,
+        color: active ? T.goldDeep : T.text2,
+        bgcolor: active ? T.goldTint2 : T.bg1,
+        border: `1.5px solid ${active ? T.gold : T.border}`,
+        transition: 'background-color 0.15s ease, border-color 0.15s ease',
+        '&:hover': { borderColor: T.goldDeep },
+      }}
+    >
+      {label}
+    </Box>
+  );
+}
+
+type BadgeVariant = 'success' | 'warning' | 'error' | 'info' | 'ai' | 'gold' | 'neutral';
+const ATELIER_BADGE_COLORS: Record<BadgeVariant, { bg: string; color: string }> = {
+  success: { bg: T.successTint, color: T.success },
+  warning: { bg: T.warningTint, color: T.warning },
+  error: { bg: T.errorTint, color: T.error },
+  info: { bg: T.infoTint, color: T.info },
+  ai: { bg: T.aiTint, color: T.ai },
+  gold: { bg: T.goldTint, color: T.goldDeep },
+  neutral: { bg: T.bg3, color: T.text3 },
+};
+
+function AtelierBadge({ variant = 'neutral', children }: { variant?: BadgeVariant; children: ReactNode }) {
+  const c = ATELIER_BADGE_COLORS[variant];
+  return (
+    <Box
+      component="span"
+      sx={{
+        display: 'inline-flex', alignItems: 'center', gap: 0.625,
+        px: 1.125, py: 0.375, borderRadius: '99px',
+        fontFamily: MONO, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
+        bgcolor: c.bg, color: c.color,
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
 
 export function DashboardPage() {
   return <DashboardPageContent />;
@@ -143,7 +297,6 @@ function DashboardPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const prevScopeRef = useRef<string>(`${adminScopeMode}:${requestOwnerId ?? ''}`);
-  const [dashTab, setDashTab] = useState<'overview' | 'perf'>('overview');
 
   useEffect(() => {
     const scopeKey = `${adminScopeMode}:${requestOwnerId ?? ''}`;
@@ -615,33 +768,7 @@ function DashboardPageContent() {
         </Alert>
       ) : null}
 
-      {!ownerScopeUnset ? (
-        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
-          {([['overview', "Vue d'ensemble"], ['perf', 'Performance par bien']] as const).map(([key, label]) => (
-            <Button
-              key={key}
-              onClick={() => setDashTab(key)}
-              sx={{
-                textTransform: 'none', fontWeight: 800, fontSize: 12.5, borderRadius: '99px', px: 2,
-                border: `1.5px solid ${dashTab === key ? '#F4CF5E' : 'rgba(20,17,10,0.10)'}`,
-                bgcolor: dashTab === key ? 'rgba(244,207,94,0.14)' : '#fff',
-                color: dashTab === key ? '#c79b22' : 'text.secondary',
-                '&:hover': { bgcolor: 'rgba(244,207,94,0.20)', borderColor: '#F4CF5E' },
-              }}
-            >
-              {label}
-            </Button>
-          ))}
-        </Stack>
-      ) : null}
-
-      {dashTab === 'perf' && !ownerScopeUnset ? (
-        <Suspense fallback={<Box sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>Chargement…</Box>}>
-          <ListingPerformanceTab ownerId={requestOwnerId || undefined} />
-        </Suspense>
-      ) : null}
-
-      {dashTab === 'perf' ? null : !dashboardReady && !ownerScopeUnset ? (
+      {!dashboardReady && !ownerScopeUnset ? (
         <Box
           sx={{
             minHeight: 'min(70vh, 640px)',
@@ -659,9 +786,9 @@ function DashboardPageContent() {
         </Box>
       ) : ownerScopeUnset ? null : (
         <>
-      <FilterBar>
+      <AtelierFilterBar>
         {dashboardPeriods.map((item) => (
-          <FilterChip
+          <AtelierFilterChip
             key={item}
             label={item}
             active={period === item}
@@ -700,76 +827,60 @@ function DashboardPageContent() {
             Réinitialiser listings
           </Button>
         ) : null}
-      </FilterBar>
+      </AtelierFilterBar>
 
-      <StatsRow>
-        <StatCard
-          icon="🎫"
-          iconBg="rgba(230,176,34,0.12)"
-          iconColor={t.primaryDeep}
+      <AtelierStatsRow>
+        <AtelierStatCard
+          accent={T.gold}
           value={snapshot.kpis.totalReservations.value.toString()}
           label={`Réservations · ${period.toLowerCase()}`}
           trend={snapshot.kpis.totalReservations.trend}
         />
-        <StatCard
-          icon="💶"
-          iconBg="rgba(16,185,129,0.12)"
-          iconColor={t.success}
+        <AtelierStatCard
+          accent={T.success}
           value={currency.format(snapshot.kpis.monthlyRevenue.value)}
           label="Revenus du mois"
           trend={snapshot.kpis.monthlyRevenue.trend}
         />
-        <StatCard
-          icon="📈"
-          iconBg="rgba(6,182,212,0.12)"
-          iconColor={t.info}
+        <AtelierStatCard
+          accent={T.info}
           value={`${snapshot.kpis.occupancyRate.value}%`}
           label="Taux d’occupation"
           trend={snapshot.kpis.occupancyRate.trend}
         />
-        <StatCard
-          icon="🛏️"
-          iconBg="rgba(139,92,246,0.12)"
-          iconColor={t.ai}
+        <AtelierStatCard
+          accent={T.ai}
           value={`${snapshot.kpis.adr.value} MAD`}
           label="ADR"
           trend={snapshot.kpis.adr.trend}
         />
-      </StatsRow>
+      </AtelierStatsRow>
 
-      <StatsRow>
-        <StatCard
-          icon="🏡"
-          iconBg="rgba(245,158,11,0.12)"
-          iconColor={t.warning}
+      <AtelierStatsRow>
+        <AtelierStatCard
+          accent={T.warning}
           value={snapshot.kpis.activeProperties.value.toString()}
           label="Properties actives"
           trend={snapshot.kpis.activeProperties.trend}
         />
-        <StatCard
-          icon="⭐"
-          iconBg="rgba(230,176,34,0.12)"
-          iconColor={t.primaryDeep}
+        <AtelierStatCard
+          accent={T.goldDeep}
           value={`${ratingDisplay.display}/5`}
           label="Note moyenne voyageurs"
         />
-        <StatCard
-          icon="👥"
-          iconBg="rgba(16,185,129,0.12)"
-          iconColor={t.success}
+        <AtelierStatCard
+          accent={T.success}
           value={snapshot.kpis.guestsThisMonth.value.toString()}
           label="Voyageurs ce mois"
           trend={snapshot.kpis.guestsThisMonth.trend}
         />
-        <StatCard
-          icon="📊"
-          iconBg="rgba(239,68,68,0.12)"
-          iconColor={t.error}
+        <AtelierStatCard
+          accent={T.error}
           value={`${snapshot.kpis.revpar.value} MAD`}
           label="RevPAR"
           trend={snapshot.kpis.revpar.trend}
         />
-      </StatsRow>
+      </AtelierStatsRow>
 
       <Box
         sx={{
@@ -780,14 +891,14 @@ function DashboardPageContent() {
           '& > *': { minWidth: 0 },
         }}
       >
-        <Panel
+        <AtelierPanel
           title="Revenus par jour / semaine / mois"
           desc="Timeline · revenu (MAD) à gauche · arrivées (check-in) à droite"
         >
           <StableChart height={320}>
             {({ width, height }: { width: number; height: number }) => (
               <LineChart width={width} height={height} data={snapshot.revenueChart}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(20,17,10,0.08)" />
                 <XAxis dataKey="date" />
                 <YAxis
                   yAxisId="revenue"
@@ -811,7 +922,7 @@ function DashboardPageContent() {
                   type="monotone"
                   dataKey="revenue"
                   name="Revenu (MAD)"
-                  stroke="#e6b022"
+                  stroke={T.gold}
                   strokeWidth={3}
                   dot={false}
                 />
@@ -820,16 +931,16 @@ function DashboardPageContent() {
                   type="monotone"
                   dataKey="bookings"
                   name="Arrivées"
-                  stroke="#8b5cf6"
+                  stroke={T.ai}
                   strokeWidth={2}
                   dot={false}
                 />
               </LineChart>
             )}
           </StableChart>
-        </Panel>
+        </AtelierPanel>
 
-        <Panel title="Réservations par source" desc="Airbnb, Booking, Direct, Vrbo">
+        <AtelierPanel title="Réservations par source" desc="Airbnb, Booking, Direct, Vrbo">
           <StableChart height={320}>
             {({ width, height }: { width: number; height: number }) => {
               const outerRadius = Math.max(70, Math.min(110, Math.floor(Math.min(width, height) * 0.34)));
@@ -855,7 +966,7 @@ function DashboardPageContent() {
               );
             }}
           </StableChart>
-        </Panel>
+        </AtelierPanel>
       </Box>
 
       <Box
@@ -867,12 +978,12 @@ function DashboardPageContent() {
           '& > *': { minWidth: 0 },
         }}
       >
-        <Panel
+        <AtelierPanel
           title="Taux d’occupation par property"
           desc={occupancyPanelDesc}
           headRight={
             snapshot.kpis.occupancyRate.value > 0 ? (
-              <Badge variant="success">{snapshot.kpis.occupancyRate.value}% global</Badge>
+              <AtelierBadge variant="success">{snapshot.kpis.occupancyRate.value}% global</AtelierBadge>
             ) : null
           }
         >
@@ -886,32 +997,32 @@ function DashboardPageContent() {
                 data={namedOccupancyByProperty}
                 margin={{ top: showBarPct ? 22 : 8, right: 8, left: 0, bottom: 24 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,20,8,0.08)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(20,17,10,0.08)" />
                 <XAxis
                   dataKey="shortLabel"
                   interval={0}
                   angle={0}
                   textAnchor="middle"
                   height={28}
-                  tick={{ fontSize: 12, fill: t.text2 }}
+                  tick={{ fontSize: 12, fill: T.text2 }}
                   minTickGap={4}
                 />
                 <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
                 <Tooltip
-                  cursor={{ fill: 'rgba(16,185,129,0.08)' }}
+                  cursor={{ fill: T.goldTint }}
                   formatter={(value: number) => [`${Number(value).toFixed(1)} %`, 'Occupation']}
                   labelFormatter={(_label, payload) => {
                     const row = payload?.[0]?.payload as { property?: string } | undefined;
                     return row?.property || String(_label);
                   }}
                 />
-                <Bar dataKey="occupancy" radius={[8, 8, 0, 0]} fill="#10b981">
+                <Bar dataKey="occupancy" radius={[8, 8, 0, 0]} fill={T.gold}>
                   {showBarPct ? (
                     <LabelList
                       dataKey="occupancy"
                       position="top"
                       formatter={(v: number) => `${Number(v).toFixed(1)}%`}
-                      style={{ fontSize: 11, fontWeight: 700, fill: t.text2 }}
+                      style={{ fontSize: 11, fontWeight: 700, fill: T.text2 }}
                     />
                   ) : null}
                 </Bar>
@@ -919,9 +1030,9 @@ function DashboardPageContent() {
               );
             }}
           </StableChart>
-        </Panel>
+        </AtelierPanel>
 
-        <Panel title="Arrivées & départs" desc={`Prochains mouvements · ${VISIBLE_LIST_HINT}`}>
+        <AtelierPanel title="Arrivées & départs" desc={`Prochains mouvements · ${VISIBLE_LIST_HINT}`}>
           <ScrollableList>
             {arrivalsDepartures.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
@@ -938,7 +1049,7 @@ function DashboardPageContent() {
               ))
             )}
           </ScrollableList>
-        </Panel>
+        </AtelierPanel>
       </Box>
 
       <Box
@@ -948,7 +1059,7 @@ function DashboardPageContent() {
           gap: 2,
         }}
       >
-        <Panel title="Tâches urgentes" desc={`5 prioritaires · ${VISIBLE_LIST_HINT}`}>
+        <AtelierPanel title="Tâches urgentes" desc={`5 prioritaires · ${VISIBLE_LIST_HINT}`}>
           <ScrollableList>
             {snapshot.urgentTasks.map((task) => (
               <MiniRow
@@ -959,9 +1070,9 @@ function DashboardPageContent() {
               />
             ))}
           </ScrollableList>
-        </Panel>
+        </AtelierPanel>
 
-        <Panel title="Messages non lus" desc={`Guests + OTA + staff · ${VISIBLE_LIST_HINT}`}>
+        <AtelierPanel title="Messages non lus" desc={`Guests + OTA + staff · ${VISIBLE_LIST_HINT}`}>
           <ScrollableList>
             {snapshot.unreadMessages.map((message) => (
               <MiniRow
@@ -972,15 +1083,15 @@ function DashboardPageContent() {
               />
             ))}
           </ScrollableList>
-        </Panel>
+        </AtelierPanel>
 
-        <Panel title="Avis récents & alertes" desc={`Reviews + notifications · ${VISIBLE_LIST_HINT}`}>
+        <AtelierPanel title="Avis récents & alertes" desc={`Reviews + notifications · ${VISIBLE_LIST_HINT}`}>
           <ScrollableList spacing={1.5}>
             {snapshot.recentReviews.map((review) => (
               <Box key={review.id}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
                   <Typography sx={{ fontWeight: 700 }}>{review.guest}</Typography>
-                  <Badge variant="success">{review.rating}{Number(review.rating) > 5 ? '/10' : '/5'}</Badge>
+                  <AtelierBadge variant="success">{review.rating}{Number(review.rating) > 5 ? '/10' : '/5'}</AtelierBadge>
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
                   {review.property} · {review.comment}
@@ -992,9 +1103,9 @@ function DashboardPageContent() {
               <Box key={alert.id}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
                   <Typography sx={{ fontWeight: 700 }}>{alert.title}</Typography>
-                  <Badge variant={alert.severity === 'critical' ? 'error' : alert.severity === 'warning' ? 'warning' : 'info'}>
+                  <AtelierBadge variant={alert.severity === 'critical' ? 'error' : alert.severity === 'warning' ? 'warning' : 'info'}>
                     {alert.severity}
-                  </Badge>
+                  </AtelierBadge>
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
                   {alert.detail}
@@ -1002,12 +1113,12 @@ function DashboardPageContent() {
               </Box>
             ))}
           </ScrollableList>
-        </Panel>
+        </AtelierPanel>
       </Box>
 
       {topLiveProperties.length > 0 ? (
         <Box sx={{ mt: 2 }}>
-          <Panel title="Top biens" desc="Classés par ADR puis occupation · données live">
+          <AtelierPanel title="Top biens" desc="Classés par ADR puis occupation · données live">
             <Stack spacing={1.25}>
               {topLiveProperties.map((item, index) => (
                 <MiniRow
@@ -1018,14 +1129,14 @@ function DashboardPageContent() {
                 />
               ))}
             </Stack>
-          </Panel>
+          </AtelierPanel>
         </Box>
       ) : null}
 
       {/* ── Opérations (interne) — en bas, après la vue client ── */}
       <Divider sx={{ my: 3 }} />
-      <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 1.5, color: t.text2 }}>
-        ⚙️ Opérations du jour
+      <Typography sx={{ fontFamily: MONO, fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', mb: 1.5, color: T.text3 }}>
+        Opérations du jour
       </Typography>
       <Suspense fallback={null}>
         <OrchestrationOpsCards ownerId={requestOwnerId || undefined} />
@@ -1051,7 +1162,7 @@ function ScrollableList({
         pr: 0.5,
         '&::-webkit-scrollbar': { width: 6 },
         '&::-webkit-scrollbar-thumb': {
-          bgcolor: 'rgba(26,20,8,0.15)',
+          bgcolor: T.borderStrong,
           borderRadius: 3,
         },
       }}
@@ -1074,17 +1185,16 @@ function MiniRow({
     <Box
       sx={{
         p: 1.5,
-        border: '1px solid',
-        borderColor: 'rgba(26,20,8,0.08)',
-        borderRadius: 2,
-        bgcolor: '#fff',
+        border: `1px solid ${T.border}`,
+        borderRadius: '10px',
+        bgcolor: T.bg1,
       }}
     >
-      <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+      <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
         <Typography variant="body2" sx={{ fontWeight: 700 }}>
           {title}
         </Typography>
-        <Badge variant="neutral">{badge}</Badge>
+        <AtelierBadge variant="neutral">{badge}</AtelierBadge>
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
         {subtitle}

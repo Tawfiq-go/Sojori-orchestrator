@@ -52,8 +52,11 @@ export {
   parseGuestDocumentLoose,
   parseGuestDocuments,
   parseGuestDocumentsLoose,
+  requiredDocumentsSignatureProgress,
+  requiredSignableDocuments,
   signableDocuments,
   syncContractSignatureFromDocuments,
+  type LiveContractLike,
   type ParsedGuestDocument,
 } from './parse';
 export {
