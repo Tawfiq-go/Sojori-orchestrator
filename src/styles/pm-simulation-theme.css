@@ -1,29 +1,6 @@
-/* Mode simulation PM — repères visuels ambre (ne pas confondre avec prod admin) */
-
-body.sojori-pm-simulation {
-  --sojori-sim-accent: #f59e0b;
-  --sojori-sim-accent-deep: #b45309;
-  --sojori-sim-bg-tint: rgba(245, 158, 11, 0.06);
-}
-
-body.sojori-pm-simulation .sojori-dashboard-root {
-  outline: 3px solid var(--sojori-sim-accent);
-  outline-offset: -3px;
-}
-
-body.sojori-pm-simulation .sojori-sidebar-sim {
-  box-shadow: inset 4px 0 0 var(--sojori-sim-accent);
-  background-image: linear-gradient(
-    90deg,
-    var(--sojori-sim-bg-tint) 0%,
-    transparent 28%
-  );
-}
+/* Vue owner (ex-« simulation PM ») — un seul repère : un filet doré sous la topbar.
+   Le chip « la vue » à côté de l'engrenage porte le reste (2026-09-03). */
 
 body.sojori-pm-simulation .sojori-topbar-sim {
-  border-bottom: 2px solid var(--sojori-sim-accent) !important;
-}
-
-body.sojori-pm-simulation .sojori-main-sim {
-  /* pas d’inset gauche — évite l’effet « double sidebar » */
+  border-bottom: 2px solid #b8851a !important;
 }

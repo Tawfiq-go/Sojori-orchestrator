@@ -473,6 +473,9 @@ function App() {
 
               {/* Claude Design V2 - Remplace les anciennes vues */}
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
+              {/* Ma journée a sa propre entrée menu — /reports reste le hub des
+                  autres rapports (ne réaffiche pas Ma journée, déjà accessible
+                  à côté dans le menu). */}
               <Route path="/reports" element={<LazyRoute><ReportsHubPage /></LazyRoute>} />
               {/* Fusionnee dans /reports2/clients (meme ecran, LCD et hotel unifies). */}
               <Route path="/reports/clients" element={<Navigate to="/reports2/clients" replace />} />
