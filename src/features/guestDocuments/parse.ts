@@ -163,6 +163,53 @@ export function signableDocuments(docs: GuestDocument[]): GuestDocument[] {
   return docs.filter((d) => d.enabled && d.requiresSignature);
 }
 
+/** Signable docs that count toward Enregistrement x/y (WhatsApp 1/2 2/2). */
+export function requiredSignableDocuments(docs: GuestDocument[]): GuestDocument[] {
+  return signableDocuments(docs).filter((d) => d.requiredBeforeArrival === true);
+}
+
+export type LiveContractLike = {
+  documentType?: string;
+  status?: string;
+  signatureCount?: number;
+  requiredSignerCount?: number;
+};
+
+/**
+ * Required-document progress for Enregistrement x/y.
+ * Optional signable docs do not affect the denominator.
+ */
+export function requiredDocumentsSignatureProgress(
+  docs: GuestDocument[],
+  liveContracts: LiveContractLike[] | null | undefined,
+  adultCount = 1,
+): { signed: number; total: number; complete: boolean } {
+  const required = requiredSignableDocuments(docs);
+  if (required.length === 0) return { signed: 0, total: 0, complete: true };
+
+  const active = (liveContracts ?? []).filter((c) => c.status !== 'superseded');
+  let signed = 0;
+  let total = 0;
+  for (const doc of required) {
+    const type = documentTypeForGuestDocument(doc);
+    const match = active.find((c) => String(c.documentType || '').trim() === type);
+    const each = doc.signerPolicy === 'each_traveler';
+    const req = match
+      ? Math.max(1, Number(match.requiredSignerCount) || 1)
+      : each
+        ? Math.max(1, adultCount)
+        : 1;
+    total += req;
+    if (!match) continue;
+    if (match.status === 'signed' || match.status === 'finalizing') {
+      signed += req;
+    } else {
+      signed += Math.min(req, Math.max(0, Number(match.signatureCount) || 0));
+    }
+  }
+  return { signed, total, complete: total > 0 && signed >= total };
+}
+
 /** Prefer disclaimer, else first signable (legacy sync → single contractSignature). */
 export function firstSignedContract(docs: GuestDocument[]): GuestDocument | undefined {
   return (
