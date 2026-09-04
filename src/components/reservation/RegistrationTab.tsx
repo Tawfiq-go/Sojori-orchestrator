@@ -38,7 +38,6 @@ import {
   evaluateRegistrationCompleteness,
   fieldLabel,
   fieldValueForStay,
-  relaxCompleteExtraRequired,
   resolveEffectiveRegistrationForm,
   simplePresetSchema,
   type RegistrationFieldDef,
@@ -318,7 +317,7 @@ export function RegistrationTab({
         : resolveEffectiveRegistrationForm({
             listingGestion: doc?.capabilities?.registration?.gestion ?? {},
           });
-      setFormSchema(relaxCompleteExtraRequired(resolved.schema));
+      setFormSchema(resolved.schema);
       setRegistrationLevel(resolved.registrationLevel);
     } catch {
       setRegistrationLevel('simple');
@@ -1175,7 +1174,7 @@ export function RegistrationTab({
             {registrationLevel === 'complete' ? (
               <>
                 <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.text3, pt: 0.5 }}>
-                  Fiche de police — champs complémentaires (optionnels)
+                  Fiche de police — champs complémentaires
                 </Typography>
                 <TextField
                   label="Profession"

@@ -746,6 +746,12 @@ function DocumentCard({
             {item.enabled && !item.requiredBeforeArrival && <PolicyBadge label="Optionnel" tone="muted" />}
             {item.enabled && item.requiredBeforeArrival && <PolicyBadge label="Obligatoire" tone="warn" />}
             {item.enabled && item.blocksAccess && <PolicyBadge label="Bloque l’accès" tone="danger" />}
+            {isPolice && item.enabled && item.includeFormulaire && (
+              <PolicyBadge label="Formulaire" tone="warn" />
+            )}
+            {isPolice && item.enabled && !item.includeFormulaire && (
+              <PolicyBadge label="Pièce seule" tone="muted" />
+            )}
           </Stack>
           {item.title && item.title !== item.name && (
             <Typography sx={{ fontSize: 12, color: V3.t3 }}>{item.title}</Typography>
@@ -896,6 +902,19 @@ function WhoBlock({
           )}
         </>
       )}
+      {item.kind === 'police_form' && (
+        <>
+          <ToggleRow
+            label="Ajouter le formulaire police au contrat"
+            checked={item.includeFormulaire}
+            onChange={(v) => onChange({ includeFormulaire: v })}
+          />
+          <Typography sx={{ fontSize: 11, color: V3.t4, mt: -0.5, mb: 0.75, lineHeight: 1.4 }}>
+            Coché : profession, domicile, provenance… apparaissent dans le contrat et le PDF.
+            Décoché : pièce d’identité et séjour seulement (Airbnb / LCD).
+          </Typography>
+        </>
+      )}
       {item.requiresSignature && (
         <>
           <Stack sx={{ gap: 0.75, mt: 0.75 }}>
@@ -1021,6 +1040,12 @@ function FieldsBlock({
             group={g.id}
             selected={item.fieldKeys}
             defaultOpen={i === 0}
+            disabled={g.id === 'whatsapp' && item.kind === 'police_form' && !item.includeFormulaire}
+            disabledHint={
+              g.id === 'whatsapp' && item.kind === 'police_form' && !item.includeFormulaire
+                ? 'Activez « Ajouter le formulaire police au contrat » pour les afficher.'
+                : undefined
+            }
             onToggle={toggle}
           />
         ))}
@@ -1033,11 +1058,15 @@ function FieldSourceGroup({
   group,
   selected,
   defaultOpen,
+  disabled,
+  disabledHint,
   onToggle,
 }: {
   group: GuestDocumentFieldGroup;
   selected: string[];
   defaultOpen?: boolean;
+  disabled?: boolean;
+  disabledHint?: string;
   onToggle: (key: string, on: boolean) => void;
 }) {
   const meta = SOURCE_GROUPS.find((g) => g.id === group)!;
@@ -1045,7 +1074,17 @@ function FieldSourceGroup({
   const onCount = fields.filter((f) => selected.includes(f.key)).length;
 
   return (
-    <Box component="details" open={defaultOpen} sx={{ border: `1px solid ${V3.b}`, borderRadius: '10px', bgcolor: V3.card, overflow: 'hidden' }}>
+    <Box
+      component="details"
+      open={defaultOpen && !disabled}
+      sx={{
+        border: `1px solid ${V3.b}`,
+        borderRadius: '10px',
+        bgcolor: V3.card,
+        overflow: 'hidden',
+        opacity: disabled ? 0.55 : 1,
+      }}
+    >
       <Box
         component="summary"
         sx={{
@@ -1069,6 +1108,11 @@ function FieldSourceGroup({
         )}
         <Typography sx={{ fontSize: 16, color: V3.t4 }}>›</Typography>
       </Box>
+      {disabledHint ? (
+        <Typography sx={{ fontSize: 11, color: V3.t4, px: 1.5, py: 1, borderTop: `1px solid ${V3.b}` }}>
+          {disabledHint}
+        </Typography>
+      ) : null}
       <Box sx={{ borderTop: `1px solid ${V3.b}` }}>
         {fields.map((field) => {
           const on = selected.includes(field.key);
@@ -1094,6 +1138,7 @@ function FieldSourceGroup({
               <Checkbox
                 size="small"
                 checked={on}
+                disabled={disabled}
                 onChange={(e) => onToggle(field.key, e.target.checked)}
                 sx={{ p: 0, color: V3.bs, '&.Mui-checked': { color: V3.p } }}
               />

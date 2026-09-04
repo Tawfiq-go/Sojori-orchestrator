@@ -988,7 +988,7 @@ export function ContractSignatureConfig({ listingId, ownerKey, logoOnly = false 
         </FormControl>
         {value.documentType === 'moroccan_police_form' ? (
           <Alert severity="warning" sx={{ fontSize: 12.5 }}>
-            La fiche de police marocaine n&apos;est pas un formulaire officiel pour ce pilote.
+            La fiche de police n&apos;est pas un formulaire officiel pour ce pilote.
             Revenez au contrat de séjour.
           </Alert>
         ) : null}

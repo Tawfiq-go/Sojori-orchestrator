@@ -85,6 +85,8 @@ describe('guestDocuments hydration & policies', () => {
       requiresSignature: true,
     });
     assert.ok(police && disclaimer);
+    assert.equal(police.includeFormulaire, true);
+    assert.equal(disclaimer.includeFormulaire, false);
     assert.deepEqual(
       { requiredBeforeArrival: police.requiredBeforeArrival, blocksAccess: police.blocksAccess },
       defaultDocumentPolicies('police_form'),
@@ -135,6 +137,21 @@ describe('guestDocuments hydration & policies', () => {
     );
     assert.equal(merged[0].requiredBeforeArrival, false);
     assert.equal(merged[0].blocksAccess, false);
+    assert.equal(merged[0].includeFormulaire, true);
+  });
+
+  it('includeFormulaire explicit false survives parsing', () => {
+    const doc = parseGuestDocument({
+      id: 'doc_police_form',
+      kind: 'police_form',
+      name: 'Fiche',
+      title: 'Fiche',
+      enabled: true,
+      requiresSignature: true,
+      includeFormulaire: false,
+    });
+    assert.ok(doc);
+    assert.equal(doc.includeFormulaire, false);
   });
 
   it('blocksAccess invariants', () => {
