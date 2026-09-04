@@ -31,7 +31,7 @@ function money(n: number, currency = 'MAD'): string {
 
 /** Provenance affichée : distingue une saisie Sojori d'une ligne du PMS. */
 function sourceLabel(source: string): string | null {
-  if (source === 'minibar') return 'Sojori';
+  if (source === 'minibar' || source === 'direct' || source === 'manual') return 'Sojori';
   if (!source || source === 'mews') return null;
   return source;
 }
