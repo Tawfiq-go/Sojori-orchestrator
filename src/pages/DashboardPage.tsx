@@ -41,9 +41,6 @@ import {
 } from '../components/dashboard/DashboardV2.components';
 import { dashboardPeriods } from '../data/mockDashboard';
 
-const ListingPerformanceTab = lazyWithReload(() =>
-  import('../features/listingPerformance/ListingPerformanceTab').then((m) => ({ default: m.default }))
-);
 const OrchestrationOpsCards = lazyWithReload(() =>
   import('../features/dashboardOps/OrchestrationOpsCards').then((m) => ({ default: m.default }))
 );
@@ -143,7 +140,6 @@ function DashboardPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const prevScopeRef = useRef<string>(`${adminScopeMode}:${requestOwnerId ?? ''}`);
-  const [dashTab, setDashTab] = useState<'overview' | 'perf'>('overview');
 
   useEffect(() => {
     const scopeKey = `${adminScopeMode}:${requestOwnerId ?? ''}`;
@@ -615,33 +611,7 @@ function DashboardPageContent() {
         </Alert>
       ) : null}
 
-      {!ownerScopeUnset ? (
-        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
-          {([['overview', "Vue d'ensemble"], ['perf', 'Performance par bien']] as const).map(([key, label]) => (
-            <Button
-              key={key}
-              onClick={() => setDashTab(key)}
-              sx={{
-                textTransform: 'none', fontWeight: 800, fontSize: 12.5, borderRadius: '99px', px: 2,
-                border: `1.5px solid ${dashTab === key ? '#F4CF5E' : 'rgba(20,17,10,0.10)'}`,
-                bgcolor: dashTab === key ? 'rgba(244,207,94,0.14)' : '#fff',
-                color: dashTab === key ? '#c79b22' : 'text.secondary',
-                '&:hover': { bgcolor: 'rgba(244,207,94,0.20)', borderColor: '#F4CF5E' },
-              }}
-            >
-              {label}
-            </Button>
-          ))}
-        </Stack>
-      ) : null}
-
-      {dashTab === 'perf' && !ownerScopeUnset ? (
-        <Suspense fallback={<Box sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>Chargement…</Box>}>
-          <ListingPerformanceTab ownerId={requestOwnerId || undefined} />
-        </Suspense>
-      ) : null}
-
-      {dashTab === 'perf' ? null : !dashboardReady && !ownerScopeUnset ? (
+      {!dashboardReady && !ownerScopeUnset ? (
         <Box
           sx={{
             minHeight: 'min(70vh, 640px)',
