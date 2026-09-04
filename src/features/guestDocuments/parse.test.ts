@@ -12,6 +12,8 @@ import {
   firstSignedContract,
   mergeGuestDocumentsInheritance,
   parseGuestDocument,
+  requiredDocumentsSignatureProgress,
+  requiredSignableDocuments,
   signableDocuments,
 } from './parse';
 import {
@@ -188,5 +190,41 @@ describe('guestDocuments hydration & policies', () => {
     assert.ok(signed);
     assert.equal(signed.kind, 'contract');
     assert.equal(documentTypeForGuestDocument(signed), 'stay_contract');
+  });
+
+  it('excludes optional docs from Enregistrement x/y', () => {
+    const police = parseGuestDocument({
+      id: POLICE_FORM_DOCUMENT_ID,
+      kind: 'police_form',
+      name: 'Fiche',
+      title: 'Fiche',
+      enabled: true,
+      requiresSignature: true,
+      requiredBeforeArrival: true,
+      blocksAccess: true,
+      signerPolicy: 'primary_guest',
+    });
+    const disclaimer = parseGuestDocument({
+      id: DEFAULT_DISCLAIMER_DOCUMENT_ID,
+      kind: 'contract',
+      name: 'Disclaimer',
+      title: 'Disclaimer',
+      enabled: true,
+      requiresSignature: true,
+      requiredBeforeArrival: false,
+      blocksAccess: false,
+      signerPolicy: 'primary_guest',
+    });
+    assert.ok(police);
+    assert.ok(disclaimer);
+    const docs = [police, disclaimer];
+    assert.deepEqual(
+      requiredSignableDocuments(docs).map((d) => d.kind),
+      ['police_form'],
+    );
+    const progress = requiredDocumentsSignatureProgress(docs, [], 2);
+    assert.equal(progress.signed, 0);
+    assert.equal(progress.total, 1);
+    assert.equal(progress.complete, false);
   });
 });
