@@ -1,4 +1,4 @@
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { Box, CircularProgress, Alert } from '@mui/material';
 import { DashboardWrapper } from '../components/DashboardWrapper';
 import ListingFormV2 from '../components/listing/form-v2/ListingFormV2';
@@ -13,7 +13,12 @@ import {
   discountsToApiPayload,
 } from '../utils/listingFormV2ApiAdapter';
 import { toast } from 'react-toastify';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
+import {
+  listingFormNavToSearchParams,
+  resolveListingFormNavFromSearch,
+  type ListingFormNav,
+} from '../components/listing/form-v2/listingFormNav';
 
 /**
  * Edit listing — une seule surface : ListingFormV2 + sidebar.
@@ -22,35 +27,23 @@ import { useMemo } from 'react';
  */
 export function ListingFormV2Page() {
   const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
-  const levelParam = searchParams.get('level');
-  const tabParamRaw = searchParams.get('tab');
-  /** Ancien onglet « Montant & devise » fusionné dans Instructions départ ; channels retiré (RU géré ailleurs) */
-  const tabParam =
-    tabParamRaw === 'city-tax-config'
-      ? 'messages-config'
-      : tabParamRaw === 'channels' || tabParamRaw === 'distribution'
-        ? 'ota'
-        : tabParamRaw === 'direct' || tabParamRaw === 'direct-booking'
-          ? 'direct-booking'
-          : tabParamRaw === 'rules' || tabParamRaw === 'rules-guest'
-          ? 'availability'
-          : tabParamRaw;
-  const defaultLevel =
-    levelParam === 'orchestration-v3' || levelParam === 'config-new' || levelParam === 'config'
-      ? 'orchestration-v3'
-      : levelParam === 'detail'
-        ? 'detail'
-        : 'detail';
-  const legacyConfigTab =
-    tabParam?.endsWith('-config') ||
-    tabParam === 'orchestration-config' ||
-    tabParam === 'whatsapp-config';
-  const resolvedTab =
-    defaultLevel === 'orchestration-v3' || legacyConfigTab
-      ? undefined
-      : tabParam || undefined;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const nav = useMemo(() => resolveListingFormNavFromSearch(searchParams), [searchParams]);
+  const defaultLevel = nav.level === 'config' ? 'orchestration-v3' : nav.level;
+  const resolvedTab = nav.tab;
+  const navEpoch =
+    location.state && typeof location.state === 'object' && 'listingFormNavToken' in location.state
+      ? Number((location.state as { listingFormNavToken?: unknown }).listingFormNavToken) || 0
+      : 0;
   const queryClient = useQueryClient();
+
+  const onNavigateLevelTab = useCallback(
+    (next: ListingFormNav) => {
+      setSearchParams(listingFormNavToSearchParams(searchParams, next), { replace: false });
+    },
+    [searchParams, setSearchParams],
+  );
 
   const { data: listingDoc, isLoading, error } = useQuery({
     queryKey: ['listing', id],
@@ -186,6 +179,8 @@ export function ListingFormV2Page() {
         importedFieldsSource={initialFormValues}
         defaultLevel={defaultLevel}
         defaultTab={resolvedTab}
+        navEpoch={navEpoch}
+        onNavigateLevelTab={onNavigateLevelTab}
         onSave={saveListing}
         onImagesPersisted={() => {
           queryClient.invalidateQueries({ queryKey: ['listing', id] });
