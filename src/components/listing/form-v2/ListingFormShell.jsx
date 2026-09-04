@@ -7,7 +7,7 @@
 // • Header listing résumé + save bar sticky
 // • Slot `renderTab(tabKey)` à brancher sur tes composants existants
 // ════════════════════════════════════════════════════════════════════
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Stack, Typography, Button } from '@mui/material';
 import { LISTING_LAYOUT } from '../../../constants/listingLayout';
 import { V3 } from '../../../features/orchestrationListingV3/theme';
@@ -248,6 +248,8 @@ export default function ListingFormShell({
   tabsStatus = {},            // { [tabKey]: { tone, label } } — pour les badges
   defaultLevel = 'detail',    // 'detail' | 'orchestration-v3' (legacy config → V3)
   defaultTab = 'photos',
+  navEpoch = 0,
+  onNavigateLevelTab,         // (nav: { level, tab? }) => void — keep URL in sync
   lockLevel,                  // masque le toggle et fige le niveau (ex. embed chatbot)
   embedded = false,           // rendu dans un panneau (pas pleine page)
   configNewBadgeLabel = '',   // badge optionnel (ex. « Template » sur page catalogue)
@@ -278,19 +280,32 @@ export default function ListingFormShell({
   const [level, setLevel] = useState(resolvedLockLevel || resolvedDefaultLevel);
   const [activeTab, setActiveTab] = useState(defaultTab);
 
-  useEffect(() => {
-    setLevel(resolvedLockLevel || resolvedDefaultLevel);
-  }, [resolvedDefaultLevel, resolvedLockLevel]);
+  const commitNav = useCallback(
+    (nextLevel, nextTab) => {
+      setLevel(nextLevel);
+      setActiveTab(nextTab);
+      if (typeof onNavigateLevelTab === 'function' && !resolvedLockLevel) {
+        onNavigateLevelTab({
+          level: nextLevel,
+          tab: nextLevel === 'orchestration-v3' ? undefined : nextTab,
+        });
+      }
+    },
+    [onNavigateLevelTab, resolvedLockLevel],
+  );
 
   useEffect(() => {
-    if (!defaultTab) return;
-    if (resolvedDefaultLevel === 'orchestration-v3') {
+    const nextLevel = resolvedLockLevel || resolvedDefaultLevel;
+    setLevel(nextLevel);
+    if (nextLevel === 'orchestration-v3') {
       setActiveTab('orchestration-v3');
       return;
     }
-    if (resolvedDefaultLevel === 'config' && !CONFIG_TAB_IDS.has(defaultTab)) return;
-    setActiveTab(defaultTab);
-  }, [defaultTab, resolvedDefaultLevel]);
+    if (defaultTab) {
+      if (nextLevel === 'config' && !CONFIG_TAB_IDS.has(defaultTab)) return;
+      setActiveTab(defaultTab);
+    }
+  }, [resolvedDefaultLevel, resolvedLockLevel, defaultTab, navEpoch]);
 
   const configTabsFiltered = level === 'config' ? filterConfigTabs(CONFIG_NEW_TABS, hiddenConfigTabIds) : CONFIG_NEW_TABS;
   const configTabCount = visibleConfigTabCount(configTabsFiltered);
@@ -415,12 +430,11 @@ export default function ListingFormShell({
                   key={opt.id}
                   component="button"
                   onClick={() => {
-                    setLevel(opt.id);
                     if (opt.id === 'orchestration-v3') {
-                      setActiveTab('orchestration-v3');
+                      commitNav('orchestration-v3', 'orchestration-v3');
                       return;
                     }
-                    setActiveTab(getDetailTabs(propertyUnit)[0].items[0].id);
+                    commitNav('detail', getDetailTabs(propertyUnit)[0].items[0].id);
                   }}
                   sx={{
                     all: 'unset',
@@ -560,7 +574,7 @@ export default function ListingFormShell({
                     tab={t}
                     active={activeTab === t.id}
                     statusBadge={tabsStatus[t.id]}
-                    onClick={() => setActiveTab(t.id)}
+                    onClick={() => commitNav(level, t.id)}
                   />
                 ))}
               </React.Fragment>

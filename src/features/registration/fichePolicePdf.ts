@@ -1,7 +1,5 @@
 /**
- * PDF « Fiche individuelle de police » - format administratif Maroc
- * (grilles / cases à remplir), + bandeau établissement (logo owner, téléphone, listing).
- *
+ * PDF « Fiche de police hôtelière » — bandeau établissement (logo, téléphone, listing).
  * Helvetica/Times StandardFonts : WinAnsi (accents FR OK).
  */
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFImage } from 'pdf-lib';
@@ -249,25 +247,7 @@ export async function generateFichePolicePdfBytes(
 
     y -= 68;
 
-    // -- En-tête officiel --
-    page.drawText('ROYAUME DU MAROC', {
-      x: margin,
-      y,
-      size: 10,
-      font: serifBold,
-      color: C.ink,
-    });
-    y -= 14;
-    page.drawText("MINISTÈRE DE L'INTÉRIEUR  -  SÛRETÉ NATIONALE", {
-      x: margin,
-      y,
-      size: 8,
-      font,
-      color: C.muted,
-    });
-    y -= 18;
-
-    page.drawText('FICHE INDIVIDUELLE DE POLICE', {
+    page.drawText('FICHE DE POLICE HÔTELIÈRE', {
       x: margin,
       y,
       size: 16,
@@ -276,7 +256,7 @@ export async function generateFichePolicePdfBytes(
     });
     y -= 14;
     page.drawText(
-      "À remplir pour chaque voyageur - établissements d'hébergement touristique",
+      "À remplir pour chaque voyageur — établissements d'hébergement touristique",
       {
         x: margin,
         y,

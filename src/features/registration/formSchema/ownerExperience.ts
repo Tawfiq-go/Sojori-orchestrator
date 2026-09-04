@@ -190,13 +190,13 @@ export function inheritanceStatusLabel(input: {
   if (input.ownerMode) return 'Configuration du propriétaire'
   if (input.override) return 'Configuration personnalisée pour ce logement'
   if (input.origin === 'owner') return 'Configuration du propriétaire'
-  if (input.origin === 'preset:complete') return 'Fiche de police marocaine'
+  if (input.origin === 'preset:complete') return 'Fiche de police'
   return 'Essentiel'
 }
 
 export function presetConfirmMessage(preset: 'essential' | 'police'): string {
   if (preset === 'police') {
-    return 'Appliquer « Fiche de police marocaine » remplacera les champs actifs. Continuer ?'
+    return 'Appliquer « Fiche de police » remplacera les champs actifs. Continuer ?'
   }
   return 'Appliquer « Essentiel » remplacera les champs actifs. Continuer ?'
 }

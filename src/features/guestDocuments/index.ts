@@ -22,6 +22,7 @@ export {
   MAX_GUEST_DOCUMENTS,
   POLICE_FORM_DOCUMENT_ID,
   POLICE_FORM_FIELD_KEYS,
+  POLICE_FORMULAIRE_FIELD_KEYS,
   SHORT_TERM_RENTAL_FIELD_KEYS,
   SIGNING_FORMATS,
   SOURCE_GROUPS,
@@ -30,6 +31,7 @@ export {
   assembleContent,
   blankContract,
   defaultGuestDocuments,
+  defaultIncludeFormulaire,
   disclaimerContract,
   documentTypeForGuestDocument,
   documentTypeLabel,
@@ -43,12 +45,28 @@ export {
 } from './catalog';
 export {
   documentsFromGestion,
+  finalizeGuestDocument,
   firstSignedContract,
+  mergeGuestDocumentsInheritance,
   parseGuestDocument,
+  parseGuestDocumentLoose,
   parseGuestDocuments,
+  parseGuestDocumentsLoose,
   signableDocuments,
   syncContractSignatureFromDocuments,
+  type ParsedGuestDocument,
 } from './parse';
+export {
+  DEFAULT_REGISTRATION_POLICIES,
+  applyDocumentPolicyPatch,
+  canBlockAccess,
+  defaultDocumentPolicies,
+  normalizeDocumentPolicies,
+  readOptionalBoolean,
+  resolvePolicyFlag,
+  summarizeDocumentPolicies,
+  type DocumentPolicySummary,
+} from './policy';
 export {
   SIGNING_FORMAT_META,
   applySigningFormat,

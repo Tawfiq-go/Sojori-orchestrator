@@ -36,6 +36,15 @@ export type GuestDocument = {
   notice: string;
   enabled: boolean;
   requiresSignature: boolean;
+  /** Counts toward Enregistrement x/y when enabled. */
+  requiredBeforeArrival: boolean;
+  /** Locks menu F / access until this document is fully signed (implies required + signature). */
+  blocksAccess: boolean;
+  /**
+   * Police sheet only: include the formulaire block (profession, domicile, provenance…)
+   * in the contract / signed PDF. Off = identity + stay only (Airbnb / LCD).
+   */
+  includeFormulaire: boolean;
   autoSendAfterRegistration: boolean;
   signerPolicy: GuestDocumentSignerPolicy;
   fieldKeys: string[];
@@ -67,8 +76,8 @@ export const SOURCE_GROUPS: {
   {
     id: 'whatsapp',
     icon: '💬',
-    short: 'WhatsApp',
-    name: 'Formulaire WhatsApp',
+    short: 'Police',
+    name: 'Formulaire police',
     hint: 'Saisi par le voyageur, après la photo de sa pièce.',
     color: 'ok',
   },
@@ -133,7 +142,7 @@ export const SOURCE_LABEL: Record<GuestDocumentFieldSource, string> = {
   identity: 'Pièce d’identité',
   reservation: 'Réservation',
   both: 'OCR sinon résa',
-  guest: 'Formulaire WhatsApp',
+  guest: 'Formulaire police',
   listing: 'Listing',
 };
 
@@ -145,6 +154,21 @@ export const SOURCE_HINT: Record<GuestDocumentFieldSource, string> = {
   listing: 'Vos informations d’établissement, déjà enregistrées.',
 };
 
+/** WhatsApp formulaire fields shown on the police contract when includeFormulaire is on. */
+export const POLICE_FORMULAIRE_FIELD_KEYS = [
+  'profession',
+  'domicile',
+  'city',
+  'country',
+  'coming_from',
+  'going_to',
+  'entry_number_morocco',
+] as const;
+
+export function defaultIncludeFormulaire(kind: GuestDocumentKind): boolean {
+  return kind === 'police_form';
+}
+
 export const POLICE_FORM_FIELD_KEYS = [
   'first_name',
   'last_name',
@@ -153,10 +177,12 @@ export const POLICE_FORM_FIELD_KEYS = [
   'nationality',
   'document_number',
   'document_type',
-  'document_issued_at',
-  'profession',
-  'domicile',
-  'coming_from',
+      'document_issued_at',
+      'profession',
+      'domicile',
+      'city',
+      'country',
+      'coming_from',
   'going_to',
   'entry_number_morocco',
   'room_name',
@@ -308,7 +334,7 @@ export const DEFAULT_SHORT_TERM_RENTAL_CLAUSES: GuestDocumentClause[] = [
   },
   {
     id: 'cl_rental_police',
-    title: 'Fiche de police et identité',
+    title: 'Fiche de police',
     bodyFr:
       'Conformément aux obligations d’hébergement au Maroc, chaque occupant majeur fournit une pièce d’identité valide et les informations nécessaires à la fiche de police. Le Locataire garantit l’exactitude des déclarations.',
     bodyEn:
@@ -354,6 +380,10 @@ function withAssembled(doc: GuestDocument): GuestDocument {
   return { ...doc, content: assembleContent(doc) };
 }
 
+/**
+ * Templates shown when no guestDocuments are stored.
+ * All inactive — nothing is silently persisted as active.
+ */
 export function defaultGuestDocuments(): GuestDocument[] {
   return [
     withAssembled({
@@ -365,8 +395,11 @@ export function defaultGuestDocuments(): GuestDocument[] {
       clauses: [],
       closing: DEFAULT_POLICE_CLOSING,
       notice: DEFAULT_POLICE_NOTICE,
-      enabled: true,
+      enabled: false,
       requiresSignature: true,
+      requiredBeforeArrival: true,
+      blocksAccess: false,
+      includeFormulaire: true,
       autoSendAfterRegistration: false,
       signerPolicy: 'primary_guest',
       fieldKeys: [...POLICE_FORM_FIELD_KEYS],
@@ -380,8 +413,11 @@ export function defaultGuestDocuments(): GuestDocument[] {
       clauses: DEFAULT_DISCLAIMER_CLAUSES.map((c) => ({ ...c })),
       closing: DEFAULT_DISCLAIMER_CLOSING,
       notice: '',
-      enabled: true,
+      enabled: false,
       requiresSignature: true,
+      requiredBeforeArrival: true,
+      blocksAccess: false,
+      includeFormulaire: false,
       autoSendAfterRegistration: false,
       signerPolicy: 'primary_guest',
       fieldKeys: [...DISCLAIMER_FIELD_KEYS],
@@ -396,8 +432,11 @@ export function defaultGuestDocuments(): GuestDocument[] {
       closing: DEFAULT_SHORT_TERM_RENTAL_CLOSING,
       notice:
         'Modèle type Maroc (Loi 80-14) — à adapter avec votre conseil juridique. Signature électronique simple.',
-      enabled: true,
+      enabled: false,
       requiresSignature: true,
+      requiredBeforeArrival: true,
+      blocksAccess: false,
+      includeFormulaire: false,
       autoSendAfterRegistration: false,
       signerPolicy: 'primary_guest',
       fieldKeys: [...SHORT_TERM_RENTAL_FIELD_KEYS],
@@ -428,6 +467,11 @@ export function documentTypeLabel(documentType: string): string {
 
 export function blankContract(partial?: Partial<GuestDocument>): GuestDocument {
   const stamp = Date.now().toString(36);
+  const kind = partial?.kind ?? 'contract';
+  const policies =
+    kind === 'contract'
+      ? { requiredBeforeArrival: true, blocksAccess: false }
+      : { requiredBeforeArrival: true, blocksAccess: true };
   const base: GuestDocument = {
     id: `doc_contract_${stamp}`,
     kind: 'contract',
@@ -439,12 +483,15 @@ export function blankContract(partial?: Partial<GuestDocument>): GuestDocument {
     notice: '',
     enabled: true,
     requiresSignature: true,
+    requiredBeforeArrival: policies.requiredBeforeArrival,
+    blocksAccess: policies.blocksAccess,
+    includeFormulaire: defaultIncludeFormulaire(kind),
     autoSendAfterRegistration: false,
     signerPolicy: 'primary_guest',
     fieldKeys: [],
     ...partial,
   };
-  return withAssembled({ ...base, kind: partial?.kind ?? 'contract' });
+  return withAssembled({ ...base, kind });
 }
 
 export function disclaimerContract(): GuestDocument {

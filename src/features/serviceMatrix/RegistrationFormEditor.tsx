@@ -80,6 +80,7 @@ import {
 type Props = {
   listingId?: string;
   ownerKey?: string;
+  onSaved?: () => void;
 };
 
 type AnyOrchestrationDoc = ListingOrchestrationDoc | OwnerOrchestrationDoc;
@@ -107,7 +108,7 @@ function editorRoleFromUser(role: unknown): RegistrationEditorRole {
   return r === 'admin' || r === 'superadmin' ? 'admin' : 'owner';
 }
 
-export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
+export function RegistrationFormEditor({ listingId, ownerKey, onSaved }: Props) {
   const { user } = useAuth();
   const role = editorRoleFromUser(user?.role);
   const isAdmin = role === 'admin';
@@ -205,6 +206,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
       }
       toast.success('Formulaire d’enregistrement enregistré');
       await load();
+      onSaved?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Enregistrement impossible');
     } finally {
@@ -339,7 +341,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
           Essentiel
         </Button>
         <Button size="small" variant="outlined" disabled={saving} onClick={() => setPresetConfirm('police')}>
-          Fiche de police marocaine
+          Fiche de police
         </Button>
         <Button
           size="small"

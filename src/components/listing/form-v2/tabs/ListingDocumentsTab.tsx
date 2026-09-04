@@ -4,6 +4,7 @@ import {
   Button,
   Checkbox,
   Drawer,
+  FormControlLabel,
   Stack,
   Switch,
   TextField,
@@ -29,7 +30,10 @@ import {
   type GuestDocumentFieldGroup,
   MAX_GUEST_DOCUMENTS,
   POLICE_FORM_DOCUMENT_ID,
+  POLICE_FORMULAIRE_FIELD_KEYS,
   SOURCE_GROUPS,
+  applyDocumentPolicyPatch,
+  canBlockAccess,
   disclaimerContract,
   documentsFromGestion,
   fieldDef,
@@ -40,6 +44,14 @@ import {
   shortTermRentalContract,
   syncContractSignatureFromDocuments,
 } from '../../../../features/guestDocuments';
+import {
+  completePresetSchema,
+  gestionWithSchema,
+  parseRegistrationFormSchemaStrict,
+  resolveEffectiveRegistrationForm,
+  setBuiltinRequired,
+  type RegistrationFormSchema,
+} from '../../../../features/registration/formSchema';
 
 type Props = {
   listingId?: string | null;
@@ -73,6 +85,7 @@ function unwrapDoc(raw: unknown): ListingOrchestrationDoc | null {
 
 export default function ListingDocumentsTab({ listingId }: Props) {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [doc, setDoc] = useState<ListingOrchestrationDoc | null>(null);
   const [documents, setDocuments] = useState<GuestDocument[]>([]);
@@ -84,6 +97,8 @@ export default function ListingDocumentsTab({ listingId }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [draft, setDraft] = useState<GuestDocument | null>(null);
   const [starter, setStarter] = useState<Starter>('disclaimer');
+  const [schema, setSchema] = useState<RegistrationFormSchema>(completePresetSchema());
+  const [editorEpoch, setEditorEpoch] = useState(0);
 
   const load = useCallback(async () => {
     if (!listingId) {
@@ -91,6 +106,7 @@ export default function ListingDocumentsTab({ listingId }: Props) {
       return;
     }
     setLoading(true);
+    setLoadError(false);
     try {
       const raw = (await listingsService.getListingOrchestrationCompiled(String(listingId))) as
         | { data?: unknown }
@@ -103,10 +119,12 @@ export default function ListingDocumentsTab({ listingId }: Props) {
       const cs = parseContractSignature(gestion.contractSignature ?? compiled);
       setContractSignature(cs);
       setDocuments(documentsFromGestion(gestion, cs));
+      setSchema(resolveEffectiveRegistrationForm({ listingGestion: gestion }).schema);
       setDirty(false);
     } catch {
       setDoc(null);
-      setDocuments(documentsFromGestion({}, DEFAULT_CONTRACT_SIGNATURE));
+      setDocuments([]);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -116,20 +134,24 @@ export default function ListingDocumentsTab({ listingId }: Props) {
     void load();
   }, [load]);
 
-  const persist = async (nextDocs: GuestDocument[]) => {
+  const persist = async (nextDocs: GuestDocument[], nextSchema?: RegistrationFormSchema) => {
     if (!listingId || !doc) return false;
     setSaving(true);
     const existingGestion = (doc.capabilities?.registration?.gestion ?? {}) as Record<string, unknown>;
     const nextSignature = syncContractSignatureFromDocuments(nextDocs, contractSignature);
+    let gestion: Record<string, unknown> = {
+      ...existingGestion,
+      guestDocuments: nextDocs,
+      contractSignature: nextSignature,
+    };
+    if (nextSchema) {
+      gestion = gestionWithSchema(gestion, nextSchema, { override: true });
+    }
     try {
       await saveListingGestion({
         listingId: String(listingId),
         capabilityKey: 'registration',
-        gestion: {
-          ...existingGestion,
-          guestDocuments: nextDocs,
-          contractSignature: nextSignature,
-        },
+        gestion,
         doc,
       });
       setContractSignature(nextSignature);
@@ -146,14 +168,39 @@ export default function ListingDocumentsTab({ listingId }: Props) {
   };
 
   const updateDoc = (id: string, patch: Partial<GuestDocument>) => {
-    setDocuments((prev) =>
-      prev.map((d) => {
-        if (d.id !== id) return d;
-        const next = { ...d, ...patch };
-        return { ...next, content: assembleContent(next) };
-      }),
-    );
-    setDirty(true);
+    const next = documents.map((d) => {
+      if (d.id !== id) return d;
+      const policyKeys = [
+        'enabled',
+        'requiredBeforeArrival',
+        'requiresSignature',
+        'blocksAccess',
+        'autoSendAfterRegistration',
+        'signerPolicy',
+      ] as const;
+      const hasPolicy = policyKeys.some((k) => k in patch);
+      const merged = hasPolicy
+        ? applyDocumentPolicyPatch(d, patch)
+        : { ...d, ...patch };
+      return { ...merged, content: assembleContent(merged) };
+    });
+    setDocuments(next);
+    if ('includeFormulaire' in patch) {
+      void persist(next);
+    } else {
+      setDirty(true);
+    }
+  };
+
+  const toggleFormulaireRequired = async (binding: string, required: boolean) => {
+    const parsed = parseRegistrationFormSchemaStrict(setBuiltinRequired(schema, binding, required));
+    if (!parsed.ok || !parsed.schema) {
+      toast.error('Formulaire invalide');
+      return;
+    }
+    setSchema(parsed.schema);
+    const ok = await persist(documents, parsed.schema);
+    if (ok) setEditorEpoch((n) => n + 1);
   };
 
   const openCreate = (kind: Starter = 'disclaimer') => {
@@ -245,6 +292,20 @@ export default function ListingDocumentsTab({ listingId }: Props) {
     return (
       <Box sx={{ py: 4, display: 'flex', justifyContent: 'center', color: V3.t3, fontSize: 13 }}>
         Chargement…
+      </Box>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Box sx={{ p: 2, display: 'grid', gap: 1.25, justifyItems: 'start' }}>
+        <Typography sx={{ fontSize: 13, color: V3.er }}>
+          Impossible de charger la configuration des documents. Réessayez pour éviter
+          d’écraser une configuration existante.
+        </Typography>
+        <Button size="small" onClick={() => void load()} sx={ghostBtnSx}>
+          Réessayer
+        </Button>
       </Box>
     );
   }
@@ -378,6 +439,10 @@ export default function ListingDocumentsTab({ listingId }: Props) {
                 expanded={expandedId === police.id}
                 listingId={String(listingId)}
                 locked
+                schema={schema}
+                editorEpoch={editorEpoch}
+                onToggleFormulaireRequired={toggleFormulaireRequired}
+                onFormEditorSaved={() => void load()}
                 onToggleExpand={() => setExpandedId(expandedId === police.id ? null : police.id)}
                 onChange={(patch) => updateDoc(police.id, patch)}
                 onDone={() => {
@@ -637,6 +702,10 @@ function DocumentCard({
   expanded,
   listingId,
   locked = false,
+  schema,
+  editorEpoch = 0,
+  onToggleFormulaireRequired,
+  onFormEditorSaved,
   onToggleExpand,
   onChange,
   onRemove,
@@ -646,6 +715,10 @@ function DocumentCard({
   expanded: boolean;
   listingId: string;
   locked?: boolean;
+  schema?: RegistrationFormSchema;
+  editorEpoch?: number;
+  onToggleFormulaireRequired?: (binding: string, required: boolean) => void;
+  onFormEditorSaved?: () => void;
   onToggleExpand: () => void;
   onChange: (patch: Partial<GuestDocument>) => void;
   onRemove?: () => void;
@@ -702,16 +775,25 @@ function DocumentCard({
                   fontWeight: 750,
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
-                  bgcolor: V3.pt,
-                  color: V3.pd,
+                  bgcolor: V3.bg,
+                  color: V3.t4,
                   borderRadius: '4px',
                   px: 0.75,
                   py: 0.25,
                   fontFamily: 'monospace',
                 }}
               >
-                obligatoire
+                non supprimable
               </Box>
+            )}
+            {item.enabled && !item.requiredBeforeArrival && <PolicyBadge label="Optionnel" tone="muted" />}
+            {item.enabled && item.requiredBeforeArrival && <PolicyBadge label="Obligatoire" tone="warn" />}
+            {item.enabled && item.blocksAccess && <PolicyBadge label="Bloque l’accès" tone="danger" />}
+            {isPolice && item.enabled && item.includeFormulaire && (
+              <PolicyBadge label="Formulaire" tone="warn" />
+            )}
+            {isPolice && item.enabled && !item.includeFormulaire && (
+              <PolicyBadge label="Pièce seule" tone="muted" />
             )}
           </Stack>
           {item.title && item.title !== item.name && (
@@ -774,7 +856,12 @@ function DocumentCard({
             </Field>
           </Box>
           <WhoBlock document={item} onChange={onChange} />
-          <FieldsBlock document={item} onChange={onChange} />
+          <FieldsBlock
+            document={item}
+            schema={schema}
+            onChange={onChange}
+            onToggleFormulaireRequired={onToggleFormulaireRequired}
+          />
           <BodyBlock document={item} onChange={onChange} />
           {isPolice && (
             <details>
@@ -793,7 +880,11 @@ function DocumentCard({
                 💬 Régler ce que le voyageur voit dans WhatsApp
               </summary>
               <Box sx={{ mt: 1 }}>
-                <RegistrationFormEditor listingId={listingId} />
+                <RegistrationFormEditor
+                  key={editorEpoch}
+                  listingId={listingId}
+                  onSaved={onFormEditorSaved}
+                />
               </Box>
             </details>
           )}
@@ -824,6 +915,7 @@ function WhoBlock({
   document: GuestDocument;
   onChange: (patch: Partial<GuestDocument>) => void;
 }) {
+  const blockEnabled = canBlockAccess(item);
   return (
     <Box>
       <SectionLabel>Qui / signature</SectionLabel>
@@ -833,6 +925,48 @@ function WhoBlock({
         checked={item.requiresSignature}
         onChange={(v) => onChange({ requiresSignature: v })}
       />
+      {item.enabled && (
+        <>
+          <ToggleRow
+            label="Obligatoire avant l’arrivée"
+            checked={item.requiredBeforeArrival}
+            onChange={(v) => onChange({ requiredBeforeArrival: v })}
+          />
+          <Typography sx={{ fontSize: 11, color: V3.t4, mt: -0.5, mb: 0.75, lineHeight: 1.4 }}>
+            Compte dans la progression Enregistrement x/y. Sinon le document reste disponible
+            mais optionnel (« À faire · optionnel »).
+          </Typography>
+          {blockEnabled ? (
+            <>
+              <ToggleRow
+                label="Bloque l’accès"
+                checked={item.blocksAccess}
+                onChange={(v) => onChange({ blocksAccess: v })}
+              />
+              <Typography sx={{ fontSize: 11, color: V3.t4, mt: -0.5, mb: 0.75, lineHeight: 1.4 }}>
+                Verrouille les codes (menu F) tant que ce document n’est pas entièrement signé.
+              </Typography>
+            </>
+          ) : (
+            <Typography sx={{ fontSize: 11, color: V3.t4, mb: 0.75, lineHeight: 1.4 }}>
+              « Bloque l’accès » nécessite un document actif, obligatoire, avec signature web.
+            </Typography>
+          )}
+        </>
+      )}
+      {item.kind === 'police_form' && (
+        <>
+          <ToggleRow
+            label="Ajouter le formulaire police au contrat"
+            checked={item.includeFormulaire}
+            onChange={(v) => onChange({ includeFormulaire: v })}
+          />
+          <Typography sx={{ fontSize: 11, color: V3.t4, mt: -0.5, mb: 0.75, lineHeight: 1.4 }}>
+            Coché : profession, domicile, provenance… apparaissent sur la page de signature (même vides).
+            Enregistré tout de suite. Décoché : pièce d’identité et séjour seulement (Airbnb / LCD).
+          </Typography>
+        </>
+      )}
       {item.requiresSignature && (
         <>
           <Stack sx={{ gap: 0.75, mt: 0.75 }}>
@@ -860,12 +994,49 @@ function WhoBlock({
   );
 }
 
+function PolicyBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: 'muted' | 'warn' | 'danger';
+}) {
+  const colors =
+    tone === 'danger'
+      ? { bg: 'rgba(200,30,30,0.08)', fg: V3.er }
+      : tone === 'warn'
+        ? { bg: V3.warnT, fg: V3.warn }
+        : { bg: V3.bg, fg: V3.t4 };
+  return (
+    <Box
+      sx={{
+        fontSize: 9,
+        fontWeight: 750,
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        bgcolor: colors.bg,
+        color: colors.fg,
+        borderRadius: '4px',
+        px: 0.75,
+        py: 0.25,
+        fontFamily: 'monospace',
+      }}
+    >
+      {label}
+    </Box>
+  );
+}
+
 function FieldsBlock({
   document: item,
+  schema,
   onChange,
+  onToggleFormulaireRequired,
 }: {
   document: GuestDocument;
+  schema?: RegistrationFormSchema;
   onChange: (patch: Partial<GuestDocument>) => void;
+  onToggleFormulaireRequired?: (binding: string, required: boolean) => void;
 }) {
   const toggle = (key: string, on: boolean) => {
     onChange({
@@ -876,6 +1047,8 @@ function FieldsBlock({
         : item.fieldKeys.filter((k) => k !== key),
     });
   };
+  const requiredByKey = formulaireRequiredMap(schema);
+  const isPolice = item.kind === 'police_form';
 
   return (
     <Box>
@@ -919,37 +1092,81 @@ function FieldsBlock({
         </Stack>
       )}
       <Stack sx={{ gap: 0.85 }}>
-        {SOURCE_GROUPS.map((g, i) => (
-          <FieldSourceGroup
-            key={g.id}
-            group={g.id}
-            selected={item.fieldKeys}
-            defaultOpen={i === 0}
-            onToggle={toggle}
-          />
-        ))}
+        {SOURCE_GROUPS.map((g) => {
+          const isFormulaire = g.id === 'whatsapp' && isPolice;
+          return (
+            <FieldSourceGroup
+              key={g.id}
+              group={g.id}
+              selected={item.fieldKeys}
+              defaultOpen={g.id === 'identity' || (isFormulaire && item.includeFormulaire)}
+              disabled={isFormulaire && !item.includeFormulaire}
+              disabledHint={
+                isFormulaire && !item.includeFormulaire
+                  ? 'Activez « Ajouter le formulaire police au contrat » pour les afficher.'
+                  : undefined
+              }
+              showRequired={isFormulaire && item.includeFormulaire}
+              requiredByKey={requiredByKey}
+              onToggle={toggle}
+              onRequiredChange={onToggleFormulaireRequired}
+            />
+          );
+        })}
       </Stack>
     </Box>
   );
+}
+
+function formulaireRequiredMap(schema?: RegistrationFormSchema): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  if (!schema) return out;
+  for (const key of POLICE_FORMULAIRE_FIELD_KEYS) {
+    const field = schema.fields.find((f) => (f.binding || f.id) === key);
+    out[key] = Boolean(field?.required && field.enabled !== false);
+  }
+  return out;
 }
 
 function FieldSourceGroup({
   group,
   selected,
   defaultOpen,
+  disabled,
+  disabledHint,
+  showRequired,
+  requiredByKey,
   onToggle,
+  onRequiredChange,
 }: {
   group: GuestDocumentFieldGroup;
   selected: string[];
   defaultOpen?: boolean;
+  disabled?: boolean;
+  disabledHint?: string;
+  showRequired?: boolean;
+  requiredByKey?: Record<string, boolean>;
   onToggle: (key: string, on: boolean) => void;
+  onRequiredChange?: (key: string, required: boolean) => void;
 }) {
   const meta = SOURCE_GROUPS.find((g) => g.id === group)!;
   const fields = fieldsInGroup(group);
-  const onCount = fields.filter((f) => selected.includes(f.key)).length;
+  const onCount = showRequired
+    ? fields.filter((f) => requiredByKey?.[f.key]).length
+    : fields.filter((f) => selected.includes(f.key)).length;
 
   return (
-    <Box component="details" open={defaultOpen} sx={{ border: `1px solid ${V3.b}`, borderRadius: '10px', bgcolor: V3.card, overflow: 'hidden' }}>
+    <Box
+      component="details"
+      open={defaultOpen && !disabled}
+      sx={{
+        border: `1px solid ${V3.b}`,
+        borderRadius: '10px',
+        bgcolor: V3.card,
+        overflow: 'hidden',
+        opacity: disabled ? 0.55 : 1,
+      }}
+    >
       <Box
         component="summary"
         sx={{
@@ -973,52 +1190,87 @@ function FieldSourceGroup({
         )}
         <Typography sx={{ fontSize: 16, color: V3.t4 }}>›</Typography>
       </Box>
+      {disabledHint ? (
+        <Typography sx={{ fontSize: 11, color: V3.t4, px: 1.5, py: 1, borderTop: `1px solid ${V3.b}` }}>
+          {disabledHint}
+        </Typography>
+      ) : null}
+      {showRequired ? (
+        <Typography sx={{ fontSize: 11, color: V3.t4, px: 1.5, py: 1, borderTop: `1px solid ${V3.b}` }}>
+          Sur le contrat. Obligatoire = à remplir dans WhatsApp pour valider l’enregistrement.
+        </Typography>
+      ) : null}
       <Box sx={{ borderTop: `1px solid ${V3.b}` }}>
         {fields.map((field) => {
           const on = selected.includes(field.key);
           const badge = BADGE[field.badgeKind];
+          const required = Boolean(requiredByKey?.[field.key]);
           return (
             <Box
               key={field.key}
-              component="label"
+              component={showRequired ? 'div' : 'label'}
               sx={{
                 display: 'grid',
-                gridTemplateColumns: 'auto 1fr auto',
+                gridTemplateColumns: showRequired ? '1fr auto' : 'auto 1fr auto',
                 gap: 1.1,
                 alignItems: 'center',
                 px: 1.5,
                 py: 0.85,
-                cursor: 'pointer',
-                bgcolor: on ? V3.alt : 'transparent',
+                cursor: showRequired ? 'default' : 'pointer',
+                bgcolor: on || required ? V3.alt : 'transparent',
                 borderBottom: `1px solid ${V3.b}`,
                 '&:last-child': { borderBottom: 'none' },
                 '&:hover': { bgcolor: V3.pt },
               }}
             >
-              <Checkbox
-                size="small"
-                checked={on}
-                onChange={(e) => onToggle(field.key, e.target.checked)}
-                sx={{ p: 0, color: V3.bs, '&.Mui-checked': { color: V3.p } }}
-              />
-              <Typography sx={{ fontSize: 12.5, fontWeight: on ? 700 : 600, color: on ? V3.t : V3.t2 }}>
-                {field.label}
-              </Typography>
-              <Box
-                sx={{
-                  fontSize: 10,
-                  fontFamily: 'monospace',
-                  fontWeight: 600,
-                  borderRadius: '4px',
-                  px: 0.75,
-                  py: 0.25,
-                  bgcolor: badge.bg,
-                  color: badge.fg,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {field.badge}
+              {showRequired ? null : (
+                <Checkbox
+                  size="small"
+                  checked={on}
+                  disabled={disabled}
+                  onChange={(e) => onToggle(field.key, e.target.checked)}
+                  sx={{ p: 0, color: V3.bs, '&.Mui-checked': { color: V3.p } }}
+                />
+              )}
+              <Box>
+                <Typography sx={{ fontSize: 12.5, fontWeight: on || required ? 700 : 600, color: on || required ? V3.t : V3.t2 }}>
+                  {field.label}
+                </Typography>
+                {showRequired ? (
+                  <Typography sx={{ fontSize: 10.5, color: V3.t4, mt: 0.15 }}>{field.badge}</Typography>
+                ) : null}
               </Box>
+              {showRequired ? (
+                <FormControlLabel
+                  sx={{ mr: 0, ml: 0 }}
+                  control={
+                    <Switch
+                      size="small"
+                      checked={required}
+                      disabled={disabled}
+                      onChange={(e) => onRequiredChange?.(field.key, e.target.checked)}
+                      sx={switchSx}
+                    />
+                  }
+                  label={<Typography sx={{ fontSize: 11, fontWeight: 650, whiteSpace: 'nowrap' }}>Obligatoire</Typography>}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                    fontWeight: 600,
+                    borderRadius: '4px',
+                    px: 0.75,
+                    py: 0.25,
+                    bgcolor: badge.bg,
+                    color: badge.fg,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {field.badge}
+                </Box>
+              )}
             </Box>
           );
         })}
