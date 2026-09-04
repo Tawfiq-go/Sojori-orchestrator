@@ -1,5 +1,5 @@
 import apiClient from './apiClient';
-import { setTokens, clearTokens } from '../utils/authUtils';
+import { setTokens, clearTokens, getToken, getRefreshToken } from '../utils/authUtils';
 import { AUTH_CONFIG } from '../config/authConfig';
 
 // Types
@@ -460,12 +460,28 @@ const authService = {
    * Logout RÉEL
    */
   logout(): void {
+    // Révoquer la session côté serveur AVANT d'effacer les jetons : l'appel a
+    // besoin d'eux pour être authentifié. Avant, on effaçait puis on appelait
+    // /logout sans jeton → 401 silencieux, session jamais révoquée.
+    const token = getToken();
+    const refreshToken = getRefreshToken();
     clearTokens();
+    if (!token && !refreshToken) return;
 
-    // Appeler l'API pour invalider le token côté serveur
-    apiClient.post(AUTH_CONFIG.API_URL + '/logout').catch(() => {
-      // Ignorer les erreurs de logout
-    });
+    apiClient
+      .post(
+        AUTH_CONFIG.API_URL + '/logout',
+        {},
+        {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(refreshToken ? { 'x-refresh-token': refreshToken } : {}),
+          },
+        }
+      )
+      .catch(() => {
+        // Ignorer les erreurs de logout : les jetons sont déjà effacés localement.
+      });
   },
 };
 

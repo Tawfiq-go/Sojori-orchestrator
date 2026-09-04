@@ -120,9 +120,10 @@ export function PmSimulationPanel() {
         severity="info"
         sx={{ mb: 3, maxWidth: 720 }}
       >
-        <strong>Retour mode admin :</strong> cliquez sur le bandeau ambre en haut de l&apos;écran
-        → <strong>Quitter simulation</strong> (ou <strong>Arrêter la simulation</strong> ci-dessous).
-        Les pages <code>/admin</code> et monitor restent accessibles pendant la simulation.
+        <strong>Raccourci :</strong> le chip à gauche de l&apos;engrenage, en haut à droite, fait la
+        même chose sans quitter la page — choix de l&apos;owner et de la sidebar (owner, admin, les deux).
+        <strong> Retour plateforme :</strong> « Quitter la vue » dans ce chip, ou le bouton ci-dessous.
+        Les pages <code>/admin</code> et monitor restent accessibles par URL.
       </Alert>
 
       {isActive && snapshot ? (

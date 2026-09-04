@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useRealAuth } from '../hooks/useAuth';
 import { CRM_ALLOWED_EMAILS } from '../config/navConfig';
 
 /**
@@ -14,7 +14,7 @@ import { CRM_ALLOWED_EMAILS } from '../config/navConfig';
 export const EmailRestrictedRoute: React.FC<{ allowed?: string[] }> = ({
   allowed = CRM_ALLOWED_EMAILS,
 }) => {
-  const { loading, user } = useAuth();
+  const { loading, user } = useRealAuth();
 
   if (loading) return null;
 
