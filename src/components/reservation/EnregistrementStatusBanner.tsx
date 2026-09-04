@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Chip, Paper, Stack, Typography } from '@mui/material';
-import guestContractsService, { type GuestContractSummary } from '../../services/guestContractsService';
+import guestContractsService from '../../services/guestContractsService';
 import listingsService from '../../services/listingsService';
-import { parseGuestDocuments, signableDocuments } from '../../features/guestDocuments';
+import { parseGuestDocuments, requiredDocumentsSignatureProgress } from '../../features/guestDocuments';
 
 const T = {
   bg1: '#ffffff',
@@ -45,37 +45,6 @@ function memberIdentityDone(m: Record<string, unknown>): boolean {
   return Boolean(num || front);
 }
 
-function expectedTotal(
-  docs: Array<{ signerPolicy?: string }>,
-  adultCount: number,
-): number {
-  const adults = Math.max(1, adultCount);
-  return docs.reduce((n, d) => n + (d.signerPolicy === 'each_traveler' ? adults : 1), 0);
-}
-
-function liveProgress(
-  contracts: GuestContractSummary[],
-  fallbackTotal: number,
-): { signed: number; total: number; complete: boolean } {
-  const active = contracts.filter(c => c.status !== 'superseded');
-  if (active.length === 0) {
-    const total = Math.max(0, fallbackTotal);
-    return { signed: 0, total, complete: total === 0 };
-  }
-  let signed = 0;
-  let total = 0;
-  for (const c of active) {
-    const req = Math.max(1, Number(c.requiredSignerCount) || 1);
-    const got =
-      c.status === 'signed' || c.status === 'finalizing'
-        ? req
-        : Math.min(req, Math.max(0, Number(c.signatureCount) || 0));
-    signed += got;
-    total += req;
-  }
-  return { signed, total, complete: total > 0 && signed >= total };
-}
-
 export function useEnregistrementStatus(reservationDetails: Record<string, unknown> | null | undefined): EnregistrementStatus {
   const r = reservationDetails ?? {};
   const reservationId = String(r._id || r.id || '').trim();
@@ -97,6 +66,7 @@ export function useEnregistrementStatus(reservationDetails: Record<string, unkno
   const [loading, setLoading] = useState(Boolean(reservationId));
   const [contractsSigned, setContractsSigned] = useState(0);
   const [contractsTotal, setContractsTotal] = useState(0);
+  const [registrationRequired, setRegistrationRequired] = useState(true);
 
   useEffect(() => {
     if (!reservationId) {
@@ -121,21 +91,16 @@ export function useEnregistrementStatus(reservationDetails: Record<string, unkno
         } | null;
         const doc = orch && typeof orch === 'object' && 'data' in orch && orch.data ? orch.data : orch;
         const gestion = (doc?.capabilities?.registration?.gestion ?? {}) as Record<string, unknown>;
+        setRegistrationRequired(gestion.requiredBeforeArrival !== false);
         const parsed = parseGuestDocuments(gestion.guestDocuments);
-        const docs = parsed ? signableDocuments(parsed) : [];
-        const fallback = docs.length
-          ? expectedTotal(
-              docs.map(d => ({ signerPolicy: d.signerPolicy })),
-              identityTotal,
-            )
-          : 0;
-        const progress = liveProgress(live, fallback);
+        const progress = requiredDocumentsSignatureProgress(parsed ?? [], live, identityTotal);
         setContractsSigned(progress.signed);
         setContractsTotal(progress.total);
       } catch {
         if (!cancelled) {
           setContractsSigned(0);
           setContractsTotal(0);
+          setRegistrationRequired(true);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -148,8 +113,12 @@ export function useEnregistrementStatus(reservationDetails: Record<string, unkno
 
   return useMemo(() => {
     const contractsComplete = contractsTotal > 0 && contractsSigned >= contractsTotal;
-    let needed = 1;
-    let done = identityComplete ? 1 : 0;
+    let needed = 0;
+    let done = 0;
+    if (registrationRequired) {
+      needed += 1;
+      if (identityComplete) done += 1;
+    }
     if (contractsTotal > 0) {
       needed += 1;
       if (contractsComplete) done += 1;
@@ -177,6 +146,7 @@ export function useEnregistrementStatus(reservationDetails: Record<string, unkno
     identityComplete,
     contractsSigned,
     contractsTotal,
+    registrationRequired,
   ]);
 }
 
