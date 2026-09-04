@@ -22,6 +22,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import { DashboardPage } from './pages/DashboardPage';
+import { ListingPerformancePage } from './pages/ListingPerformancePage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import ForbiddenPage from './pages/ForbiddenPage';
 import { MaJourneePage } from './pages/MaJourneePage';
@@ -427,6 +428,7 @@ function App() {
 
               <Route path="/ma-journee" element={<MaJourneePage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/dashboard/performance-par-bien" element={<ListingPerformancePage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               {/* Section Orchestration — URLs canoniques /orchestration/* (alignées menu).
                   Les anciennes /tasks/plans|ops|orchestration-config|whatsapp-messages

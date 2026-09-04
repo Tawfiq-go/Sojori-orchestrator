@@ -55,6 +55,16 @@ export const REPORTS_CATALOG: ReportEntry[] = [
     mode: 'both',
   },
   {
+    id: 'dashboard/performance-par-bien',
+    title: 'Performance par bien',
+    pitch: 'Occupation, ADR, RevPAR — mois par mois, bien par bien',
+    detail:
+      'Matrice bien × mois : nuits ouvertes/vendues, revenu, ADR, RevPAR, pickup 7/30j, lead time, canaux — vues Mois, Année et Avis. Basé sur le calendrier de disponibilité (source alimentée pour tous les PM, vérifié en base 2026-09-04).',
+    accent: T.primary,
+    route: '/dashboard/performance-par-bien',
+    mode: 'both',
+  },
+  {
     id: 'analytics',
     title: 'Analytics',
     pitch: 'Saisonnalité, démographie, lead time',
