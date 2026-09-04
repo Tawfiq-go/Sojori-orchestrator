@@ -339,7 +339,7 @@ export function RegistrationFormEditor({ listingId, ownerKey }: Props) {
           Essentiel
         </Button>
         <Button size="small" variant="outlined" disabled={saving} onClick={() => setPresetConfirm('police')}>
-          Fiche de police marocaine
+          Fiche de police
         </Button>
         <Button
           size="small"

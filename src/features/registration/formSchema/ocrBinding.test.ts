@@ -215,7 +215,7 @@ describe('max passport extraction', () => {
     assert.equal(country.enabled, true)
     assert.equal(country.screen, 'passport')
     assert.equal(country.ocrProperty, 'residence_country')
-    assert.equal(country.required, false)
+    assert.equal(country.required, true)
     const personal = schema.fields.find((f) => f.id === 'personal_number')!
     assert.equal(personal.enabled, true)
     assert.equal(personal.required, false)
