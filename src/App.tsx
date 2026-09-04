@@ -473,7 +473,10 @@ function App() {
 
               {/* Claude Design V2 - Remplace les anciennes vues */}
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
-              <Route path="/reports" element={<LazyRoute><ReportsHubPage /></LazyRoute>} />
+              {/* Ma journée = écran par défaut du menu Reports (commun hôtel/LCD) — le
+                  hub de cartes reste accessible via /reports/hub. */}
+              <Route path="/reports" element={<Navigate to="/ma-journee" replace />} />
+              <Route path="/reports/hub" element={<LazyRoute><ReportsHubPage /></LazyRoute>} />
               {/* Fusionnee dans /reports2/clients (meme ecran, LCD et hotel unifies). */}
               <Route path="/reports/clients" element={<Navigate to="/reports2/clients" replace />} />
               <Route path="/reports/quotidien" element={<LazyRoute><DailySummaryPage /></LazyRoute>} />
