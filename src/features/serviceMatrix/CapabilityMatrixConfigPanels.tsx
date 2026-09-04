@@ -31,6 +31,8 @@ import SupportConfigTabContainer from '../listing/components/ConfigOrchestration
 import TransportConfigTab from '../listing/components/ConfigOrchestration/TransportConfigTab';
 import { V3BlockSaveBar } from '../orchestrationListingV3/V3BlockSaveBar';
 import PreArrivalRequiredToggle from './PreArrivalRequiredToggle';
+import RegistrationPolicyToggles from './RegistrationPolicyToggles';
+import OwnerGuestDocumentsPolicyEditor from './OwnerGuestDocumentsPolicyEditor';
 import RegistrationFormEditor from './RegistrationFormEditor';
 import { ContractSignatureConfig } from './ContractSignatureConfig';
 import type { CapabilityDefinition } from './capabilityRegistry';
@@ -137,13 +139,11 @@ export function CapabilityGestionPanel({
     return (
       <Box sx={embeddedSx}>
         {(lid || templateMode) && (
-          <PreArrivalRequiredToggle
+          <RegistrationPolicyToggles
             listingId={lid || undefined}
             ownerKey={templateMode ? templateOwnerKey : undefined}
             capabilityKey="registration"
             title="Enregistrement voyageurs"
-            helpRequired="Les codes d'accès (menu F) restent verrouillés tant que l'enregistrement n'est pas complété, et l'assistant WhatsApp l'explique au voyageur : l'enregistrement sur place ne suffit pas."
-            helpOptional="Le voyageur peut aussi s'enregistrer sur place à l'arrivée — le menu F (Accès & codes) n'exige plus l'enregistrement, et l'assistant le confirme si on lui demande."
           />
         )}
         {templateMode ? (
@@ -154,6 +154,7 @@ export function CapabilityGestionPanel({
             </Alert>
             <RegistrationFormEditor ownerKey={templateOwnerKey} />
             <ContractSignatureConfig ownerKey={templateOwnerKey} />
+            <OwnerGuestDocumentsPolicyEditor ownerKey={templateOwnerKey} />
           </>
         ) : (
           <Box sx={{ mt: 1.5 }}>

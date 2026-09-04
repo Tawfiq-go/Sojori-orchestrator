@@ -37,6 +37,8 @@ export default function ListingFormV2({
   importedFieldsSource,
   defaultLevel = 'detail',
   defaultTab,
+  navEpoch = 0,
+  onNavigateLevelTab,
   lockLevel,
   embedded = false,
   onSave,
@@ -320,6 +322,8 @@ export default function ListingFormV2({
             ? 'orchestration-v3'
             : 'general')
       }
+      navEpoch={navEpoch}
+      onNavigateLevelTab={onNavigateLevelTab}
       lockLevel={lockLevel}
       embedded={embedded}
       importOnboardingActive={importOnboardingActive}

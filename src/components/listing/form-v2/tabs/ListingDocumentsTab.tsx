@@ -30,6 +30,8 @@ import {
   MAX_GUEST_DOCUMENTS,
   POLICE_FORM_DOCUMENT_ID,
   SOURCE_GROUPS,
+  applyDocumentPolicyPatch,
+  canBlockAccess,
   disclaimerContract,
   documentsFromGestion,
   fieldDef,
@@ -73,6 +75,7 @@ function unwrapDoc(raw: unknown): ListingOrchestrationDoc | null {
 
 export default function ListingDocumentsTab({ listingId }: Props) {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [doc, setDoc] = useState<ListingOrchestrationDoc | null>(null);
   const [documents, setDocuments] = useState<GuestDocument[]>([]);
@@ -91,6 +94,7 @@ export default function ListingDocumentsTab({ listingId }: Props) {
       return;
     }
     setLoading(true);
+    setLoadError(false);
     try {
       const raw = (await listingsService.getListingOrchestrationCompiled(String(listingId))) as
         | { data?: unknown }
@@ -106,7 +110,8 @@ export default function ListingDocumentsTab({ listingId }: Props) {
       setDirty(false);
     } catch {
       setDoc(null);
-      setDocuments(documentsFromGestion({}, DEFAULT_CONTRACT_SIGNATURE));
+      setDocuments([]);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -149,7 +154,18 @@ export default function ListingDocumentsTab({ listingId }: Props) {
     setDocuments((prev) =>
       prev.map((d) => {
         if (d.id !== id) return d;
-        const next = { ...d, ...patch };
+        const policyKeys = [
+          'enabled',
+          'requiredBeforeArrival',
+          'requiresSignature',
+          'blocksAccess',
+          'autoSendAfterRegistration',
+          'signerPolicy',
+        ] as const;
+        const hasPolicy = policyKeys.some((k) => k in patch);
+        const next = hasPolicy
+          ? applyDocumentPolicyPatch(d, patch)
+          : { ...d, ...patch };
         return { ...next, content: assembleContent(next) };
       }),
     );
@@ -245,6 +261,20 @@ export default function ListingDocumentsTab({ listingId }: Props) {
     return (
       <Box sx={{ py: 4, display: 'flex', justifyContent: 'center', color: V3.t3, fontSize: 13 }}>
         Chargement…
+      </Box>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Box sx={{ p: 2, display: 'grid', gap: 1.25, justifyItems: 'start' }}>
+        <Typography sx={{ fontSize: 13, color: V3.er }}>
+          Impossible de charger la configuration des documents. Réessayez pour éviter
+          d’écraser une configuration existante.
+        </Typography>
+        <Button size="small" onClick={() => void load()} sx={ghostBtnSx}>
+          Réessayer
+        </Button>
       </Box>
     );
   }
@@ -702,17 +732,20 @@ function DocumentCard({
                   fontWeight: 750,
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
-                  bgcolor: V3.pt,
-                  color: V3.pd,
+                  bgcolor: V3.bg,
+                  color: V3.t4,
                   borderRadius: '4px',
                   px: 0.75,
                   py: 0.25,
                   fontFamily: 'monospace',
                 }}
               >
-                obligatoire
+                non supprimable
               </Box>
             )}
+            {item.enabled && !item.requiredBeforeArrival && <PolicyBadge label="Optionnel" tone="muted" />}
+            {item.enabled && item.requiredBeforeArrival && <PolicyBadge label="Obligatoire" tone="warn" />}
+            {item.enabled && item.blocksAccess && <PolicyBadge label="Bloque l’accès" tone="danger" />}
           </Stack>
           {item.title && item.title !== item.name && (
             <Typography sx={{ fontSize: 12, color: V3.t3 }}>{item.title}</Typography>
@@ -824,6 +857,7 @@ function WhoBlock({
   document: GuestDocument;
   onChange: (patch: Partial<GuestDocument>) => void;
 }) {
+  const blockEnabled = canBlockAccess(item);
   return (
     <Box>
       <SectionLabel>Qui / signature</SectionLabel>
@@ -833,6 +867,35 @@ function WhoBlock({
         checked={item.requiresSignature}
         onChange={(v) => onChange({ requiresSignature: v })}
       />
+      {item.enabled && (
+        <>
+          <ToggleRow
+            label="Obligatoire avant l’arrivée"
+            checked={item.requiredBeforeArrival}
+            onChange={(v) => onChange({ requiredBeforeArrival: v })}
+          />
+          <Typography sx={{ fontSize: 11, color: V3.t4, mt: -0.5, mb: 0.75, lineHeight: 1.4 }}>
+            Compte dans la progression Enregistrement x/y. Sinon le document reste disponible
+            mais optionnel (« À faire · optionnel »).
+          </Typography>
+          {blockEnabled ? (
+            <>
+              <ToggleRow
+                label="Bloque l’accès"
+                checked={item.blocksAccess}
+                onChange={(v) => onChange({ blocksAccess: v })}
+              />
+              <Typography sx={{ fontSize: 11, color: V3.t4, mt: -0.5, mb: 0.75, lineHeight: 1.4 }}>
+                Verrouille les codes (menu F) tant que ce document n’est pas entièrement signé.
+              </Typography>
+            </>
+          ) : (
+            <Typography sx={{ fontSize: 11, color: V3.t4, mb: 0.75, lineHeight: 1.4 }}>
+              « Bloque l’accès » nécessite un document actif, obligatoire, avec signature web.
+            </Typography>
+          )}
+        </>
+      )}
       {item.requiresSignature && (
         <>
           <Stack sx={{ gap: 0.75, mt: 0.75 }}>
@@ -856,6 +919,39 @@ function WhoBlock({
           />
         </>
       )}
+    </Box>
+  );
+}
+
+function PolicyBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: 'muted' | 'warn' | 'danger';
+}) {
+  const colors =
+    tone === 'danger'
+      ? { bg: 'rgba(200,30,30,0.08)', fg: V3.er }
+      : tone === 'warn'
+        ? { bg: V3.warnT, fg: V3.warn }
+        : { bg: V3.bg, fg: V3.t4 };
+  return (
+    <Box
+      sx={{
+        fontSize: 9,
+        fontWeight: 750,
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        bgcolor: colors.bg,
+        color: colors.fg,
+        borderRadius: '4px',
+        px: 0.75,
+        py: 0.25,
+        fontFamily: 'monospace',
+      }}
+    >
+      {label}
     </Box>
   );
 }

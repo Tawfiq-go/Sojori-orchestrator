@@ -43,12 +43,28 @@ export {
 } from './catalog';
 export {
   documentsFromGestion,
+  finalizeGuestDocument,
   firstSignedContract,
+  mergeGuestDocumentsInheritance,
   parseGuestDocument,
+  parseGuestDocumentLoose,
   parseGuestDocuments,
+  parseGuestDocumentsLoose,
   signableDocuments,
   syncContractSignatureFromDocuments,
+  type ParsedGuestDocument,
 } from './parse';
+export {
+  DEFAULT_REGISTRATION_POLICIES,
+  applyDocumentPolicyPatch,
+  canBlockAccess,
+  defaultDocumentPolicies,
+  normalizeDocumentPolicies,
+  readOptionalBoolean,
+  resolvePolicyFlag,
+  summarizeDocumentPolicies,
+  type DocumentPolicySummary,
+} from './policy';
 export {
   SIGNING_FORMAT_META,
   applySigningFormat,
