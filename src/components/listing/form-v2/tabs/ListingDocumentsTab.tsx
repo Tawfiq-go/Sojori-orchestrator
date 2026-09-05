@@ -4,7 +4,6 @@ import {
   Button,
   Checkbox,
   Drawer,
-  FormControlLabel,
   Stack,
   Switch,
   TextField,
@@ -49,7 +48,8 @@ import {
   gestionWithSchema,
   parseRegistrationFormSchemaStrict,
   resolveEffectiveRegistrationForm,
-  setBuiltinRequired,
+  DEFAULT_OPTIONAL_FIELD_HELPERS,
+  patchBuiltinField,
   type RegistrationFormSchema,
 } from '../../../../features/registration/formSchema';
 
@@ -192,14 +192,34 @@ export default function ListingDocumentsTab({ listingId }: Props) {
     }
   };
 
-  const toggleFormulaireRequired = async (binding: string, required: boolean) => {
-    const parsed = parseRegistrationFormSchemaStrict(setBuiltinRequired(schema, binding, required));
+  const patchFormulaireField = async (
+    binding: string,
+    patch: { required?: boolean; enabled?: boolean; helperText?: string | null },
+    fieldKeyOn?: boolean,
+  ) => {
+    let nextDocs = documents;
+    const policeDoc = documents.find((d) => d.kind === 'police_form');
+    if (fieldKeyOn !== undefined && policeDoc) {
+      nextDocs = documents.map((d) => {
+        if (d.id !== policeDoc.id) return d;
+        const fieldKeys = fieldKeyOn
+          ? d.fieldKeys.includes(binding)
+            ? d.fieldKeys
+            : [...d.fieldKeys, binding]
+          : d.fieldKeys.filter((k) => k !== binding);
+        const merged = { ...d, fieldKeys };
+        return { ...merged, content: assembleContent(merged) };
+      });
+      setDocuments(nextDocs);
+    }
+    const nextSchema = patchBuiltinField(schema, binding, patch);
+    const parsed = parseRegistrationFormSchemaStrict(nextSchema);
     if (!parsed.ok || !parsed.schema) {
       toast.error('Formulaire invalide');
       return;
     }
     setSchema(parsed.schema);
-    const ok = await persist(documents, parsed.schema);
+    const ok = await persist(nextDocs, parsed.schema);
     if (ok) setEditorEpoch((n) => n + 1);
   };
 
@@ -441,7 +461,7 @@ export default function ListingDocumentsTab({ listingId }: Props) {
                 locked
                 schema={schema}
                 editorEpoch={editorEpoch}
-                onToggleFormulaireRequired={toggleFormulaireRequired}
+                onPatchFormulaireField={patchFormulaireField}
                 onFormEditorSaved={() => void load()}
                 onToggleExpand={() => setExpandedId(expandedId === police.id ? null : police.id)}
                 onChange={(patch) => updateDoc(police.id, patch)}
@@ -704,7 +724,7 @@ function DocumentCard({
   locked = false,
   schema,
   editorEpoch = 0,
-  onToggleFormulaireRequired,
+  onPatchFormulaireField,
   onFormEditorSaved,
   onToggleExpand,
   onChange,
@@ -717,7 +737,11 @@ function DocumentCard({
   locked?: boolean;
   schema?: RegistrationFormSchema;
   editorEpoch?: number;
-  onToggleFormulaireRequired?: (binding: string, required: boolean) => void;
+  onPatchFormulaireField?: (
+    binding: string,
+    patch: { required?: boolean; enabled?: boolean; helperText?: string | null },
+    fieldKeyOn?: boolean,
+  ) => void;
   onFormEditorSaved?: () => void;
   onToggleExpand: () => void;
   onChange: (patch: Partial<GuestDocument>) => void;
@@ -860,7 +884,7 @@ function DocumentCard({
             document={item}
             schema={schema}
             onChange={onChange}
-            onToggleFormulaireRequired={onToggleFormulaireRequired}
+            onPatchFormulaireField={onPatchFormulaireField}
           />
           <BodyBlock document={item} onChange={onChange} />
           {isPolice && (
@@ -1031,12 +1055,16 @@ function FieldsBlock({
   document: item,
   schema,
   onChange,
-  onToggleFormulaireRequired,
+  onPatchFormulaireField,
 }: {
   document: GuestDocument;
   schema?: RegistrationFormSchema;
   onChange: (patch: Partial<GuestDocument>) => void;
-  onToggleFormulaireRequired?: (binding: string, required: boolean) => void;
+  onPatchFormulaireField?: (
+    binding: string,
+    patch: { required?: boolean; enabled?: boolean; helperText?: string | null },
+    fieldKeyOn?: boolean,
+  ) => void;
 }) {
   const toggle = (key: string, on: boolean) => {
     onChange({
@@ -1108,8 +1136,9 @@ function FieldsBlock({
               }
               showRequired={isFormulaire && item.includeFormulaire}
               requiredByKey={requiredByKey}
+              helperByKey={formulaireHelperMap(schema)}
               onToggle={toggle}
-              onRequiredChange={onToggleFormulaireRequired}
+              onFormulaireChange={onPatchFormulaireField}
             />
           );
         })}
@@ -1128,6 +1157,54 @@ function formulaireRequiredMap(schema?: RegistrationFormSchema): Record<string, 
   return out;
 }
 
+function formulaireHelperMap(schema?: RegistrationFormSchema): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!schema) return out;
+  for (const key of POLICE_FORMULAIRE_FIELD_KEYS) {
+    const field = schema.fields.find((f) => (f.binding || f.id) === key);
+    out[key] = String(field?.helperText || '').trim();
+  }
+  return out;
+}
+
+function FieldTag({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      disabled={disabled}
+      onClick={() => {
+        if (!disabled) onChange(!checked);
+      }}
+      sx={{
+        fontSize: 10.5,
+        fontWeight: 750,
+        borderRadius: '6px',
+        px: 1,
+        py: 0.35,
+        border: `1px solid ${checked ? V3.p : V3.b}`,
+        bgcolor: checked ? V3.pt : '#fff',
+        color: checked ? V3.pd : V3.t4,
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.45 : 1,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </Box>
+  );
+}
+
 function FieldSourceGroup({
   group,
   selected,
@@ -1136,8 +1213,9 @@ function FieldSourceGroup({
   disabledHint,
   showRequired,
   requiredByKey,
+  helperByKey,
   onToggle,
-  onRequiredChange,
+  onFormulaireChange,
 }: {
   group: GuestDocumentFieldGroup;
   selected: string[];
@@ -1146,14 +1224,17 @@ function FieldSourceGroup({
   disabledHint?: string;
   showRequired?: boolean;
   requiredByKey?: Record<string, boolean>;
+  helperByKey?: Record<string, string>;
   onToggle: (key: string, on: boolean) => void;
-  onRequiredChange?: (key: string, required: boolean) => void;
+  onFormulaireChange?: (
+    binding: string,
+    patch: { required?: boolean; enabled?: boolean; helperText?: string | null },
+    fieldKeyOn?: boolean,
+  ) => void;
 }) {
   const meta = SOURCE_GROUPS.find((g) => g.id === group)!;
   const fields = fieldsInGroup(group);
-  const onCount = showRequired
-    ? fields.filter((f) => requiredByKey?.[f.key]).length
-    : fields.filter((f) => selected.includes(f.key)).length;
+  const onCount = fields.filter((f) => selected.includes(f.key)).length;
 
   return (
     <Box
@@ -1197,7 +1278,8 @@ function FieldSourceGroup({
       ) : null}
       {showRequired ? (
         <Typography sx={{ fontSize: 11, color: V3.t4, px: 1.5, py: 1, borderTop: `1px solid ${V3.b}` }}>
-          Sur le contrat. Obligatoire = à remplir dans WhatsApp pour valider l’enregistrement.
+          Afficher = sur le contrat et WhatsApp. Obligatoire = le voyageur doit le remplir.
+          Optionnel : un texte s’affiche au client (ex. n° d’entrée récupéré à l’arrivée).
         </Typography>
       ) : null}
       <Box sx={{ borderTop: `1px solid ${V3.b}` }}>
@@ -1205,6 +1287,8 @@ function FieldSourceGroup({
           const on = selected.includes(field.key);
           const badge = BADGE[field.badgeKind];
           const required = Boolean(requiredByKey?.[field.key]);
+          const optional = on && !required;
+          const suffix = showRequired && on ? (required ? 'obligatoire' : 'optionnel') : null;
           return (
             <Box
               key={field.key}
@@ -1232,28 +1316,82 @@ function FieldSourceGroup({
                   sx={{ p: 0, color: V3.bs, '&.Mui-checked': { color: V3.p } }}
                 />
               )}
-              <Box>
+              <Box sx={{ minWidth: 0 }}>
                 <Typography sx={{ fontSize: 12.5, fontWeight: on || required ? 700 : 600, color: on || required ? V3.t : V3.t2 }}>
                   {field.label}
+                  {suffix ? (
+                    <Box component="span" sx={{ fontWeight: 650, color: V3.t4 }}>
+                      {' '}
+                      ({suffix})
+                    </Box>
+                  ) : null}
                 </Typography>
                 {showRequired ? (
                   <Typography sx={{ fontSize: 10.5, color: V3.t4, mt: 0.15 }}>{field.badge}</Typography>
                 ) : null}
+                {showRequired && optional ? (
+                  <TextField
+                    key={`${field.key}-${helperByKey?.[field.key] ?? ''}`}
+                    size="small"
+                    fullWidth
+                    defaultValue={helperByKey?.[field.key] ?? ''}
+                    placeholder={
+                      DEFAULT_OPTIONAL_FIELD_HELPERS[field.key] ||
+                      'Texte affiché au client, ex. sera récupéré à l’arrivée'
+                    }
+                    onBlur={(e) =>
+                      onFormulaireChange?.(field.key, {
+                        helperText: e.target.value,
+                        enabled: true,
+                      })
+                    }
+                    sx={{ mt: 0.75, ...inputSx }}
+                  />
+                ) : null}
               </Box>
               {showRequired ? (
-                <FormControlLabel
-                  sx={{ mr: 0, ml: 0 }}
-                  control={
-                    <Switch
-                      size="small"
-                      checked={required}
-                      disabled={disabled}
-                      onChange={(e) => onRequiredChange?.(field.key, e.target.checked)}
-                      sx={switchSx}
-                    />
-                  }
-                  label={<Typography sx={{ fontSize: 11, fontWeight: 650, whiteSpace: 'nowrap' }}>Obligatoire</Typography>}
-                />
+                <Stack direction="row" spacing={0.6} sx={{ alignItems: 'center' }}>
+                  <FieldTag
+                    label="Afficher"
+                    checked={on}
+                    disabled={disabled}
+                    onChange={(next) => {
+                      onFormulaireChange?.(
+                        field.key,
+                        {
+                          enabled: next,
+                          required: next ? required : false,
+                          helperText: next
+                            ? helperByKey?.[field.key] ||
+                              DEFAULT_OPTIONAL_FIELD_HELPERS[field.key] ||
+                              null
+                            : helperByKey?.[field.key] || null,
+                        },
+                        next,
+                      );
+                    }}
+                  />
+                  <FieldTag
+                    label="Obligatoire"
+                    checked={required}
+                    disabled={disabled || !on}
+                    onChange={(next) => {
+                      onFormulaireChange?.(
+                        field.key,
+                        {
+                          required: next,
+                          enabled: true,
+                          helperText: next
+                            ? helperByKey?.[field.key] || null
+                            : helperByKey?.[field.key] ||
+                              DEFAULT_OPTIONAL_FIELD_HELPERS[field.key] ||
+                              null,
+                        },
+                        true,
+                      );
+                    }}
+                  />
+                </Stack>
               ) : (
                 <Box
                   sx={{
