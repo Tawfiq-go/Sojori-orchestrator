@@ -41,6 +41,8 @@ interface AmenitiesTabProps {
     listingAmenitiesIds?: ListingAmenityRow[];
     propertyUnit?: string;
     roomTypes?: Array<Record<string, unknown>>;
+    personCapacityMax?: number;
+    guests?: number;
   };
   onChange: (field: string, value: unknown) => void;
   listingId?: string;

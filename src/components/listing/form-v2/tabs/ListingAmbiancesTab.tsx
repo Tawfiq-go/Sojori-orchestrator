@@ -142,11 +142,11 @@ const CARD_GRID_SX = {
   display: 'grid',
   gridTemplateColumns: {
     xs: 'repeat(2, 1fr)',
-    sm: 'repeat(3, 1fr)',
-    md: 'repeat(4, 1fr)',
-    lg: 'repeat(6, 1fr)',
+    sm: 'repeat(2, 1fr)',
+    md: 'repeat(3, 1fr)',
   },
-  gap: 1,
+  gap: 1.25,
+  maxWidth: 720,
 } as const;
 
 /**
@@ -278,8 +278,9 @@ export default function ListingAmbiancesTab({
         Options séjour
       </Typography>
       <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 1.5 }}>
-        Ambiances villa, piscine, beds — mêmes cartes, même activation. Le petit
-        déjeuner reste l’onglet <b>PDJ Inclus</b>.
+        Ambiances villa, piscine et beds : mêmes cartes, même interrupteur. Activez{' '}
+        <b>Beds</b> ici pour le voir dans WhatsApp Options séjour. Le petit déjeuner
+        reste l’onglet <b>PDJ Inclus</b>.
       </Typography>
 
       {isMulti && roomTypes.length > 0
