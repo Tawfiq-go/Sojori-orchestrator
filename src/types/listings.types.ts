@@ -271,6 +271,8 @@ export interface ListingStructureRoomType {
   ruObjectTypeId: string | null;
   paidPrivatePool?: boolean;
   privatePoolPricePerDayMad?: number | null;
+  paidBeds?: boolean;
+  bedsPricePerDayMad?: number | null;
   rooms: ListingStructureRoom[];
 }
 
@@ -289,6 +291,8 @@ export interface ListingStructure {
     active: boolean;
     paidPrivatePool?: boolean;
     privatePoolPricePerDayMad?: number | null;
+    paidBeds?: boolean;
+    bedsPricePerDayMad?: number | null;
   };
   totals: {
     roomTypes: number;

@@ -248,7 +248,7 @@ export default function ListingFormV2({
           />
         );
       }
-      if (tabKey === 'ambiances') {
+      if (tabKey === 'stay-options' || tabKey === 'ambiances') {
         return (
           <ListingAmbiancesTab
             listingId={listingId}
