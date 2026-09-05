@@ -14,7 +14,7 @@ type Props = {
 
 /**
  * Onglet listing « Expériences » — activités guest + navette cochées (J3 / navette).
- * Ambiances villa et PDJ ont leurs propres onglets.
+ * Ambiances villa + piscine/beds : onglet Options séjour. PDJ : onglet à part.
  */
 export default function ListingExperiencesTab({
   listingId,

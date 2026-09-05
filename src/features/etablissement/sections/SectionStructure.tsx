@@ -41,21 +41,25 @@ const HK: Record<string, { label: string; color: string; bg: string; border: str
 const UNKNOWN = { label: 'État inconnu', color: T.ink4, bg: T.bg2, border: T.line };
 const hk = (s?: string | null) => HK[String(s || '')] ?? UNKNOWN;
 
-function PoolToggle({
+function StayExtraToggle({
+  title,
   checked,
   priceMad,
   savingLabel,
+  ariaLabel,
   onToggle,
 }: {
+  title: string;
   checked: boolean;
   priceMad: number;
   savingLabel?: string;
+  ariaLabel: string;
   onToggle: (next: boolean) => Promise<void>;
 }) {
   return (
     <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, mt: 1.25 }}>
       <Box>
-        <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.ink }}>Piscine privée</Typography>
+        <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{title}</Typography>
         <Typography sx={{ fontSize: 11.5, color: T.ink3 }}>
           Option WhatsApp · {priceMad} DH / jour{savingLabel ? ` · ${savingLabel}` : ''}
         </Typography>
@@ -65,7 +69,7 @@ function PoolToggle({
         onChange={(e) => {
           void onToggle(e.target.checked);
         }}
-        inputProps={{ 'aria-label': 'Piscine privée payante' }}
+        inputProps={{ 'aria-label': ariaLabel }}
       />
     </Stack>
   );
@@ -188,13 +192,28 @@ function RoomTypeCard({
           {rt.declaredUnits > 1 ? 's' : ''}, mais rien n'est assignable.
         </Typography>
       )}
-      <PoolToggle
+      <StayExtraToggle
+        title="Piscine privée"
+        ariaLabel="Piscine privée payante"
         checked={rt.paidPrivatePool === true}
         priceMad={rt.privatePoolPricePerDayMad || 1000}
         onToggle={async (next) => {
           const r = await listingsService.patchListingConfiguration(listingId, {
             roomTypeId: rt.id,
             roomType: { paidPrivatePool: next, privatePoolPricePerDayMad: rt.privatePoolPricePerDayMad || 1000 },
+          });
+          if (r.success) onChanged?.();
+        }}
+      />
+      <StayExtraToggle
+        title="Beds piscine"
+        ariaLabel="Beds piscine payants"
+        checked={rt.paidBeds === true}
+        priceMad={rt.bedsPricePerDayMad || 200}
+        onToggle={async (next) => {
+          const r = await listingsService.patchListingConfiguration(listingId, {
+            roomTypeId: rt.id,
+            roomType: { paidBeds: next, bedsPricePerDayMad: rt.bedsPricePerDayMad || 200 },
           });
           if (r.success) onChanged?.();
         }}
@@ -219,7 +238,9 @@ export default function SectionStructure({ structure }: Props) {
           Ce logement est <b>son propre type de vente</b> : ce que le client achète et l'unité
           physique ne font qu'un. Il n'y a ni types multiples ni chambres à gérer séparément.
         </Typography>
-        <PoolToggle
+        <StayExtraToggle
+          title="Piscine privée"
+          ariaLabel="Piscine privée payante"
           checked={building.paidPrivatePool === true}
           priceMad={building.privatePoolPricePerDayMad || 1000}
           savingLabel="listing"
@@ -228,6 +249,22 @@ export default function SectionStructure({ structure }: Props) {
               building: {
                 paidPrivatePool: next,
                 privatePoolPricePerDayMad: building.privatePoolPricePerDayMad || 1000,
+              },
+            });
+            if (r.success) onChanged?.();
+          }}
+        />
+        <StayExtraToggle
+          title="Beds piscine"
+          ariaLabel="Beds piscine payants"
+          checked={building.paidBeds === true}
+          priceMad={building.bedsPricePerDayMad || 200}
+          savingLabel="listing"
+          onToggle={async (next) => {
+            const r = await listingsService.patchListingConfiguration(building.id, {
+              building: {
+                paidBeds: next,
+                bedsPricePerDayMad: building.bedsPricePerDayMad || 200,
               },
             });
             if (r.success) onChanged?.();
