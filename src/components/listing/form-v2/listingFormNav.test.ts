@@ -47,6 +47,16 @@ describe('listingFormNav URL sync', () => {
     assert.equal(back.get('tab'), null);
   });
 
+  it('legacy ambiances / options-sejour URLs open Options séjour', () => {
+    for (const tab of ['ambiances', 'options-sejour', 'stay-options']) {
+      const nav = resolveListingFormNavFromSearch(
+        new URLSearchParams(`level=detail&tab=${tab}`),
+      );
+      assert.equal(nav.level, 'detail', tab);
+      assert.equal(nav.tab, 'stay-options', tab);
+    }
+  });
+
   it('stale detail/documents URL still maps to Documents tab (shell re-applies via navEpoch)', () => {
     const stale = resolveListingFormNavFromSearch(
       new URLSearchParams('level=detail&tab=documents'),

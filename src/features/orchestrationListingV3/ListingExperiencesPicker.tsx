@@ -29,6 +29,8 @@ type Props = {
    * plats Room Service, ou ambiances villa.
    */
   kindFilter?: 'experience' | 'room_service' | 'villa_experience';
+  /** Parent page already has the title (Options séjour). */
+  hideIntro?: boolean;
 };
 
 function money(n: number) {
@@ -54,6 +56,7 @@ export function ListingExperiencesPicker({
   onSaved,
   maxHeight = 560,
   kindFilter = 'experience',
+  hideIntro = false,
 }: Props) {
   const [rows, setRows] = useState<PartnerService[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,6 +217,11 @@ export function ListingExperiencesPicker({
             Aucune formule petit déjeuner sur ce listing. Les plats et options (boisson,
             cuisson…) sont gérés par le <b>staff</b>, pas un provider.
           </>
+        ) : kindFilter === 'villa_experience' ? (
+          <>
+            Aucune ambiance villa sur ce listing. Chaque option (romance, anniversaire…)
+            a un nom, une description, jusqu’à 3 photos, une catégorie et des jours.
+          </>
         ) : (
           <>
             Aucune expérience pour la ville de ce listing. Créez les vôtres dans{' '}
@@ -227,11 +235,17 @@ export function ListingExperiencesPicker({
 
   return (
     <Box>
+      {hideIntro ? null : (
       <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 1.5, lineHeight: 1.5 }}>
         {kindFilter === 'room_service' ? (
           <>
             Formules <b>incluses</b> servies par le staff. Chaque plat montre ses options
             (choix simple ou multiple, comme au McDo). Pas de provider.
+          </>
+        ) : kindFilter === 'villa_experience' ? (
+          <>
+            Mises en scène par votre équipe, commandées depuis WhatsApp. Nom,
+            description, photos, catégorie, choix simple ou multiple, jours.
           </>
         ) : (
           <>
@@ -240,6 +254,7 @@ export function ListingExperiencesPicker({
           </>
         )}
       </Typography>
+      )}
 
       <Box
         sx={{
@@ -249,7 +264,7 @@ export function ListingExperiencesPicker({
           mb: 1.25,
         }}
       >
-        {kindFilter === 'room_service' ? null : (
+        {kindFilter === 'room_service' || kindFilter === 'villa_experience' ? null : (
         <TextField
           select
           size="small"
@@ -407,7 +422,30 @@ export function ListingExperiencesPicker({
                       {min > 0 ? ` · dès ${money(min)} MAD` : ''}
                     </Typography>
                     )}
-                    {kindFilter === 'room_service' ? (
+                    {kindFilter === 'villa_experience' && r.description ? (
+                      <Typography
+                        sx={{
+                          fontSize: 11.5,
+                          color: 'text.secondary',
+                          lineHeight: 1.4,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {r.description}
+                      </Typography>
+                    ) : null}
+                    {kindFilter === 'villa_experience' ? (
+                      <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>
+                        {(r.photos || []).filter(Boolean).length}/3 photos
+                        {r.schedule?.weekdays?.length
+                          ? ` · ${r.schedule.weekdays.length} j / sem.`
+                          : ' · tous les jours'}
+                      </Typography>
+                    ) : null}
+                    {kindFilter === 'room_service' || kindFilter === 'villa_experience' ? (
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mt: 0.25 }}>
                         {(r.optionGroups || []).length === 0 ? (
                           <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>
