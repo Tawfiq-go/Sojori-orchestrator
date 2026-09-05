@@ -15,6 +15,7 @@ import {
 } from './listingCancellationPolicyPresets';
 import { buildAdditionalFeesSavePayload } from './listingRuFeesDisplay';
 import { isMongoObjectId } from './listingId';
+import { normalizeStayVerify } from '../components/listing/form-v2/tabs/stayVerifyCatalog';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -707,6 +708,7 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     visibility: mapVisibilityFromApi(hydrated),
     channelDiscounts: mapChannelDiscountsFromApi(hydrated),
     directEnabled: mapVisibilityFromApi(hydrated).sojori,
+    stayVerify: normalizeStayVerify(hydrated.stayVerify),
   };
 }
 
@@ -921,6 +923,8 @@ export function mergeFormV2ToUpdatePropertyPayload(
       })
       .filter(Boolean);
   }
+
+  payload.stayVerify = normalizeStayVerify(values.stayVerify);
 
   const lat = asNumber(values.lat);
   const lng = asNumber(values.lng);

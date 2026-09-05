@@ -66,7 +66,7 @@ export function buildListingTabLivePayload(
         imagesCount: Array.isArray(raw.listingImages) ? raw.listingImages.length : 0,
       };
     case 'equipment':
-      return { listingAmenitiesIds: raw.listingAmenitiesIds };
+      return { listingAmenitiesIds: raw.listingAmenitiesIds, stayVerify: raw.stayVerify };
     case 'pricing':
       return pick(raw, [
         'currencyCode',
