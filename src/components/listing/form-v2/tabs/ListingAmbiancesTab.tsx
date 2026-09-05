@@ -8,6 +8,7 @@ import type {
   ListingStructure,
   ListingStructureRoomType,
 } from '../../../../types/listings.types';
+import { GuestPaymentMethodsField } from './GuestPaymentMethodsField';
 import { STAY_OPTION_BEDS, STAY_OPTION_POOL } from './stayOptionCatalog';
 
 type Props = {
@@ -282,6 +283,18 @@ export default function ListingAmbiancesTab({
         <b>Beds</b> ici pour le voir dans WhatsApp Options séjour. Le petit déjeuner
         reste l’onglet <b>PDJ Inclus</b>.
       </Typography>
+
+      <GuestPaymentMethodsField
+        value={structure?.building.guestPaymentMethods}
+        busy={busyKey === 'guestPayment'}
+        onChange={(methods) => {
+          void patchExtra(
+            'guestPayment',
+            { building: { guestPaymentMethods: methods } },
+            `Paiement extras : ${methods.join(' + ')}`,
+          );
+        }}
+      />
 
       {isMulti && roomTypes.length > 0
         ? roomTypes.map((rt) => (
