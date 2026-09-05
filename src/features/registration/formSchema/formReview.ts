@@ -4,7 +4,7 @@ import { builtinField } from './builtinCatalog'
 import { PASSPORT_DEDICATED_PROPERTIES, isDedicatedPassportField } from './componentBudget'
 import { schemaFieldForCanonicalBinding } from './canonicalOcr'
 import { newCustomField, parseRegistrationFormSchema } from './normalize'
-import { simplePresetSchema } from './presets'
+import { DEFAULT_OPTIONAL_FIELD_HELPERS, simplePresetSchema } from './presets'
 import { resolveEffectiveRegistrationForm } from './resolve'
 import { nextScreenAfterFormSave as nextInfoScreenAfterFormSave } from './screens'
 import type { PassportOcrProperty, RegistrationFieldDef, RegistrationFormSchema } from './types'
@@ -216,7 +216,11 @@ export function formReviewControlFlags(
     visible: true,
     required: field.required === true,
     label: markedRequiredLabel(fieldLabel(field, locale || undefined), field.required === true),
-    helper: (field.helperText || ' ').trim() || ' ',
+    helper: (
+      field.helperText ||
+      (field.required ? '' : DEFAULT_OPTIONAL_FIELD_HELPERS[field.binding || field.id]) ||
+      ' '
+    ).trim() || ' ',
     showDate: isDate,
     showText: false,
   }

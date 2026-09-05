@@ -41,7 +41,10 @@ export function completePresetSchema(): RegistrationFormSchema {
     builtinField('domicile', { required: true, enabled: true, order: 17 }),
     builtinField('city', { required: true, enabled: true, order: 18 }),
     builtinField('country', { required: true, enabled: true, order: 19 }),
-    builtinField('entry_number_morocco', { required: false, enabled: true, order: 20 }),
+    {
+      ...builtinField('entry_number_morocco', { required: false, enabled: true, order: 20 }),
+      helperText: DEFAULT_OPTIONAL_FIELD_HELPERS.entry_number_morocco,
+    },
     builtinField('arrival_time', { required: false, enabled: true, order: 21 }),
   ]
   return { version: 2, source: 'preset:complete', fields }
@@ -74,23 +77,52 @@ export const COMPLETE_EXTRA_OPTIONAL_KEYS = [
   'arrival_time',
 ] as const
 
-/** Toggle WhatsApp-required on a builtin field; adds the complete-preset field if missing. */
-export function setBuiltinRequired(
+/** Texte client par défaut quand le champ est affiché mais pas obligatoire. */
+export const DEFAULT_OPTIONAL_FIELD_HELPERS: Record<string, string> = {
+  entry_number_morocco: 'Sera récupéré à votre arrivée.',
+}
+
+export function patchBuiltinField(
   schema: RegistrationFormSchema,
   binding: string,
-  required: boolean,
+  patch: { required?: boolean; enabled?: boolean; helperText?: string | null },
 ): RegistrationFormSchema {
   const fromComplete = completePresetSchema().fields.find((f) => f.binding === binding)
   let found = false
   const fields = schema.fields.map((f) => {
     if ((f.binding || f.id) !== binding) return f
     found = true
-    return { ...f, required, enabled: required ? true : f.enabled }
+    return applyBuiltinPatch(f, patch)
   })
   if (!found && fromComplete) {
-    fields.push({ ...fromComplete, required, enabled: true, order: fields.length })
+    fields.push({ ...applyBuiltinPatch(fromComplete, patch), order: fields.length })
   }
   return { ...schema, version: 2, fields: fields.map((f, i) => ({ ...f, order: i })) }
+}
+
+function applyBuiltinPatch(
+  field: RegistrationFieldDef,
+  patch: { required?: boolean; enabled?: boolean; helperText?: string | null },
+): RegistrationFieldDef {
+  const next = { ...field }
+  if (patch.required !== undefined) next.required = patch.required
+  if (patch.enabled !== undefined) next.enabled = patch.enabled
+  if (patch.helperText !== undefined) {
+    const text = String(patch.helperText || '').trim()
+    next.helperText = text || undefined
+  }
+  if (next.required) next.enabled = true
+  if (next.enabled === false) next.required = false
+  return next
+}
+
+/** Toggle WhatsApp-required on a builtin field; adds the complete-preset field if missing. */
+export function setBuiltinRequired(
+  schema: RegistrationFormSchema,
+  binding: string,
+  required: boolean,
+): RegistrationFormSchema {
+  return patchBuiltinField(schema, binding, { required })
 }
 
 const MAX_PASSPORT_CORE_REQUIRED = new Set([

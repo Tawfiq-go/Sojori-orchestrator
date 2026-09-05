@@ -27,6 +27,7 @@ import {
   reconstructSlotMapping,
   requiredEnabledFields,
   resolveEffectiveRegistrationForm,
+  patchBuiltinField,
   setBuiltinRequired,
   screenshotHotelRegistrationSchema,
   simplePresetSchema,
@@ -133,6 +134,18 @@ describe('old complete configuration', () => {
     assert.equal(profession?.enabled, true)
     const relaxed = setBuiltinRequired(added, 'profession', false)
     assert.equal(relaxed.fields.find((f) => f.id === 'profession')?.required, false)
+  })
+
+  it('patchBuiltinField stores optional client helper text', () => {
+    const withHelper = patchBuiltinField(completePresetSchema(), 'entry_number_morocco', {
+      required: false,
+      enabled: true,
+      helperText: 'Sera récupéré à votre arrivée.',
+    })
+    const entry = withHelper.fields.find((f) => f.id === 'entry_number_morocco')
+    assert.equal(entry?.required, false)
+    assert.equal(entry?.enabled, true)
+    assert.equal(entry?.helperText, 'Sera récupéré à votre arrivée.')
   })
 })
 
