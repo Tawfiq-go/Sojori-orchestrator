@@ -113,6 +113,31 @@ export default function ListingRoomServiceTab({
     void load();
   }, [load]);
 
+  const persistBreakfastConfig = async (next: RoomServiceBreakfastConfig) => {
+    if (!listingId) return;
+    const included = Array.from(includedIds);
+    const supplement = Array.from(supplementIds).filter((id) => includedIds.has(id));
+    await persistListingConciergeSlice(String(listingId), {
+      roomServiceBreakfast: {
+        ...next,
+        includedServiceIds: included,
+        supplementServiceIds: supplement,
+        supplementMode: supplement.length ? 'with_supplement' : 'none',
+        guestMustSelectDays: true,
+      },
+    });
+  };
+
+  const saveWindow = async (next: RoomServiceBreakfastConfig) => {
+    setBreakfast(next);
+    try {
+      await persistBreakfastConfig(next);
+      toast.success('Fenêtre petit déjeuner enregistrée');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Enregistrement impossible');
+    }
+  };
+
   const save = async () => {
     if (!listingId) return;
     setSaving(true);
@@ -228,10 +253,10 @@ export default function ListingRoomServiceTab({
             label="Début"
             value={breakfast.start}
             onChange={(e) =>
-              setBreakfast((p) => ({
-                ...p,
+              void saveWindow({
+                ...breakfast,
                 start: e.target.value as RoomServiceBreakfastConfig['start'],
-              }))
+              })
             }
           >
             <MenuItem value="j_plus_1">J+1</MenuItem>
@@ -245,10 +270,10 @@ export default function ListingRoomServiceTab({
             label="Fin"
             value={breakfast.endInclusive ? 'departure' : 'eve'}
             onChange={(e) =>
-              setBreakfast((p) => ({
-                ...p,
+              void saveWindow({
+                ...breakfast,
                 endInclusive: e.target.value === 'departure',
-              }))
+              })
             }
           >
             <MenuItem value="eve">Veille du départ</MenuItem>
@@ -301,6 +326,10 @@ export default function ListingRoomServiceTab({
           }
         />
       </Box>
+      <Typography sx={{ mt: 0.75, fontSize: 12, color: 'text.secondary' }}>
+        Début et Fin s’enregistrent tout de suite. « Jour de départ » ajoute le matin du
+        checkout dans WhatsApp, même formule pour tous les matins.
+      </Typography>
 
       <Typography sx={{ fontSize: 13, fontWeight: 700, mt: 2.5, mb: 0.25 }}>Formules</Typography>
       <ListingBreakfastFormulas
