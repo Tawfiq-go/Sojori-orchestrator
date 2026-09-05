@@ -222,8 +222,6 @@ export const SHORT_TERM_RENTAL_FIELD_KEYS = [
   'departure_date',
   'stay_dates',
   'reservation_number',
-  'deposit',
-  'agency',
   'sign_place',
   'sign_date',
 ];
@@ -270,91 +268,138 @@ export const DEFAULT_DISCLAIMER_CLAUSES: GuestDocumentClause[] = [
  * (hébergement touristique / chez l’habitant, cadre Loi n° 80-14).
  * Texte éditable par le PM ; ce n’est pas un acte notarié.
  */
-export const DEFAULT_SHORT_TERM_RENTAL_CLOSING = `Le Locataire reconnaît avoir pris connaissance du présent contrat et du règlement intérieur, et s’engage à les respecter pendant toute la durée du séjour.
-The Guest acknowledges having read this agreement and the house rules, and agrees to comply for the entire stay.
+export const DEFAULT_SHORT_TERM_RENTAL_CLOSING = `Fait à {{sign_place}}, le {{sign_date}}. Le Voyageur reconnaît avoir lu le contrat et le règlement intérieur, et les accepter pour lui-même et les occupants déclarés.
+Signed in {{sign_place}} on {{sign_date}}. The Guest acknowledges having read the agreement and the house rules, and accepts them for themselves and the declared occupants.`;
 
-Fait à {{sign_place}}, le {{sign_date}}`;
-
+/** Contrat LCD Maroc v2 (2026-09-05) — voir docs/produits/CONTRAT_LCD_MAROC.md. Aucun montant ni horaire en variable : ils viennent de la réservation. */
 export const DEFAULT_SHORT_TERM_RENTAL_CLAUSES: GuestDocumentClause[] = [
   {
-    id: 'cl_rental_cadre',
-    title: 'Cadre juridique',
+    id: 'cl_lcd_parties',
+    title: 'Art. 1 — Parties et qualité',
     bodyFr:
-      'Le présent contrat régit une location meublée de courte durée à caractère touristique au Maroc, dans le cadre de la Loi n° 80-14 relative aux établissements touristiques et formes d’hébergement assimilées, et non un bail d’habitation longue durée (Loi 67-12). Il ne constitue pas un titre de séjour.',
+      'Entre {{establishment_name}}, {{establishment_address}}, agissant en qualité de gestionnaire mandaté par le propriétaire du logement (ci-après « le Bailleur »), et {{full_name}}, titulaire de la pièce d’identité n° {{document_number}}, nationalité {{nationality}}, joignable au {{phone}} / {{email}} (ci-après « le Voyageur »), agissant pour lui-même et pour les personnes qu’il déclare à l’enregistrement.',
     bodyEn:
-      'This agreement covers short-term furnished tourist accommodation in Morocco under Law no. 80-14 on tourist establishments (not a long-term residential lease under Law 67-12). It is not a residence permit.',
+      'Between {{establishment_name}}, {{establishment_address}}, acting as manager mandated by the owner of the property (the “Host”), and {{full_name}}, holder of ID no. {{document_number}}, nationality {{nationality}}, reachable at {{phone}} / {{email}} (the “Guest”), acting for themselves and for the persons declared at check-in.',
   },
   {
-    id: 'cl_rental_parties',
-    title: 'Parties',
+    id: 'cl_lcd_objet',
+    title: 'Art. 2 — Objet et nature du contrat',
     bodyFr:
-      'Bailleur / exploitant : {{establishment_name}}, {{establishment_address}}. Locataire / voyageur principal : {{full_name}} (pièce {{document_number}}, nationalité {{nationality}}). Contact : {{email}} / {{phone}}.',
+      'Le Bailleur met à disposition du Voyageur le logement meublé « {{room_name}} » situé à {{establishment_address}}, pour un séjour touristique temporaire. Il s’agit d’un louage de choses au sens des articles 627 et suivants du Dahir des obligations et contrats, dans le cadre de la réglementation marocaine de l’hébergement touristique (loi n° 80-14). Ce contrat n’est pas un bail d’habitation au sens de la loi n° 67-12, ne confère aucun droit au maintien dans les lieux et ne vaut ni domicile ni titre de séjour.',
     bodyEn:
-      'Host / operator: {{establishment_name}}, {{establishment_address}}. Primary guest: {{full_name}} (ID {{document_number}}, nationality {{nationality}}). Contact: {{email}} / {{phone}}.',
+      'The Host provides the Guest with the furnished unit “{{room_name}}” at {{establishment_address}} for a temporary tourist stay. This is a lease of property under articles 627 et seq. of the Moroccan Code of Obligations and Contracts, within the Moroccan tourist accommodation rules (Law 80-14). It is not a residential lease under Law 67-12, grants no right to remain, and is neither a domicile nor a residence permit.',
   },
   {
-    id: 'cl_rental_bien',
-    title: 'Bien loué',
+    id: 'cl_lcd_duree',
+    title: 'Art. 3 — Durée',
     bodyFr:
-      'Le Bailleur met à disposition le logement meublé désigné « {{room_name}} » situé à {{establishment_address}}, pour un usage exclusif d’habitation temporaire / tourisme, avec le mobilier et équipements inventoriés.',
+      'Séjour du {{arrival_date}} au {{departure_date}}, aux heures d’arrivée et de départ indiquées dans la réservation n° {{reservation_number}}. Le séjour prend fin de plein droit à la date et l’heure de départ, sans préavis ni formalité. Toute prolongation suppose l’accord écrit préalable du Bailleur et le paiement du complément ; à défaut, toute occupation au-delà du terme est sans droit et donne lieu à une indemnité égale à deux fois le tarif journalier par jour commencé, sans préjudice de toute action.',
     bodyEn:
-      'The Host provides the furnished unit “{{room_name}}” at {{establishment_address}} for temporary / tourist residential use only, with the inventoried furniture and equipment.',
+      'Stay from {{arrival_date}} to {{departure_date}}, at the check-in and check-out times stated in booking no. {{reservation_number}}. The stay ends automatically at the departure date and time, without notice. Any extension requires the Host’s prior written consent and payment; otherwise any occupation beyond the term is unlawful and incurs an indemnity of twice the daily rate per day started, without prejudice to any legal action.',
   },
   {
-    id: 'cl_rental_duree',
-    title: 'Durée du séjour',
+    id: 'cl_lcd_occupants',
+    title: 'Art. 4 — Occupants',
     bodyFr:
-      'Arrivée le {{arrival_date}}, départ le {{departure_date}} ({{stay_dates}}). Réservation n° {{reservation_number}}. Toute prolongation nécessite l’accord écrit du Bailleur et peut entraîner un complément de loyer.',
+      'Le logement est loué pour le nombre de personnes indiqué dans la réservation, toutes déclarées à l’enregistrement. Aucune autre personne ne peut y séjourner, même de jour, sans accord écrit du Bailleur. Fêtes, événements, sous-location, cession du contrat et mise en ligne sur toute plateforme sont interdits. En cas de manquement, le Bailleur peut mettre fin au séjour immédiatement, sans remboursement, et retenir la caution.',
     bodyEn:
-      'Check-in {{arrival_date}}, check-out {{departure_date}} ({{stay_dates}}). Reservation no. {{reservation_number}}. Any extension requires the Host’s written approval and may incur extra rent.',
+      'The unit is rented for the number of persons stated in the booking, all declared at check-in. No other person may stay, even during the day, without the Host’s written consent. Parties, events, subletting, assignment and re-listing on any platform are forbidden. In case of breach the Host may end the stay immediately, without refund, and keep the deposit.',
   },
   {
-    id: 'cl_rental_prix',
-    title: 'Loyer et modalités',
+    id: 'cl_lcd_prix',
+    title: 'Art. 5 — Prix, paiement, taxes',
     bodyFr:
-      'Le prix du séjour et les frais annexes sont ceux acceptés lors de la réservation (OTA, directe ou agence {{agency}}). Sauf accord contraire, le solde est dû avant ou à l’arrivée. Les taxes de séjour applicables restent à la charge du Locataire lorsqu’elles ne sont pas incluses.',
+      'Le prix total du séjour est celui accepté lors de la réservation, sur la plateforme ou en direct. Il comprend le logement, le mobilier, les équipements et le ménage de fin de séjour, et ne comprend pas la taxe de séjour et la taxe de promotion touristique, réglées sur place au tarif en vigueur sauf mention contraire sur la réservation. Le solde est dû au plus tard à l’arrivée, selon les modalités de paiement du canal de réservation.',
     bodyEn:
-      'Stay price and extras are those accepted at booking (OTA, direct, or agency {{agency}}). Unless otherwise agreed, the balance is due before or at check-in. Applicable tourist taxes remain the Guest’s responsibility when not included.',
+      'The total price of the stay is the one accepted at booking, on the platform or directly. It includes the unit, furniture, equipment and end-of-stay cleaning, and excludes the tourist tax and tourism promotion tax, paid on site at the applicable rate unless stated otherwise on the booking. The balance is due at check-in at the latest, under the payment terms of the booking channel.',
   },
   {
-    id: 'cl_rental_caution',
-    title: 'Caution / dépôt de garantie',
+    id: 'cl_lcd_caution',
+    title: 'Art. 6 — Dépôt de garantie',
     bodyFr:
-      'Une caution peut être demandée ({{deposit}}). Elle garantit les dégradations, manquants d’inventaire, frais de remise en état et pénalités (fêtes, sur-occupation, départ anticipé non autorisé). Restitution sous réserve d’état des lieux de sortie conforme, sous déduction des sommes dues.',
+      'Un dépôt de garantie peut être demandé par le Bailleur, au plus tard à l’arrivée, selon le montant et les modalités indiqués dans la réservation. Lorsqu’il est demandé, il garantit les dégradations, les manquants d’inventaire, les frais de remise en état ou de nettoyage anormal, les consommations non incluses et les pénalités prévues au présent contrat. Il est restitué dans les 7 jours suivant le départ, sous déduction des sommes justifiées par photos, factures ou devis. Si les dommages excèdent le dépôt, le Voyageur reste tenu du surplus.',
     bodyEn:
-      'A security deposit may be required ({{deposit}}). It covers damage, inventory shortages, restoration costs and penalties (parties, over-occupancy, unauthorized early departure). Refund subject to a compliant check-out inventory, minus amounts owed.',
+      'The Host may request a security deposit, at check-in at the latest, for the amount and under the terms stated in the booking. When requested, it covers damage, missing inventory, restoration or abnormal cleaning costs, non-included consumption and the penalties in this agreement. It is refunded within 7 days after departure, minus amounts substantiated by photos, invoices or quotes. If damage exceeds the deposit, the Guest remains liable for the balance.',
   },
   {
-    id: 'cl_rental_occupation',
-    title: 'Occupation et règlement intérieur',
+    id: 'cl_lcd_edl',
+    title: 'Art. 7 — État des lieux et inventaire',
     bodyFr:
-      'Seules les personnes déclarées à l’enregistrement peuvent occuper le logement. Fêtes, nuisances sonores excessives et sous-location sont interdites. Le Locataire respecte le règlement intérieur affiché ou communiqué, les règles de la résidence / copropriété, et la tranquillité du voisinage.',
+      'Un état des lieux et un inventaire photographiques sont établis par le Bailleur avant l’arrivée et mis à disposition du Voyageur. Le Voyageur signale par écrit (WhatsApp) tout défaut ou manquant dans les 24 heures suivant son arrivée ; passé ce délai, le logement est réputé conforme. Au départ, un état des lieux de sortie est réalisé ; en l’absence du Voyageur, il est établi par le Bailleur avec photos horodatées et lui est opposable.',
     bodyEn:
-      'Only guests declared at check-in may occupy the unit. Parties, excessive noise and subletting are forbidden. The Guest must follow house rules, residence / condo rules, and neighbour quiet hours.',
+      'A photographic inventory and condition report are drawn up by the Host before arrival and made available to the Guest. The Guest reports any defect or missing item in writing (WhatsApp) within 24 hours of arrival; after that the unit is deemed compliant. At departure a check-out report is made; if the Guest is absent, the Host draws it up with time-stamped photos and it is binding on the Guest.',
   },
   {
-    id: 'cl_rental_police',
-    title: 'Fiche de police',
+    id: 'cl_lcd_usage',
+    title: 'Art. 8 — Usage, règlement intérieur, voisinage',
     bodyFr:
-      'Conformément aux obligations d’hébergement au Maroc, chaque occupant majeur fournit une pièce d’identité valide et les informations nécessaires à la fiche de police. Le Locataire garantit l’exactitude des déclarations.',
+      'Le Voyageur occupe les lieux en bon père de famille, respecte le règlement intérieur communiqué dans le chatbot WhatsApp et les règles de la résidence ou de la copropriété, et préserve la tranquillité du voisinage, notamment entre 22 h et 8 h. Il est interdit de fumer à l’intérieur, d’accueillir des animaux sans accord écrit, de modifier les serrures ou installations, et d’utiliser le logement à des fins professionnelles, commerciales ou contraires aux lois et bonnes mœurs marocaines.',
     bodyEn:
-      'Under Moroccan lodging rules, each adult occupant provides a valid ID and the data required for the police registration form. The Guest warrants that declarations are accurate.',
+      'The Guest uses the premises with due care, follows the house rules provided in the WhatsApp chatbot and the residence or condominium rules, and respects neighbours’ quiet, especially between 10 pm and 8 am. Smoking indoors, pets without written consent, changing locks or installations, and any professional, commercial or unlawful use are forbidden.',
   },
   {
-    id: 'cl_rental_responsabilite',
-    title: 'Responsabilité et assurance',
+    id: 'cl_lcd_annulation',
+    title: 'Art. 9 — Annulation, modification, non-présentation',
     bodyFr:
-      'Le Locataire use du bien en bon père de famille. Il répond des dégradations causées par lui-même, ses accompagnants ou invités. Les objets de valeur doivent être placés en lieu sûr. Le Bailleur recommande une assurance voyage couvrant responsabilité civile et annulation.',
+      'L’annulation, la modification des dates, la non-présentation et le départ anticipé sont régis exclusivement par les conditions du canal de réservation acceptées lors de la réservation, qu’il s’agisse d’une plateforme (Airbnb, Booking ou autre) ou d’une réservation directe. Le présent contrat n’y ajoute ni n’y retire rien.',
     bodyEn:
-      'The Guest shall use the property carefully and is liable for damage caused by themselves, companions or visitors. Valuables should be kept secure. The Host recommends travel insurance covering liability and cancellation.',
+      'Cancellation, date changes, no-show and early departure are governed exclusively by the booking channel terms accepted at booking, whether a platform (Airbnb, Booking or other) or a direct booking. This agreement neither adds to nor removes anything from them.',
   },
   {
-    id: 'cl_rental_depart',
-    title: 'Départ et restitution',
+    id: 'cl_lcd_police',
+    title: 'Art. 10 — Enregistrement et fiche de police',
     bodyFr:
-      'Au départ, le logement est rendu dans l’état d’arrivée (hors usure normale), clés et accès restitués. Tout manquement peut être imputé sur la caution. Le présent document vaut engagement du voyageur principal pour le groupe déclaré.',
+      'Conformément à la réglementation marocaine sur l’hébergement des voyageurs, chaque occupant fournit avant l’arrivée une pièce d’identité en cours de validité et les informations nécessaires à la déclaration aux autorités (fiche individuelle). Le Voyageur garantit l’exactitude de ces informations et reconnaît que l’accès au logement peut être différé tant que l’enregistrement de tous les occupants n’est pas complet.',
     bodyEn:
-      'At check-out the unit is returned as received (normal wear excepted), with keys/access. Shortfalls may be charged to the deposit. This document binds the primary guest for the declared party.',
+      'In accordance with Moroccan rules on guest accommodation, each occupant provides a valid ID and the information required for the police declaration (individual form) before arrival. The Guest warrants the accuracy of this information and acknowledges that access may be withheld until every occupant’s registration is complete.',
+  },
+  {
+    id: 'cl_lcd_responsabilite',
+    title: 'Art. 11 — Responsabilité, sécurité, assurance',
+    bodyFr:
+      'Le Voyageur est responsable des dommages causés par lui-même, les personnes qu’il héberge et ses visiteurs. Les enfants restent sous la surveillance permanente des adultes, notamment à proximité d’une piscine, d’une terrasse ou d’un escalier. Les objets de valeur sont conservés sous la seule responsabilité du Voyageur. Le Bailleur n’est pas responsable des interruptions de services publics (eau, électricité, internet) indépendantes de sa volonté, ni des vols sans effraction. Il est recommandé au Voyageur de disposer d’une assurance voyage couvrant la responsabilité civile, les frais médicaux et l’annulation.',
+    bodyEn:
+      'The Guest is liable for damage caused by themselves, the persons they host and their visitors. Children remain under constant adult supervision, especially near a pool, terrace or stairs. Valuables are kept at the Guest’s sole risk. The Host is not liable for utility outages (water, power, internet) beyond its control, nor for theft without break-in. Travel insurance covering liability, medical costs and cancellation is recommended.',
+  },
+  {
+    id: 'cl_lcd_acces',
+    title: 'Art. 12 — Accès et clés',
+    bodyFr:
+      'Les codes, clés ou badges remis sont strictement personnels. Ils ne doivent être ni copiés ni communiqués. Toute perte est signalée immédiatement ; le remplacement des clés ou serrures est facturé au coût réel. Le Bailleur ou son représentant peut accéder au logement pour une intervention nécessaire à la sécurité ou à l’entretien, après en avoir informé le Voyageur par message.',
+    bodyEn:
+      'Codes, keys or badges are strictly personal and must not be copied or shared. Any loss must be reported immediately; replacing keys or locks is charged at actual cost. The Host or its representative may enter the unit for work required for safety or maintenance, after informing the Guest by message.',
+  },
+  {
+    id: 'cl_lcd_resiliation',
+    title: 'Art. 13 — Résiliation',
+    bodyFr:
+      'En cas de manquement grave (sur-occupation, fête, nuisances répétées, sous-location, dégradations volontaires, comportement dangereux ou illicite), le Bailleur peut mettre fin au séjour immédiatement par notification écrite adressée au Voyageur par message WhatsApp, par la messagerie de la plateforme de réservation ou par e-mail. Les nuits restantes sont traitées selon les conditions du canal de réservation, sans préjudice des dommages-intérêts. Le Voyageur libère alors les lieux dans les deux heures suivant la notification.',
+    bodyEn:
+      'In case of serious breach (over-occupancy, parties, repeated nuisance, subletting, deliberate damage, dangerous or unlawful behaviour), the Host may end the stay immediately by written notice sent to the Guest by WhatsApp message, through the booking platform’s messaging or by e-mail. Remaining nights are handled under the booking channel terms, without prejudice to damages. The Guest then vacates within two hours of the notice.',
+  },
+  {
+    id: 'cl_lcd_force_majeure',
+    title: 'Art. 14 — Force majeure',
+    bodyFr:
+      'Aucune des parties n’est responsable d’un manquement dû à un événement de force majeure au sens du droit marocain (catastrophe naturelle, décision des autorités, épidémie, fermeture des frontières). Le sort des nuits non consommées relève alors des conditions du canal de réservation, sans autre indemnité.',
+    bodyEn:
+      'Neither party is liable for a failure due to force majeure under Moroccan law (natural disaster, government decision, epidemic, border closure). Unused nights are then handled under the booking channel terms, without further compensation.',
+  },
+  {
+    id: 'cl_lcd_donnees',
+    title: 'Art. 15 — Données personnelles',
+    bodyFr:
+      'Les données du Voyageur et des occupants sont collectées pour la gestion de la réservation et l’exécution des obligations légales de déclaration des voyageurs (loi n° 09-08). Elles sont conservées le temps nécessaire à ces finalités et à la prescription applicable, et ne sont transmises qu’aux autorités habilitées et aux prestataires du Bailleur intervenant dans le séjour. Le Voyageur dispose d’un droit d’accès et de rectification auprès du Bailleur.',
+    bodyEn:
+      'Guest and occupant data are collected to manage the booking and to meet legal guest declaration duties (Law 09-08). They are kept as long as needed for these purposes and the applicable limitation period, and shared only with authorised authorities and the Host’s service providers involved in the stay. The Guest may access and correct their data through the Host.',
+  },
+  {
+    id: 'cl_lcd_droit',
+    title: 'Art. 16 — Droit applicable, litiges, langue',
+    bodyFr:
+      'Le présent contrat est soumis au droit marocain. Tout litige est soumis, après tentative de règlement amiable, aux tribunaux compétents du lieu de situation du logement. Le contrat est établi en français et en anglais ; en cas de divergence, la version française prévaut. La signature électronique apposée via le lien sécurisé transmis sur WhatsApp vaut signature des parties (loi n° 53-05).',
+    bodyEn:
+      'This agreement is governed by Moroccan law. Any dispute is submitted, after an attempt at amicable settlement, to the competent courts of the place where the unit is located. The agreement is drawn up in French and English; in case of discrepancy the French version prevails. The electronic signature applied through the secure link sent on WhatsApp constitutes the parties’ signature (Law 53-05).',
   },
 ];
 
@@ -431,7 +476,7 @@ export function defaultGuestDocuments(): GuestDocument[] {
       clauses: DEFAULT_SHORT_TERM_RENTAL_CLAUSES.map((c) => ({ ...c })),
       closing: DEFAULT_SHORT_TERM_RENTAL_CLOSING,
       notice:
-        'Modèle type Maroc (Loi 80-14) — à adapter avec votre conseil juridique. Signature électronique simple.',
+        'Contrat LCD Maroc v2 — relecture par votre conseil juridique recommandée. Signature électronique simple via le lien WhatsApp.',
       enabled: false,
       requiresSignature: true,
       requiredBeforeArrival: true,
@@ -518,7 +563,7 @@ export function shortTermRentalContract(): GuestDocument {
     clauses: DEFAULT_SHORT_TERM_RENTAL_CLAUSES.map((c) => ({ ...c })),
     closing: DEFAULT_SHORT_TERM_RENTAL_CLOSING,
     notice:
-      'Modèle type Maroc (Loi 80-14) — à adapter avec votre conseil juridique. Signature électronique simple.',
+      'Contrat LCD Maroc v2 — relecture par votre conseil juridique recommandée. Signature électronique simple via le lien WhatsApp.',
     fieldKeys: [...SHORT_TERM_RENTAL_FIELD_KEYS],
     requiresSignature: true,
     autoSendAfterRegistration: false,
