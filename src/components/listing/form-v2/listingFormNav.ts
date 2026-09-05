@@ -33,7 +33,9 @@ export function resolveListingFormNavFromSearch(params: {
           ? 'direct-booking'
           : tabRaw === 'rules' || tabRaw === 'rules-guest'
             ? 'availability'
-            : tabRaw;
+            : tabRaw === 'ambiances' || tabRaw === 'options-sejour'
+              ? 'stay-options'
+              : tabRaw;
   const legacyConfigTab =
     Boolean(tabParam?.endsWith('-config')) ||
     tabParam === 'orchestration-config' ||

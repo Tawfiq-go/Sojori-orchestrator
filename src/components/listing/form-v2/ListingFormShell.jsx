@@ -48,7 +48,7 @@ export const DETAIL_TABS = [
   { group: 'Inventaire', items: [
     { id: 'rooms',        icon: '🛏️', label: 'Rooms & Beds' },
     { id: 'experiences',  icon: '✨', label: 'Expériences' },
-    { id: 'ambiances',    icon: '🌹', label: 'Ambiances villa' },
+    { id: 'stay-options', icon: '🌞', label: 'Options séjour' },
     { id: 'room-service', icon: '🥐', label: 'PDJ Inclus' },
     { id: 'menage',       icon: '🧹', label: 'Ménage' },
     { id: 'documents',    icon: '📋', label: 'Documents voyageurs' },
@@ -81,7 +81,7 @@ export const DETAIL_TABS_MULTI = [
   ]},
   { group: 'Admin', items: [
     { id: 'experiences',  icon: '✨', label: 'Expériences' },
-    { id: 'ambiances',    icon: '🌹', label: 'Ambiances villa' },
+    { id: 'stay-options', icon: '🌞', label: 'Options séjour' },
     { id: 'room-service', icon: '🥐', label: 'PDJ Inclus' },
     { id: 'menage',       icon: '🧹', label: 'Ménage' },
     { id: 'documents',    icon: '📋', label: 'Documents voyageurs' },
