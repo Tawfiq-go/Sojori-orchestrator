@@ -102,6 +102,16 @@ export const DEFAULT_PAYMENT: PartnerServicePayment = {
   timing: 'instant',
 };
 
+export type PartnerServiceCancellation = {
+  freeUntilHours: number | null;
+  note?: string;
+};
+
+export const DEFAULT_CANCELLATION: PartnerServiceCancellation = {
+  freeUntilHours: 24,
+  note: '',
+};
+
 export type PartnerServiceContact = {
   firstName?: string;
   lastName?: string;
@@ -172,6 +182,7 @@ export type PartnerService = {
   optionGroups?: PartnerServiceOptionGroup[];
   schedule?: PartnerServiceSchedule;
   payment?: PartnerServicePayment;
+  cancellation?: PartnerServiceCancellation;
   contact?: PartnerServiceContact;
   confirmation?: PartnerServiceConfirmation;
   providerReminder?: PartnerServiceProviderReminder;
