@@ -1,5 +1,12 @@
 import { listingsService } from '../../../../services/listingsService';
 
+/** Entier borné avec repli — saisie libre côté formulaire. */
+function clampInt(raw: unknown, min: number, max: number, fallback: number): number {
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
 export type RoomServiceBreakfastTimeMode = 'shared' | 'per_traveler';
 
 /** Toutes les formules sont inclus. with_supplement = flag ; facturation plus tard. */
@@ -15,6 +22,9 @@ export type RoomServiceBreakfastConfig = {
   timeWindow?: { from: string; to: string };
   timeMode?: RoomServiceBreakfastTimeMode;
   guestMustSelectDays: boolean;
+  /** Limite d'annulation : N jours avant, à telle heure (locale du logement). */
+  cancelCutoffDaysBefore?: number;
+  cancelCutoffHour?: number;
   supplementMode: RoomServiceBreakfastSupplementMode;
   /** Formules en inclus + supplément (parmi includedServiceIds). */
   supplementServiceIds: string[];
@@ -69,6 +79,8 @@ function normalizeBreakfast(raw: unknown): RoomServiceBreakfastConfig | null {
     })(),
     timeMode: b.timeMode === 'per_traveler' ? 'per_traveler' : 'shared',
     guestMustSelectDays: b.guestMustSelectDays !== false,
+    cancelCutoffDaysBefore: clampInt(b.cancelCutoffDaysBefore, 0, 14, 1),
+    cancelCutoffHour: clampInt(b.cancelCutoffHour, 0, 23, 17),
     supplementMode: b.supplementMode === 'with_supplement' ? 'with_supplement' : 'none',
     supplementServiceIds: (Array.isArray(b.supplementServiceIds) ? b.supplementServiceIds : [])
       .map(String)
