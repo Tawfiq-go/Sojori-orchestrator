@@ -28,7 +28,9 @@ export default function ListingExperiencesTab({
   const [enabledIds, setEnabledIds] = useState<string[]>([]);
   const [guestBlocs, setGuestBlocs] = useState('');
   const [savingBlocs, setSavingBlocs] = useState(false);
-  const [paymentMethods, setPaymentMethods] = useState<Array<'cash' | 'card'>>([]);
+  const [paymentMethods, setPaymentMethods] = useState<
+    Array<'cash' | 'card' | 'card_tpe' | 'room_charge'>
+  >([]);
   const [savingPay, setSavingPay] = useState(false);
 
   useEffect(() => {

@@ -293,7 +293,7 @@ export interface ListingStructure {
     privatePoolPricePerDayMad?: number | null;
     paidBeds?: boolean;
     bedsPricePerDayMad?: number | null;
-    guestPaymentMethods?: Array<'cash' | 'card'>;
+    guestPaymentMethods?: Array<'cash' | 'card' | 'card_tpe' | 'room_charge'>;
   };
   totals: {
     roomTypes: number;

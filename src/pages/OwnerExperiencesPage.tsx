@@ -104,9 +104,11 @@ const CATS = [
 ];
 
 const PAY_METHODS: { v: PaymentMethod; l: string }[] = [
-  { v: 'card', l: 'Carte' },
-  { v: 'cash', l: 'Cash' },
-  { v: 'transfer', l: 'Virement' },
+  { v: 'cash', l: '💵 Cash — Espèces à la livraison' },
+  { v: 'card_tpe', l: '💳 Carte (TPE) — Terminal à la livraison' },
+  { v: 'room_charge', l: '🏨 Sur la note — Réception au départ' },
+  { v: 'card', l: '🔗 Carte en ligne — Lien + acompte 30 %' },
+  { v: 'transfer', l: '🏦 Virement' },
 ];
 
 const inpBase: React.CSSProperties = {
