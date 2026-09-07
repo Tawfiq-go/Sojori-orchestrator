@@ -8,6 +8,7 @@ import {
   type PartnerServiceKind,
   type PartnerServiceOptionGroup,
   type PartnerServicePayment,
+  type PartnerServiceCancellation,
   type PartnerServiceSchedule,
   type PartnerServiceContact,
   type PartnerServiceConfirmation,
@@ -17,9 +18,11 @@ import {
   type PaymentMethod,
   DEFAULT_SCHEDULE,
   DEFAULT_PAYMENT,
+  DEFAULT_CANCELLATION,
   DEFAULT_CONFIRMATION,
   DEFAULT_PROVIDER_REMINDER,
   DEFAULT_SHARE_GUEST_CONTACT,
+  PAYMENT_LINK_TTL_OPTIONS,
   GUEST_EXPERIENCE_KINDS,
   isGuestExperienceKind,
 } from '../services/partnersApi';
@@ -44,6 +47,7 @@ type Draft = {
   optionGroups: PartnerServiceOptionGroup[];
   schedule: PartnerServiceSchedule;
   payment: PartnerServicePayment;
+  cancellation: PartnerServiceCancellation;
   contact: PartnerServiceContact;
   confirmation: PartnerServiceConfirmation;
   providerReminder: PartnerServiceProviderReminder;
@@ -194,6 +198,7 @@ function emptyDraft(): Draft {
     optionGroups: [],
     schedule: { ...DEFAULT_SCHEDULE },
     payment: { ...DEFAULT_PAYMENT, methods: [...DEFAULT_PAYMENT.methods] },
+    cancellation: { ...DEFAULT_CANCELLATION },
     contact: { firstName: '', lastName: '', email: '' },
     confirmation: { ...DEFAULT_CONFIRMATION },
     providerReminder: { ...DEFAULT_PROVIDER_REMINDER },
@@ -249,6 +254,14 @@ function toDraft(s: PartnerService): Draft {
       ...DEFAULT_PAYMENT,
       ...pay,
       methods: [...(pay.methods || DEFAULT_PAYMENT.methods)],
+    },
+    cancellation: {
+      ...DEFAULT_CANCELLATION,
+      ...(s.cancellation || {}),
+      freeUntilHours:
+        s.cancellation?.freeUntilHours === null
+          ? null
+          : Number(s.cancellation?.freeUntilHours ?? DEFAULT_CANCELLATION.freeUntilHours),
     },
     contact: {
       firstName: s.contact?.firstName || '',
@@ -634,6 +647,11 @@ export function OwnerExperiencesPage() {
           ? Number(draft.payment.depositPercent) || 30
           : null,
       timing: draft.payment.timing === 'on_confirmation' ? 'on_confirmation' : 'instant',
+      linkTtlHours: needsRemote
+        ? ([1, 4, 8, 24].includes(Number(draft.payment.linkTtlHours))
+            ? (Number(draft.payment.linkTtlHours) as 1 | 4 | 8 | 24)
+            : 24)
+        : 24,
     };
     const optionGroups =
       draft.kind === 'room_service'
@@ -672,6 +690,13 @@ export function OwnerExperiencesPage() {
       optionGroups,
       schedule: draft.schedule,
       payment,
+      cancellation: {
+        freeUntilHours:
+          draft.cancellation.freeUntilHours === null || draft.cancellation.freeUntilHours === undefined
+            ? null
+            : Number(draft.cancellation.freeUntilHours),
+        note: (draft.cancellation.note || '').trim(),
+      },
       contact: {
         firstName: (draft.contact.firstName || '').trim(),
         lastName: (draft.contact.lastName || '').trim(),
@@ -2110,6 +2135,81 @@ export function OwnerExperiencesPage() {
                   Cash seul → règlement sur place (pas d’acompte).
                 </p>
               )}
+              {needsRemotePay ? (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--pa-ink2)', marginBottom: 6 }}>
+                    Durée du lien de paiement
+                  </div>
+                  <select
+                    className="pa-in"
+                    style={{ ...inpBase, maxWidth: 280 }}
+                    value={draft.payment.linkTtlHours ?? 24}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        payment: {
+                          ...d.payment,
+                          linkTtlHours: Number(e.target.value) as 1 | 4 | 8 | 24,
+                        },
+                      }))
+                    }
+                  >
+                    {PAYMENT_LINK_TTL_OPTIONS.map((opt) => (
+                      <option key={opt.hours} value={opt.hours}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--pa-ink3)' }}>
+                    Le guest doit payer dans ce délai. Le lien s’arrête au plus tard le jour de la prestation.
+                    Défaut 24 h.
+                  </p>
+                </div>
+              ) : null}
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--pa-ink2)', marginBottom: 6 }}>
+                  Annulation gratuite jusqu’à … h avant
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input
+                    className="pa-in"
+                    style={{ ...inpBase, maxWidth: 120 }}
+                    type="number"
+                    min={0}
+                    max={720}
+                    disabled={draft.cancellation.freeUntilHours === null}
+                    value={draft.cancellation.freeUntilHours ?? ''}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        cancellation: {
+                          ...d.cancellation,
+                          freeUntilHours: e.target.value === '' ? 24 : Number(e.target.value) || 0,
+                        },
+                      }))
+                    }
+                  />
+                  <label style={{ fontSize: 13, color: 'var(--pa-ink2)', display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={draft.cancellation.freeUntilHours === null}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          cancellation: {
+                            ...d.cancellation,
+                            freeUntilHours: e.target.checked ? null : 24,
+                          },
+                        }))
+                      }
+                    />
+                    À tout moment
+                  </label>
+                </div>
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--pa-ink3)' }}>
+                  Lu par le Flow WhatsApp (caption d’annulation). Défaut 24 h pour la navette.
+                </p>
+              </div>
               <div style={{ marginTop: 14 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--pa-ink2)', marginBottom: 6 }}>
                   Quand encaisser ?

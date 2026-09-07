@@ -48,9 +48,10 @@ export const DETAIL_TABS = [
   { group: 'Inventaire', items: [
     { id: 'rooms',        icon: '🛏️', label: 'Rooms & Beds' },
     { id: 'experiences',  icon: '✨', label: 'Expériences' },
-    { id: 'ambiances',    icon: '🌹', label: 'Ambiances villa' },
+    { id: 'stay-options', icon: '🌞', label: 'Options séjour' },
     { id: 'room-service', icon: '🥐', label: 'PDJ Inclus' },
     { id: 'menage',       icon: '🧹', label: 'Ménage' },
+    { id: 'stay-verify',  icon: '🏠', label: 'Vérifier logement' },
     { id: 'documents',    icon: '📋', label: 'Documents voyageurs' },
     { id: 'license',      icon: '📄', label: 'License' },
     { id: 'ru-import',    icon: '🗄️', label: 'Trace import RU' },
@@ -81,9 +82,10 @@ export const DETAIL_TABS_MULTI = [
   ]},
   { group: 'Admin', items: [
     { id: 'experiences',  icon: '✨', label: 'Expériences' },
-    { id: 'ambiances',    icon: '🌹', label: 'Ambiances villa' },
+    { id: 'stay-options', icon: '🌞', label: 'Options séjour' },
     { id: 'room-service', icon: '🥐', label: 'PDJ Inclus' },
     { id: 'menage',       icon: '🧹', label: 'Ménage' },
+    { id: 'stay-verify',  icon: '🏠', label: 'Vérifier logement' },
     { id: 'documents',    icon: '📋', label: 'Documents voyageurs' },
     { id: 'license',      icon: '📄', label: 'License' },
     { id: 'ru-import',    icon: '🗄️', label: 'Trace import RU' },

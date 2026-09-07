@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Box, Button, CircularProgress, TextField, Typography } from '@mui/material';
+import { toast } from 'react-toastify';
 import { ListingExperiencesPicker } from '../../../../features/orchestrationListingV3/ListingExperiencesPicker';
 import {
   fetchListingConciergeArrays,
   persistListingConciergeSlice,
 } from '../../../../features/listing/components/ConfigOrchestration/conciergeListingPersist';
+import listingsService from '../../../../services/listingsService';
+import { GuestPaymentMethodsField } from './GuestPaymentMethodsField';
 
 type Props = {
   listingId?: string | null;
@@ -14,7 +17,7 @@ type Props = {
 
 /**
  * Onglet listing « Expériences » — activités guest + navette cochées (J3 / navette).
- * Ambiances villa et PDJ ont leurs propres onglets.
+ * Ambiances villa + piscine/beds : onglet Options séjour. PDJ : onglet à part.
  */
 export default function ListingExperiencesTab({
   listingId,
@@ -25,6 +28,8 @@ export default function ListingExperiencesTab({
   const [enabledIds, setEnabledIds] = useState<string[]>([]);
   const [guestBlocs, setGuestBlocs] = useState('');
   const [savingBlocs, setSavingBlocs] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<Array<'cash' | 'card'>>([]);
+  const [savingPay, setSavingPay] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,10 +40,14 @@ export default function ListingExperiencesTab({
       }
       setLoading(true);
       try {
-        const conc = await fetchListingConciergeArrays(String(listingId));
+        const [conc, struct] = await Promise.all([
+          fetchListingConciergeArrays(String(listingId)),
+          listingsService.getListingStructure(String(listingId)),
+        ]);
         if (!cancelled) {
           setEnabledIds(conc.enabledExperienceIds ?? []);
           setGuestBlocs(conc.experienceGuestBlocs || '');
+          setPaymentMethods(struct?.building.guestPaymentMethods ?? []);
         }
       } catch {
         if (!cancelled) {
@@ -80,6 +89,28 @@ export default function ListingExperiencesTab({
       <Typography sx={{ fontSize: 22, fontWeight: 750, mb: 0.75, lineHeight: 1.2 }}>
         Expériences
       </Typography>
+      <GuestPaymentMethodsField
+        value={paymentMethods}
+        busy={savingPay}
+        onChange={async (methods) => {
+          setSavingPay(true);
+          try {
+            const r = await listingsService.patchListingConfiguration(String(listingId), {
+              building: { guestPaymentMethods: methods },
+            });
+            if (!r.success) {
+              toast.error(r.error || 'Enregistrement impossible');
+              return;
+            }
+            setPaymentMethods(methods);
+            toast.success(`Paiement extras : ${methods.join(' + ')}`);
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Enregistrement impossible');
+          } finally {
+            setSavingPay(false);
+          }
+        }}
+      />
       <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 2, maxWidth: 520 }}>
         <TextField
           size="small"

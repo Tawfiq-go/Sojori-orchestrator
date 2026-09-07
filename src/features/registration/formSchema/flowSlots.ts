@@ -1,4 +1,5 @@
 import { enabledFields, fieldLabel } from './completeness'
+import { DEFAULT_OPTIONAL_FIELD_HELPERS } from './presets'
 import {
   COMPLETION_SLOT_BANK,
   PASSPORT_DEDICATED_PROPERTIES,
@@ -373,7 +374,12 @@ export function buildTypedSlotFlowData(input: {
   const required = field.required === true
   const label = markedRequiredLabel(fieldLabel(field, input.locale || undefined), required)
   const helper =
-    (input.helper || field.helperText || (assignment.type === 'time' ? timeHelper(input.locale) : '')).trim() || ' '
+    (
+      input.helper ||
+      field.helperText ||
+      (!required ? DEFAULT_OPTIONAL_FIELD_HELPERS[field.binding || field.id] : '') ||
+      (assignment.type === 'time' ? timeHelper(input.locale) : '')
+    ).trim() || ' '
   const init =
     assignment.type === 'multi_select'
       ? initMulti(input.value)
@@ -518,7 +524,12 @@ export function buildSlotFlowData(input: {
   const variant = fieldTypeToVariant(field.type)
   const required = field.required === true
   const label = markedRequiredLabel(fieldLabel(field, input.locale || undefined), required)
-  const helper = (input.helper || field.helperText || (variant === 'time' ? timeHelper(input.locale) : '')).trim()
+  const helper = (
+    input.helper ||
+    field.helperText ||
+    (!required ? DEFAULT_OPTIONAL_FIELD_HELPERS[field.binding || field.id] : '') ||
+    (variant === 'time' ? timeHelper(input.locale) : '')
+  ).trim()
   return {
     ...base,
     [`slot_${input.slot}_active`]: true,
