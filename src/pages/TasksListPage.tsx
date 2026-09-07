@@ -2368,7 +2368,13 @@ export function TasksListPage() {
         const full = String(row.listingName || '').trim();
         const sep = full.indexOf(' · ');
         const hotel = sep > 0 ? full.slice(0, sep) : full;
-        const room = sep > 0 ? full.slice(sep + 3) : '';
+        // Le logement REEL prime sur le type de chambre : le staff se rend
+        // dans « Villa executive 09 », pas dans « Villa signature ». Envoyer
+        // la categorie, c'est l'envoyer au mauvais endroit.
+        const realRoom = String(
+          row.roomName || (row as { payload?: { roomName?: string } }).payload?.roomName || '',
+        ).trim();
+        const room = realRoom || (sep > 0 ? full.slice(sep + 3) : '');
         return (
           <Stack spacing={0} sx={{ minWidth: 0 }}>
             <Typography sx={{ fontSize: 12, fontWeight: 600 }} noWrap title={full || ''}>
