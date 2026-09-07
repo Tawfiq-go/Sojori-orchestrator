@@ -16,6 +16,7 @@ import {
 import { buildAdditionalFeesSavePayload } from './listingRuFeesDisplay';
 import { isMongoObjectId } from './listingId';
 import { normalizeStayVerify } from '../components/listing/form-v2/tabs/stayVerifyCatalog';
+import { mapDepartureGuestToListingPatch, normalizeDepartureGuest } from '../components/listing/form-v2/tabs/departureGuestCatalog';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -709,6 +710,7 @@ export function mapApiToFormV2Values(raw: UnknownRecord): UnknownRecord {
     channelDiscounts: mapChannelDiscountsFromApi(hydrated),
     directEnabled: mapVisibilityFromApi(hydrated).sojori,
     stayVerify: normalizeStayVerify(hydrated.stayVerify),
+    departureGuest: normalizeDepartureGuest(hydrated.departureGuest, hydrated),
   };
 }
 
@@ -925,6 +927,12 @@ export function mergeFormV2ToUpdatePropertyPayload(
   }
 
   payload.stayVerify = normalizeStayVerify(values.stayVerify);
+  const departureGuest = normalizeDepartureGuest(values.departureGuest, values);
+  const cityTax = departureGuest.taxes.find((t) => t.id === 'city_tax');
+  if (cityTax && typeof values.cityTaxEnabled === 'boolean') {
+    cityTax.enabled = values.cityTaxEnabled === true;
+  }
+  Object.assign(payload, mapDepartureGuestToListingPatch(departureGuest));
 
   const lat = asNumber(values.lat);
   const lng = asNumber(values.lng);
@@ -1210,6 +1218,7 @@ export function mergeFormV2ToUpdatePropertyPayload(
     'wifiPassword',
     'messageCheckin',
     'messageCheckout',
+    'departureGuest',
     'preporteyInformation',
     'directPaymentMethods',
   ] as const;
