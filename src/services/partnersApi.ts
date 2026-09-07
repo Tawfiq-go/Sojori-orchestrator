@@ -87,12 +87,22 @@ export type PaymentMethod = 'card' | 'cash' | 'transfer';
 export type PaymentCollection = 'full' | 'deposit';
 /** instant = accepté d'office · on_confirmation = le provider confirme sous SLA */
 export type PaymentTiming = 'instant' | 'on_confirmation';
+export type PaymentLinkTtlHours = 1 | 4 | 8 | 24;
+
+export const PAYMENT_LINK_TTL_OPTIONS: ReadonlyArray<{ hours: PaymentLinkTtlHours; label: string }> = [
+  { hours: 1, label: '1 heure (instantanée)' },
+  { hours: 4, label: '4 h' },
+  { hours: 8, label: '8 h' },
+  { hours: 24, label: '24 h' },
+];
 
 export type PartnerServicePayment = {
   methods: PaymentMethod[];
   collection: PaymentCollection;
   depositPercent?: number | null;
   timing?: PaymentTiming;
+  /** Validité du lien carte (1 / 4 / 8 / 24 h). Défaut 24. */
+  linkTtlHours?: PaymentLinkTtlHours | null;
 };
 
 export const DEFAULT_PAYMENT: PartnerServicePayment = {
@@ -100,6 +110,7 @@ export const DEFAULT_PAYMENT: PartnerServicePayment = {
   collection: 'full',
   depositPercent: null,
   timing: 'instant',
+  linkTtlHours: 24,
 };
 
 export type PartnerServiceCancellation = {

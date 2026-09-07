@@ -12,6 +12,7 @@ import {
   type PaymentMethod,
   DEFAULT_SCHEDULE,
   DEFAULT_PAYMENT,
+  PAYMENT_LINK_TTL_OPTIONS,
 } from '../services/partnersApi';
 import { postFormDataAsMultipart } from '../utils/upload/postFormData';
 import { MICROSERVICE_BASE_URL } from '../config/authConfig';
@@ -935,6 +936,9 @@ export function PartnersAdminPage() {
               needsRemote && serviceDraft.payment.collection === 'deposit'
                 ? Number(serviceDraft.payment.depositPercent) || 30
                 : null,
+            linkTtlHours: ([1, 4, 8, 24].includes(Number(serviceDraft.payment.linkTtlHours))
+              ? (Number(serviceDraft.payment.linkTtlHours) as 1 | 4 | 8 | 24)
+              : 24),
           } satisfies PartnerServicePayment;
         })(),
         keywords: serviceDraft.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean),
@@ -2302,6 +2306,35 @@ export function PartnersAdminPage() {
                       ) : (
                         <div />
                       )}
+                    </div>
+                    <div style={{ marginTop: 16 }}>
+                      <div className="pa-lbl" style={{ marginBottom: 7 }}>
+                        Durée du lien de paiement
+                      </div>
+                      <select
+                        className="pa-in"
+                        style={{ ...inpBase, maxWidth: 280 }}
+                        value={serviceDraft.payment.linkTtlHours ?? 24}
+                        onChange={(e) =>
+                          setServiceDraft((d) => ({
+                            ...d,
+                            payment: {
+                              ...d.payment,
+                              linkTtlHours: Number(e.target.value) as 1 | 4 | 8 | 24,
+                            },
+                          }))
+                        }
+                      >
+                        {PAYMENT_LINK_TTL_OPTIONS.map((opt) => (
+                          <option key={opt.hours} value={opt.hours}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <Constraint>
+                        Le guest doit payer dans ce délai. Le lien s’arrête au plus tard le jour de la prestation.
+                        Défaut 24 h.
+                      </Constraint>
                     </div>
                   ) : (
                     <Constraint>Cash seul → règlement sur place (pas d’acompte en ligne).</Constraint>
