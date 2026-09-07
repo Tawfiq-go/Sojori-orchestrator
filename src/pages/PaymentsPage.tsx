@@ -54,7 +54,22 @@ import {
 
 moment.locale('fr');
 
-const PAGE_SIZE = 50;
+// Aligné sur ReservationsPage : 100 par défaut, choix 100/200/300.
+/**
+ * Montant en MAD entiers, sans decimales flottantes.
+ *
+ * Les prix issus des OTA arrivent en flottant : 8774.400000000001 s'affichait
+ * tel quel. Les MAD sont entiers cote Sojori (frontiere devise), on arrondit
+ * donc a l'affichage plutot que de laisser fuir l'artefact binaire.
+ */
+function formatMad(value: unknown): string {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '—'
+  return Math.round(n).toLocaleString('fr-FR')
+}
+
+const PAGE_SIZE_OPTIONS = [100, 200, 300] as const;
+const PAGE_SIZE = 100;
 
 const T = {
   primary: '#b8851a',
@@ -67,6 +82,14 @@ const T = {
   warning: '#c46506',
   error: '#c81e1e',
 };
+
+/** Libelles des types de paiement — memes termes que le filtre. */
+const PAYMENT_KIND_LABEL: Record<string, string> = {
+  navette: 'Navette',
+  experience: 'Expérience',
+  option_sejour: 'Option de séjour',
+  prolongation: 'Prolongation',
+}
 
 function paymentStatusChip(status: string) {
   const s = (status || '').toLowerCase();
@@ -238,7 +261,26 @@ export function PaymentsPage() {
   const [appliedSearch, setAppliedSearch] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('UnPaid,Paid');
   const [cardOnly, setCardOnly] = useState(true);
+  // Filtre Type : 'all' | 'reservation' | navette | experience | option_sejour |
+  // prolongation. Les prestations viennent d'une AUTRE collection
+  // (experiencepayments) — une seule vue, deux sources.
+  const [kindFilter, setKindFilter] = useState('all');
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZE);
+  // Tri applique cote BASE (paramètres sortBy/sortDir) : trier la page
+  // courante donnerait un ordre faux des qu'il y a plus d'une page.
+  const [sortBy, setSortBy] = useState<'createdAt' | 'prestationDate'>('createdAt');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const toggleSort = (field: 'createdAt' | 'prestationDate') => {
+    if (sortBy === field) {
+      setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
+    } else {
+      setSortBy(field);
+      setSortDir('desc');
+    }
+    setPage(0);
+  };
   const loadRequestIdRef = useRef(0);
 
   const queryKey = useMemo(
@@ -247,10 +289,10 @@ export function PaymentsPage() {
         page,
         paymentStatus,
         cardOnly,
-        search: appliedSearch,
+        search: `${appliedSearch}|${kindFilter}|${pageSize}|${sortBy}|${sortDir}`,
         ownerScope: ownerScopeKey,
       }),
-    [page, paymentStatus, cardOnly, appliedSearch, ownerScopeKey],
+    [page, paymentStatus, cardOnly, appliedSearch, ownerScopeKey, kindFilter, pageSize, sortBy, sortDir],
   );
 
   const loadDetail = useCallback(async (row: PaymentAuditRow) => {
@@ -296,7 +338,7 @@ export function PaymentsPage() {
       try {
         const res = await paymentsService.getList({
           page,
-          limit: PAGE_SIZE,
+          limit: pageSize,
           paymentStatus,
           reservationNumber: appliedSearch.trim() || undefined,
           cardOnly,
@@ -304,9 +346,32 @@ export function PaymentsPage() {
         });
         if (cancelled || requestId !== loadRequestIdRef.current) return;
         if (!res.success) throw new Error('API error');
-        setRows(res.data || []);
-        setTotal(res.total || 0);
-        setCachedPaymentsList(queryKey, res.data || [], res.total || 0);
+
+        // Prestations : source distincte, chargee sauf si l'utilisateur a
+        // explicitement demande les reservations seules. getServicePayments
+        // ne jette jamais — la vue reste utilisable si elle est indisponible.
+        const services =
+          kindFilter === 'reservation'
+            ? []
+            : await paymentsService.getServicePayments({
+                page: 0,
+                limit: pageSize,
+                serviceType: kindFilter === 'all' ? undefined : kindFilter,
+                sortBy,
+                sortDir,
+              });
+        if (cancelled || requestId !== loadRequestIdRef.current) return;
+
+        const reservations = kindFilter === 'all' || kindFilter === 'reservation'
+          ? res.data || []
+          : [];
+        // Les plus recents d'abord, toutes sources confondues.
+        const merged = [...services, ...reservations].sort((a, b) =>
+          String(b.dates?.createdAt || '').localeCompare(String(a.dates?.createdAt || '')),
+        );
+        setRows(merged);
+        setTotal((res.total || 0) + services.length);
+        setCachedPaymentsList(queryKey, merged, (res.total || 0) + services.length);
         setTableReady(true);
       } catch (e) {
         if (cancelled || requestId !== loadRequestIdRef.current) return;
@@ -327,7 +392,21 @@ export function PaymentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [queryKey, page, paymentStatus, appliedSearch, cardOnly, scopeFetchReady, requestOwnerId]);
+    // `kindFilter` DOIT figurer ici : sans lui l'effet ne se relance pas et
+    // changer le type dans le selecteur n'a aucun effet visible.
+  }, [
+    queryKey,
+    page,
+    paymentStatus,
+    appliedSearch,
+    cardOnly,
+    kindFilter,
+    pageSize,
+    sortBy,
+    sortDir,
+    scopeFetchReady,
+    requestOwnerId,
+  ]);
 
   useEffect(() => {
     setPage(0);
@@ -453,6 +532,22 @@ export function PaymentsPage() {
                 <MenuItem value="all">Toutes réservations</MenuItem>
               </Select>
             </FormControl>
+            <FormControl size="small" sx={{ minWidth: 190 }}>
+              <Select
+                value={kindFilter}
+                onChange={(e) => {
+                  setKindFilter(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <MenuItem value="all">Tous les paiements</MenuItem>
+                <MenuItem value="reservation">Réservations</MenuItem>
+                <MenuItem value="navette">Navette</MenuItem>
+                <MenuItem value="experience">Expériences</MenuItem>
+                <MenuItem value="option_sejour">Options de séjour</MenuItem>
+                <MenuItem value="prolongation">Prolongations</MenuItem>
+              </Select>
+            </FormControl>
             <Button variant="contained" onClick={applyFilters} sx={{ bgcolor: T.primary }}>
               Filtrer
             </Button>
@@ -507,6 +602,20 @@ export function PaymentsPage() {
               <TableHead>
                 <TableRow sx={{ bgcolor: '#fafaf7' }}>
                   <TableCell width={40} />
+                  {/* « Créé » en tête : c'est le repère principal pour
+                      retrouver un paiement qu'on vient de générer. */}
+                  <TableCell
+                    sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => toggleSort('createdAt')}
+                  >
+                    Créé{sortBy === 'createdAt' ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+                  </TableCell>
+                  <TableCell
+                    sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => toggleSort('prestationDate')}
+                  >
+                    Exécution{sortBy === 'prestationDate' ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+                  </TableCell>
                   <TableCell>Réservation</TableCell>
                   <TableCell>Voyageur / Bien</TableCell>
                   <TableCell>Montant</TableCell>
@@ -514,7 +623,6 @@ export function PaymentsPage() {
                   <TableCell>idDemande</TableCell>
                   <TableCell>repauto</TableCell>
                   <TableCell>Events</TableCell>
-                  <TableCell>Créé</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -545,21 +653,44 @@ export function PaymentsPage() {
                             </IconButton>
                           </TableCell>
                           <TableCell>
+                            <Typography sx={{ fontSize: 12 }}>
+                              {moment(row.dates.createdAt).format('DD MMM YY HH:mm')}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {/* Date d'execution de la prestation — vide pour
+                                une reservation, qui n'en a pas au sens tache. */}
+                            <Typography sx={{ fontSize: 12, color: T.text3 }}>
+                              {row.dates.arrival
+                                ? moment(row.dates.arrival).format('DD MMM YY')
+                                : '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
                             <Typography sx={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }}>
                               {row.reservationNumber}
                             </Typography>
-                            <Typography sx={{ fontSize: 11, color: T.text3 }}>{row.channelName || '—'}</Typography>
+                            <Typography sx={{ fontSize: 11, color: T.text3 }}>
+                              {row.kind && row.kind !== 'reservation'
+                                ? PAYMENT_KIND_LABEL[row.kind] || row.kind
+                                : row.channelName || '—'}
+                            </Typography>
                           </TableCell>
                           <TableCell>
                             <Typography sx={{ fontSize: 13 }}>{row.guestName}</Typography>
                             <Typography sx={{ fontSize: 11, color: T.text3 }}>
-                              {row.listing?.name || '—'}
+                              {/* Prestation : pas de logement, on montre le service.
+                                  Un lien qui expire bientot est l'info utile ici. */}
+                              {row.serviceName ||
+                                row.listing?.name ||
+                                '—'}
                               {row.listing?.city ? ` · ${row.listing.city}` : ''}
+                              {row.receivedAfterExpiry ? ' · ⚠️ encaissé hors délai' : ''}
                             </Typography>
                           </TableCell>
                           <TableCell>
                             <Typography sx={{ fontWeight: 700 }}>
-                              {row.pricing.total} {row.pricing.currency}
+                              {formatMad(row.pricing.total)} {row.pricing.currency}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -588,11 +719,6 @@ export function PaymentsPage() {
                             </Typography>
                           </TableCell>
                           <TableCell>{row.naps.eventsCount ?? row.naps.events?.length ?? 0}</TableCell>
-                          <TableCell>
-                            <Typography sx={{ fontSize: 12 }}>
-                              {moment(row.dates.createdAt).format('DD MMM YY HH:mm')}
-                            </Typography>
-                          </TableCell>
                           <TableCell align="right">
                             <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
                               <Tooltip title="Voir réservation">
@@ -632,8 +758,36 @@ export function PaymentsPage() {
         </TableContainer>
         )}
 
-        {tableReady && total > PAGE_SIZE ? (
-          <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, minHeight: 28, justifyContent: 'center', alignItems: 'center' }}>
+        {/* Barre TOUJOURS visible (pattern ReservationsPage) : elle porte la
+            taille de page, pas seulement la navigation. La masquer quand tout
+            tient sur une page prive du selecteur au moment ou l'on veut
+            justement en afficher plus. */}
+        {tableReady ? (
+          <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{ mt: 0.5, minHeight: 28, justifyContent: 'center', alignItems: 'center' }}
+          >
+            <Select
+              size="small"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(0);
+              }}
+              sx={{
+                minWidth: 56,
+                fontSize: 11,
+                height: 24,
+                '& .MuiSelect-select': { py: 0, px: 1 },
+              }}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <MenuItem key={size} value={size}>
+                  {size}
+                </MenuItem>
+              ))}
+            </Select>
             <Button
               size="small"
               disabled={page === 0}
@@ -643,11 +797,11 @@ export function PaymentsPage() {
               ‹
             </Button>
             <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
-              {page + 1}/{Math.max(1, Math.ceil(total / PAGE_SIZE))} · {total}
+              {page + 1}/{Math.max(1, Math.ceil(total / pageSize))} · {total}
             </Typography>
             <Button
               size="small"
-              disabled={(page + 1) * PAGE_SIZE >= total}
+              disabled={(page + 1) * pageSize >= total}
               onClick={() => setPage((p) => p + 1)}
               sx={{ textTransform: 'none', minHeight: 24, py: 0, px: 0.75, fontSize: 11 }}
             >
