@@ -7,6 +7,8 @@ export type DepartureTaxCalculationMode = 'per_stay' | 'per_night' | 'per_person
 
 export type DepartureTaxCollectionMode =
   | 'on_table'
+  | 'at_reception'
+  | 'hand_to_housekeeping'
   | 'hand_to_pm'
   | 'cash_on_departure'
   | 'included_in_price'
@@ -140,7 +142,10 @@ function asCalculationMode(value: unknown, fallback: DepartureTaxCalculationMode
 
 function asCollectionMode(value: unknown, fallback: DepartureTaxCollectionMode): DepartureTaxCollectionMode {
   if (value === 'cash_on_arrival') return 'cash_on_departure'
+  if (value === 'reception') return 'at_reception'
   return value === 'on_table' ||
+    value === 'at_reception' ||
+    value === 'hand_to_housekeeping' ||
     value === 'hand_to_pm' ||
     value === 'cash_on_departure' ||
     value === 'included_in_price'

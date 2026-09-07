@@ -39,8 +39,10 @@ const CALC_LABEL: Record<DepartureTaxCalculationMode, string> = {
 };
 
 const COLLECT_LABEL: Record<DepartureTaxCollectionMode, string> = {
-  on_table: 'Sur la table',
-  hand_to_pm: 'En main propre',
+  on_table: 'Laisser dans l’appartement',
+  at_reception: 'Payer à la réception',
+  hand_to_housekeeping: 'Donner au ménage avant départ',
+  hand_to_pm: 'En main propre (gestionnaire)',
   cash_on_departure: 'Espèces au départ',
   included_in_price: 'Déjà incluse',
 };
@@ -287,10 +289,10 @@ export default function ListingDepartureTab({ values, onChange, listingId, templ
                         <MenuItem value="per_stay">{CALC_LABEL.per_stay}</MenuItem>
                       </Select>
                     </FormControl>
-                    <FormControl size="small" sx={{ minWidth: 170 }}>
-                      <InputLabel>Réception</InputLabel>
+                    <FormControl size="small" sx={{ minWidth: 220 }}>
+                      <InputLabel>Mode de paiement</InputLabel>
                       <Select
-                        label="Réception"
+                        label="Mode de paiement"
                         value={row.collectionMode}
                         onChange={(e) =>
                           patchTax(row.id, {
@@ -299,6 +301,8 @@ export default function ListingDepartureTab({ values, onChange, listingId, templ
                         }
                       >
                         <MenuItem value="on_table">{COLLECT_LABEL.on_table}</MenuItem>
+                        <MenuItem value="at_reception">{COLLECT_LABEL.at_reception}</MenuItem>
+                        <MenuItem value="hand_to_housekeeping">{COLLECT_LABEL.hand_to_housekeeping}</MenuItem>
                         <MenuItem value="hand_to_pm">{COLLECT_LABEL.hand_to_pm}</MenuItem>
                         <MenuItem value="cash_on_departure">{COLLECT_LABEL.cash_on_departure}</MenuItem>
                         <MenuItem value="included_in_price">{COLLECT_LABEL.included_in_price}</MenuItem>
