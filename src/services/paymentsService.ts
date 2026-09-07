@@ -21,7 +21,28 @@ export type NapsPaymentEvent = {
   note?: string;
 };
 
+/**
+ * Nature du paiement. `reservation` vient de la collection `reservations` ;
+ * les autres viennent de `experiencepayments` (prestations vendues pendant
+ * le sejour). Une seule vue : « qui me doit de l'argent » ne doit pas se
+ * chercher a deux endroits.
+ */
+export type PaymentKind =
+  | 'reservation'
+  | 'navette'
+  | 'experience'
+  | 'option_sejour'
+  | 'prolongation'
+
 export type PaymentAuditRow = {
+  /** Absent sur les lignes reservation (retro-compatibilite). */
+  kind?: PaymentKind
+  /** Libelle de la prestation — vide pour une reservation. */
+  serviceName?: string
+  /** Heures restantes avant expiration du lien (prestations uniquement). */
+  hoursRemaining?: number
+  /** ⚠️ Argent encaisse APRES expiration : reconciliation manuelle requise. */
+  receivedAfterExpiry?: boolean
   _id: string;
   reservationNumber: string;
   guestName: string;
@@ -133,6 +154,71 @@ function normalizePaymentRow(raw: Record<string, unknown>): PaymentAuditRow {
     },
     paymentStatusTimes: Array.isArray(raw.paymentStatusTimes) ? raw.paymentStatusTimes : [],
   };
+}
+
+/**
+ * Une prestation payee ramenee au format des lignes reservation, pour que la
+ * table n'ait qu'un seul type a afficher.
+ *
+ * Les champs sans equivalent (arrivee/depart, canal, listing) restent vides
+ * plutot que d'etre inventes : une prestation n'a pas de dates de sejour.
+ */
+function normalizeServicePaymentRow(raw: Record<string, unknown>): PaymentAuditRow {
+  const dates = (raw.dates ?? {}) as Record<string, string | null>
+  const naps = (raw.naps ?? {}) as Record<string, unknown>
+  const service = (raw.service ?? {}) as Record<string, unknown>
+  const status = String(raw.status ?? '')
+  return {
+    kind: (String(raw.serviceType ?? '') || 'experience') as PaymentKind,
+    serviceName: String(service.name ?? ''),
+    hoursRemaining: Number(raw.hoursRemaining ?? 0),
+    receivedAfterExpiry: Boolean(raw.receivedAfterExpiry),
+    _id: String(raw.orderid ?? ''),
+    // La reference visible est le code de tache : c'est lui que le staff
+    // retrouve dans le back-office.
+    reservationNumber: String(service.taskCode ?? raw.orderid ?? ''),
+    guestName: String(raw.guestName ?? ''),
+    channelName: 'Sojori',
+    status,
+    listing: null,
+    dates: {
+      createdAt: String(dates.createdAt ?? ''),
+      // Colonne « Execution » : pour une prestation c'est la date de
+      // realisation, pas une arrivee de sejour.
+      arrival: String(dates.prestationDate ?? ''),
+      departure: '',
+    },
+    pricing: {
+      total: Number(raw.amountMad ?? 0),
+      paid: status === 'paid' ? Number(raw.amountMad ?? 0) : 0,
+      currency: String(raw.currency ?? 'MAD'),
+    },
+    payment: {
+      // `paid` cote prestation = `Paid` cote reservation : meme vocabulaire
+      // dans la table, sinon le filtre par statut ne marche que d'un cote.
+      status: status === 'paid' ? 'Paid' : status === 'pending' ? 'UnPaid' : status,
+      method: 'card',
+      type: null,
+      link: null,
+      returnBase: null,
+      redirectSuccess: false,
+      redirectFail: false,
+    },
+    naps: {
+      idDemande: (naps.idDemande as string | null) ?? null,
+      lastError: null,
+      payload: null,
+      events: [],
+      eventsCount: Number(raw.eventsCount ?? 0),
+      hasPayload: Boolean(naps.idDemande),
+      numAuto: (naps.numAuto as string | null) ?? null,
+      repauto: (naps.repauto as string | null) ?? null,
+      carte: (naps.cardLast4 as string | null) ?? null,
+      typecarte: null,
+      montant: null,
+    },
+    paymentStatusTimes: [],
+  } as PaymentAuditRow
 }
 
 class PaymentsService {
@@ -257,6 +343,57 @@ class PaymentsService {
       },
       paymentStatusTimes: r.paymentStatusTimes,
     });
+  }
+
+  /**
+   * GET /api/v1/reservations/service-payments — paiements des PRESTATIONS
+   * (navette, experience, ambiance, prolongation, option de sejour).
+   *
+   * Source distincte des reservations : ces paiements vivent dans
+   * `experiencepayments`. Sans cet appel, un PM voit les encaissements de ses
+   * resas mais reste aveugle sur ses prestations — un lien expire sans
+   * paiement, ou de l'argent encaisse hors fenetre, ne se voit nulle part.
+   *
+   * Ne jette jamais : la vue reservations doit rester utilisable meme si
+   * cette source est indisponible.
+   */
+  async getServicePayments(params: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    serviceType?: string;
+    /** Tri applique cote base — jamais sur la page courante. */
+    sortBy?: string;
+    sortDir?: 'asc' | 'desc';
+  }): Promise<PaymentAuditRow[]> {
+    try {
+      const query = new URLSearchParams({
+        page: String(params.page ?? 0),
+        limit: String(params.limit ?? 50),
+        compact: 'true',
+      });
+      if (params.status) query.set('status', params.status);
+      if (params.serviceType) query.set('serviceType', params.serviceType);
+      if (params.sortBy) query.set('sortBy', params.sortBy);
+      if (params.sortDir) query.set('sortDir', params.sortDir);
+
+      const url = `${BASE_URL}/api/v1/reservations/service-payments?${query.toString()}`;
+      const headers: Record<string, string> = {};
+      const isLocalhost =
+        typeof window !== 'undefined' &&
+        (window.location.hostname === 'localhost' ||
+          window.location.hostname === '127.0.0.1' ||
+          window.location.hostname === '[::1]');
+      const devToken = import.meta.env.VITE_DEV_TOKEN;
+      if (isLocalhost && devToken) headers['X-Dev-Token'] = String(devToken);
+
+      const response = await apiClient.get(url, { headers });
+      const payload = response.data as { success?: boolean; data?: Record<string, unknown>[] };
+      if (!payload?.success || !Array.isArray(payload.data)) return [];
+      return payload.data.map(normalizeServicePaymentRow);
+    } catch {
+      return [];
+    }
   }
 }
 
