@@ -83,7 +83,9 @@ export const DEFAULT_SCHEDULE: PartnerServiceSchedule = {
   note: '',
 };
 
-export type PaymentMethod = 'card' | 'cash' | 'transfer';
+// card_tpe = terminal apporté à la livraison · room_charge = porté sur la note
+// réglée à la réception · card = lien de paiement envoyé au voyageur.
+export type PaymentMethod = 'card' | 'cash' | 'transfer' | 'card_tpe' | 'room_charge';
 export type PaymentCollection = 'full' | 'deposit';
 /** instant = accepté d'office · on_confirmation = le provider confirme sous SLA */
 export type PaymentTiming = 'instant' | 'on_confirmation';

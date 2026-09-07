@@ -1,18 +1,22 @@
 import { Box, Typography } from '@mui/material';
 
-export type GuestPaymentMethod = 'cash' | 'card';
+export type GuestPaymentMethod = 'cash' | 'card' | 'card_tpe' | 'room_charge';
 
-const OPTIONS: Array<{ id: GuestPaymentMethod; label: string }> = [
-  { id: 'cash', label: 'Cash' },
-  { id: 'card', label: 'Carte' },
+const OPTIONS: Array<{ id: GuestPaymentMethod; label: string; hint: string }> = [
+  { id: 'cash', label: '💵 Cash', hint: 'Espèces à la livraison' },
+  { id: 'card_tpe', label: '💳 Carte (TPE)', hint: 'Terminal apporté à la livraison' },
+  { id: 'room_charge', label: '🏨 Sur la note', hint: 'À régler à la réception au départ' },
+  { id: 'card', label: '🔗 Carte en ligne', hint: 'Lien sécurisé + acompte 30 %' },
 ];
+
+const ALLOWED = new Set<GuestPaymentMethod>(['cash', 'card', 'card_tpe', 'room_charge']);
 
 export function normalizeGuestPaymentMethods(raw: unknown): GuestPaymentMethod[] {
   const list = Array.isArray(raw) ? raw : [];
   const out: GuestPaymentMethod[] = [];
   for (const item of list) {
-    const id = String(item ?? '').trim().toLowerCase();
-    if ((id === 'cash' || id === 'card') && !out.includes(id)) out.push(id);
+    const id = String(item ?? '').trim().toLowerCase() as GuestPaymentMethod;
+    if (ALLOWED.has(id) && !out.includes(id)) out.push(id);
   }
   return out;
 }
@@ -23,7 +27,7 @@ type Props = {
   onChange: (next: GuestPaymentMethod[]) => void;
 };
 
-/** Cash / Carte — extras guest (Options séjour, Navette, Service, Prolonger). */
+/** Modes extras guest — Options séjour, Navette, Service, Expériences, Courses, Prolonger. */
 export function GuestPaymentMethodsField({ value, busy, onChange }: Props) {
   const selected = normalizeGuestPaymentMethods(value);
   const shown = selected.length ? selected : (['cash'] as GuestPaymentMethod[]);
@@ -36,11 +40,14 @@ export function GuestPaymentMethodsField({ value, busy, onChange }: Props) {
 
   return (
     <Box sx={{ mb: 2.5 }}>
-      <Typography sx={{ fontSize: 12.5, fontWeight: 700, mb: 0.5 }}>Paiement extras</Typography>
-      <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>
-        Cash et Carte pour Options séjour, Navette, Service, Expériences, Courses et Prolonger le séjour.
+      <Typography sx={{ fontSize: 12.5, fontWeight: 700, mb: 0.5 }}>
+        💳 Comment souhaitez-vous payer ?
       </Typography>
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+      <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>
+        Modes proposés au voyageur (Options séjour, Navette, Service, Expériences, Courses,
+        Prolonger). Carte en ligne = lien + acompte (défaut 30 % sur l’activité).
+      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {OPTIONS.map((opt) => {
           const on = shown.includes(opt.id);
           return (
@@ -51,20 +58,23 @@ export function GuestPaymentMethodsField({ value, busy, onChange }: Props) {
               disabled={busy}
               onClick={() => toggle(opt.id)}
               sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
                 px: 1.5,
-                py: 0.75,
+                py: 1,
                 borderRadius: 1.5,
                 border: '1px solid',
                 borderColor: on ? 'warning.main' : 'divider',
                 bgcolor: on ? 'rgba(184, 133, 26, 0.12)' : 'background.paper',
                 color: on ? 'warning.dark' : 'text.secondary',
-                fontSize: 13,
-                fontWeight: 700,
                 cursor: busy ? 'wait' : 'pointer',
                 opacity: busy ? 0.7 : 1,
+                textAlign: 'left',
               }}
             >
-              {opt.label}
+              <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{opt.label}</Typography>
+              <Typography sx={{ fontSize: 11.5, opacity: 0.85 }}>{opt.hint}</Typography>
             </Box>
           );
         })}
