@@ -22,6 +22,7 @@ import {
   DEFAULT_CONFIRMATION,
   DEFAULT_PROVIDER_REMINDER,
   DEFAULT_SHARE_GUEST_CONTACT,
+  PAYMENT_LINK_TTL_OPTIONS,
   GUEST_EXPERIENCE_KINDS,
   isGuestExperienceKind,
 } from '../services/partnersApi';
@@ -646,6 +647,11 @@ export function OwnerExperiencesPage() {
           ? Number(draft.payment.depositPercent) || 30
           : null,
       timing: draft.payment.timing === 'on_confirmation' ? 'on_confirmation' : 'instant',
+      linkTtlHours: needsRemote
+        ? ([1, 4, 8, 24].includes(Number(draft.payment.linkTtlHours))
+            ? (Number(draft.payment.linkTtlHours) as 1 | 4 | 8 | 24)
+            : 24)
+        : 24,
     };
     const optionGroups =
       draft.kind === 'room_service'
@@ -2129,6 +2135,37 @@ export function OwnerExperiencesPage() {
                   Cash seul → règlement sur place (pas d’acompte).
                 </p>
               )}
+              {needsRemotePay ? (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--pa-ink2)', marginBottom: 6 }}>
+                    Durée du lien de paiement
+                  </div>
+                  <select
+                    className="pa-in"
+                    style={{ ...inpBase, maxWidth: 280 }}
+                    value={draft.payment.linkTtlHours ?? 24}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        payment: {
+                          ...d.payment,
+                          linkTtlHours: Number(e.target.value) as 1 | 4 | 8 | 24,
+                        },
+                      }))
+                    }
+                  >
+                    {PAYMENT_LINK_TTL_OPTIONS.map((opt) => (
+                      <option key={opt.hours} value={opt.hours}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--pa-ink3)' }}>
+                    Le guest doit payer dans ce délai. Le lien s’arrête au plus tard le jour de la prestation.
+                    Défaut 24 h.
+                  </p>
+                </div>
+              ) : null}
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--pa-ink2)', marginBottom: 6 }}>
                   Annulation gratuite jusqu’à … h avant
