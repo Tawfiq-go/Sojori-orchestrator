@@ -27,6 +27,7 @@ import ListingAmbiancesTab from './tabs/ListingAmbiancesTab';
 import ListingMenageTab from './tabs/ListingMenageTab';
 import ListingDocumentsTab from './tabs/ListingDocumentsTab';
 import ListingStayVerifyTab from './tabs/ListingStayVerifyTab';
+import ListingDepartureTab from './tabs/ListingDepartureTab';
 import ListingRoomServiceTab from './tabs/ListingRoomServiceTab';
 import ListingOrchestrationV3Embed from '../../../features/orchestrationListingV3/ListingOrchestrationV3Embed';
 
@@ -272,6 +273,9 @@ export default function ListingFormV2({
       }
       if (tabKey === 'stay-verify') {
         return <ListingStayVerifyTab {...common} listingId={listingId} />;
+      }
+      if (tabKey === 'departure') {
+        return <ListingDepartureTab {...common} listingId={listingId} />;
       }
       if (tabKey === 'documents') {
         return <ListingDocumentsTab listingId={listingId} />;
