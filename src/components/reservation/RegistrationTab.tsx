@@ -163,16 +163,23 @@ function memberStatus(
   schema: RegistrationFormSchema,
   travelerAnswers?: Record<string, unknown>,
 ): 'complete' | 'draft' | 'empty' {
+  const first = String(m.first_name || m.firstName || '').trim()
+  const last = String(m.last_name || m.lastName || '').trim()
+  const memberForEval: Member = {
+    ...m,
+    first_name: /^(voyageur|traveler)\s*[-_]?\s*\d+$/iu.test(first) ? '' : first,
+    last_name: /^(voyageur|traveler)\s*[-_]?\s*\d+$/iu.test(last) ? '' : last,
+  }
   const schemaMissing =
     evaluateRegistrationCompleteness(schema, {
-      members: [m],
+      members: [memberForEval],
       customAnswers: { stay: {}, travelers: { '0': travelerAnswers ?? {} } },
       travelerCount: 1,
     }).travelersMissing[0] ?? [];
   if (schemaMissing.length === 0) return 'complete';
   if (m.status === 'DRAFT' || m.draft === true) return 'draft';
   const hasAny =
-    Boolean(m.first_name || m.firstName) ||
+    Boolean(memberForEval.first_name || memberForEval.firstName) ||
     Boolean(m.document_number || m.passport) ||
     Boolean(memberDocUrl(m, 'front'));
   return hasAny ? 'draft' : 'empty';
@@ -293,6 +300,24 @@ export function RegistrationTab({
     };
     setStayAnswers(custom.stay ?? {});
     setTravelerAnswers(custom.travelers ?? {});
+
+    // Prefer the active registration task's frozen form-schema snapshot.
+    if (resaId) {
+      try {
+        const stateRes = await fulltaskApi.getRegistrationFlowState(resaId);
+        const snapSchema = stateRes?.data?.registrationForm?.schema as RegistrationFormSchema | undefined;
+        if (snapSchema?.fields?.length) {
+          setFormSchema(snapSchema);
+          setRegistrationLevel(
+            normalizeRegistrationLevel(stateRes?.data?.registrationLevel) || 'simple',
+          );
+          return;
+        }
+      } catch {
+        /* fall through to listing schema */
+      }
+    }
+
     if (!listingId) {
       setRegistrationLevel('simple');
       setFormSchema(simplePresetSchema());

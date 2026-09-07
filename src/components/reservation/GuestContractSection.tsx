@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import { toast } from 'react-toastify';
 import listingsService from '../../services/listingsService';
 import guestContractsService, {
@@ -115,15 +115,25 @@ function contractFingerprint(contract: GuestContractSummary | null | undefined):
     .join('|');
 }
 
-/** Only surface a contract when its frozen travelers still match live registration. */
+/** Only surface a contract when its frozen travelers still match live registration.
+ * Signed / historical contracts with drift are still returned with `registrationDrift`.
+ */
 function liveContract(
   contract: GuestContractSummary | null | undefined,
   registered: RegisteredContractTraveler[] | undefined,
-): GuestContractSummary | null {
+): (GuestContractSummary & { registrationDrift?: boolean }) | null {
   if (!contract || contract.status === 'superseded') return null;
   if (registered === undefined) return contract;
+  const matches =
+    registered.length > 0 &&
+    contractFingerprint(contract) === registrationFingerprint(registered);
+  if (matches) return contract;
+  // Signed / partially signed copies remain visible as historical read-only data.
+  if (contract.status === 'signed' || contract.status === 'partially_signed') {
+    return { ...contract, registrationDrift: true };
+  }
   if (registered.length === 0) return null;
-  return contractFingerprint(contract) === registrationFingerprint(registered) ? contract : null;
+  return null;
 }
 
 function formatLabel(configured: ConfiguredContract[]): string {
@@ -653,6 +663,16 @@ export function GuestContractSection({
         <Typography sx={{ fontSize: 12, color: T.text4 }}>
           Aucun voyageur enregistré — les contrats apparaîtront avec les personnes enregistrées.
         </Typography>
+      ) : null}
+
+      {!loading &&
+      signRows.some(row => {
+        const current = liveContract(byType.get(row.documentType), registeredTravelers);
+        return Boolean(current && (current as { registrationDrift?: boolean }).registrationDrift);
+      }) ? (
+        <Alert severity="warning" sx={{ py: 0.5, fontSize: 12 }}>
+          Signed contract information differs from the current registration record.
+        </Alert>
       ) : null}
 
       <Stack spacing={0.4}>

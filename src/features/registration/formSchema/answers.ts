@@ -84,11 +84,19 @@ export function stayFieldValue(
   return memberFieldValue(s, key)
 }
 
+export function isGeneratedPlaceholderName(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  return /^(voyageur|traveler)\s*[-_]?\s*\d+$/iu.test(value.trim())
+}
+
 export function isAnswerFilled(value: unknown): boolean {
   if (value == null) return false
   if (typeof value === 'boolean') return true
   if (Array.isArray(value)) return value.some((v) => String(v ?? '').trim() !== '')
-  return String(value).trim() !== ''
+  const s = String(value).trim()
+  if (!s) return false
+  if (isGeneratedPlaceholderName(s)) return false
+  return true
 }
 
 function asMap(raw: unknown): Record<string, unknown> {
