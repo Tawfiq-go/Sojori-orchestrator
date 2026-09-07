@@ -279,9 +279,9 @@ export default function ListingAmbiancesTab({
         Options séjour
       </Typography>
       <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 1.5 }}>
-        Ambiances villa, piscine et beds : mêmes cartes, même interrupteur. Activez{' '}
-        <b>Beds</b> ici pour le voir dans WhatsApp Options séjour. Le petit déjeuner
-        reste l’onglet <b>PDJ Inclus</b>.
+        Ambiances villa, piscine et beds : mêmes cartes, même interrupteur. Multi :{' '}
+        <b>Beds</b> au niveau hôtel, <b>Piscine</b> par type de villa. Activez-les pour
+        WhatsApp Options séjour. Le petit déjeuner reste l’onglet <b>PDJ Inclus</b>.
       </Typography>
 
       <GuestPaymentMethodsField
@@ -296,8 +296,19 @@ export default function ListingAmbiancesTab({
         }}
       />
 
-      {isMulti && roomTypes.length > 0
-        ? roomTypes.map((rt) => (
+      {isMulti && roomTypes.length > 0 ? (
+        <>
+          <Typography sx={{ fontSize: 12.5, fontWeight: 700, mb: 1 }}>Hôtel</Typography>
+          <Box sx={{ ...CARD_GRID_SX, mb: 2.5 }}>
+            <StayOptionCard
+              {...STAY_OPTION_BEDS}
+              priceMad={structure?.building.bedsPricePerDayMad || STAY_OPTION_BEDS.defaultPriceMad}
+              checked={structure?.building.paidBeds === true}
+              busy={busyKey === 'beds:building'}
+              onToggle={(next) => toggleBuilding('beds', next)}
+            />
+          </Box>
+          {roomTypes.map((rt) => (
             <Box key={rt.id} sx={{ mb: 2 }}>
               <Typography sx={{ fontSize: 12.5, fontWeight: 700, mb: 1 }}>
                 {rt.otaDisplayName || rt.name}
@@ -310,36 +321,30 @@ export default function ListingAmbiancesTab({
                   busy={busyKey === `pool:${rt.id}`}
                   onToggle={(next) => toggleRoomType(rt, 'pool', next)}
                 />
-                <StayOptionCard
-                  {...STAY_OPTION_BEDS}
-                  priceMad={rt.bedsPricePerDayMad || STAY_OPTION_BEDS.defaultPriceMad}
-                  checked={rt.paidBeds === true}
-                  busy={busyKey === `beds:${rt.id}`}
-                  onToggle={(next) => toggleRoomType(rt, 'beds', next)}
-                />
               </Box>
             </Box>
-          ))
-        : (
-            <Box sx={{ ...CARD_GRID_SX, mb: 2.5 }}>
-              <StayOptionCard
-                {...STAY_OPTION_POOL}
-                priceMad={
-                  structure?.building.privatePoolPricePerDayMad || STAY_OPTION_POOL.defaultPriceMad
-                }
-                checked={structure?.building.paidPrivatePool === true}
-                busy={busyKey === 'pool:building'}
-                onToggle={(next) => toggleBuilding('pool', next)}
-              />
-              <StayOptionCard
-                {...STAY_OPTION_BEDS}
-                priceMad={structure?.building.bedsPricePerDayMad || STAY_OPTION_BEDS.defaultPriceMad}
-                checked={structure?.building.paidBeds === true}
-                busy={busyKey === 'beds:building'}
-                onToggle={(next) => toggleBuilding('beds', next)}
-              />
-            </Box>
-          )}
+          ))}
+        </>
+      ) : (
+        <Box sx={{ ...CARD_GRID_SX, mb: 2.5 }}>
+          <StayOptionCard
+            {...STAY_OPTION_POOL}
+            priceMad={
+              structure?.building.privatePoolPricePerDayMad || STAY_OPTION_POOL.defaultPriceMad
+            }
+            checked={structure?.building.paidPrivatePool === true}
+            busy={busyKey === 'pool:building'}
+            onToggle={(next) => toggleBuilding('pool', next)}
+          />
+          <StayOptionCard
+            {...STAY_OPTION_BEDS}
+            priceMad={structure?.building.bedsPricePerDayMad || STAY_OPTION_BEDS.defaultPriceMad}
+            checked={structure?.building.paidBeds === true}
+            busy={busyKey === 'beds:building'}
+            onToggle={(next) => toggleBuilding('beds', next)}
+          />
+        </Box>
+      )}
 
       <Typography sx={{ fontSize: 12.5, fontWeight: 700, mb: 1 }}>Ambiances villa</Typography>
       <ListingExperiencesPicker

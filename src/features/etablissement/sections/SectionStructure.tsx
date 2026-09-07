@@ -205,19 +205,6 @@ function RoomTypeCard({
           if (r.success) onChanged?.();
         }}
       />
-      <StayExtraToggle
-        title="Beds piscine"
-        ariaLabel="Beds piscine payants"
-        checked={rt.paidBeds === true}
-        priceMad={rt.bedsPricePerDayMad || 200}
-        onToggle={async (next) => {
-          const r = await listingsService.patchListingConfiguration(listingId, {
-            roomTypeId: rt.id,
-            roomType: { paidBeds: next, bedsPricePerDayMad: rt.bedsPricePerDayMad || 200 },
-          });
-          if (r.success) onChanged?.();
-        }}
-      />
     </Box>
   );
 }
@@ -276,6 +263,33 @@ export default function SectionStructure({ structure }: Props) {
 
   return (
     <Stack spacing={1.75}>
+      {/* Beds = hôtel (comme ambiances). Piscine = par type, plus bas. */}
+      <Box sx={cardSx}>
+        <Typography sx={{ fontWeight: 750, fontSize: 15, color: T.ink, mb: 0.5 }}>
+          Options hôtel
+        </Typography>
+        <Typography sx={{ fontSize: 13, color: T.ink2, lineHeight: 1.6, mb: 1 }}>
+          Les <b>beds piscine</b> s’appliquent à tout l’établissement. La piscine privée
+          se règle type par type (ex. Villa confort).
+        </Typography>
+        <StayExtraToggle
+          title="Beds piscine"
+          ariaLabel="Beds piscine payants (hôtel)"
+          checked={building.paidBeds === true}
+          priceMad={building.bedsPricePerDayMad || 200}
+          savingLabel="listing"
+          onToggle={async (next) => {
+            const r = await listingsService.patchListingConfiguration(building.id, {
+              building: {
+                paidBeds: next,
+                bedsPricePerDayMad: building.bedsPricePerDayMad || 200,
+              },
+            });
+            if (r.success) onChanged?.();
+          }}
+        />
+      </Box>
+
       {/* L'écart, énoncé d'entrée : c'est l'information la plus utile. */}
       {gap > 0 ? (
         <Box

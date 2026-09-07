@@ -24,6 +24,7 @@ describe('Listing Options séjour', () => {
     assert.match(source, /paidPrivatePool/);
     assert.match(source, /paidBeds/);
     assert.match(source, /GuestPaymentMethodsField/);
+    assert.match(source, /Beds.*hôtel|toggleBuilding\('beds'/);
     assert.match(catalog, /Piscine privée/);
     assert.match(catalog, /Beds piscine/);
     assert.doesNotMatch(source, /ListingRoomServiceTab/);
