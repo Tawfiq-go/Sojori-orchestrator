@@ -2255,6 +2255,7 @@ export function PartnersAdminPage() {
                     })}
                   </div>
                   {serviceDraft.payment.methods.some((m) => m === 'card' || m === 'transfer') ? (
+                    <>
                     <div
                       style={{
                         display: 'grid',
@@ -2336,6 +2337,7 @@ export function PartnersAdminPage() {
                         Défaut 24 h.
                       </Constraint>
                     </div>
+                    </>
                   ) : (
                     <Constraint>Cash seul → règlement sur place (pas d’acompte en ligne).</Constraint>
                   )}
