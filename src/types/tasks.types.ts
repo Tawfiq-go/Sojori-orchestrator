@@ -222,6 +222,13 @@ export interface TaskCreatePayload {
   startDate: string;
   endDate: string;
   listingName?: string;
+  /**
+   * Le logement REEL — « Villa executive 09 ».
+   *
+   * A ne pas confondre avec le type de chambre (« Villa signature ») : le
+   * staff se rend dans une villa precise, pas dans une categorie.
+   */
+  roomName?: string;
   reservationNumber?: string;
   reservationId?: string;
   price?: number;
