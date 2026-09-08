@@ -152,8 +152,8 @@ export default function ListingRoomServiceTab({
         supplementServiceIds: supplement,
         supplementMode: supplement.length ? 'with_supplement' : 'none',
         guestMustSelectDays: true,
-  cancelCutoffDaysBefore: 1,
-  cancelCutoffHour: 17,
+        cancelCutoffDaysBefore: next.cancelCutoffDaysBefore ?? 1,
+        cancelCutoffHour: next.cancelCutoffHour ?? 17,
       },
     });
   };
@@ -204,8 +204,10 @@ export default function ListingRoomServiceTab({
           supplementServiceIds: supplement,
           supplementMode: supplement.length ? 'with_supplement' : 'none',
           guestMustSelectDays: true,
-  cancelCutoffDaysBefore: 1,
-  cancelCutoffHour: 17,
+          // Les champs « Limite d'annulation » étaient écrasés à 1 j / 17 h à chaque
+          // enregistrement : on garde ce que le PM a saisi.
+          cancelCutoffDaysBefore: breakfast.cancelCutoffDaysBefore ?? 1,
+          cancelCutoffHour: breakfast.cancelCutoffHour ?? 17,
         },
       });
       setBreakfast((prev) => ({

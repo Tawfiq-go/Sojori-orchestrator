@@ -48,4 +48,9 @@ describe('Listing PDJ Inclus — formules éditables depuis l’onglet', () => {
     assert.match(rows, /Supprimer la formule/);
     assert.match(rows, /useState\(\(draft\.optionGroups \|\| \[\]\)\.length > 0\)/);
   });
+  it('keeps the cancellation cutoff the PM typed (was reset to 1 day / 17h on every save)', () => {
+    assert.equal((tab.match(/cancelCutoffDaysBefore: 1,/g) || []).length, 1, 'only the default');
+    assert.match(tab, /cancelCutoffDaysBefore: breakfast\.cancelCutoffDaysBefore \?\? 1/);
+    assert.match(tab, /cancelCutoffHour: breakfast\.cancelCutoffHour \?\? 17/);
+  });
 });
