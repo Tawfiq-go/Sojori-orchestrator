@@ -1597,17 +1597,6 @@ function RailCard({ title, children }: { title: string; children: React.ReactNod
   );
 }
 
-function GlanceStat({ value, label }: { value: string; label: string }) {
-  return (
-    <Box>
-      <Typography sx={{ fontSize: 15, fontWeight: 600, fontFamily: 'ui-monospace, Menlo, monospace' }}>{value}</Typography>
-      <Typography sx={{ fontSize: 10, fontWeight: 750, letterSpacing: '0.09em', textTransform: 'uppercase', color: V3.t4, mt: 0.15 }}>
-        {label}
-      </Typography>
-    </Box>
-  );
-}
-
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <Typography sx={{ fontSize: 10.5, fontWeight: 750, letterSpacing: '0.12em', textTransform: 'uppercase', color: V3.t4, mb: 1.1, display: 'block' }}>

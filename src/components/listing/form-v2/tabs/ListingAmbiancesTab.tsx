@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { GuestWhatsAppPreview } from './GuestWhatsAppPreview';
 import {
   Box,
   Button,
@@ -135,6 +136,7 @@ export default function ListingAmbiancesTab({
   const [creating, setCreating] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [newAmbiance, setNewAmbiance] = useState<NewAmbiance>(EMPTY_NEW);
+  const [previewKey, setPreviewKey] = useState(0);
 
   const toggleOpen = (key: string) => setOpen((p) => ({ ...p, [key]: !p[key] }));
 
@@ -268,6 +270,7 @@ export default function ListingAmbiancesTab({
       });
       toast.success('Ambiances enregistrées');
       await load();
+      setPreviewKey((k) => k + 1);
     } catch (e) {
       toast.error(extractHttpErrorMessage(e, 'Enregistrement impossible'));
     } finally {
@@ -575,6 +578,22 @@ export default function ListingAmbiancesTab({
             {saving ? '…' : 'Enregistrer les ambiances'}
           </Button>
         </Box>
+      </TabSection>
+
+      <TabSection
+        id="preview"
+        icon="💬"
+        title="Ce que le voyageur voit"
+        summary="le menu WhatsApp et la ligne Options séjour, calculés par le chatbot"
+        open={Boolean(open.preview)}
+        onToggle={() => toggleOpen('preview')}
+      >
+        <GuestWhatsAppPreview
+          listingId={String(listingId)}
+          focus="stay"
+          roomTypes={roomTypes.map((rt) => ({ id: rt.id, name: rt.otaDisplayName || rt.name }))}
+          refreshKey={previewKey}
+        />
       </TabSection>
     </Box>
   );
