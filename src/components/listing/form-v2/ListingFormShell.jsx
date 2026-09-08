@@ -212,32 +212,28 @@ function StatusChip({ tone, label, dot = true }) {
 
 function TabButton({ tab, active, statusBadge, onClick }) {
   return (
-    <Box component="button" onClick={onClick} sx={{
-      all: 'unset', cursor: 'pointer', width: '100%',
-      display: 'flex', alignItems: 'center', gap: 1,
-      px: 1.5, py: 1, borderRadius: '7px',
-      fontSize: 12.5, fontWeight: active ? 600 : 500,
+    <Box component="button" type="button" onClick={onClick} aria-current={active ? 'page' : undefined} sx={{
+      all: 'unset', cursor: 'pointer',
+      display: 'inline-flex', alignItems: 'center', gap: 0.6,
+      px: 1.1, py: 0.55, borderRadius: '8px',
+      fontSize: 12.5, fontWeight: active ? 650 : 500, whiteSpace: 'nowrap',
       color: active ? T.text : T.text2,
       bgcolor: active ? T.bg1 : 'transparent',
-      boxShadow: active ? '0 1px 2px rgba(20,17,10,0.04)' : 'none',
-      position: 'relative', mb: 0.25,
-      '&:hover': { bgcolor: active ? T.bg1 : T.bg2, color: T.text },
-      '&::before': active ? {
-        content: '""', position: 'absolute', left: 0, top: 8, bottom: 8,
-        width: 2, borderRadius: 1, bgcolor: T.primary,
-      } : {},
+      border: `1px solid ${active ? T.primary : 'transparent'}`,
+      boxShadow: active ? '0 1px 2px rgba(20,17,10,0.06)' : 'none',
+      '&:hover': { bgcolor: T.bg1, color: T.text, borderColor: active ? T.primary : T.border },
+      '&:focus-visible': { outline: `2px solid ${T.primary}`, outlineOffset: 1 },
     }}>
-      <Box sx={{ fontSize: 14, width: 18, textAlign: 'center', flexShrink: 0 }}>{tab.icon}</Box>
-      <Box sx={{ flex: 1, minWidth: 0, lineHeight: 1.35, letterSpacing: '-0.01em' }}>{tab.label}</Box>
+      {tab.icon ? <Box component="span" sx={{ fontSize: 13, lineHeight: 1 }}>{tab.icon}</Box> : null}
+      <Box component="span" sx={{ lineHeight: 1.3, letterSpacing: '-0.01em' }}>{tab.label}</Box>
       {statusBadge && (
-        <Box sx={{
-          flexShrink: 0,
+        <Box component="span" sx={{
           fontSize: 9.5, fontFamily: '"Geist Mono", monospace', fontWeight: 700,
           bgcolor: statusBadge.tone === 'warning' ? T.warningTint :
                    statusBadge.tone === 'success' ? T.successTint : T.bg3,
           color:   statusBadge.tone === 'warning' ? T.warning :
                    statusBadge.tone === 'success' ? T.success : T.text3,
-          px: 0.75, py: '1px', borderRadius: '99px',
+          px: 0.6, py: '1px', borderRadius: '99px',
         }}>{statusBadge.label}</Box>
       )}
     </Box>
@@ -551,37 +547,47 @@ export default function ListingFormShell({
           bgcolor: T.bg1, border: `1px solid ${T.border}`, borderRadius: 1.75,
           overflow: 'hidden',
           display: 'grid',
-          gridTemplateColumns: isOrchV3 ? '1fr' : { xs: '1fr', md: `${LISTING_LAYOUT.tabsRailWidth}px 1fr` },
+          gridTemplateColumns: '1fr',
+          gridTemplateRows: isOrchV3 ? '1fr' : 'auto 1fr',
           minHeight: isOrchV3 ? (embedded ? V3_ORCH_MIN_H : V3_ORCH_MIN_H) : embedded ? 420 : 560,
           height: isOrchV3 ? V3_ORCH_MIN_H : undefined,
           maxHeight: isOrchV3 ? V3_ORCH_MIN_H : undefined,
         }}>
-          {/* Tabs rail */}
+          {/* Onglets en haut — un bloc par groupe, séparés par un filet ;
+              le contenu prend toute la largeur (demande Tawfiq 2026-09-08). */}
           {!isOrchV3 && (
-          <Stack sx={{
-            borderRight: { md: `1px solid ${T.border}` },
-            bgcolor: T.bg2, p: LISTING_LAYOUT.tabsRailPad, overflowY: 'auto',
-            maxHeight: { md: embedded ? 'calc(100vh - 220px)' : '80vh' },
+          <Box data-testid="listing-top-tabs" sx={{
+            borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2,
+            display: 'flex', alignItems: 'stretch',
+            overflowX: 'auto', flexWrap: { xs: 'nowrap', xl: 'wrap' },
+            px: 0.5, py: 0.5,
+            scrollbarWidth: 'thin',
           }}>
-            {tabsConfig.map(g => (
-              <React.Fragment key={g.group}>
+            {tabsConfig.map((g, gi) => (
+              <Box key={g.group} sx={{
+                display: 'flex', flexDirection: 'column', gap: 0.35,
+                px: 1.25, py: 0.35, flexShrink: 0,
+                borderLeft: gi ? `1px solid ${T.border}` : 'none',
+              }}>
                 <Typography sx={{
                   fontSize: 9.5, fontFamily: '"Geist Mono", monospace', fontWeight: 600,
                   color: T.text4, letterSpacing: '0.08em', textTransform: 'uppercase',
-                  px: 1.5, pt: 1.25, pb: 0.75,
+                  px: 0.5,
                 }}>{g.group}</Typography>
-                {g.items.map(t => (
-                  <TabButton
-                    key={t.id}
-                    tab={t}
-                    active={activeTab === t.id}
-                    statusBadge={tabsStatus[t.id]}
-                    onClick={() => commitNav(level, t.id)}
-                  />
-                ))}
-              </React.Fragment>
+                <Stack direction="row" sx={{ gap: 0.4, flexWrap: 'wrap' }}>
+                  {g.items.map(t => (
+                    <TabButton
+                      key={t.id}
+                      tab={t}
+                      active={activeTab === t.id}
+                      statusBadge={tabsStatus[t.id]}
+                      onClick={() => commitNav(level, t.id)}
+                    />
+                  ))}
+                </Stack>
+              </Box>
             ))}
-          </Stack>
+          </Box>
           )}
 
           {/* Content */}
