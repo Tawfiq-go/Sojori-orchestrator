@@ -101,6 +101,22 @@ class GuestContractsService {
     }
   }
 
+  /**
+   * Suppression DÉFINITIVE — efface le document Mongo et ses fichiers
+   * (signé compris). Contrairement à `supersede()` (archivage réversible,
+   * garde la preuve légale), cette action est irréversible : à réserver aux
+   * cas où la donnée doit vraiment disparaître (RGPD, erreur de saisie).
+   */
+  async hardDelete(contractId: string) {
+    const url = `${RESERVATIONS_API}/guest-contracts/${encodeURIComponent(contractId)}`;
+    try {
+      const response = await apiClient.delete(url);
+      return unwrap<{ deleted: true }>(response.data);
+    } catch (err) {
+      return unwrapCaught<{ deleted: true }>(err);
+    }
+  }
+
   async createAccessToken(contractId: string, signerId?: string) {
     const url = `${RESERVATIONS_API}/guest-contracts/${encodeURIComponent(contractId)}/access-token`;
     try {

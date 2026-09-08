@@ -301,6 +301,31 @@ class MessagesService {
   }
 
   /**
+   * Suppression DÉFINITIVE des messages WhatsApp de lien de contrat (nom du
+   * voyageur en clair) pour une réservation — irréversible.
+   * DELETE /api/v1/ai/debug/conversations/:reservationId/contract-links
+   */
+  async deleteContractLinkMessages(reservationId: string): Promise<{ deletedCount: number }> {
+    try {
+      const response = await apiClient.delete<{
+        success?: boolean;
+        status?: string;
+        error?: string;
+        data?: { deletedCount: number };
+      }>(`${resolveWhatsappDebugBase('guest')}/conversations/${encodeURIComponent(reservationId)}/contract-links`);
+      const body = response.data;
+      if (body.status === 'error' || body.success === false) {
+        throw new Error(body.error || 'Échec suppression messages WhatsApp');
+      }
+      return body.data ?? { deletedCount: 0 };
+    } catch (error: unknown) {
+      throw new Error(
+        extractHttpErrorMessage(error, 'Erreur lors de la suppression des messages WhatsApp'),
+      );
+    }
+  }
+
+  /**
    * Envoyer un menu / flow WhatsApp (comme si le guest tapait C, D, E…)
    * POST /api/v1/ai/debug/send-menu-code
    */

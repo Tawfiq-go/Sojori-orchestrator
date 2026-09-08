@@ -1071,6 +1071,8 @@ export type GuestMemberInput = {
   document_issued_on?: string;
   customAnswers?: Record<string, unknown>;
   stayAnswers?: Record<string, unknown>;
+  /** Autorise l'effacement d'un champ identité déjà renseigné (ex. retrait de pièce). */
+  allowIdentityClear?: boolean;
 };
 
 export async function getRegistrationFlowState(reservationId: string) {

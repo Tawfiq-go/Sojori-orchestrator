@@ -512,6 +512,35 @@ export function RegistrationTab({
     }
   };
 
+  const handleRemoveDocument = async (index: number, side: 'front' | 'back') => {
+    if (!resaId || readOnly) return;
+    const member = members[index] || {};
+    if (
+      !window.confirm(
+        `Retirer la pièce d’identité (${side === 'front' ? 'recto/passeport' : 'verso'}) de ce voyageur ? L’identité et le statut d’enregistrement restent inchangés.`,
+      )
+    )
+      return;
+    setSaving(true);
+    try {
+      const res = await fulltaskApi.registerGuestMember(resaId, index, {
+        first_name: memberField(member, 'first_name', 'firstName'),
+        last_name: memberField(member, 'last_name', 'lastName'),
+        allowIdentityClear: true,
+        ...(side === 'front'
+          ? { document_front_download: '' }
+          : { document_back_download: '' }),
+      });
+      if (res?.success === false) throw new Error(res?.error || 'Échec suppression');
+      toast.success('Pièce retirée');
+      onRefresh?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur suppression');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleResetAttempt = async () => {
     if (!resaId || readOnly) return;
     if (
@@ -775,8 +804,31 @@ export function RegistrationTab({
             ) : null}
           </Stack>
         </Stack>
+      </Paper>
 
-        {resaId ? (
+      {resaId ? (
+        <Paper
+          id="enregistrement-contrats"
+          sx={{
+            p: 1.25,
+            mb: 1.25,
+            border: `1px solid ${T.border}`,
+            borderRadius: 1.25,
+            bgcolor: T.bg1,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: T.text3,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              mb: 1,
+            }}
+          >
+            Contrats
+          </Typography>
           <GuestContractSection
             reservationId={resaId}
             listingId={listingId || null}
@@ -792,8 +844,8 @@ export function RegistrationTab({
               })
               .filter(t => t.name)}
           />
-        ) : null}
-      </Paper>
+        </Paper>
+      ) : null}
 
       {Math.max(members.length, regTotal) === 0 ? (
         <Paper
@@ -1026,18 +1078,54 @@ export function RegistrationTab({
                         />
                       ))}
                     </Box>
-                    <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                    <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
                       {docKind === 'national_id' ? (
                         <>
                           {front ? (
-                            <DocOpenButton src={front} label="Recto" onPreview={setPreviewUrl} />
+                            <>
+                              <DocOpenButton src={front} label="Recto" onPreview={setPreviewUrl} />
+                              {!readOnly ? (
+                                <IconButton
+                                  size="small"
+                                  title="Retirer le recto"
+                                  onClick={() => void handleRemoveDocument(i, 'front')}
+                                  sx={{ color: T.error }}
+                                >
+                                  <Close sx={{ fontSize: 14 }} />
+                                </IconButton>
+                              ) : null}
+                            </>
                           ) : null}
                           {back ? (
-                            <DocOpenButton src={back} label="Verso" onPreview={setPreviewUrl} />
+                            <>
+                              <DocOpenButton src={back} label="Verso" onPreview={setPreviewUrl} />
+                              {!readOnly ? (
+                                <IconButton
+                                  size="small"
+                                  title="Retirer le verso"
+                                  onClick={() => void handleRemoveDocument(i, 'back')}
+                                  sx={{ color: T.error }}
+                                >
+                                  <Close sx={{ fontSize: 14 }} />
+                                </IconButton>
+                              ) : null}
+                            </>
                           ) : null}
                         </>
                       ) : front ? (
-                        <DocOpenButton src={front} label="Passeport" onPreview={setPreviewUrl} />
+                        <>
+                          <DocOpenButton src={front} label="Passeport" onPreview={setPreviewUrl} />
+                          {!readOnly ? (
+                            <IconButton
+                              size="small"
+                              title="Retirer le passeport"
+                              onClick={() => void handleRemoveDocument(i, 'front')}
+                              sx={{ color: T.error }}
+                            >
+                              <Close sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          ) : null}
+                        </>
                       ) : null}
                       {!front && !back ? (
                         <Typography sx={{ fontSize: 11, color: T.text4 }}>Pas de pièce</Typography>

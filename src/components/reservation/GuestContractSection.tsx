@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import { toast } from 'react-toastify';
+import { useRealAuth } from '../../hooks/useAuth';
 import listingsService from '../../services/listingsService';
+import messagesService from '../../services/messagesService';
 import guestContractsService, {
   missingSigners,
   needsNewSigningVersion,
@@ -180,6 +182,8 @@ export function GuestContractSection({
   embedded = false,
   registeredTravelers,
 }: Props) {
+  const { user: realUser } = useRealAuth();
+  const canHardDelete = realUser?.role === 'Admin' || realUser?.role === 'SuperAdmin';
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [contracts, setContracts] = useState<GuestContractSummary[]>([]);
@@ -573,6 +577,46 @@ export function GuestContractSection({
     });
   };
 
+  /**
+   * Suppression DÉFINITIVE — efface le contrat (signé compris), irréversible.
+   * Double confirmation volontaire, distincte de `removeContract` (archivage).
+   */
+  const hardDeleteContract = (documentType: GuestContractDocumentType, rowKey: string) => {
+    const existing = liveContract(byType.get(documentType), registeredTravelers);
+    if (!existing || readOnly || !canHardDelete) return;
+    if (
+      !window.confirm(
+        'Supprimer DÉFINITIVEMENT ce contrat ? Cette action efface aussi la version signée et ne peut PAS être annulée — à réserver aux cas où la preuve légale n’a plus à exister.',
+      )
+    )
+      return;
+    if (!window.confirm('Confirmer une dernière fois : suppression irréversible.')) return;
+    const alsoPurgeWhatsapp = window.confirm(
+      'Le nom du voyageur reste visible dans l’historique WhatsApp (message du lien de signature déjà envoyé). Supprimer aussi ces messages ? Irréversible, sans effet sur le reste de la conversation.',
+    );
+    void withBusy(`${rowKey}:harddel`, async () => {
+      const res = await guestContractsService.hardDelete(existing.id);
+      if (!res.success) {
+        toast.error(res.message || 'Suppression définitive impossible');
+        return;
+      }
+      await refreshContracts();
+      toast.success('Contrat supprimé définitivement');
+      if (alsoPurgeWhatsapp && reservationId) {
+        try {
+          const { deletedCount } = await messagesService.deleteContractLinkMessages(reservationId);
+          toast.success(
+            deletedCount > 0
+              ? `${deletedCount} message${deletedCount > 1 ? 's' : ''} WhatsApp supprimé${deletedCount > 1 ? 's' : ''}`
+              : 'Aucun message de lien de contrat trouvé',
+          );
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Suppression WhatsApp échouée');
+        }
+      }
+    });
+  };
+
   const openPdf = (documentType: GuestContractDocumentType, rowKey: string) => {
     const tab = window.open('about:blank', '_blank');
     paintWaitingTab(tab, 'Préparation du PDF');
@@ -682,6 +726,7 @@ export function GuestContractSection({
           const webBusy = busyKey === `${row.key}:web`;
           const pdfBusy = busyKey === `${row.key}:pdf`;
           const delBusy = busyKey === `${row.key}:del`;
+          const hardDelBusy = busyKey === `${row.key}:harddel`;
           const anyBusy = Boolean(busyKey);
           return (
             <Stack
@@ -797,6 +842,29 @@ export function GuestContractSection({
                   }}
                 >
                   {delBusy ? <CircularProgress size={12} /> : 'Suppr.'}
+                </Button>
+              ) : null}
+              {current && !readOnly && canHardDelete ? (
+                <Button
+                  size="small"
+                  variant="text"
+                  disabled={anyBusy}
+                  onClick={() => hardDeleteContract(row.documentType, row.key)}
+                  title="Suppression définitive — irréversible, efface aussi la version signée"
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontSize: 11,
+                    color: '#fff',
+                    bgcolor: T.error,
+                    '&:hover': { bgcolor: '#a51818' },
+                    minHeight: 26,
+                    minWidth: 0,
+                    px: 0.75,
+                    flexShrink: 0,
+                  }}
+                >
+                  {hardDelBusy ? <CircularProgress size={12} color="inherit" /> : 'Suppr. définitif'}
                 </Button>
               ) : null}
             </Stack>
