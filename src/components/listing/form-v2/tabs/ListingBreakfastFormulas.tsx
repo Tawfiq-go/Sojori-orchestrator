@@ -11,11 +11,18 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import { toast } from 'react-toastify';
 import type {
   PartnerService,
   PartnerServiceOptionChoice,
   PartnerServiceOptionGroup,
 } from '../../../../services/partnersApi';
+import {
+  type BreakfastFormulaDraft,
+  MAX_FORMULA_PHOTOS,
+  formulaPriceMad,
+} from './breakfastFormulaHelpers';
+import { pickUploadablePhotos, uploadPartnerPhotos } from './partnerPhotoUpload';
 
 function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -63,14 +70,14 @@ export function sanitizeOptionGroups(
     .filter((g) => g.label && g.choices.length);
 }
 
-type FormulaDraft = {
-  id: string;
-  title: string;
-  description: string;
-  optionGroups: PartnerServiceOptionGroup[];
-};
+type FormulaDraft = BreakfastFormulaDraft;
+
+export type BreakfastFormulasMode = 'breakfast' | 'card';
 
 type Props = {
+  /** breakfast = formules incluses (PDJ) ; card = carte payante Room service. */
+  mode?: BreakfastFormulasMode;
+  emptyText?: string;
   dishes: PartnerService[];
   drafts: Record<string, FormulaDraft>;
   includedIds: Set<string>;
@@ -78,6 +85,8 @@ type Props = {
   onToggleIncluded: (id: string, on: boolean) => void;
   onToggleSupplement: (id: string, on: boolean) => void;
   onDraftChange: (id: string, patch: Partial<FormulaDraft>) => void;
+  /** Retire la formule du catalogue (active=false) — jamais de suppression physique ici. */
+  onRemove?: (id: string) => void;
   disabled?: boolean;
 };
 
@@ -211,6 +220,7 @@ function OptionGroupCard({
 }
 
 function FormulaRow({
+  mode,
   dish,
   draft,
   included,
@@ -218,8 +228,10 @@ function FormulaRow({
   onToggleIncluded,
   onToggleSupplement,
   onDraftChange,
+  onRemove,
   disabled,
 }: {
+  mode: BreakfastFormulasMode;
   dish: PartnerService;
   draft: FormulaDraft;
   included: boolean;
@@ -227,10 +239,27 @@ function FormulaRow({
   onToggleIncluded: (on: boolean) => void;
   onToggleSupplement: (on: boolean) => void;
   onDraftChange: (patch: Partial<FormulaDraft>) => void;
+  onRemove?: () => void;
   disabled?: boolean;
 }) {
   const [openOptions, setOpenOptions] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const groups = draft.optionGroups || [];
+  const photos = draft.photos || [];
+  const onPickPhotos = async (files: FileList | null) => {
+    const { valid, rejected } = pickUploadablePhotos(files, MAX_FORMULA_PHOTOS - photos.length);
+    rejected.forEach((msg) => toast.error(msg));
+    if (!valid.length) return;
+    setUploading(true);
+    try {
+      const urls = await uploadPartnerPhotos(valid);
+      onDraftChange({ photos: [...photos, ...urls].slice(0, MAX_FORMULA_PHOTOS) });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload échoué');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <Box
@@ -242,10 +271,24 @@ function FormulaRow({
         pointerEvents: disabled ? 'none' : 'auto',
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography sx={{ fontSize: 15, fontWeight: 700, flex: 1, lineHeight: 1.2 }}>
-          {dish.title}
-        </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+        <TextField
+          size="small"
+          placeholder="Nom de la formule"
+          value={draft.title}
+          onChange={(e) => onDraftChange({ title: e.target.value })}
+          slotProps={{ htmlInput: { 'aria-label': 'Nom de la formule', maxLength: 160 } }}
+          sx={{ flex: 1, minWidth: 180, '& input': { fontWeight: 700, fontSize: 15 } }}
+        />
+        <TextField
+          size="small"
+          type="number"
+          label="Prix MAD"
+          value={draft.priceMad ?? formulaPriceMad(dish)}
+          onChange={(e) => onDraftChange({ priceMad: Math.max(0, Number(e.target.value) || 0) })}
+          slotProps={{ htmlInput: { min: 0, step: 10, 'aria-label': 'Prix de la formule en MAD' } }}
+          sx={{ width: 120 }}
+        />
         <FormControlLabel
           sx={{ mr: 0 }}
           control={
@@ -255,8 +298,19 @@ function FormulaRow({
               onChange={(_, on) => onToggleIncluded(on)}
             />
           }
-          label={<Typography sx={{ fontSize: 13 }}>Activer</Typography>}
+          label={<Typography sx={{ fontSize: 13 }}>Inclus au petit déjeuner</Typography>}
         />
+        {onRemove ? (
+          <Button
+            size="small"
+            color="error"
+            onClick={onRemove}
+            sx={{ textTransform: 'none', fontSize: 12 }}
+            aria-label={`Retirer la formule ${dish.title}`}
+          >
+            Retirer
+          </Button>
+        ) : null}
       </Box>
 
       <TextField
@@ -270,6 +324,49 @@ function FormulaRow({
         onChange={(e) => onDraftChange({ description: e.target.value })}
         sx={{ mt: 1 }}
       />
+      <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+          Photos ({photos.length}/{MAX_FORMULA_PHOTOS})
+        </Typography>
+        {photos.map((url, i) => (
+          <Box key={url} sx={{ position: 'relative' }}>
+            <Box
+              component="img"
+              src={url}
+              alt={`Photo ${i + 1} de ${dish.title}`}
+              sx={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 1, display: 'block' }}
+            />
+            <IconButton
+              size="small"
+              onClick={() => onDraftChange({ photos: photos.filter((_, k) => k !== i) })}
+              aria-label={`Supprimer la photo ${i + 1}`}
+              sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'background.paper', p: 0.25 }}
+            >
+              ×
+            </IconButton>
+          </Box>
+        ))}
+        {photos.length < MAX_FORMULA_PHOTOS ? (
+          <Button
+            component="label"
+            size="small"
+            disabled={uploading}
+            sx={{ textTransform: 'none', fontSize: 12 }}
+          >
+            {uploading ? 'Envoi…' : '+ Photo'}
+            <input
+              hidden
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              onChange={(e) => {
+                void onPickPhotos(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </Button>
+        ) : null}
+      </Box>
 
       <Box
         sx={{
@@ -280,23 +377,27 @@ function FormulaRow({
           flexWrap: 'wrap',
         }}
       >
-        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Supplément</Typography>
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={withSupplement ? 'with' : 'none'}
-          onChange={(_, v: 'none' | 'with' | null) => {
-            if (!v) return;
-            onToggleSupplement(v === 'with');
-          }}
-        >
-          <ToggleButton value="none" sx={{ py: 0.2, px: 1, fontSize: 11.5, textTransform: 'none' }}>
-            Sans
-          </ToggleButton>
-          <ToggleButton value="with" sx={{ py: 0.2, px: 1, fontSize: 11.5, textTransform: 'none' }}>
-            Avec
-          </ToggleButton>
-        </ToggleButtonGroup>
+        {mode === 'breakfast' ? (
+          <>
+            <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Supplément</Typography>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={withSupplement ? 'with' : 'none'}
+              onChange={(_, v: 'none' | 'with' | null) => {
+                if (!v) return;
+                onToggleSupplement(v === 'with');
+              }}
+            >
+              <ToggleButton value="none" sx={{ py: 0.2, px: 1, fontSize: 11.5, textTransform: 'none' }}>
+                Sans
+              </ToggleButton>
+              <ToggleButton value="with" sx={{ py: 0.2, px: 1, fontSize: 11.5, textTransform: 'none' }}>
+                Avec
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </>
+        ) : null}
 
         <Button
           size="small"
@@ -388,6 +489,8 @@ export function draftFromDish(d: PartnerService): FormulaDraft {
     id: String(d.id),
     title: d.title,
     description: d.description || '',
+    priceMad: formulaPriceMad(d),
+    photos: (d.photos || []).slice(0, MAX_FORMULA_PHOTOS),
     optionGroups: (d.optionGroups || []).map((g) => ({
       ...g,
       choices: (g.choices || []).map((c) => ({ ...c })),
@@ -396,6 +499,8 @@ export function draftFromDish(d: PartnerService): FormulaDraft {
 }
 
 export function ListingBreakfastFormulas({
+  mode = 'breakfast',
+  emptyText,
   dishes,
   drafts,
   includedIds,
@@ -403,12 +508,13 @@ export function ListingBreakfastFormulas({
   onToggleIncluded,
   onToggleSupplement,
   onDraftChange,
+  onRemove,
   disabled,
 }: Props) {
   if (!dishes.length) {
     return (
       <Typography sx={{ fontSize: 13, color: 'text.secondary', mt: 1 }}>
-        Aucune formule petit déjeuner sur ce listing.
+        {emptyText || 'Aucune formule petit déjeuner sur ce listing. Ajoutez-en une avec « Nouvelle formule ».'}
       </Typography>
     );
   }
@@ -421,6 +527,7 @@ export function ListingBreakfastFormulas({
         return (
           <FormulaRow
             key={id}
+            mode={mode}
             dish={d}
             draft={draft}
             included={includedIds.has(id)}
@@ -428,6 +535,7 @@ export function ListingBreakfastFormulas({
             onToggleIncluded={(on) => onToggleIncluded(id, on)}
             onToggleSupplement={(on) => onToggleSupplement(id, on)}
             onDraftChange={(patch) => onDraftChange(id, patch)}
+            onRemove={onRemove ? () => onRemove(id) : undefined}
             disabled={disabled}
           />
         );

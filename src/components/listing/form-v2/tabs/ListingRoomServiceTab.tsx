@@ -18,17 +18,31 @@ import {
   type RoomServiceBreakfastConfig,
 } from '../../../../features/listing/components/ConfigOrchestration/conciergeListingPersist';
 import { partnersApi, type PartnerService } from '../../../../services/partnersApi';
+import { extractHttpErrorMessage } from '../../../../utils/extractHttpErrorMessage';
 import {
   ListingBreakfastFormulas,
   draftFromDish,
   sanitizeOptionGroups,
   sortBreakfastDishes,
 } from './ListingBreakfastFormulas';
+import {
+  activeBreakfastDishes,
+  breakfastFormulaPatch,
+  newBreakfastFormulaBody,
+  retireFormulaPatch,
+} from './breakfastFormulaHelpers';
 
 type Props = {
   listingId?: string | null;
   listingCityId?: string | null;
   listingOwnerId?: string | null;
+  /**
+   * breakfast = onglet « PDJ Inclus » (formules incluses, fenêtre, annulation) ;
+   * card = onglet « Room service » (carte payante, ce que WhatsApp montre sous 🍴).
+   * Même catalogue room_service : « Inclus au petit déjeuner » fait passer un plat
+   * d'un onglet à l'autre après Enregistrer.
+   */
+  mode?: 'breakfast' | 'card';
 };
 
 const DEFAULT_BREAKFAST: RoomServiceBreakfastConfig = {
@@ -49,6 +63,9 @@ const DEFAULT_BREAKFAST: RoomServiceBreakfastConfig = {
 
 type FormulaDraft = ReturnType<typeof draftFromDish>;
 
+type NewFormula = { title: string; priceMad: string; whatsapp: string; description: string };
+const EMPTY_NEW: NewFormula = { title: '', priceMad: '0', whatsapp: '', description: '' };
+
 /**
  * Onglet listing « PDJ Inclus » — une activation, puis chaque formule
  * (description, supplément, options). Staff, pas de provider.
@@ -57,14 +74,21 @@ export default function ListingRoomServiceTab({
   listingId,
   listingCityId,
   listingOwnerId,
+  mode = 'breakfast',
 }: Props) {
+  const isCard = mode === 'card';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [breakfast, setBreakfast] = useState<RoomServiceBreakfastConfig>(DEFAULT_BREAKFAST);
   const [dishes, setDishes] = useState<PartnerService[]>([]);
   const [drafts, setDrafts] = useState<Record<string, FormulaDraft>>({});
   const [includedIds, setIncludedIds] = useState<Set<string>>(new Set());
+  /** Inclus tels que chargés : un plat reste dans son onglet jusqu'à Enregistrer. */
+  const [loadedIncludedIds, setLoadedIncludedIds] = useState<Set<string>>(new Set());
   const [supplementIds, setSupplementIds] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
+  const [newFormula, setNewFormula] = useState<NewFormula>(EMPTY_NEW);
 
   const load = useCallback(async () => {
     if (!listingId) {
@@ -82,7 +106,7 @@ export default function ListingRoomServiceTab({
           kinds: ['room_service'],
         }),
       ]);
-      const rows = sortBreakfastDishes(catalog.filter((r) => (r.kind || '') === 'room_service'));
+      const rows = sortBreakfastDishes(activeBreakfastDishes(catalog));
       setDishes(rows);
       const nextDrafts: Record<string, FormulaDraft> = {};
       for (const r of rows) nextDrafts[String(r.id)] = draftFromDish(r);
@@ -92,6 +116,7 @@ export default function ListingRoomServiceTab({
       setBreakfast(b);
       const included = new Set((b.includedServiceIds || []).map(String));
       setIncludedIds(included);
+      setLoadedIncludedIds(new Set(included));
       const savedSupp = (b.supplementServiceIds || []).map(String).filter((id) => included.has(id));
       if (savedSupp.length) {
         setSupplementIds(new Set(savedSupp));
@@ -105,6 +130,7 @@ export default function ListingRoomServiceTab({
       setDrafts({});
       setBreakfast({ ...DEFAULT_BREAKFAST });
       setIncludedIds(new Set());
+      setLoadedIncludedIds(new Set());
       setSupplementIds(new Set());
     } finally {
       setLoading(false);
@@ -138,7 +164,7 @@ export default function ListingRoomServiceTab({
       await persistBreakfastConfig(next);
       toast.success('Fenêtre petit déjeuner enregistrée');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Enregistrement impossible');
+      toast.error(extractHttpErrorMessage(e, 'Enregistrement impossible'));
     }
   };
 
@@ -149,15 +175,9 @@ export default function ListingRoomServiceTab({
       for (const dish of dishes) {
         const id = String(dish.id);
         const draft = drafts[id] || draftFromDish(dish);
-        const optionGroups = sanitizeOptionGroups(draft.optionGroups);
-        const desc = (draft.description || '').trim();
-        const sameDesc = (dish.description || '').trim() === desc;
-        const sameOpts = JSON.stringify(dish.optionGroups || []) === JSON.stringify(optionGroups);
-        if (sameDesc && sameOpts) continue;
-        await partnersApi.updateExperience(id, {
-          description: desc,
-          optionGroups,
-        });
+        const patch = breakfastFormulaPatch(dish, draft, sanitizeOptionGroups);
+        if (!patch) continue;
+        await partnersApi.updateExperience(id, patch);
       }
 
       const included = Array.from(includedIds);
@@ -187,10 +207,79 @@ export default function ListingRoomServiceTab({
         supplementMode: supplement.length ? 'with_supplement' : 'none',
       }));
       toast.success('Petit déjeuner inclus enregistré');
+      await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Enregistrement impossible');
+      toast.error(extractHttpErrorMessage(e, 'Enregistrement impossible'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** Crée une formule (PartnerService room_service) puis l'inclut dans le PDJ. */
+  const createFormula = async () => {
+    const whatsapp = newFormula.whatsapp.trim() || dishes.find((d) => d.whatsapp)?.whatsapp || '';
+    const body = newBreakfastFormulaBody({
+      ownerId: listingOwnerId || undefined,
+      title: newFormula.title,
+      description: newFormula.description,
+      priceMad: Number(newFormula.priceMad) || 0,
+      whatsapp,
+    });
+    if ('error' in body) {
+      toast.error(body.error);
+      return;
+    }
+    setCreating(true);
+    try {
+      const created = await partnersApi.createExperience(body);
+      const id = String(created.id);
+      setDishes((prev) => sortBreakfastDishes([...prev, created]));
+      setDrafts((prev) => ({ ...prev, [id]: draftFromDish(created) }));
+      if (!isCard) {
+        setIncludedIds((prev) => new Set(prev).add(id));
+        setLoadedIncludedIds((prev) => new Set(prev).add(id));
+        setBreakfast((p) => (p.enabled ? p : { ...p, enabled: true }));
+      }
+      setNewFormula(EMPTY_NEW);
+      setNewOpen(false);
+      toast.success(
+        isCard
+          ? `Plat « ${created.title} » ajouté à la carte — pensez à Enregistrer`
+          : `Formule « ${created.title} » créée — pensez à Enregistrer`,
+      );
+    } catch (e) {
+      toast.error(extractHttpErrorMessage(e, 'Création impossible'));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  /** Retire une formule : active=false côté partenaires, jamais de suppression physique. */
+  const removeFormula = async (id: string) => {
+    const dish = dishes.find((d) => String(d.id) === id);
+    if (!dish) return;
+    if (!window.confirm(`Retirer la formule « ${dish.title} » du petit déjeuner ?`)) return;
+    try {
+      await partnersApi.updateExperience(id, retireFormulaPatch(dish));
+      setDishes((prev) => prev.filter((d) => String(d.id) !== id));
+      setDrafts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setIncludedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setSupplementIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      toast.success(`Formule « ${dish.title} » retirée — pensez à Enregistrer`);
+    } catch (e) {
+      toast.error(extractHttpErrorMessage(e, 'Retrait impossible'));
     }
   };
 
@@ -208,6 +297,172 @@ export default function ListingRoomServiceTab({
     return (
       <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
         <CircularProgress size={24} />
+      </Box>
+    );
+  }
+
+  // Un plat reste dans l'onglet où il a été chargé jusqu'à Enregistrer.
+  const visibleDishes = dishes.filter((d) =>
+    isCard ? !loadedIncludedIds.has(String(d.id)) : loadedIncludedIds.has(String(d.id)),
+  );
+
+  const formulasList = (
+    <ListingBreakfastFormulas
+      mode={mode}
+      emptyText={
+        isCard
+          ? 'Aucun plat payant sur ce listing. Ajoutez-en un avec « Nouveau plat ».'
+          : undefined
+      }
+      dishes={visibleDishes}
+      drafts={drafts}
+      includedIds={includedIds}
+      supplementIds={supplementIds}
+      onToggleIncluded={(id, on) => {
+        setIncludedIds((prev) => {
+          const next = new Set(prev);
+          if (on) next.add(id);
+          else next.delete(id);
+          return next;
+        });
+        if (on) setBreakfast((p) => (p.enabled ? p : { ...p, enabled: true }));
+        if (!on) {
+          setSupplementIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        }
+      }}
+      onToggleSupplement={(id, on) => {
+        setSupplementIds((prev) => {
+          const next = new Set(prev);
+          if (on) next.add(id);
+          else next.delete(id);
+          return next;
+        });
+      }}
+      onDraftChange={(id, patch) => {
+        setDrafts((prev) => {
+          const dish = dishes.find((d) => String(d.id) === id);
+          const base = prev[id] || (dish ? draftFromDish(dish) : undefined);
+          if (!base) return prev;
+          return { ...prev, [id]: { ...base, ...patch } };
+        });
+      }}
+      onRemove={(id) => void removeFormula(id)}
+    />
+  );
+
+  const newFormulaBlock = (
+    <>
+    {newOpen ? (
+      <Box
+        sx={{
+          mt: 1.5,
+          p: 1.5,
+          border: '1px dashed',
+          borderColor: 'divider',
+          borderRadius: 1.5,
+          display: 'grid',
+          gap: 1,
+          gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' },
+        }}
+      >
+        <TextField
+          size="small"
+          label={isCard ? 'Nom du plat' : 'Nom de la formule'}
+          value={newFormula.title}
+          onChange={(e) => setNewFormula((p) => ({ ...p, title: e.target.value }))}
+          slotProps={{ htmlInput: { maxLength: 160 } }}
+          autoFocus
+        />
+        <TextField
+          size="small"
+          type="number"
+          label="Prix MAD"
+          value={newFormula.priceMad}
+          onChange={(e) => setNewFormula((p) => ({ ...p, priceMad: e.target.value }))}
+          slotProps={{ htmlInput: { min: 0, step: 10 } }}
+          helperText={isCard ? 'Prix payé à la commande' : '0 = inclus dans le séjour'}
+        />
+        <TextField
+          size="small"
+          label="WhatsApp cuisine (notifications)"
+          value={newFormula.whatsapp}
+          onChange={(e) => setNewFormula((p) => ({ ...p, whatsapp: e.target.value }))}
+          placeholder={dishes.find((d) => d.whatsapp)?.whatsapp || '+212…'}
+          helperText={
+            dishes.find((d) => d.whatsapp)?.whatsapp
+              ? 'Vide = même numéro que les autres formules'
+              : 'Numéro qui reçoit les commandes'
+          }
+          sx={{ gridColumn: { sm: '1 / -1' } }}
+        />
+        <TextField
+          size="small"
+          fullWidth
+          multiline
+          minRows={2}
+          maxRows={4}
+          label="Description"
+          value={newFormula.description}
+          onChange={(e) => setNewFormula((p) => ({ ...p, description: e.target.value }))}
+          sx={{ gridColumn: { sm: '1 / -1' } }}
+        />
+        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', gridColumn: { sm: '1 / -1' } }}>
+          <Button
+            size="small"
+            disabled={creating}
+            onClick={() => {
+              setNewOpen(false);
+              setNewFormula(EMPTY_NEW);
+            }}
+          >
+            Annuler
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={creating || !newFormula.title.trim()}
+            onClick={() => void createFormula()}
+          >
+            {creating ? '…' : isCard ? 'Ajouter à la carte' : 'Créer la formule'}
+          </Button>
+        </Box>
+      </Box>
+    ) : (
+      <Button
+        size="small"
+        onClick={() => setNewOpen(true)}
+        sx={{ mt: 1, textTransform: 'none' }}
+      >
+        {isCard ? '＋ Nouveau plat' : '＋ Nouvelle formule'}
+      </Button>
+    )}
+    </>
+  );
+
+  if (isCard) {
+    return (
+      <Box sx={{ p: { xs: 1.5, md: 2 }, width: '100%' }}>
+        <Typography sx={{ fontSize: 18, fontWeight: 750, lineHeight: 1.2 }}>
+          Room service — carte payante
+        </Typography>
+        <Typography sx={{ mt: 0.75, fontSize: 12, color: 'text.secondary' }}>
+          Ce que le voyageur voit dans WhatsApp sous 🍴 Room service : plats et catégories
+          payés à la commande, avec leurs options. « Inclus au petit déjeuner » déplace un plat
+          vers l’onglet PDJ Inclus après Enregistrer. La porte s’allume dans WhatsApp si le
+          service Room Service est activé dans Orchestration.
+        </Typography>
+        <Typography sx={{ fontSize: 13, fontWeight: 700, mt: 2.5, mb: 0.25 }}>Carte</Typography>
+        {formulasList}
+        {newFormulaBlock}
+        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button variant="contained" size="small" disabled={saving} onClick={() => void save()}>
+            {saving ? '…' : 'Enregistrer'}
+          </Button>
+        </Box>
       </Box>
     );
   }
@@ -377,44 +632,9 @@ export default function ListingRoomServiceTab({
       </Typography>
 
       <Typography sx={{ fontSize: 13, fontWeight: 700, mt: 2.5, mb: 0.25 }}>Formules</Typography>
-      <ListingBreakfastFormulas
-        dishes={dishes}
-        drafts={drafts}
-        includedIds={includedIds}
-        supplementIds={supplementIds}
-        onToggleIncluded={(id, on) => {
-          setIncludedIds((prev) => {
-            const next = new Set(prev);
-            if (on) next.add(id);
-            else next.delete(id);
-            return next;
-          });
-          if (on) setBreakfast((p) => (p.enabled ? p : { ...p, enabled: true }));
-          if (!on) {
-            setSupplementIds((prev) => {
-              const next = new Set(prev);
-              next.delete(id);
-              return next;
-            });
-          }
-        }}
-        onToggleSupplement={(id, on) => {
-          setSupplementIds((prev) => {
-            const next = new Set(prev);
-            if (on) next.add(id);
-            else next.delete(id);
-            return next;
-          });
-        }}
-        onDraftChange={(id, patch) => {
-          setDrafts((prev) => {
-            const dish = dishes.find((d) => String(d.id) === id);
-            const base = prev[id] || (dish ? draftFromDish(dish) : undefined);
-            if (!base) return prev;
-            return { ...prev, [id]: { ...base, ...patch } };
-          });
-        }}
-      />
+      {formulasList}
+
+      {newFormulaBlock}
 
       <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
         <Button variant="contained" size="small" disabled={saving} onClick={() => void save()}>
