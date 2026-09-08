@@ -259,12 +259,13 @@ export default function ListingFormV2({
           />
         );
       }
-      if (tabKey === 'room-service') {
+      if (tabKey === 'room-service' || tabKey === 'room-service-card') {
         return (
           <ListingRoomServiceTab
             listingId={listingId}
             listingCityId={values.cityId}
             listingOwnerId={values.ownerId}
+            mode={tabKey === 'room-service-card' ? 'card' : 'breakfast'}
           />
         );
       }

@@ -27,4 +27,13 @@ describe('Listing PDJ Inclus — formules éditables depuis l’onglet', () => {
     assert.match(tab, /breakfastFormulaPatch\(dish, draft, sanitizeOptionGroups\)/);
     assert.doesNotMatch(tab, /sameDesc && sameOpts/);
   });
+  it('splits PDJ Inclus and the paid Room service card into two tabs, like WhatsApp', () => {
+    const shell = fs.readFileSync(path.join(here, '..', 'ListingFormShell.jsx'), 'utf8');
+    const v2 = fs.readFileSync(path.join(here, '..', 'ListingFormV2.jsx'), 'utf8');
+    assert.equal((shell.match(/id: 'room-service-card'/g) || []).length, 2);
+    assert.match(v2, /mode=\{tabKey === 'room-service-card' \? 'card' : 'breakfast'\}/);
+    assert.match(tab, /mode\?: 'breakfast' \| 'card'/);
+    assert.match(tab, /Room service — carte payante/);
+    assert.match(rows, /Inclus au petit déjeuner/);
+  });
 });

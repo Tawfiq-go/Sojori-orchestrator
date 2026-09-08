@@ -72,7 +72,12 @@ export function sanitizeOptionGroups(
 
 type FormulaDraft = BreakfastFormulaDraft;
 
+export type BreakfastFormulasMode = 'breakfast' | 'card';
+
 type Props = {
+  /** breakfast = formules incluses (PDJ) ; card = carte payante Room service. */
+  mode?: BreakfastFormulasMode;
+  emptyText?: string;
   dishes: PartnerService[];
   drafts: Record<string, FormulaDraft>;
   includedIds: Set<string>;
@@ -215,6 +220,7 @@ function OptionGroupCard({
 }
 
 function FormulaRow({
+  mode,
   dish,
   draft,
   included,
@@ -225,6 +231,7 @@ function FormulaRow({
   onRemove,
   disabled,
 }: {
+  mode: BreakfastFormulasMode;
   dish: PartnerService;
   draft: FormulaDraft;
   included: boolean;
@@ -291,7 +298,7 @@ function FormulaRow({
               onChange={(_, on) => onToggleIncluded(on)}
             />
           }
-          label={<Typography sx={{ fontSize: 13 }}>Activer</Typography>}
+          label={<Typography sx={{ fontSize: 13 }}>Inclus au petit déjeuner</Typography>}
         />
         {onRemove ? (
           <Button
@@ -370,23 +377,27 @@ function FormulaRow({
           flexWrap: 'wrap',
         }}
       >
-        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Supplément</Typography>
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={withSupplement ? 'with' : 'none'}
-          onChange={(_, v: 'none' | 'with' | null) => {
-            if (!v) return;
-            onToggleSupplement(v === 'with');
-          }}
-        >
-          <ToggleButton value="none" sx={{ py: 0.2, px: 1, fontSize: 11.5, textTransform: 'none' }}>
-            Sans
-          </ToggleButton>
-          <ToggleButton value="with" sx={{ py: 0.2, px: 1, fontSize: 11.5, textTransform: 'none' }}>
-            Avec
-          </ToggleButton>
-        </ToggleButtonGroup>
+        {mode === 'breakfast' ? (
+          <>
+            <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Supplément</Typography>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={withSupplement ? 'with' : 'none'}
+              onChange={(_, v: 'none' | 'with' | null) => {
+                if (!v) return;
+                onToggleSupplement(v === 'with');
+              }}
+            >
+              <ToggleButton value="none" sx={{ py: 0.2, px: 1, fontSize: 11.5, textTransform: 'none' }}>
+                Sans
+              </ToggleButton>
+              <ToggleButton value="with" sx={{ py: 0.2, px: 1, fontSize: 11.5, textTransform: 'none' }}>
+                Avec
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </>
+        ) : null}
 
         <Button
           size="small"
@@ -488,6 +499,8 @@ export function draftFromDish(d: PartnerService): FormulaDraft {
 }
 
 export function ListingBreakfastFormulas({
+  mode = 'breakfast',
+  emptyText,
   dishes,
   drafts,
   includedIds,
@@ -501,7 +514,7 @@ export function ListingBreakfastFormulas({
   if (!dishes.length) {
     return (
       <Typography sx={{ fontSize: 13, color: 'text.secondary', mt: 1 }}>
-        Aucune formule petit déjeuner sur ce listing. Ajoutez-en une avec « Nouvelle formule ».
+        {emptyText || 'Aucune formule petit déjeuner sur ce listing. Ajoutez-en une avec « Nouvelle formule ».'}
       </Typography>
     );
   }
@@ -514,6 +527,7 @@ export function ListingBreakfastFormulas({
         return (
           <FormulaRow
             key={id}
+            mode={mode}
             dish={d}
             draft={draft}
             included={includedIds.has(id)}
