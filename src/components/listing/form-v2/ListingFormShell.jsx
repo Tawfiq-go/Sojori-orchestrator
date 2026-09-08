@@ -277,6 +277,12 @@ export default function ListingFormShell({
   });
   const [level, setLevel] = useState(resolvedLockLevel || resolvedDefaultLevel);
   const [activeTab, setActiveTab] = useState(defaultTab);
+  useEffect(() => {
+    const el = document.querySelector('[data-testid="listing-top-tabs"] [aria-current="page"]');
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [activeTab]);
 
   const commitNav = useCallback(
     (nextLevel, nextTab) => {
@@ -559,14 +565,15 @@ export default function ListingFormShell({
           <Box data-testid="listing-top-tabs" sx={{
             borderBottom: `1px solid ${T.border}`, bgcolor: T.bg2,
             display: 'flex', alignItems: 'stretch',
-            overflowX: 'auto', flexWrap: { xs: 'nowrap', xl: 'wrap' },
+            overflowX: 'auto', flexWrap: { xs: 'nowrap', md: 'wrap' },
             px: 0.5, py: 0.5,
             scrollbarWidth: 'thin',
           }}>
             {tabsConfig.map((g, gi) => (
               <Box key={g.group} sx={{
                 display: 'flex', flexDirection: 'column', gap: 0.35,
-                px: 1.25, py: 0.35, flexShrink: 0,
+                px: 1.25, py: 0.35,
+                flex: '0 1 auto', minWidth: { xs: 'max-content', md: 0 },
                 borderLeft: gi ? `1px solid ${T.border}` : 'none',
               }}>
                 <Typography sx={{
