@@ -184,12 +184,20 @@ export default function ListingRoomServiceTab({
       const supplement = Array.from(supplementIds).filter((id) => includedIds.has(id));
       const current = await fetchListingConciergeArrays(String(listingId));
       const catalogIds = new Set(dishes.map((d) => String(d.id)));
-      const keptOther = (current.enabledExperienceIds ?? [])
-        .map(String)
-        .filter((id) => !catalogIds.has(id));
+      const currentIds = (current.enabledExperienceIds ?? []).map(String);
+      const keptOther = currentIds.filter((id) => !catalogIds.has(id));
+      // Carte payante WhatsApp = plats room_service activés sur le listing mais non
+      // inclus au PDJ. L'onglet Room service l'aligne sur le catalogue (moins les
+      // plats retirés) ; l'onglet PDJ ne touche pas à ce qui est déjà activé.
+      // Avant : la liste était réécrite avec les seuls inclus, ce qui éteignait la
+      // carte payante dans WhatsApp à chaque enregistrement.
+      const paidIds = isCard
+        ? dishes.map((d) => String(d.id)).filter((id) => !includedIds.has(id))
+        : currentIds.filter((id) => catalogIds.has(id) && !includedIds.has(id));
+      const enabledExperienceIds = Array.from(new Set([...keptOther, ...included, ...paidIds]));
 
       await persistListingConciergeSlice(String(listingId), {
-        enabledExperienceIds: [...keptOther, ...included],
+        enabledExperienceIds,
         roomServiceBreakfast: {
           ...breakfast,
           includedServiceIds: included,

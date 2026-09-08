@@ -36,4 +36,9 @@ describe('Listing PDJ Inclus — formules éditables depuis l’onglet', () => {
     assert.match(tab, /Room service — carte payante/);
     assert.match(rows, /Inclus au petit déjeuner/);
   });
+  it('keeps the paid card enabled on the listing when saving (WhatsApp Room service door)', () => {
+    assert.match(tab, /const paidIds = isCard/);
+    assert.match(tab, /new Set\(\[\.\.\.keptOther, \.\.\.included, \.\.\.paidIds\]\)/);
+    assert.doesNotMatch(tab, /enabledExperienceIds: \[\.\.\.keptOther, \.\.\.included\]/);
+  });
 });
