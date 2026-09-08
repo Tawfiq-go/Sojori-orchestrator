@@ -6,12 +6,15 @@ import {
   type CommissionType,
   type Partner,
   type PartnerService,
+  type PartnerServiceConfirmation,
   type PartnerServiceFormule,
   type PartnerServicePayment,
   type PartnerServiceSchedule,
   type PaymentMethod,
+  type PaymentTiming,
   DEFAULT_SCHEDULE,
   DEFAULT_PAYMENT,
+  DEFAULT_CONFIRMATION,
   PAYMENT_LINK_TTL_OPTIONS,
 } from '../services/partnersApi';
 import { postFormDataAsMultipart } from '../utils/upload/postFormData';
@@ -45,6 +48,7 @@ type ServiceDraft = {
   formules: PartnerServiceFormule[];
   schedule: PartnerServiceSchedule;
   payment: PartnerServicePayment;
+  confirmation: PartnerServiceConfirmation;
   keywords: string[];
   commissionType: '' | CommissionType;
   commissionPercent: string;
@@ -113,6 +117,7 @@ function emptyService(): ServiceDraft {
     formules: [{ label: '', priceMad: 0 }],
     schedule: { ...DEFAULT_SCHEDULE },
     payment: { ...DEFAULT_PAYMENT, methods: [...DEFAULT_PAYMENT.methods] },
+    confirmation: { ...DEFAULT_CONFIRMATION },
     keywords: [],
     commissionType: '',
     commissionPercent: '',
@@ -143,6 +148,7 @@ function serviceToDraft(s: PartnerService): ServiceDraft {
       ? s.formules.map((f) => ({ label: f.label || '', priceMad: Number(f.priceMad) || 0 }))
       : [{ label: '', priceMad: 0 }];
   const pay = s.payment || DEFAULT_PAYMENT;
+  const conf = s.confirmation || DEFAULT_CONFIRMATION;
   return {
     category: s.category || '',
     subCategory: s.subCategory || '',
@@ -167,6 +173,15 @@ function serviceToDraft(s: PartnerService): ServiceDraft {
       methods: Array.isArray(pay.methods) && pay.methods.length ? [...pay.methods] : ['cash'],
       collection: pay.collection === 'deposit' ? 'deposit' : 'full',
       depositPercent: pay.depositPercent ?? null,
+      timing: pay.timing === 'instant' ? 'instant' : 'on_confirmation',
+      linkTtlHours: ([1, 4, 8, 24].includes(Number(pay.linkTtlHours))
+        ? (Number(pay.linkTtlHours) as 1 | 4 | 8 | 24)
+        : 24),
+    },
+    confirmation: {
+      slaHours: Number(conf.slaHours) >= 1 ? Math.round(Number(conf.slaHours)) : 24,
+      remindBeforeHours: Number(conf.remindBeforeHours) || 3,
+      remindAfterHours: Number(conf.remindAfterHours) || 3,
     },
     keywords: Array.isArray(s.keywords) ? [...s.keywords] : [],
     commissionType: (s.commissionType as CommissionType) || '',
@@ -938,11 +953,21 @@ export function PartnersAdminPage() {
               needsRemote && serviceDraft.payment.collection === 'deposit'
                 ? Number(serviceDraft.payment.depositPercent) || 30
                 : null,
+            timing: (serviceDraft.payment.timing === 'instant'
+              ? 'instant'
+              : 'on_confirmation') as PaymentTiming,
             linkTtlHours: ([1, 4, 8, 24].includes(Number(serviceDraft.payment.linkTtlHours))
               ? (Number(serviceDraft.payment.linkTtlHours) as 1 | 4 | 8 | 24)
               : 24),
           } satisfies PartnerServicePayment;
         })(),
+        confirmation: {
+          slaHours: Number(serviceDraft.confirmation.slaHours) >= 1
+            ? Math.round(Number(serviceDraft.confirmation.slaHours))
+            : 24,
+          remindBeforeHours: Number(serviceDraft.confirmation.remindBeforeHours) || 3,
+          remindAfterHours: Number(serviceDraft.confirmation.remindAfterHours) || 3,
+        } satisfies PartnerServiceConfirmation,
         keywords: serviceDraft.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean),
         commissionType: serviceDraft.commissionType || null,
         commissionPercent:
@@ -2312,6 +2337,28 @@ export function PartnersAdminPage() {
                     </div>
                     <div style={{ marginTop: 16 }}>
                       <div className="pa-lbl" style={{ marginBottom: 7 }}>
+                        Quand envoyer le lien / encaisser
+                      </div>
+                      <select
+                        className="pa-in"
+                        style={{ ...inpBase, maxWidth: 360 }}
+                        value={serviceDraft.payment.timing === 'instant' ? 'instant' : 'on_confirmation'}
+                        onChange={(e) =>
+                          setServiceDraft((d) => ({
+                            ...d,
+                            payment: {
+                              ...d.payment,
+                              timing: e.target.value === 'instant' ? 'instant' : 'on_confirmation',
+                            },
+                          }))
+                        }
+                      >
+                        <option value="on_confirmation">Après confirmation fournisseur</option>
+                        <option value="instant">Dès la demande (instantané)</option>
+                      </select>
+                    </div>
+                    <div style={{ marginTop: 16 }}>
+                      <div className="pa-lbl" style={{ marginBottom: 7 }}>
                         Durée du lien de paiement
                       </div>
                       <select
@@ -2343,6 +2390,27 @@ export function PartnersAdminPage() {
                   ) : (
                     <Constraint>Cash seul → règlement sur place (pas d’acompte en ligne).</Constraint>
                   )}
+                  <div style={{ marginTop: 16, maxWidth: 280 }}>
+                    <Field
+                      label="SLA confirmation fournisseur (h)"
+                      value={String(serviceDraft.confirmation.slaHours ?? 24)}
+                      onChange={(v) =>
+                        setServiceDraft((d) => ({
+                          ...d,
+                          confirmation: {
+                            ...d.confirmation,
+                            slaHours: Math.min(168, Math.max(1, Number(v) || 24)),
+                          },
+                        }))
+                      }
+                      mono
+                      ph="24"
+                    />
+                    <Constraint>
+                      Expériences : 24 h par défaut. Paiement carte uniquement après acceptation
+                      provider. Navette : SLA dédié (souvent 4 h).
+                    </Constraint>
+                  </div>
                 </Section>
 
                 <Section

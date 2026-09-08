@@ -111,7 +111,7 @@ export const DEFAULT_PAYMENT: PartnerServicePayment = {
   methods: ['cash'],
   collection: 'full',
   depositPercent: null,
-  timing: 'instant',
+  timing: 'on_confirmation',
   linkTtlHours: 24,
 };
 
@@ -138,7 +138,7 @@ export type PartnerServiceConfirmation = {
 };
 
 export const DEFAULT_CONFIRMATION: PartnerServiceConfirmation = {
-  slaHours: 12,
+  slaHours: 24,
   remindBeforeHours: 3,
   remindAfterHours: 3,
 };
