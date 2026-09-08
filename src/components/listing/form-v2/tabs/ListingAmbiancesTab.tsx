@@ -405,8 +405,7 @@ export default function ListingAmbiancesTab({
 
   return (
     <Box sx={{ p: { xs: 1.5, md: 2 }, width: '100%' }}>
-      <Typography sx={{ fontSize: 18, fontWeight: 750, lineHeight: 1.2 }}>Options séjour</Typography>
-      <Typography sx={{ mt: 0.5, mb: 1.5, fontSize: 12, color: 'text.secondary' }}>
+      <Typography sx={{ mb: 1.5, fontSize: 12, color: 'text.secondary' }}>
         Ce que le voyageur voit dans WhatsApp sous 🌞 Options séjour. Le petit déjeuner est dans
         PDJ Inclus, la carte payante dans Room service.
       </Typography>
