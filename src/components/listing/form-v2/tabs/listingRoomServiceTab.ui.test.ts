@@ -41,4 +41,16 @@ describe('Listing PDJ Inclus — formules éditables depuis l’onglet', () => {
     assert.match(tab, /new Set\(\[\.\.\.keptOther, \.\.\.included, \.\.\.paidIds\]\)/);
     assert.doesNotMatch(tab, /enabledExperienceIds: \[\.\.\.keptOther, \.\.\.included\]/);
   });
+  it('offers Supprimer (hard delete) next to Retirer, and says where a toggled formula will go', () => {
+    assert.match(tab, /partnersApi\.removeExperience\(id\)/);
+    assert.match(tab, /Passera dans Room service/);
+    assert.match(tab, /Passera dans PDJ Inclus/);
+    assert.match(rows, /Supprimer la formule/);
+    assert.match(rows, /useState\(\(draft\.optionGroups \|\| \[\]\)\.length > 0\)/);
+  });
+  it('keeps the cancellation cutoff the PM typed (was reset to 1 day / 17h on every save)', () => {
+    assert.equal((tab.match(/cancelCutoffDaysBefore: 1,/g) || []).length, 1, 'only the default');
+    assert.match(tab, /cancelCutoffDaysBefore: breakfast\.cancelCutoffDaysBefore \?\? 1/);
+    assert.match(tab, /cancelCutoffHour: breakfast\.cancelCutoffHour \?\? 17/);
+  });
 });
