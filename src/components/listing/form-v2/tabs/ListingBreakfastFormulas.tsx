@@ -20,6 +20,7 @@ import type {
 import {
   type BreakfastFormulaDraft,
   MAX_FORMULA_PHOTOS,
+  cleanFormule,
   formulaPriceMad,
 } from './breakfastFormulaHelpers';
 import { pickUploadablePhotos, uploadPartnerPhotos } from './partnerPhotoUpload';
@@ -72,7 +73,7 @@ export function sanitizeOptionGroups(
 
 type FormulaDraft = BreakfastFormulaDraft;
 
-export type BreakfastFormulasMode = 'breakfast' | 'card';
+export type BreakfastFormulasMode = 'breakfast' | 'card' | 'ambiance';
 
 type Props = {
   /** breakfast = formules incluses (PDJ) ; card = carte payante Room service. */
@@ -280,6 +281,7 @@ function FormulaRow({
           slotProps={{ htmlInput: { 'aria-label': 'Nom de la formule', maxLength: 160 } }}
           sx={{ flex: 1, minWidth: 180, '& input': { fontWeight: 700, fontSize: 15 } }}
         />
+        {mode === 'ambiance' ? null : (
         <TextField
           size="small"
           type="number"
@@ -289,6 +291,7 @@ function FormulaRow({
           slotProps={{ htmlInput: { min: 0, step: 10, 'aria-label': 'Prix de la formule en MAD' } }}
           sx={{ width: 120 }}
         />
+        )}
         <FormControlLabel
           sx={{ mr: 0 }}
           control={
@@ -298,7 +301,11 @@ function FormulaRow({
               onChange={(_, on) => onToggleIncluded(on)}
             />
           }
-          label={<Typography sx={{ fontSize: 13 }}>Inclus au petit déjeuner</Typography>}
+          label={
+            <Typography sx={{ fontSize: 13 }}>
+              {mode === 'ambiance' ? 'Proposée dans WhatsApp' : 'Inclus au petit déjeuner'}
+            </Typography>
+          }
         />
         {onRemove ? (
           <Button
@@ -324,6 +331,65 @@ function FormulaRow({
         onChange={(e) => onDraftChange({ description: e.target.value })}
         sx={{ mt: 1 }}
       />
+      {mode === 'ambiance' ? (
+        <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+            Formules (prix « dès » = la moins chère)
+          </Typography>
+          {(draft.formules || []).map((f, i) => (
+            <Box key={`f-${i}`} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <TextField
+                size="small"
+                placeholder="Nom de la formule (Essentiel, Chic…)"
+                value={f.label}
+                onChange={(e) => {
+                  const next = (draft.formules || []).map((x, k) =>
+                    k === i ? { ...x, label: e.target.value } : x,
+                  );
+                  onDraftChange({ formules: next });
+                }}
+                slotProps={{ htmlInput: { maxLength: 120, 'aria-label': `Formule ${i + 1}` } }}
+                sx={{ flex: 1, minWidth: 160 }}
+              />
+              <TextField
+                size="small"
+                type="number"
+                label="MAD"
+                value={f.priceMad ?? 0}
+                onChange={(e) => {
+                  const next = (draft.formules || []).map((x, k) =>
+                    k === i ? { ...x, priceMad: Math.max(0, Number(e.target.value) || 0) } : x,
+                  );
+                  onDraftChange({ formules: next });
+                }}
+                slotProps={{ htmlInput: { min: 0, step: 50, 'aria-label': `Prix formule ${i + 1}` } }}
+                sx={{ width: 110 }}
+              />
+              <IconButton
+                size="small"
+                disabled={(draft.formules || []).length <= 1}
+                onClick={() =>
+                  onDraftChange({ formules: (draft.formules || []).filter((_, k) => k !== i) })
+                }
+                aria-label={`Supprimer la formule ${i + 1}`}
+              >
+                ×
+              </IconButton>
+            </Box>
+          ))}
+          <Button
+            size="small"
+            sx={{ alignSelf: 'flex-start', textTransform: 'none', fontSize: 12 }}
+            onClick={() =>
+              onDraftChange({
+                formules: [...(draft.formules || []), { label: '', priceMad: 0 }],
+              })
+            }
+          >
+            + Formule
+          </Button>
+        </Box>
+      ) : null}
       <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
         <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
           Photos ({photos.length}/{MAX_FORMULA_PHOTOS})
@@ -490,6 +556,7 @@ export function draftFromDish(d: PartnerService): FormulaDraft {
     title: d.title,
     description: d.description || '',
     priceMad: formulaPriceMad(d),
+    formules: (d.formules || []).map(cleanFormule),
     photos: (d.photos || []).slice(0, MAX_FORMULA_PHOTOS),
     optionGroups: (d.optionGroups || []).map((g) => ({
       ...g,
