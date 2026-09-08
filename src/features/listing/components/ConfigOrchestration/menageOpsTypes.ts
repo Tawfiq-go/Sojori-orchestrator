@@ -31,7 +31,26 @@ export type MenageTrackWithOptions = MenageTrackConfig & {
   /** Recouche cadence — true = tous les N jours (hors arrivée / départ). */
   always?: boolean;
   everyNDays?: number;
+  /** Hôtel : cadence par RoomType id ; absent = comme le listing. */
+  byRoomType?: Record<string, CleaningCadence>;
 };
+
+export type CleaningCadence = { always: boolean; everyNDays: number };
+
+export function normalizeCadenceByRoomType(raw: unknown): Record<string, CleaningCadence> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: Record<string, CleaningCadence> = {};
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!key || !val || typeof val !== 'object') continue;
+    const v = val as Record<string, unknown>;
+    const every = Number(v.everyNDays);
+    out[key] = {
+      always: v.always === true,
+      everyNDays: Number.isFinite(every) && every >= 1 ? Math.round(every) : 1,
+    };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 
 export type MenageCheckoutConfig = MenageTrackConfig & {
   pricingMode: 'per_passage' | 'monthly_forfait';
@@ -160,6 +179,7 @@ export function normalizeMenageOps(raw: unknown): MenageOpsConfig {
       monthlyForfaitAmount: Math.max(0, num(t.monthlyForfaitAmount, fb.monthlyForfaitAmount ?? 0)),
       always: bool(t.always, fbTrack.always === true),
       everyNDays: Math.max(1, Math.round(num(t.everyNDays, fbTrack.everyNDays ?? 1))),
+      byRoomType: normalizeCadenceByRoomType(t.byRoomType ?? fbTrack.byRoomType),
     };
   };
 

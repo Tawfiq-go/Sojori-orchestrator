@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, Stack, Switch, TextField, Typography } from '@mui/material';
 import { toast } from 'react-toastify';
 import listingsService from '../../services/listingsService';
+import type { ListingStructureRoomType } from '../../types/listings.types';
 import {
   normalizeMenageOps,
   parseMenageOpsFromSources,
@@ -68,6 +69,22 @@ export default function V3MenageTypeCards({
   const savedRef = useRef<MenageOpsConfig>(cfg);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ recouche: true });
+  /** Hôtel : types de chambre pour la cadence par type (vide en Single). */
+  const [roomTypes, setRoomTypes] = useState<ListingStructureRoomType[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    listingsService
+      .getListingStructure(listingId)
+      .then(struct => {
+        if (cancelled || !struct) return;
+        const multi = String(struct.building?.propertyUnit || '') === 'Multi';
+        setRoomTypes(multi ? struct.roomTypes ?? [] : []);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [listingId]);
 
   useEffect(() => {
     const next = parseMenageOpsFromSources(undefined, listingValues);
@@ -191,6 +208,84 @@ export default function V3MenageTypeCards({
             })}
           </Box>
         </Section>
+        {roomTypes.length > 0 && (
+          <Section
+            label="Par type de chambre (hôtel)"
+            caption="Chaque type suit la cadence de l’hôtel ci-dessus, sauf réglage propre. Le chatbot applique celle du type de la réservation."
+          >
+            <Stack sx={{ gap: 0.6 }}>
+              {roomTypes.map(rt => {
+                const own = cfg.included.byRoomType?.[rt.id];
+                const current: 'hotel' | 'daily' | 'alt' | 'tiers' = !own
+                  ? 'hotel'
+                  : !own.always
+                    ? 'tiers'
+                    : own.everyNDays >= 2
+                      ? 'alt'
+                      : 'daily';
+                return (
+                  <Box
+                    key={rt.id}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', py: 0.35 }}
+                  >
+                    <Typography sx={{ fontSize: 12.5, fontWeight: 700, minWidth: 150, flex: '0 0 auto' }}>
+                      {rt.otaDisplayName || rt.name}
+                    </Typography>
+                    {(
+                      [
+                        { id: 'hotel', label: 'Comme l’hôtel' },
+                        { id: 'daily', label: 'Tous les jours' },
+                        { id: 'alt', label: 'Jours alternés' },
+                        { id: 'tiers', label: 'Paliers' },
+                      ] as const
+                    ).map(opt => {
+                      const active = current === opt.id;
+                      return (
+                        <Box
+                          key={opt.id}
+                          role="button"
+                          aria-label={`${rt.otaDisplayName || rt.name} : ${opt.label}`}
+                          onClick={() =>
+                            commit(c => {
+                              const next = { ...(c.included.byRoomType || {}) };
+                              if (opt.id === 'hotel') delete next[rt.id];
+                              else {
+                                next[rt.id] = {
+                                  always: opt.id !== 'tiers',
+                                  everyNDays: opt.id === 'alt' ? 2 : 1,
+                                };
+                              }
+                              return {
+                                ...c,
+                                included: {
+                                  ...c.included,
+                                  byRoomType: Object.keys(next).length ? next : undefined,
+                                },
+                              };
+                            })
+                          }
+                          sx={{
+                            px: 1,
+                            py: 0.4,
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontSize: 11.5,
+                            fontWeight: 800,
+                            border: `1px solid ${active ? V3.p : V3.b}`,
+                            bgcolor: active ? V3.pt : '#fff',
+                            color: active ? V3.pd : V3.t2,
+                          }}
+                        >
+                          {opt.label}
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                );
+              })}
+            </Stack>
+          </Section>
+        )}
 
         {/* Durée & crédits */}
         <Section label="Durée & crédits par niveau" caption="1 crédit = 1 minute · alimente le barème">

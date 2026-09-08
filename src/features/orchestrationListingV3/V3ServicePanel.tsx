@@ -194,7 +194,10 @@ export default function V3ServicePanel({
     switch (activePanel) {
       case 'gestion':
         if (def.key === 'cleaning_free' || def.key === 'cleaning_paid') {
-          // Contenu ménage (durées, prix, niveaux, linge) → onglet Ménage du listing.
+          // Le contenu ménage (types, cadence par type de chambre, équipe, barème)
+          // s'édite ICI, dans l'orchestration — plus d'onglet Ménage dans la barre
+          // latérale du listing (décision Tawfiq 2026-09-08). Template owner : pas de
+          // listing, on garde le rappel.
           return (
             <MenageContentRedirectCard
               listingId={ownerTemplateMode ? undefined : listingId}

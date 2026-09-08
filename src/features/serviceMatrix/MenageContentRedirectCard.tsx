@@ -1,8 +1,8 @@
-// Renvoi : le CONTENU du ménage vit dans l'onglet Ménage du listing.
-// L'orchestration ne garde que les ACTIVATIONS (Gérer / Client / Tâche / Orchestrer…).
+// Contenu ménage dans l'orchestration (éditeur en place) ; renvoi seulement en template.
 import { Box, Button, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { V3 } from '../orchestrationListingV3/theme';
+import ListingMenageTab from '../../components/listing/form-v2/tabs/ListingMenageTab';
 
 type Props = {
   /** Listing courant — absent en mode template propriétaire. */
@@ -14,6 +14,14 @@ type Props = {
 export default function MenageContentRedirectCard({ listingId, templateMode = false }: Props) {
   const navigate = useNavigate();
   const canNavigate = !templateMode && Boolean(listingId);
+
+  // Décision Tawfiq 2026-09-08 : l'orchestration se configure dans l'orchestration.
+  // Dès qu'un listing est connu, le contenu ménage (types, cadence par type de
+  // chambre, équipe, barème) s'édite ici même ; le renvoi ne reste que pour le
+  // template propriétaire, qui n'a pas de listing.
+  if (canNavigate) {
+    return <ListingMenageTab listingId={String(listingId)} embedded />;
+  }
 
   return (
     <Box
