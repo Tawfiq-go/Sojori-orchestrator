@@ -665,7 +665,7 @@ export default function ListingRoomServiceTab({
           size="small"
           type="number"
           label="Jours avant"
-          inputProps={{ min: 0, max: 14 }}
+          slotProps={{ htmlInput: { min: 0, max: 14 } }}
           sx={{ width: 130 }}
           value={breakfast.cancelCutoffDaysBefore ?? 1}
           onChange={(e) =>
@@ -679,7 +679,7 @@ export default function ListingRoomServiceTab({
           size="small"
           type="number"
           label="Heure limite"
-          inputProps={{ min: 0, max: 23 }}
+          slotProps={{ htmlInput: { min: 0, max: 23 } }}
           sx={{ width: 130 }}
           value={breakfast.cancelCutoffHour ?? 17}
           onChange={(e) =>

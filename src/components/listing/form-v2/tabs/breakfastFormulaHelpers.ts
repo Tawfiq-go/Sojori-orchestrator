@@ -46,7 +46,8 @@ export function normalizeWhatsapp(raw: string): string {
 }
 
 export type NewBreakfastFormulaInput = {
-  ownerId: string;
+  /** Propriétaire (obligatoire côté API pour un admin ; un owner est déduit du JWT). */
+  ownerId?: string;
   title: string;
   description?: string;
   priceMad: number;
@@ -65,7 +66,7 @@ export type NewPartnerServiceInput = NewBreakfastFormulaInput & {
 export type PartnerServiceCreateKind = 'room_service' | 'villa_experience' | 'experience' | 'transport';
 
 export type NewPartnerServiceBody = {
-  ownerId: string;
+  ownerId?: string;
   partnerId?: string;
   category: string;
   kind: PartnerServiceCreateKind;
@@ -94,7 +95,7 @@ export function newPartnerServiceBody(
   if (!Number.isFinite(priceMad) || priceMad < 0) return { error: 'Prix invalide.' };
   const partnerId = String(input.partnerId || '').trim();
   return {
-    ownerId: input.ownerId,
+    ...(input.ownerId ? { ownerId: input.ownerId } : {}),
     ...(partnerId ? { partnerId } : {}),
     category: input.category,
     kind: input.kind,
