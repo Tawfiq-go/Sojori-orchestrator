@@ -244,6 +244,7 @@ export default function V3MenageTypeCards({
                         <Box
                           key={opt.id}
                           role="button"
+                          aria-pressed={active}
                           aria-label={`${rt.otaDisplayName || rt.name} : ${opt.label}`}
                           onClick={() =>
                             commit(c => {

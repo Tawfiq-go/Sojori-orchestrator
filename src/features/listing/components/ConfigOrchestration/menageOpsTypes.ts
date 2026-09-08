@@ -31,8 +31,8 @@ export type MenageTrackWithOptions = MenageTrackConfig & {
   /** Recouche cadence — true = tous les N jours (hors arrivée / départ). */
   always?: boolean;
   everyNDays?: number;
-  /** Hôtel : cadence par RoomType id ; absent = comme le listing. */
-  byRoomType?: Record<string, CleaningCadence>;
+  /** Hôtel : cadence par RoomType id ; null = aucune (le backend efface), absent = inchangé. */
+  byRoomType?: Record<string, CleaningCadence> | null;
 };
 
 export type CleaningCadence = { always: boolean; everyNDays: number };
@@ -179,7 +179,10 @@ export function normalizeMenageOps(raw: unknown): MenageOpsConfig {
       monthlyForfaitAmount: Math.max(0, num(t.monthlyForfaitAmount, fb.monthlyForfaitAmount ?? 0)),
       always: bool(t.always, fbTrack.always === true),
       everyNDays: Math.max(1, Math.round(num(t.everyNDays, fbTrack.everyNDays ?? 1))),
-      byRoomType: normalizeCadenceByRoomType(t.byRoomType ?? fbTrack.byRoomType),
+      // `null` explicite : un PUT sans la clé laisserait la cadence par type stockée
+      // (le backend garde ce que le body n'envoie pas), donc « Comme l'hôtel » partout
+      // ne s'enregistrerait jamais.
+      byRoomType: normalizeCadenceByRoomType(t.byRoomType ?? fbTrack.byRoomType) ?? null,
     };
   };
 

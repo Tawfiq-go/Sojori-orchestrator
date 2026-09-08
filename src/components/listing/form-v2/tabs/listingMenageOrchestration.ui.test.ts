@@ -34,7 +34,7 @@ describe('Ménage lives in Orchestration only', () => {
     assert.match(cards, /Comme l’hôtel/);
     assert.match(cards, /byRoomType/);
     assert.match(types, /byRoomType\?: Record<string, CleaningCadence>/);
-    assert.match(types, /normalizeCadenceByRoomType\(t\.byRoomType \?\? fbTrack\.byRoomType\)/);
+    assert.match(types, /normalizeCadenceByRoomType\(t\.byRoomType \?\? fbTrack\.byRoomType\) \?\? null/);
   });
   it('tells the PM what the guest sees', () => {
     assert.match(tab, /Ce que le voyageur voit/);
