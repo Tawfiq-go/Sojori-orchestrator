@@ -19,6 +19,8 @@ export type BreakfastFormulaDraft = {
   priceMad: number;
   photos: string[];
   optionGroups: PartnerServiceOptionGroup[];
+  /** Formules nommées (ambiances : Essentiel / Chic / Signature) — éditées telles quelles. */
+  formules?: PartnerServiceFormule[];
 };
 
 export function formulaPriceMad(dish: Pick<PartnerService, 'formules'>): number {
@@ -27,9 +29,13 @@ export function formulaPriceMad(dish: Pick<PartnerService, 'formules'>): number 
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
-/** Catalogue affiché : jamais une formule retirée (active=false). */
+/** Catalogue affiché : jamais un service retiré (active=false). */
+export function activeDishesOfKind(rows: PartnerService[], kind: string): PartnerService[] {
+  return rows.filter((r) => (r.kind || '') === kind && r.active !== false);
+}
+
 export function activeBreakfastDishes(rows: PartnerService[]): PartnerService[] {
-  return rows.filter((r) => (r.kind || '') === 'room_service' && r.active !== false);
+  return activeDishesOfKind(rows, 'room_service');
 }
 
 export function normalizeWhatsapp(raw: string): string {
@@ -47,11 +53,20 @@ export type NewBreakfastFormulaInput = {
   whatsapp: string;
 };
 
-/** Corps POST /partners/experiences pour une nouvelle formule (schéma Joi : title, category, whatsapp, formules ≥ 1). */
-export function newBreakfastFormulaBody(input: NewBreakfastFormulaInput): {
-  ownerId: string;
+export type NewPartnerServiceInput = NewBreakfastFormulaInput & {
+  kind: 'room_service' | 'villa_experience';
   category: string;
-  kind: 'room_service';
+  /** Fiche provider (obligatoire côté API sauf room_service). */
+  partnerId?: string | null;
+  /** Libellé de la 1re formule (ambiance : « Essentiel ») — défaut : le titre. */
+  formuleLabel?: string;
+};
+
+export type NewPartnerServiceBody = {
+  ownerId: string;
+  partnerId?: string;
+  category: string;
+  kind: 'room_service' | 'villa_experience';
   title: string;
   description: string;
   whatsapp: string;
@@ -61,29 +76,52 @@ export function newBreakfastFormulaBody(input: NewBreakfastFormulaInput): {
   optionGroups: PartnerServiceOptionGroup[];
   keywords: string[];
   active: true;
-} | { error: string } {
+};
+
+/** Corps POST /partners/experiences (schéma Joi : title, category, whatsapp, formules ≥ 1). */
+export function newPartnerServiceBody(
+  input: NewPartnerServiceInput,
+): NewPartnerServiceBody | { error: string } {
   const title = String(input.title || '').trim();
-  if (!title) return { error: 'Le nom de la formule est obligatoire.' };
+  if (!title) return { error: 'Le nom est obligatoire.' };
   const whatsapp = normalizeWhatsapp(input.whatsapp);
   if (!/^\+\d{8,15}$/.test(whatsapp)) {
-    return { error: 'WhatsApp cuisine obligatoire, au format international (+212…).' };
+    return { error: 'WhatsApp de notification obligatoire, au format international (+212…).' };
   }
   const priceMad = Number(input.priceMad);
   if (!Number.isFinite(priceMad) || priceMad < 0) return { error: 'Prix invalide.' };
+  const partnerId = String(input.partnerId || '').trim();
   return {
     ownerId: input.ownerId,
-    category: BREAKFAST_CATEGORY,
-    kind: 'room_service',
+    ...(partnerId ? { partnerId } : {}),
+    category: input.category,
+    kind: input.kind,
     title,
     description: String(input.description || '').trim(),
     whatsapp,
     cityIds: 'all',
     photos: [],
-    formules: [{ label: title, priceMad: Math.round(priceMad) } as PartnerServiceFormule],
+    formules: [
+      { label: input.formuleLabel || title, priceMad: Math.round(priceMad) } as PartnerServiceFormule,
+    ],
     optionGroups: [],
     keywords: [],
     active: true,
   };
+}
+
+/** Nouvelle formule PDJ / plat room service. */
+export function newBreakfastFormulaBody(
+  input: NewBreakfastFormulaInput,
+): NewPartnerServiceBody | { error: string } {
+  const body = newPartnerServiceBody({ ...input, kind: 'room_service', category: BREAKFAST_CATEGORY });
+  if ('error' in body && body.error === 'Le nom est obligatoire.') {
+    return { error: 'Le nom de la formule est obligatoire.' };
+  }
+  if ('error' in body && body.error.startsWith('WhatsApp')) {
+    return { error: 'WhatsApp cuisine obligatoire, au format international (+212…).' };
+  }
+  return body;
 }
 
 /**
@@ -103,6 +141,7 @@ export function breakfastFormulaPatch(
   dish: PartnerService,
   draft: BreakfastFormulaDraft,
   sanitizeGroups: (g: PartnerServiceOptionGroup[]) => PartnerServiceOptionGroup[],
+  opts: { formulesEditable?: boolean } = {},
 ): Partial<PartnerService> | null {
   const patch: Partial<PartnerService> = {};
   const title = (draft.title || '').trim() || dish.title;
@@ -111,11 +150,26 @@ export function breakfastFormulaPatch(
   if (desc !== (dish.description || '').trim()) patch.description = desc;
   const groups = sanitizeGroups(draft.optionGroups || []);
   if (JSON.stringify(groups) !== JSON.stringify(dish.optionGroups || [])) patch.optionGroups = groups;
-  const price = Math.max(0, Math.round(Number(draft.priceMad) || 0));
   const currentFormules = (dish.formules || []).map(cleanFormule);
-  if (price !== formulaPriceMad(dish) || title !== dish.title) {
-    const first = currentFormules[0] || { label: title, priceMad: price };
-    patch.formules = [{ ...first, label: title, priceMad: price }, ...currentFormules.slice(1)];
+  if (opts.formulesEditable) {
+    // Ambiances : formules nommées éditées une à une, le titre ne pilote pas le label.
+    const next = (draft.formules || [])
+      .map(cleanFormule)
+      .filter((f) => String(f.label || '').trim())
+      .map((f) => ({
+        ...f,
+        label: f.label.trim(),
+        priceMad: Math.max(0, Math.round(Number(f.priceMad) || 0)),
+      }));
+    if (next.length && JSON.stringify(next) !== JSON.stringify(currentFormules)) {
+      patch.formules = next;
+    }
+  } else {
+    const price = Math.max(0, Math.round(Number(draft.priceMad) || 0));
+    if (price !== formulaPriceMad(dish) || title !== dish.title) {
+      const first = currentFormules[0] || { label: title, priceMad: price };
+      patch.formules = [{ ...first, label: title, priceMad: price }, ...currentFormules.slice(1)];
+    }
   }
   const photos = (draft.photos || []).filter(Boolean).slice(0, MAX_FORMULA_PHOTOS);
   if (JSON.stringify(photos) !== JSON.stringify((dish.photos || []).slice(0, MAX_FORMULA_PHOTOS))) {
@@ -123,13 +177,19 @@ export function breakfastFormulaPatch(
   }
   if (!Object.keys(patch).length) return null;
   // Formules seedées sans `category` : Mongoose refuse le save tant qu'elle manque.
-  if (!String(dish.category || '').trim()) patch.category = BREAKFAST_CATEGORY;
+  if (!String(dish.category || '').trim()) patch.category = defaultCategory(dish);
   return patch;
 }
 
+function defaultCategory(dish: Partial<Pick<PartnerService, 'kind'>>): string {
+  return dish.kind === 'villa_experience' ? 'Ambiance' : BREAKFAST_CATEGORY;
+}
+
 /** Retirer = active:false (jamais de suppression) — avec la même rustine `category`. */
-export function retireFormulaPatch(dish: Pick<PartnerService, 'category'>): Partial<PartnerService> {
+export function retireFormulaPatch(
+  dish: Pick<PartnerService, 'category'> & Partial<Pick<PartnerService, 'kind'>>,
+): Partial<PartnerService> {
   const patch: Partial<PartnerService> = { active: false };
-  if (!String(dish.category || '').trim()) patch.category = BREAKFAST_CATEGORY;
+  if (!String(dish.category || '').trim()) patch.category = defaultCategory(dish);
   return patch;
 }
