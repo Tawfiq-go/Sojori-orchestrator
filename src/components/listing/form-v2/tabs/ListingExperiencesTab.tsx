@@ -91,6 +91,7 @@ export default function ListingExperiencesTab({
   const [creating, setCreating] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [draftNew, setDraftNew] = useState<NewExperience>(EMPTY_NEW);
+  const [previewKey, setPreviewKey] = useState(0);
 
   const load = useCallback(async () => {
     if (!listingId) {
@@ -163,6 +164,7 @@ export default function ListingExperiencesTab({
       setEnabledIds(next);
       toast.success('Expériences enregistrées');
       await load();
+      setPreviewKey((k) => k + 1);
     } catch (e) {
       toast.error(extractHttpErrorMessage(e, 'Enregistrement impossible'));
     } finally {
@@ -515,6 +517,17 @@ export default function ListingExperiencesTab({
             OK
           </Button>
         </Box>
+      </TabSection>
+
+      <TabSection
+        id="preview"
+        icon="💬"
+        title="Ce que le voyageur voit"
+        summary="le menu WhatsApp et le hub Services, calculés par le chatbot"
+        open={Boolean(open.preview)}
+        onToggle={() => toggleOpen('preview')}
+      >
+        <GuestWhatsAppPreview listingId={String(listingId)} focus="experiences" refreshKey={previewKey} />
       </TabSection>
     </Box>
   );

@@ -38,6 +38,7 @@ export default function ListingMenageTab({ listingId, embedded = false }: Props)
   const [loading, setLoading] = useState(true);
   const [policy, setPolicy] = useState<HousekeepingPolicyConfig | null>(null);
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
+  const [roomTypes, setRoomTypes] = useState<ListingStructureRoomType[]>([]);
   const baremeView = useMenageBareme(listingId ? String(listingId) : null);
 
   useEffect(() => {
@@ -64,6 +65,14 @@ export default function ListingMenageTab({ listingId, embedded = false }: Props)
           return null;
         }
       };
+      const loadRoomTypes = async () => {
+        try {
+          const struct = await listingsService.getListingStructure(String(listingId));
+          return String(struct?.building?.propertyUnit || '') === 'Multi' ? (struct?.roomTypes ?? []) : [];
+        } catch {
+          return [];
+        }
+      };
       const loadListing = async () => {
         try {
           const doc = await listingsService.getListingDocument(String(listingId));
@@ -72,10 +81,11 @@ export default function ListingMenageTab({ listingId, embedded = false }: Props)
           return {};
         }
       };
-      const [hp, vals] = await Promise.all([loadPolicy(), loadListing()]);
+      const [hp, vals, rts] = await Promise.all([loadPolicy(), loadListing(), loadRoomTypes()]);
       if (!cancelled) {
         setPolicy(hp);
         setListingValues(vals);
+        setRoomTypes(rts);
         setLoading(false);
       }
     })();
@@ -147,6 +157,12 @@ export default function ListingMenageTab({ listingId, embedded = false }: Props)
                   {line}
                 </Typography>
               ))}
+              <GuestWhatsAppPreview
+                listingId={String(listingId)}
+                focus="cleaning"
+                roomTypes={roomTypes.map((rt) => ({ id: rt.id, name: rt.otaDisplayName || rt.name }))}
+                refreshKey={JSON.stringify((listingValues.menageOps as { included?: unknown } | undefined)?.included ?? null)}
+              />
             </Stack>
           </Box>
           <V3HousekeepingPolicyPanel

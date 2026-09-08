@@ -89,6 +89,8 @@ export default function ListingRoomServiceTab({
   const [creating, setCreating] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [newFormula, setNewFormula] = useState<NewFormula>(EMPTY_NEW);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
 
   const load = useCallback(async () => {
     if (!listingId) {
@@ -218,6 +220,7 @@ export default function ListingRoomServiceTab({
       }));
       toast.success('Petit déjeuner inclus enregistré');
       await load();
+      setPreviewKey((k) => k + 1);
     } catch (e) {
       toast.error(extractHttpErrorMessage(e, 'Enregistrement impossible'));
     } finally {
@@ -489,6 +492,19 @@ export default function ListingRoomServiceTab({
     </>
   );
 
+  const previewBlock = (
+    <TabSection
+      id="preview"
+      icon="💬"
+      title="Ce que le voyageur voit"
+      summary="le menu WhatsApp et cette porte, calculés par le chatbot"
+      open={previewOpen}
+      onToggle={() => setPreviewOpen((o) => !o)}
+    >
+      <GuestWhatsAppPreview listingId={String(listingId)} focus={isCard ? 'card' : 'breakfast'} refreshKey={previewKey} />
+    </TabSection>
+  );
+
   if (isCard) {
     return (
       <Box sx={{ p: { xs: 1.5, md: 2 }, width: '100%' }}>
@@ -509,6 +525,7 @@ export default function ListingRoomServiceTab({
             {saving ? '…' : 'Enregistrer'}
           </Button>
         </Box>
+        <Box sx={{ mt: 2 }}>{previewBlock}</Box>
       </Box>
     );
   }
@@ -687,6 +704,7 @@ export default function ListingRoomServiceTab({
           {saving ? '…' : 'Enregistrer'}
         </Button>
       </Box>
+      <Box sx={{ mt: 2 }}>{previewBlock}</Box>
     </Box>
   );
 }
