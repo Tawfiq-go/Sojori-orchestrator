@@ -88,6 +88,10 @@ type Props = {
   onDraftChange: (id: string, patch: Partial<FormulaDraft>) => void;
   /** Retire la formule du catalogue (active=false) — jamais de suppression physique ici. */
   onRemove?: (id: string) => void;
+  /** Supprime définitivement (formule jamais commandée). */
+  onDelete?: (id: string) => void;
+  /** Phrase affichée sous l'interrupteur quand la formule changera d'onglet à l'enregistrement. */
+  moveHint?: (id: string) => string | undefined;
   disabled?: boolean;
 };
 
@@ -230,6 +234,8 @@ function FormulaRow({
   onToggleSupplement,
   onDraftChange,
   onRemove,
+  onDelete,
+  hint,
   disabled,
 }: {
   mode: BreakfastFormulasMode;
@@ -241,9 +247,11 @@ function FormulaRow({
   onToggleSupplement: (on: boolean) => void;
   onDraftChange: (patch: Partial<FormulaDraft>) => void;
   onRemove?: () => void;
+  onDelete?: () => void;
+  hint?: string;
   disabled?: boolean;
 }) {
-  const [openOptions, setOpenOptions] = useState(false);
+  const [openOptions, setOpenOptions] = useState((draft.optionGroups || []).length > 0);
   const [uploading, setUploading] = useState(false);
   const groups = draft.optionGroups || [];
   const photos = draft.photos || [];
@@ -318,7 +326,21 @@ function FormulaRow({
             Retirer
           </Button>
         ) : null}
+        {onDelete ? (
+          <Button
+            size="small"
+            color="error"
+            onClick={onDelete}
+            sx={{ textTransform: 'none', fontSize: 12 }}
+            aria-label={`Supprimer la formule ${dish.title}`}
+          >
+            Supprimer
+          </Button>
+        ) : null}
       </Box>
+      {hint ? (
+        <Typography sx={{ mt: 0.5, fontSize: 12, color: 'warning.dark' }}>{hint}</Typography>
+      ) : null}
 
       <TextField
         size="small"
@@ -576,6 +598,8 @@ export function ListingBreakfastFormulas({
   onToggleSupplement,
   onDraftChange,
   onRemove,
+  onDelete,
+  moveHint,
   disabled,
 }: Props) {
   if (!dishes.length) {
@@ -603,6 +627,8 @@ export function ListingBreakfastFormulas({
             onToggleSupplement={(on) => onToggleSupplement(id, on)}
             onDraftChange={(patch) => onDraftChange(id, patch)}
             onRemove={onRemove ? () => onRemove(id) : undefined}
+            onDelete={onDelete ? () => onDelete(id) : undefined}
+            hint={moveHint ? moveHint(id) : undefined}
             disabled={disabled}
           />
         );

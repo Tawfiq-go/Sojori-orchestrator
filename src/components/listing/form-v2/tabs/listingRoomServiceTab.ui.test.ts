@@ -41,4 +41,11 @@ describe('Listing PDJ Inclus — formules éditables depuis l’onglet', () => {
     assert.match(tab, /new Set\(\[\.\.\.keptOther, \.\.\.included, \.\.\.paidIds\]\)/);
     assert.doesNotMatch(tab, /enabledExperienceIds: \[\.\.\.keptOther, \.\.\.included\]/);
   });
+  it('offers Supprimer (hard delete) next to Retirer, and says where a toggled formula will go', () => {
+    assert.match(tab, /partnersApi\.removeExperience\(id\)/);
+    assert.match(tab, /Passera dans Room service/);
+    assert.match(tab, /Passera dans PDJ Inclus/);
+    assert.match(rows, /Supprimer la formule/);
+    assert.match(rows, /useState\(\(draft\.optionGroups \|\| \[\]\)\.length > 0\)/);
+  });
 });

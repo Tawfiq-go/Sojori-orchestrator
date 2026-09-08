@@ -262,6 +262,55 @@ export default function ListingRoomServiceTab({
     }
   };
 
+  /** Supprime définitivement une formule (jamais commandée) — sinon Retirer. */
+  const deleteFormula = async (id: string) => {
+    const dish = dishes.find((d) => String(d.id) === id);
+    if (!dish) return;
+    if (
+      !window.confirm(
+        `Supprimer définitivement « ${dish.title} » ?\nSi des commandes ont déjà été passées, préférez Retirer : la formule disparaît du menu mais l’historique la garde.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await partnersApi.removeExperience(id);
+      dropFromState(id);
+      toast.success(`Formule « ${dish.title} » supprimée — pensez à Enregistrer`);
+    } catch (e) {
+      toast.error(extractHttpErrorMessage(e, 'Suppression impossible'));
+    }
+  };
+
+  const dropFromState = (id: string) => {
+    setDishes((prev) => prev.filter((d) => String(d.id) !== id));
+    setDrafts((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setIncludedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setSupplementIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  /** Ce que deviendra la formule à l'enregistrement si l'interrupteur a changé. */
+  const moveHint = (id: string): string | undefined => {
+    const wasIncluded = loadedIncludedIds.has(id);
+    const isIncluded = includedIds.has(id);
+    if (wasIncluded === isIncluded) return undefined;
+    return isIncluded
+      ? 'Passera dans PDJ Inclus à l’enregistrement (gratuite pour le voyageur).'
+      : 'Passera dans Room service à l’enregistrement (payée à la commande).';
+  };
+
   /** Retire une formule : active=false côté partenaires, jamais de suppression physique. */
   const removeFormula = async (id: string) => {
     const dish = dishes.find((d) => String(d.id) === id);
@@ -269,22 +318,7 @@ export default function ListingRoomServiceTab({
     if (!window.confirm(`Retirer la formule « ${dish.title} » du petit déjeuner ?`)) return;
     try {
       await partnersApi.updateExperience(id, retireFormulaPatch(dish));
-      setDishes((prev) => prev.filter((d) => String(d.id) !== id));
-      setDrafts((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      setIncludedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      setSupplementIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
+      dropFromState(id);
       toast.success(`Formule « ${dish.title} » retirée — pensez à Enregistrer`);
     } catch (e) {
       toast.error(extractHttpErrorMessage(e, 'Retrait impossible'));
@@ -359,6 +393,8 @@ export default function ListingRoomServiceTab({
         });
       }}
       onRemove={(id) => void removeFormula(id)}
+      onDelete={(id) => void deleteFormula(id)}
+      moveHint={moveHint}
     />
   );
 
