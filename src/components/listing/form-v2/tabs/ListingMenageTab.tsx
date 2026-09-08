@@ -14,9 +14,12 @@ import {
   baremeTotalCount,
 } from '../../../../features/orchestrationListingV3/menageBareme';
 import { V3 } from '../../../../features/orchestrationListingV3/theme';
+import { cleaningGuestPreview } from './cleaningGuestPreview';
 
 type Props = {
   listingId?: string | null;
+  /** Rendu dans l’onglet Orchestration → Ménage (pas de titre de page). */
+  embedded?: boolean;
 };
 
 const sectionSx = {
@@ -31,7 +34,7 @@ const sectionSx = {
  * Desktop (≥1100px) : rail gauche 340px (Politique + En un coup d'œil),
  * colonne droite large (Types de ménage + Barème). En dessous : empilement.
  */
-export default function ListingMenageTab({ listingId }: Props) {
+export default function ListingMenageTab({ listingId, embedded = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [policy, setPolicy] = useState<HousekeepingPolicyConfig | null>(null);
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
@@ -105,13 +108,17 @@ export default function ListingMenageTab({ listingId }: Props) {
   const windowDays = baremeView && 'windowDays' in baremeView ? baremeView.windowDays : 30;
 
   return (
-    <Box sx={{ p: { xs: 1.5, md: 2 }, width: '100%' }}>
+    <Box sx={{ p: embedded ? 0 : { xs: 1.5, md: 2 }, width: '100%' }}>
+      {!embedded && (
+        <>
       <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: 'text.secondary', mb: 0.5 }}>
         LISTING
       </Typography>
       <Typography sx={{ fontSize: 22, fontWeight: 750, mb: 1.25, lineHeight: 1.2 }}>
         Ménage
       </Typography>
+        </>
+      )}
 
       <Box
         sx={{
@@ -128,6 +135,20 @@ export default function ListingMenageTab({ listingId }: Props) {
       >
         {/* Rail gauche */}
         <Stack sx={{ gap: 2, minWidth: 0 }}>
+          <Box sx={sectionSx}>
+            <Box sx={{ px: 2, py: 1.25, borderBottom: `1px solid ${V3.b}`, bgcolor: V3.alt }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 800, color: V3.t }}>
+                💬 Ce que le voyageur voit
+              </Typography>
+            </Box>
+            <Stack sx={{ px: 2, py: 1.5, gap: 0.75 }}>
+              {cleaningGuestPreview(listingValues).map((line) => (
+                <Typography key={line} sx={{ fontSize: 12, color: V3.t2, lineHeight: 1.55 }}>
+                  {line}
+                </Typography>
+              ))}
+            </Stack>
+          </Box>
           <V3HousekeepingPolicyPanel
             listingId={String(listingId)}
             policy={policy}

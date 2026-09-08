@@ -6,8 +6,10 @@ import CleaningConfigTab from './CleaningConfigTab';
 import CleaningSojoriConfigTab from './CleaningSojoriConfigTab';
 import CleaningChecklistPanel from './CleaningChecklistPanel';
 import MenageOpsPanel from './MenageOpsPanel';
+import ListingMenageTab from '../../../../components/listing/form-v2/tabs/ListingMenageTab';
 
 const HUB_TABS = [
+  { id: 'types', label: 'Types, équipe & barème', icon: '🧹' },
   { id: 'levels', label: 'Tous les tarifs', icon: '💶' },
   { id: 'included', label: 'Inclus (paliers)', icon: '🎁' },
   { id: 'paid', label: 'Payant', icon: '💰' },
@@ -32,7 +34,7 @@ export default function CleaningHubTab({
   onListingPatch,
   templateMode = false,
 }: Props) {
-  const [hubTab, setHubTab] = useState<HubTab>('levels');
+  const [hubTab, setHubTab] = useState<HubTab>('types');
 
   const common = { listingId, ownerId, listingValues, onListingPatch, templateMode };
 
@@ -68,6 +70,7 @@ export default function CleaningHubTab({
         ))}
       </Stack>
 
+      {hubTab === 'types' && <ListingMenageTab listingId={listingId} embedded />}
       {hubTab === 'levels' && (
         <MenageOpsPanel
           listingId={listingId}
