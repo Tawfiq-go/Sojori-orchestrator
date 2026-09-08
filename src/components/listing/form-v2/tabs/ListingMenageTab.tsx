@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { GuestWhatsAppPreview } from './GuestWhatsAppPreview';
+import type { ListingStructureRoomType } from '../../../../types/listings.types';
 import { Box, CircularProgress, Stack, Typography } from '@mui/material';
 import listingsService from '../../../../services/listingsService';
 import V3HousekeepingPolicyPanel, {
