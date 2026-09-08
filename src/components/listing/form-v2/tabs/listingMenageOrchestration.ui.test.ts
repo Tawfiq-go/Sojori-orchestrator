@@ -13,9 +13,9 @@ const types = read('../../../../features/listing/components/ConfigOrchestration/
 const tab = read('ListingMenageTab.tsx');
 
 describe('Ménage lives in Orchestration only', () => {
-  it('removes the Ménage and Instructions départ duplicates from the listing sidebar', () => {
-    assert.equal((shell.match(/id: 'menage'/g) || []).length, 0);
-    assert.equal((shell.match(/id: 'departure'/g) || []).length, 0);
+  it('keeps a Ménage and an Instructions départ tab that open the same editors as Orchestration', () => {
+    assert.equal((shell.match(/id: 'menage'/g) || []).length, 2);
+    assert.equal((shell.match(/id: 'departure'/g) || []).length, 2);
     assert.match(shell, /id: 'cleaning-config'/);
     assert.match(shell, /id: 'messages-config'/);
   });
