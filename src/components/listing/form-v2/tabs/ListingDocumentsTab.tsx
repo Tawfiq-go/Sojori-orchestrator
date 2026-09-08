@@ -43,6 +43,7 @@ import {
   shortTermRentalContract,
   syncContractSignatureFromDocuments,
 } from '../../../../features/guestDocuments';
+import { documentsGlance } from './documentsGlance';
 import {
   completePresetSchema,
   gestionWithSchema,
@@ -280,16 +281,7 @@ export default function ListingDocumentsTab({ listingId }: Props) {
     }
   };
 
-  const glance = useMemo(() => {
-    const police = documents.find((d) => d.kind === 'police_form');
-    const contracts = documents.filter((d) => d.kind === 'contract');
-    return {
-      total: documents.length,
-      policeOn: police?.enabled === true,
-      contracts: contracts.length,
-      signed: documents.filter((d) => d.enabled && d.requiresSignature).length,
-    };
-  }, [documents]);
+  const glance = useMemo(() => documentsGlance(documents), [documents]);
 
   const police = documents.find((d) => d.kind === 'police_form');
   const contracts = documents.filter((d) => d.kind === 'contract');
@@ -365,36 +357,60 @@ export default function ListingDocumentsTab({ listingId }: Props) {
         }}
       >
         <Stack sx={{ gap: '11px' }}>
-          <RailCard title="En un coup d’œil">
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.4 }}>
-              <GlanceStat value={String(glance.total)} label="documents" />
-              <GlanceStat value={glance.policeOn ? 'on' : 'off'} label="fiche police" />
-              <GlanceStat value={String(glance.contracts)} label="contrats" />
-              <GlanceStat value={String(glance.signed)} label="à signer" />
-            </Box>
-          </RailCard>
-
-          <RailCard title="Origines">
-            <Stack sx={{ gap: 1.1 }}>
-              {SOURCE_GROUPS.map((g) => (
-                <Box key={g.id} sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1.1, rowGap: 0.25 }}>
+          <RailCard title="Vos documents">
+            <Stack sx={{ gap: 0.6 }}>
+              {glance.rows.map((r) => (
+                <Box
+                  key={r.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setExpandedId(r.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setExpandedId(r.id);
+                  }}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: '10px 1fr',
+                    columnGap: 1,
+                    alignItems: 'start',
+                    px: 0.75,
+                    py: 0.6,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    bgcolor: expandedId === r.id ? V3.card : 'transparent',
+                    '&:hover': { bgcolor: V3.card },
+                  }}
+                >
                   <Box
                     sx={{
                       width: 8,
                       height: 8,
                       borderRadius: '50%',
-                      mt: '5px',
-                      bgcolor: CHIP[g.color].fg,
+                      mt: '6px',
+                      bgcolor: r.tone === 'ok' ? V3.su : r.tone === 'warn' ? V3.warn : V3.t4,
                     }}
+                    aria-label={r.tone === 'ok' ? 'complet' : r.tone === 'warn' ? 'à compléter' : 'désactivé'}
                   />
-                  <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>
-                    {g.icon} {g.short}
-                  </Typography>
-                  <Typography sx={{ fontSize: 11.5, color: V3.t3, lineHeight: 1.4, gridColumn: 2 }}>
-                    {g.hint}
-                  </Typography>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.3 }}>{r.name}</Typography>
+                    <Typography sx={{ fontSize: 11.5, color: V3.t3, lineHeight: 1.4 }}>{r.status}</Typography>
+                    {r.missing.length ? (
+                      <Typography sx={{ fontSize: 11.5, color: V3.warn, lineHeight: 1.4 }}>
+                        À compléter : {r.missing.join(', ')}
+                      </Typography>
+                    ) : null}
+                  </Box>
                 </Box>
               ))}
+              {glance.rows.length === 0 ? (
+                <Typography sx={{ fontSize: 12, color: V3.t3 }}>Aucun document configuré.</Typography>
+              ) : null}
+              <Typography sx={{ fontSize: 11.5, color: V3.t3, mt: 0.5, pt: 0.75, borderTop: `1px solid ${V3.b}` }}>
+                {glance.toSign
+                  ? `${glance.toSign} document${glance.toSign > 1 ? 's' : ''} à signer par le voyageur`
+                  : 'Aucune signature demandée'}
+                {glance.incomplete ? ` · ${glance.incomplete} à compléter` : ''}
+              </Typography>
             </Stack>
           </RailCard>
 
@@ -1119,6 +1135,15 @@ function FieldsBlock({
           })}
         </Stack>
       )}
+      <Typography sx={{ fontSize: 11.5, color: V3.t3, mb: 0.75 }}>
+        Origine des champs :{' '}
+        {SOURCE_GROUPS.map((g, i) => (
+          <Box key={g.id} component="span" title={g.hint} sx={{ whiteSpace: 'nowrap' }}>
+            {i ? ' · ' : ''}
+            {g.icon} {g.short}
+          </Box>
+        ))}
+      </Typography>
       <Stack sx={{ gap: 0.85 }}>
         {SOURCE_GROUPS.map((g) => {
           const isFormulaire = g.id === 'whatsapp' && isPolice;
