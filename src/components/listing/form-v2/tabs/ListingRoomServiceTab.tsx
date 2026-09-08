@@ -18,12 +18,19 @@ import {
   type RoomServiceBreakfastConfig,
 } from '../../../../features/listing/components/ConfigOrchestration/conciergeListingPersist';
 import { partnersApi, type PartnerService } from '../../../../services/partnersApi';
+import { extractHttpErrorMessage } from '../../../../utils/extractHttpErrorMessage';
 import {
   ListingBreakfastFormulas,
   draftFromDish,
   sanitizeOptionGroups,
   sortBreakfastDishes,
 } from './ListingBreakfastFormulas';
+import {
+  activeBreakfastDishes,
+  breakfastFormulaPatch,
+  newBreakfastFormulaBody,
+  retireFormulaPatch,
+} from './breakfastFormulaHelpers';
 
 type Props = {
   listingId?: string | null;
@@ -49,6 +56,9 @@ const DEFAULT_BREAKFAST: RoomServiceBreakfastConfig = {
 
 type FormulaDraft = ReturnType<typeof draftFromDish>;
 
+type NewFormula = { title: string; priceMad: string; whatsapp: string; description: string };
+const EMPTY_NEW: NewFormula = { title: '', priceMad: '0', whatsapp: '', description: '' };
+
 /**
  * Onglet listing « PDJ Inclus » — une activation, puis chaque formule
  * (description, supplément, options). Staff, pas de provider.
@@ -65,6 +75,9 @@ export default function ListingRoomServiceTab({
   const [drafts, setDrafts] = useState<Record<string, FormulaDraft>>({});
   const [includedIds, setIncludedIds] = useState<Set<string>>(new Set());
   const [supplementIds, setSupplementIds] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
+  const [newFormula, setNewFormula] = useState<NewFormula>(EMPTY_NEW);
 
   const load = useCallback(async () => {
     if (!listingId) {
@@ -82,7 +95,7 @@ export default function ListingRoomServiceTab({
           kinds: ['room_service'],
         }),
       ]);
-      const rows = sortBreakfastDishes(catalog.filter((r) => (r.kind || '') === 'room_service'));
+      const rows = sortBreakfastDishes(activeBreakfastDishes(catalog));
       setDishes(rows);
       const nextDrafts: Record<string, FormulaDraft> = {};
       for (const r of rows) nextDrafts[String(r.id)] = draftFromDish(r);
@@ -138,7 +151,7 @@ export default function ListingRoomServiceTab({
       await persistBreakfastConfig(next);
       toast.success('Fenêtre petit déjeuner enregistrée');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Enregistrement impossible');
+      toast.error(extractHttpErrorMessage(e, 'Enregistrement impossible'));
     }
   };
 
@@ -149,15 +162,9 @@ export default function ListingRoomServiceTab({
       for (const dish of dishes) {
         const id = String(dish.id);
         const draft = drafts[id] || draftFromDish(dish);
-        const optionGroups = sanitizeOptionGroups(draft.optionGroups);
-        const desc = (draft.description || '').trim();
-        const sameDesc = (dish.description || '').trim() === desc;
-        const sameOpts = JSON.stringify(dish.optionGroups || []) === JSON.stringify(optionGroups);
-        if (sameDesc && sameOpts) continue;
-        await partnersApi.updateExperience(id, {
-          description: desc,
-          optionGroups,
-        });
+        const patch = breakfastFormulaPatch(dish, draft, sanitizeOptionGroups);
+        if (!patch) continue;
+        await partnersApi.updateExperience(id, patch);
       }
 
       const included = Array.from(includedIds);
@@ -187,10 +194,72 @@ export default function ListingRoomServiceTab({
         supplementMode: supplement.length ? 'with_supplement' : 'none',
       }));
       toast.success('Petit déjeuner inclus enregistré');
+      await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Enregistrement impossible');
+      toast.error(extractHttpErrorMessage(e, 'Enregistrement impossible'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** Crée une formule (PartnerService room_service) puis l'inclut dans le PDJ. */
+  const createFormula = async () => {
+    const whatsapp = newFormula.whatsapp.trim() || dishes.find((d) => d.whatsapp)?.whatsapp || '';
+    const body = newBreakfastFormulaBody({
+      ownerId: listingOwnerId || undefined,
+      title: newFormula.title,
+      description: newFormula.description,
+      priceMad: Number(newFormula.priceMad) || 0,
+      whatsapp,
+    });
+    if ('error' in body) {
+      toast.error(body.error);
+      return;
+    }
+    setCreating(true);
+    try {
+      const created = await partnersApi.createExperience(body);
+      const id = String(created.id);
+      setDishes((prev) => sortBreakfastDishes([...prev, created]));
+      setDrafts((prev) => ({ ...prev, [id]: draftFromDish(created) }));
+      setIncludedIds((prev) => new Set(prev).add(id));
+      setBreakfast((p) => (p.enabled ? p : { ...p, enabled: true }));
+      setNewFormula(EMPTY_NEW);
+      setNewOpen(false);
+      toast.success(`Formule « ${created.title} » créée — pensez à Enregistrer`);
+    } catch (e) {
+      toast.error(extractHttpErrorMessage(e, 'Création impossible'));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  /** Retire une formule : active=false côté partenaires, jamais de suppression physique. */
+  const removeFormula = async (id: string) => {
+    const dish = dishes.find((d) => String(d.id) === id);
+    if (!dish) return;
+    if (!window.confirm(`Retirer la formule « ${dish.title} » du petit déjeuner ?`)) return;
+    try {
+      await partnersApi.updateExperience(id, retireFormulaPatch(dish));
+      setDishes((prev) => prev.filter((d) => String(d.id) !== id));
+      setDrafts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setIncludedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setSupplementIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      toast.success(`Formule « ${dish.title} » retirée — pensez à Enregistrer`);
+    } catch (e) {
+      toast.error(extractHttpErrorMessage(e, 'Retrait impossible'));
     }
   };
 
@@ -414,7 +483,93 @@ export default function ListingRoomServiceTab({
             return { ...prev, [id]: { ...base, ...patch } };
           });
         }}
+        onRemove={(id) => void removeFormula(id)}
       />
+
+      {newOpen ? (
+        <Box
+          sx={{
+            mt: 1.5,
+            p: 1.5,
+            border: '1px dashed',
+            borderColor: 'divider',
+            borderRadius: 1.5,
+            display: 'grid',
+            gap: 1,
+            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' },
+          }}
+        >
+          <TextField
+            size="small"
+            label="Nom de la formule"
+            value={newFormula.title}
+            onChange={(e) => setNewFormula((p) => ({ ...p, title: e.target.value }))}
+            slotProps={{ htmlInput: { maxLength: 160 } }}
+            autoFocus
+          />
+          <TextField
+            size="small"
+            type="number"
+            label="Prix MAD"
+            value={newFormula.priceMad}
+            onChange={(e) => setNewFormula((p) => ({ ...p, priceMad: e.target.value }))}
+            slotProps={{ htmlInput: { min: 0, step: 10 } }}
+            helperText="0 = inclus dans le séjour"
+          />
+          <TextField
+            size="small"
+            label="WhatsApp cuisine (notifications)"
+            value={newFormula.whatsapp}
+            onChange={(e) => setNewFormula((p) => ({ ...p, whatsapp: e.target.value }))}
+            placeholder={dishes.find((d) => d.whatsapp)?.whatsapp || '+212…'}
+            helperText={
+              dishes.find((d) => d.whatsapp)?.whatsapp
+                ? 'Vide = même numéro que les autres formules'
+                : 'Numéro qui reçoit les commandes'
+            }
+            sx={{ gridColumn: { sm: '1 / -1' } }}
+          />
+          <TextField
+            size="small"
+            fullWidth
+            multiline
+            minRows={2}
+            maxRows={4}
+            label="Description"
+            value={newFormula.description}
+            onChange={(e) => setNewFormula((p) => ({ ...p, description: e.target.value }))}
+            sx={{ gridColumn: { sm: '1 / -1' } }}
+          />
+          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', gridColumn: { sm: '1 / -1' } }}>
+            <Button
+              size="small"
+              disabled={creating}
+              onClick={() => {
+                setNewOpen(false);
+                setNewFormula(EMPTY_NEW);
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={creating || !newFormula.title.trim()}
+              onClick={() => void createFormula()}
+            >
+              {creating ? '…' : 'Créer la formule'}
+            </Button>
+          </Box>
+        </Box>
+      ) : (
+        <Button
+          size="small"
+          onClick={() => setNewOpen(true)}
+          sx={{ mt: 1, textTransform: 'none' }}
+        >
+          ＋ Nouvelle formule
+        </Button>
+      )}
 
       <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
         <Button variant="contained" size="small" disabled={saving} onClick={() => void save()}>
