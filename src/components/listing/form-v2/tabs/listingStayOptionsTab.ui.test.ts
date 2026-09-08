@@ -23,7 +23,7 @@ describe('Listing Options séjour', () => {
     for (const id of ['payment', 'beds', 'pool', 'ambiances']) {
       assert.match(source, new RegExp(`id="${id}"`), `section ${id}`);
     }
-    assert.match(source, /AccordionSummary/);
+    assert.match(source, /<TabSection/);
     assert.match(source, /STAY_OPTION_POOL/);
     assert.match(source, /STAY_OPTION_BEDS/);
     assert.match(source, /paidPrivatePool/);

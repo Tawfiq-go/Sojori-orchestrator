@@ -54,7 +54,7 @@ export type NewBreakfastFormulaInput = {
 };
 
 export type NewPartnerServiceInput = NewBreakfastFormulaInput & {
-  kind: 'room_service' | 'villa_experience';
+  kind: PartnerServiceCreateKind;
   category: string;
   /** Fiche provider (obligatoire côté API sauf room_service). */
   partnerId?: string | null;
@@ -62,11 +62,13 @@ export type NewPartnerServiceInput = NewBreakfastFormulaInput & {
   formuleLabel?: string;
 };
 
+export type PartnerServiceCreateKind = 'room_service' | 'villa_experience' | 'experience' | 'transport';
+
 export type NewPartnerServiceBody = {
   ownerId: string;
   partnerId?: string;
   category: string;
-  kind: 'room_service' | 'villa_experience';
+  kind: PartnerServiceCreateKind;
   title: string;
   description: string;
   whatsapp: string;

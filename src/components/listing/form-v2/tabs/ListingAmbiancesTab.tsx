@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Box,
   Button,
   CircularProgress,
@@ -37,6 +33,7 @@ import {
   retireFormulaPatch,
 } from './breakfastFormulaHelpers';
 import { STAY_OPTION_BEDS, STAY_OPTION_POOL } from './stayOptionCatalog';
+import { TabSection } from './tabSection';
 
 type Props = {
   listingId?: string | null;
@@ -49,45 +46,6 @@ type FormulaDraft = ReturnType<typeof draftFromDish>;
 type NewAmbiance = { title: string; priceMad: string; whatsapp: string; description: string };
 const EMPTY_NEW: NewAmbiance = { title: '', priceMad: '650', whatsapp: '', description: '' };
 const AMBIANCE_CATEGORY = 'Ambiance';
-
-/** Section repliable : titre + résumé d'état lisible sans ouvrir. */
-function Section({
-  id,
-  icon,
-  title,
-  summary,
-  open,
-  onToggle,
-  children,
-}: {
-  id: string;
-  icon: string;
-  title: string;
-  summary: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Accordion
-      expanded={open}
-      onChange={onToggle}
-      disableGutters
-      elevation={0}
-      sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '10px !important', mb: 1, '&:before': { display: 'none' } }}
-    >
-      <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls={`${id}-content`} id={`${id}-header`}>
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, flexWrap: 'wrap', pr: 1 }}>
-          <Typography sx={{ fontSize: 14, fontWeight: 750 }}>
-            {icon} {title}
-          </Typography>
-          <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>{summary}</Typography>
-        </Box>
-      </AccordionSummary>
-      <AccordionDetails sx={{ pt: 0 }}>{children}</AccordionDetails>
-    </Accordion>
-  );
-}
 
 /** Une ligne « option native » : interrupteur + prix / jour, enregistrés tout de suite. */
 function ExtraRow({
@@ -410,7 +368,7 @@ export default function ListingAmbiancesTab({
         PDJ Inclus, la carte payante dans Room service.
       </Typography>
 
-      <Section
+      <TabSection
         id="payment"
         icon="💳"
         title="Paiement"
@@ -429,9 +387,9 @@ export default function ListingAmbiancesTab({
             );
           }}
         />
-      </Section>
+      </TabSection>
 
-      <Section
+      <TabSection
         id="beds"
         icon="🛏️"
         title={STAY_OPTION_BEDS.title}
@@ -451,9 +409,9 @@ export default function ListingAmbiancesTab({
           onToggle={(next) => toggleBuilding('beds', next)}
           onPrice={(price) => toggleBuilding('beds', bedsOn, price)}
         />
-      </Section>
+      </TabSection>
 
-      <Section
+      <TabSection
         id="pool"
         icon="🏊"
         title={STAY_OPTION_POOL.title}
@@ -489,9 +447,9 @@ export default function ListingAmbiancesTab({
             }
           />
         )}
-      </Section>
+      </TabSection>
 
-      <Section
+      <TabSection
         id="ambiances"
         icon="🌹"
         title="Ambiances villa"
@@ -617,7 +575,7 @@ export default function ListingAmbiancesTab({
             {saving ? '…' : 'Enregistrer les ambiances'}
           </Button>
         </Box>
-      </Section>
+      </TabSection>
     </Box>
   );
 }
