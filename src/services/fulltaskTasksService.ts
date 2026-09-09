@@ -78,9 +78,11 @@ class FulltaskTasksService {
 
     const payload = (raw.payload || {}) as Record<string, unknown>;
     const mappedRaw =
-      payload.stayLineId || payload.kind !== 'stay_series'
+      payload.stayLineId || payload.cleanId
         ? raw
-        : explodeStaySeriesTasksForDashboard([raw])[0] ?? raw;
+        : payload.kind === 'stay_series' || payload.kind === 'daily_cleaning_hub'
+          ? explodeStaySeriesTasksForDashboard([raw])[0] ?? raw
+          : raw;
 
     return fullTaskToListItem(mappedRaw, staffById, listingById, reservationMeta);
   }

@@ -591,12 +591,19 @@ export function fullTaskToListItem(
   };
 }
 
-/** Recouche cadence : une Task TU- → N lignes dashboard SR-XXXXXXXX (FdM, heure, durée). */
+/** Recouche cadence / daily hub : une Task TU- → N lignes dashboard SR-XXXXXXXX. */
 export function stayLineTaskRef(id: string): { mongoId: string; lineId?: string } {
   const raw = String(id ?? '').trim()
   const m = /^(.+):(SR-[A-Z0-9]{8})$/.exec(raw)
   if (m) return { mongoId: m[1], lineId: m[2] }
   return { mongoId: raw }
+}
+
+function cleaningNatureToDashboardType(nature: string): string {
+  if (nature === 'checkout') return 'checkout_cleaning'
+  if (nature === 'urgent') return 'cleaning_urgent'
+  if (nature === 'refresh') return 'cleaning_refresh'
+  return 'cleaning_free'
 }
 
 export function explodeStaySeriesTasksForDashboard(
@@ -608,6 +615,57 @@ export function explodeStaySeriesTasksForDashboard(
       string,
       unknown
     >
+    if (payload.cleanId || payload.stayLineId) {
+      out.push(t)
+      continue
+    }
+    if (payload.kind === 'daily_cleaning_hub' && Array.isArray(payload.cleanings)) {
+      const parentId = String(t._id ?? '')
+      const parentCode = String(t.taskCode ?? '')
+      const date = String(payload.date ?? '').slice(0, 10)
+      for (const raw of payload.cleanings) {
+        if (!raw || typeof raw !== 'object') continue
+        const e = raw as Record<string, unknown>
+        if (String(e.status ?? '') === 'cancelled') continue
+        const cleanId = String(e.cleanId ?? '').trim()
+        const roomId = String(e.roomId ?? '').trim()
+        if (!cleanId && !roomId) continue
+        const durationMin = Number(e.durationMin)
+        out.push({
+          ...t,
+          _id: cleanId ? `${parentId}:${cleanId}` : `${parentId}:${roomId}`,
+          taskCode: cleanId || parentCode,
+          type: cleaningNatureToDashboardType(String(e.cleaningNature ?? '')),
+          assignedTo: e.assignedTo || t.assignedTo,
+          roomId: roomId || t.roomId,
+          roomName: e.roomName || t.roomName,
+          guestName: e.guestName || t.guestName,
+          reservationId: e.reservationId || t.reservationId,
+          reservationCode: e.reservationCode || t.reservationCode,
+          status: e.status === 'waiting_guest' ? 'waiting_guest' : e.status || t.status,
+          scheduledDate: /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T00:00:00.000Z` : t.scheduledDate,
+          scheduledAt: e.time || t.scheduledAt,
+          payload: {
+            ...payload,
+            cleanId,
+            stayLineId: cleanId,
+            cleaningNature: e.cleaningNature,
+            date,
+            slotId: e.slotId,
+            time: e.time,
+            selectedTime: e.time,
+            parentTaskCode: parentCode,
+            parentTaskId: parentId,
+            menageDurationMinutes:
+              Number.isFinite(durationMin) && durationMin > 0
+                ? durationMin
+                : payload.menageDurationMinutes,
+            origin: e.origin,
+          },
+        })
+      }
+      continue
+    }
     const execs = payload.kind === 'stay_series' && Array.isArray(payload.executions)
       ? payload.executions
       : null

@@ -48,31 +48,31 @@ export async function createTask(body: Record<string, unknown>) {
 }
 
 export async function getTask(id: string) {
-  const { data } = await apiClient.get(`${BASE}/tasks/${id}`);
+  const { data } = await apiClient.get(`${BASE}/tasks/${encodeURIComponent(id)}`);
   return data;
 }
 
 export async function patchTask(id: string, body: Record<string, unknown>) {
-  const { data } = await apiClient.patch(`${BASE}/tasks/${id}`, body);
+  const { data } = await apiClient.patch(`${BASE}/tasks/${encodeURIComponent(id)}`, body);
   return data;
 }
 
 export async function patchTaskStatus(id: string, status: string) {
-  const { data } = await apiClient.patch(`${BASE}/tasks/${id}/status`, { status });
+  const { data } = await apiClient.patch(`${BASE}/tasks/${encodeURIComponent(id)}/status`, { status });
   return data;
 }
 
 /** Acceptation staff / admin (pending_partner → confirmed + sync plan). */
 export async function acceptTask(id: string, staffId?: string) {
   const body = staffId ? { staffId } : {};
-  const { data } = await apiClient.patch(`${BASE}/tasks/${id}/accept`, body);
+  const { data } = await apiClient.patch(`${BASE}/tasks/${encodeURIComponent(id)}/accept`, body);
   return data;
 }
 
 /** Refus staff / admin. */
 export async function rejectTask(id: string, staffId?: string) {
   const body = staffId ? { staffId } : {};
-  const { data } = await apiClient.patch(`${BASE}/tasks/${id}/reject`, body);
+  const { data } = await apiClient.patch(`${BASE}/tasks/${encodeURIComponent(id)}/reject`, body);
   return data;
 }
 
@@ -84,12 +84,12 @@ export async function completeTask(
 ) {
   const body: Record<string, unknown> = { staffId };
   if (executionNote?.trim()) body.executionNote = executionNote.trim();
-  const { data } = await apiClient.patch(`${BASE}/tasks/${id}/complete`, body);
+  const { data } = await apiClient.patch(`${BASE}/tasks/${encodeURIComponent(id)}/complete`, body);
   return data;
 }
 
 export async function assignTask(id: string, staffId: string | null) {
-  const { data } = await apiClient.patch(`${BASE}/tasks/${id}/assign`, { staffId });
+  const { data } = await apiClient.patch(`${BASE}/tasks/${encodeURIComponent(id)}/assign`, { staffId });
   return data;
 }
 
@@ -110,7 +110,7 @@ export async function listStaffTasksWeek(staffId: string, date?: string) {
 }
 
 export async function deleteTask(id: string) {
-  const { data } = await apiClient.delete(`${BASE}/tasks/${id}`);
+  const { data } = await apiClient.delete(`${BASE}/tasks/${encodeURIComponent(id)}`);
   return data;
 }
 
