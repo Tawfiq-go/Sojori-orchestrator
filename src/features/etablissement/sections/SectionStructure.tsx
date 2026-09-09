@@ -209,7 +209,7 @@ function RoomTypeCard({
   );
 }
 
-export default function SectionStructure({ structure }: Props) {
+export default function SectionStructure({ structure, onChanged }: Props) {
   const { building, totals, roomTypes, orphanRooms } = structure;
   const isMulti = building.propertyUnit === 'Multi';
   const gap = totals.declaredUnits - totals.sellableRooms;
