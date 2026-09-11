@@ -194,13 +194,14 @@ export default function V3ServicePanel({
     switch (activePanel) {
       case 'gestion':
         if (def.key === 'cleaning_free' || def.key === 'cleaning_paid') {
-          // Le contenu ménage s'édite ICI (ListingMenageTab embarqué).
+          // Le contenu ménage s'édite ICI (ListingMenageTab embarqué, focus par capability).
           // L'onglet listing Ménage reste un second point d'entrée vers le même éditeur.
           // Template owner : pas de listing, on garde le rappel.
           return (
             <MenageContentRedirectCard
               listingId={ownerTemplateMode ? undefined : listingId}
               templateMode={Boolean(ownerTemplateMode)}
+              focus={def.key === 'cleaning_paid' ? 'paid' : 'stay'}
             />
           );
         }

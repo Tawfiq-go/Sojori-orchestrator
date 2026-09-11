@@ -90,23 +90,66 @@ export function CapabilityGestionPanel({
     return null;
   }
 
-  if (key === 'cleaning_free' || key === 'cleaning_paid') {
-    // Contenu ménage (durées, prix, niveaux, linge) — éditeur listing embarqué.
+  if (key === 'cleaning_free') {
+    // Recouche · pendant le séjour uniquement.
     return (
       <Box sx={embeddedSx}>
-        <MenageContentRedirectCard listingId={lid || undefined} templateMode={templateMode} />
+        <MenageContentRedirectCard
+          listingId={lid || undefined}
+          templateMode={templateMode}
+          focus="stay"
+        />
+      </Box>
+    );
+  }
+  if (key === 'cleaning_paid') {
+    // À la demande uniquement.
+    return (
+      <Box sx={embeddedSx}>
+        <MenageContentRedirectCard
+          listingId={lid || undefined}
+          templateMode={templateMode}
+          focus="paid"
+        />
       </Box>
     );
   }
   if (key === 'cleaning_sojori') {
-    // Contenu ménage embarqué ; ici on garde aussi l'ACTIVATION
+    // Contenu turnover (À blanc) embarqué ; ici on garde aussi l'ACTIVATION
     // (déclenchement auto checkout + filet DIRTY) via CleaningSojoriConfigTab.
     return (
       <Box sx={embeddedSx}>
-        <MenageContentRedirectCard listingId={lid || undefined} templateMode={templateMode} />
+        <MenageContentRedirectCard
+          listingId={lid || undefined}
+          templateMode={templateMode}
+          focus="checkout"
+        />
         <Box sx={{ mt: 2 }}>
           <CleaningSojoriConfigTab {...commonListing} showChecklist={false} />
         </Box>
+      </Box>
+    );
+  }
+  if (key === 'stay_cleaning') {
+    return (
+      <Box sx={embeddedSx}>
+        <Alert severity="info" sx={{ borderRadius: 2, fontSize: 12.5, lineHeight: 1.45 }}>
+          <strong>Ménage journalier (hôtel / Multi)</strong> — pas de formulaire dédié ici.
+          La cadence pendant le séjour se règle dans <strong>Ménage séjour</strong> (Recouche :
+          tous les jours / jours alternés / paliers). Utilisez les colonnes Décisions pour
+          activer tâche, assignation et escalade de ce flow.
+        </Alert>
+      </Box>
+    );
+  }
+  if (key === 'minibar_check') {
+    return (
+      <Box sx={embeddedSx}>
+        <Alert severity="info" sx={{ borderRadius: 2, fontSize: 12.5, lineHeight: 1.45 }}>
+          <strong>Contrôle mini-bar</strong> — pas de formulaire de contenu ici. Le catalogue et
+          le suivi se gèrent dans <strong>Tâches → Extras → Mini-bar</strong>. Ici : activations
+          et décisions (WA / tâche / assignation / escalade) pour le jour du départ.
+        </Alert>
       </Box>
     );
   }
