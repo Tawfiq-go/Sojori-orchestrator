@@ -53,7 +53,7 @@ import {
 import {
   activationStatusFromEffectiveDoc,
   loadListingServiceActivation,
-  overridePatchForToggle,
+  resolveListingTogglePatch,
   saveListingServiceActivation,
   type ServiceActivationStatusEntry,
 } from './listingCapabilityActivation';
@@ -1326,59 +1326,111 @@ export default function OrchestrationOverviewPanel({
       void (async () => {
         setSaving(true);
         try {
-          const patch = overridePatchForToggle(activationStatus, capKey, value);
+          const act = activationStatus.find((s) => s.serviceId === capKey);
+          const currentlyOn = act
+            ? act.effectiveEnabled === true
+            : cap.decisions?.managed === true;
+          const patch = resolveListingTogglePatch(
+            activationStatus,
+            capKey,
+            value,
+            currentlyOn,
+          );
           if (!patch.overrides && !patch.unset?.length) {
+            // Already matches owner and UI — still sync local flags if OFF was requested
+            // while managed was somehow still true (legacy / race).
+            if (!value && cap.decisions?.managed === true) {
+              const def = getCapabilityDefinition(capKey);
+              if (def) {
+                await listingsService.putListingOrchestration(listingId, {
+                  capabilities: {
+                    [capKey]: {
+                      key: capKey,
+                      taskType: def.taskType,
+                      decisions: {
+                        ...(cap.decisions ?? {}),
+                        managed: false,
+                        orchestrated: false,
+                        clientEnabled: false,
+                      },
+                      taskBehavior: cap.taskBehavior,
+                      gestion: cap.gestion,
+                      whatsapp: cap.whatsapp,
+                      execution: cap.execution,
+                    },
+                  },
+                });
+                setDoc((prev) => {
+                  if (!prev) return prev;
+                  const existing = (prev.capabilities?.[capKey] ?? cap) as CapDoc;
+                  return {
+                    ...prev,
+                    capabilities: {
+                      ...prev.capabilities,
+                      [capKey]: {
+                        ...existing,
+                        decisions: {
+                          ...(existing.decisions ?? {}),
+                          managed: false,
+                          orchestrated: false,
+                          clientEnabled: false,
+                        },
+                      } as never,
+                    },
+                  };
+                });
+                toast.success('Service désactivé pour cette annonce');
+                return;
+              }
+            }
             toast.info('Déjà aligné sur l’activation propriétaire');
             return;
           }
           const next = await saveListingServiceActivation(listingId, patch);
           setActivationStatus(next.services ?? []);
-          // Plus de toggle Orchestrer : ON ⇒ plan auto autorisé (orchestrated=true).
-          // Appel direct (pas saveCapPatch) : le gate activation verrait encore l’ancien OFF.
-          if (value) {
-            const def = getCapabilityDefinition(capKey);
-            if (def) {
-              await listingsService.putListingOrchestration(listingId, {
-                capabilities: {
-                  [capKey]: {
-                    key: capKey,
-                    taskType: def.taskType,
-                    decisions: {
-                      ...(cap.decisions ?? {}),
-                      managed: true,
-                      orchestrated: true,
-                    },
-                    taskBehavior: cap.taskBehavior,
-                    gestion: cap.gestion,
-                    whatsapp: cap.whatsapp,
-                    execution: cap.execution,
+          // Sync capability decisions both ways (ON and OFF). Direct put — not
+          // saveCapPatch — so the activation gate does not block on stale OFF.
+          const def = getCapabilityDefinition(capKey);
+          if (def) {
+            await listingsService.putListingOrchestration(listingId, {
+              capabilities: {
+                [capKey]: {
+                  key: capKey,
+                  taskType: def.taskType,
+                  decisions: {
+                    ...(cap.decisions ?? {}),
+                    managed: value,
+                    orchestrated: value,
+                    ...(value ? null : { clientEnabled: false }),
                   },
+                  taskBehavior: cap.taskBehavior,
+                  gestion: cap.gestion,
+                  whatsapp: cap.whatsapp,
+                  execution: cap.execution,
                 },
-              });
-            }
-          }
-          toast.success(value ? 'Service activé pour cette annonce' : 'Service désactivé pour cette annonce');
-          // Mise à jour locale sans spinner plein écran.
-          if (value) {
-            setDoc((prev) => {
-              if (!prev) return prev;
-              const existing = (prev.capabilities?.[capKey] ?? cap) as CapDoc;
-              return {
-                ...prev,
-                capabilities: {
-                  ...prev.capabilities,
-                  [capKey]: {
-                    ...existing,
-                    decisions: {
-                      ...(existing.decisions ?? {}),
-                      managed: true,
-                      orchestrated: true,
-                    },
-                  } as never,
-                },
-              };
+              },
             });
           }
+          toast.success(value ? 'Service activé pour cette annonce' : 'Service désactivé pour cette annonce');
+          setDoc((prev) => {
+            if (!prev) return prev;
+            const existing = (prev.capabilities?.[capKey] ?? cap) as CapDoc;
+            return {
+              ...prev,
+              capabilities: {
+                ...prev.capabilities,
+                [capKey]: {
+                  ...existing,
+                  decisions: {
+                    ...(existing.decisions ?? {}),
+                    managed: value,
+                    orchestrated: value,
+                    ...(value ? null : { clientEnabled: false }),
+                  },
+                } as never,
+              },
+            };
+          });
         } catch (e: unknown) {
           toast.error(e instanceof Error ? e.message : 'Activation impossible');
         } finally {
@@ -2626,11 +2678,15 @@ export default function OrchestrationOverviewPanel({
           ? 'Éditez mode d’accueil, parking, immeuble et appartement (codes + descriptions) — puis Enregistrer.'
           : 'Template owner : mode d’accueil seulement. Codes parking / immeuble / appartement → chaque fiche annonce.';
       case 'cleaning_free':
-        return 'Tarifs Normal/Grand + paliers (nombre de ménages selon la durée) et créneaux — puis Enregistrer.';
+        return 'Recouche pendant le séjour (cadence, paliers, durées / prix) — puis Enregistrer.';
       case 'cleaning_paid':
-        return 'Tarifs Normal/Grand + options serviettes/draps — puis Enregistrer.';
+        return 'À la demande (durées / prix Normal & Grand) — puis Enregistrer.';
       case 'cleaning_sojori':
-        return 'Tarifs Normal/Grand (ou forfait mensuel) + déclenchement après checkout — puis Enregistrer.';
+        return 'Turnover À blanc (durées / prix) + déclenchement auto après checkout — puis Enregistrer.';
+      case 'stay_cleaning':
+        return 'Flow hôtel : décisions ici ; cadence journalière = Recouche dans Ménage séjour.';
+      case 'minibar_check':
+        return 'Décisions ici ; catalogue / suivi mini-bar → Tâches → Extras → Mini-bar.';
       case 'transport':
         return 'Suivi du vol : activez-le et choisissez les vérifications. Destinations et prix → onglet Expériences.';
       case 'concierge':
@@ -2850,35 +2906,47 @@ export default function OrchestrationOverviewPanel({
                   </Box>
                   <Box
                     sx={{
-                      ...(r.key === 'concierge' ? cell : editCell),
+                      ...cell,
                       display: 'flex',
                       flexWrap: 'wrap',
                       gap: 0.35,
                       minHeight: 28,
                       alignItems: 'center',
                       py: 0.25,
-                      ...(r.key === 'concierge' ? { cursor: 'default', opacity: 0.85 } : null),
+                      cursor: 'default',
+                      ...(r.key === 'concierge' ? { opacity: 0.85 } : null),
                     }}
-                    onClick={
-                      r.key === 'concierge'
-                        ? undefined
-                        : () => setConfigModal({ capKey: r.key, tab: 'gestion' })
-                    }
                     title={
                       r.key === 'concierge'
                         ? 'Expériences (J3) — onglet listing Expériences'
                         : r.key === 'transport'
-                          ? 'Suivi du vol — destinations et prix dans l’onglet Expériences'
-                          : 'Contenu (prix, créneaux, catalogue…)'
+                          ? 'Résumé : suivi du vol (ouvrir Éditer). Destinations et prix → Expériences'
+                          : r.key === 'stay_cleaning'
+                            ? 'Cadence journalière = Recouche dans Ménage séjour'
+                            : r.key === 'minibar_check'
+                              ? 'Catalogue / suivi → Tâches → Extras → Mini-bar'
+                              : 'Résumé du contenu — ouvrir Éditer pour configurer'
                     }
                   >
-                    {r.key === 'concierge' || r.key === 'transport' ? (
+                    {r.key === 'concierge' ? (
                       <Typography sx={{ ...cell, color: V3.t3, fontSize: 11.5, fontWeight: 700 }}>
-                        {r.key === 'transport' ? '→ Expériences (navette)' : '→ Expériences'}
+                        → Expériences
+                      </Typography>
+                    ) : r.key === 'transport' ? (
+                      <Typography sx={{ ...cell, color: V3.t3, fontSize: 11.5, fontWeight: 700 }}>
+                        Suivi du vol
+                      </Typography>
+                    ) : r.key === 'stay_cleaning' ? (
+                      <Typography sx={{ ...cell, color: V3.t3, fontSize: 11.5, fontWeight: 700 }}>
+                        → Ménage séjour
+                      </Typography>
+                    ) : r.key === 'minibar_check' ? (
+                      <Typography sx={{ ...cell, color: V3.t3, fontSize: 11.5, fontWeight: 700 }}>
+                        → Extras mini-bar
                       </Typography>
                     ) : r.hints.length === 0 ? (
-                      <Typography sx={{ ...cell, color: V3.p, fontSize: 11.5, fontWeight: 700 }}>
-                        + Contenu
+                      <Typography sx={{ ...cell, color: V3.t3, fontSize: 11.5, fontWeight: 700 }}>
+                        Contenu
                       </Typography>
                     ) : (
                       r.hints.map((h) => (
@@ -2892,7 +2960,7 @@ export default function OrchestrationOverviewPanel({
                             fontWeight: 600,
                             bgcolor: V3.pt,
                             color: V3.pd,
-                            cursor: 'pointer',
+                            cursor: 'default',
                           }}
                         />
                       ))
@@ -3571,11 +3639,19 @@ export default function OrchestrationOverviewPanel({
             </DialogTitle>
             <DialogContent dividers sx={{ pt: 1.5 }}>
               <Box key={`gestion-${configDef.key}-${listingId ?? ownerKey}`}>
-                  {configDef.key === 'cleaning_free' || configDef.key === 'cleaning_paid' ? (
-                    /* Contenu ménage (durées, prix, niveaux, linge) — éditeur listing embarqué. */
+                  {configDef.key === 'cleaning_free' ? (
+                    /* Recouche · séjour — éditeur listing embarqué. */
                     <MenageContentRedirectCard
                       listingId={isListingScope ? listingId || undefined : undefined}
                       templateMode={!isListingScope}
+                      focus="stay"
+                    />
+                  ) : configDef.key === 'cleaning_paid' ? (
+                    /* À la demande — éditeur listing embarqué. */
+                    <MenageContentRedirectCard
+                      listingId={isListingScope ? listingId || undefined : undefined}
+                      templateMode={!isListingScope}
+                      focus="paid"
                     />
                   ) : configDef.key === 'cleaning_sojori' ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

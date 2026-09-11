@@ -2,22 +2,20 @@ import { isAxiosError } from 'axios';
 import listingsService from '../../services/listingsService';
 import { CAPABILITY_REGISTRY } from '../serviceMatrix/capabilityRegistry';
 import type { ListingOrchestrationEffective } from './listingOrchestrationApi';
+import type {
+  ListingServiceActivationPatch,
+  ServiceActivationStatusEntry,
+} from './listingCapabilityActivationTypes';
+import {
+  overridePatchForToggle,
+  resolveListingTogglePatch,
+} from './listingCapabilityActivationPatch';
 
-export type ServiceActivationStatusEntry = {
-  serviceId: string;
-  label: string;
-  ownerEnabled: boolean;
-  listingOverride: boolean | null;
-  listingEnabled: boolean | null;
-  effectiveEnabled: boolean;
-  source: 'owner' | 'listing';
-  disabledReason: 'owner' | 'listing' | null;
-};
-
-export type ListingServiceActivationPatch = {
-  overrides?: Record<string, boolean>;
-  unset?: string[];
-};
+export type {
+  ListingServiceActivationPatch,
+  ServiceActivationStatusEntry,
+} from './listingCapabilityActivationTypes';
+export { overridePatchForToggle, resolveListingTogglePatch } from './listingCapabilityActivationPatch';
 
 export type ListingServiceActivationResponse = {
   ownerId: string;
@@ -118,19 +116,6 @@ export function overridesPatchFromDisplayState(
     ...(Object.keys(overrides).length ? { overrides } : {}),
     ...(unset.length ? { unset } : {}),
   };
-}
-
-export function overridePatchForToggle(
-  services: ServiceActivationStatusEntry[],
-  key: string,
-  checked: boolean,
-): ListingServiceActivationPatch {
-  const row = rowForKey(services, key);
-  const owner = row?.ownerEnabled === true;
-  if (checked === owner) {
-    return row?.source === 'listing' ? { unset: [key] } : {};
-  }
-  return { overrides: { [key]: checked } };
 }
 
 function isRouteNotFoundError(e: unknown): boolean {

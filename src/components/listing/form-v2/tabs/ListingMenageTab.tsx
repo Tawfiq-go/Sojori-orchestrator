@@ -18,10 +18,17 @@ import {
 import { V3 } from '../../../../features/orchestrationListingV3/theme';
 import { cleaningGuestPreview } from './cleaningGuestPreview';
 
+export type MenageEditorFocus = 'all' | 'stay' | 'paid' | 'checkout';
+
 type Props = {
   listingId?: string | null;
   /** Rendu dans l’onglet Orchestration → Ménage (pas de titre de page). */
   embedded?: boolean;
+  /**
+   * Focused slice when opened from Orchestration capability rows.
+   * Detail tab uses `all` (default).
+   */
+  focus?: MenageEditorFocus;
 };
 
 const sectionSx = {
@@ -31,12 +38,20 @@ const sectionSx = {
   overflow: 'hidden',
 };
 
+const FOCUS_TITLE: Record<MenageEditorFocus, string> = {
+  all: 'Ménage',
+  stay: 'Ménage séjour',
+  paid: 'Ménage payant',
+  checkout: 'Ménage checkout',
+};
+
 /**
  * Onglet listing « Ménage » — page ménage listing.
  * Desktop (≥1100px) : rail gauche 340px (Politique + En un coup d'œil),
  * colonne droite large (Types de ménage + Barème). En dessous : empilement.
  */
-export default function ListingMenageTab({ listingId, embedded = false }: Props) {
+export default function ListingMenageTab({ listingId, embedded = false, focus = 'all' }: Props) {
+  const showStayChrome = focus === 'all' || focus === 'stay';
   const [loading, setLoading] = useState(true);
   const [policy, setPolicy] = useState<HousekeepingPolicyConfig | null>(null);
   const [listingValues, setListingValues] = useState<Record<string, unknown>>({});
@@ -127,7 +142,7 @@ export default function ListingMenageTab({ listingId, embedded = false }: Props)
         LISTING
       </Typography>
       <Typography sx={{ fontSize: 22, fontWeight: 750, mb: 1.25, lineHeight: 1.2 }}>
-        Ménage
+        {FOCUS_TITLE[focus]}
       </Typography>
         </>
       )}
@@ -141,11 +156,12 @@ export default function ListingMenageTab({ listingId, embedded = false }: Props)
           width: '100%',
           maxWidth: 1440,
           '@media (min-width:1100px)': {
-            gridTemplateColumns: '340px minmax(0, 1fr)',
+            gridTemplateColumns: showStayChrome ? '340px minmax(0, 1fr)' : '1fr',
           },
         }}
       >
-        {/* Rail gauche */}
+        {/* Rail gauche — stay / full editor only */}
+        {showStayChrome && (
         <Stack sx={{ gap: 2, minWidth: 0 }}>
           <Box sx={sectionSx}>
             <Box sx={{ px: 2, py: 1.25, borderBottom: `1px solid ${V3.b}`, bgcolor: V3.alt }}>
@@ -198,6 +214,7 @@ export default function ListingMenageTab({ listingId, embedded = false }: Props)
             </Stack>
           </Box>
         </Stack>
+        )}
 
         {/* Colonne principale */}
         <Stack sx={{ gap: 2.5, minWidth: 0 }}>
@@ -205,9 +222,10 @@ export default function ListingMenageTab({ listingId, embedded = false }: Props)
             listingId={String(listingId)}
             listingValues={listingValues}
             baremeView={baremeView}
+            focus={focus}
             onListingPatch={patch => setListingValues(prev => ({ ...prev, ...patch }))}
           />
-          <V3MenageBaremePanel listingId={String(listingId)} view={baremeView} />
+          {showStayChrome && <V3MenageBaremePanel listingId={String(listingId)} view={baremeView} />}
         </Stack>
       </Box>
     </Box>

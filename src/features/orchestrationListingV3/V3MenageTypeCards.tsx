@@ -26,6 +26,14 @@ type Props = {
   baremeView: BaremeViewState | null;
   /** Remonte le doc local après écriture (menageOps). */
   onListingPatch?: (patch: Record<string, unknown>) => void;
+  /**
+   * Focused slice of ménage type cards:
+   * - `stay` = Recouche only (cleaning_free)
+   * - `paid` = À la demande only (cleaning_paid)
+   * - `checkout` = À blanc only (cleaning_sojori)
+   * - `all` = full editor (Detail tab Ménage)
+   */
+  focus?: 'all' | 'stay' | 'paid' | 'checkout';
 };
 
 const cardSx = {
@@ -62,13 +70,22 @@ export default function V3MenageTypeCards({
   listingValues,
   baremeView,
   onListingPatch,
+  focus = 'all',
 }: Props) {
+  const showRecouche = focus === 'all' || focus === 'stay';
+  const showCheckout = focus === 'all' || focus === 'checkout';
+  const showPaid = focus === 'all' || focus === 'paid';
+  const showExtras = focus === 'all';
   const [cfg, setCfg] = useState<MenageOpsConfig>(() =>
     parseMenageOpsFromSources(undefined, listingValues),
   );
   const savedRef = useRef<MenageOpsConfig>(cfg);
   const [saving, setSaving] = useState(false);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ recouche: true });
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+    if (focus === 'checkout') return { checkout: true };
+    if (focus === 'paid') return { paid: true };
+    return { recouche: true };
+  });
   /** Hôtel : types de chambre pour la cadence par type (vide en Single). */
   const [roomTypes, setRoomTypes] = useState<ListingStructureRoomType[]>([]);
   useEffect(() => {
@@ -149,6 +166,7 @@ export default function V3MenageTypeCards({
       )}
 
       {/* ── Recouche · pendant le séjour (dépliée) ─────────────────── */}
+      {showRecouche && (
       <TypeCard
         emoji="🧹"
         title="Recouche · pendant le séjour"
@@ -503,8 +521,10 @@ export default function V3MenageTypeCards({
           </Stack>
         </Section>
       </TypeCard>
+      )}
 
       {/* ── À blanc · au départ ────────────────────────────────────── */}
+      {showCheckout && (
       <TypeCard
         emoji="🧼"
         title="À blanc · au départ"
@@ -514,6 +534,7 @@ export default function V3MenageTypeCards({
         onToggle={v => commit(c => ({ ...c, checkout: { ...c.checkout, enabled: v } }))}
         expanded={expanded.checkout === true}
         onExpand={() => setExpanded(e => ({ ...e, checkout: !e.checkout }))}
+        accent={focus === 'checkout'}
       >
         <Section label="Durée & prix par niveau">
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25 }}>
@@ -543,8 +564,10 @@ export default function V3MenageTypeCards({
           </Box>
         </Section>
       </TypeCard>
+      )}
 
       {/* ── À la demande ───────────────────────────────────────────── */}
+      {showPaid && (
       <TypeCard
         emoji="✨"
         title="À la demande"
@@ -557,6 +580,7 @@ export default function V3MenageTypeCards({
         onToggle={v => commit(c => ({ ...c, paid: { ...c.paid, enabled: v } }))}
         expanded={expanded.paid === true}
         onExpand={() => setExpanded(e => ({ ...e, paid: !e.paid }))}
+        accent={focus === 'paid'}
       >
         <Section label="Durée & prix par niveau">
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25 }}>
@@ -586,7 +610,10 @@ export default function V3MenageTypeCards({
           </Box>
         </Section>
       </TypeCard>
+      )}
 
+      {showExtras && (
+        <>
       {/* ── Urgent ─────────────────────────────────────────────────── */}
       <TypeCard
         emoji="⚡"
@@ -602,6 +629,8 @@ export default function V3MenageTypeCards({
         Ménage journalier et Contrôle mini-bar ne figurent plus ici — le journalier est couvert par
         la cadence de la Recouche, le mini-bar a sa propre configuration.
       </Typography>
+        </>
+      )}
     </Stack>
   );
 }
