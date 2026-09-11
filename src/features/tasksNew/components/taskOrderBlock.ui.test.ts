@@ -29,6 +29,7 @@ describe('Tasks — order summary, payment follow-up, start time', () => {
   });
   it('the subtitle and the planned hour come from `order` for room service, transport, experiences', () => {
     assert.match(mapper, /const orderLine = order\?\.summary/);
+    assert.match(mapper, /conciergeDetailLine: detailLine/);
     assert.match(mapper, /plannedTime: plannedTime \?\? orderPlannedTime/);
     assert.match(page, /const label = task\.order\?\.startLabel;/);
     assert.match(cell, /\$\{m\[1\]\}h\$\{m\[2\]\}/);

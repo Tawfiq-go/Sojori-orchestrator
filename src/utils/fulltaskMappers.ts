@@ -444,6 +444,8 @@ export function fullTaskToListItem(
     orderLine ||
     conciergeDetailLine ||
     (task.requestNote ? String(task.requestNote) : '')
+  // La liste lit conciergeDetailLine en premier : le résumé normalisé prime.
+  const detailLine = orderLine || conciergeDetailLine
   // Heure de début des commandes (room service, navette, expérience…) :
   // choisie par le voyageur dans WhatsApp, donc source « client ».
   const orderPlannedTime = !showsGuestHour && order?.startTime ? order.startTime : undefined
@@ -561,7 +563,7 @@ export function fullTaskToListItem(
     linkedItemNumber: payload.parentTaskCode ? String(payload.parentTaskCode) : null,
     linkedItemId: payload.parentTaskId ? String(payload.parentTaskId) : null,
     descriptions: descriptionLine ? [{ description: descriptionLine }] : [],
-    conciergeDetailLine,
+    conciergeDetailLine: detailLine,
     order,
     conciergeGroupingKey,
     checklistItems: checklistItems.length ? checklistItems : undefined,
