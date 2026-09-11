@@ -3,7 +3,9 @@ import * as fulltaskApi from './fulltaskApi';
 import reservationsService from './reservationsService';
 import { LEGACY_TO_FULLTASK_STATUS, explodeStaySeriesTasksForDashboard, fullTaskToListItem, stayLineTaskRef } from '../utils/fulltaskMappers';
 import type { ReservationMetaLike } from '../utils/fulltaskMappers';
-import type { TaskFulltaskUpdatePayload, TaskListItem, TasksSearchParams } from '../types/tasks.types';
+import type { TaskFulltaskUpdatePayload, TaskListItem, TasksSearchParams,
+  TaskPaymentUpdatePayload,
+} from '../types/tasks.types';
 import { toLegacyAuthUser } from '../utils/legacyAuthUser';
 import {
   canSelectOwnerInAdminFilter,
@@ -364,6 +366,13 @@ class FulltaskTasksService {
     if (res?.success === false) throw new Error(res?.error || 'Statut refusé');
     if (!res?.data) throw new Error('Réponse statut vide');
     return res.data as Record<string, unknown>;
+  }
+
+  /** Paiement d'une commande : payé / partiel (montant) / à régler sur place, et le mode. */
+  async updateTaskPayment(taskId: string, body: TaskPaymentUpdatePayload): Promise<void> {
+    const { mongoId } = stayLineTaskRef(taskId);
+    const res = await fulltaskApi.patchTaskPayment(mongoId, body as Record<string, unknown>);
+    if (res?.success === false) throw new Error(res?.error || 'Paiement refusé');
   }
 
   async updateTaskStatus(

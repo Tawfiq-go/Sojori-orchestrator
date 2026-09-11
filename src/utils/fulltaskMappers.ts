@@ -7,6 +7,7 @@ import {
   type ReservationDatesLike,
 } from './inferTaskPlannedDate';
 import { formatHotelRoomLabel, pickRoomTypeName } from './multiListingLabel';
+import type { TaskOrder } from '../types/tasks.types';
 
 export const FULLTASK_TO_LEGACY_STATUS: Record<string, string> = {
   waiting_guest: 'CREATED',
@@ -432,9 +433,20 @@ export function fullTaskToListItem(
     ? buildConciergeDetailLine(payload, task.requestNote)
     : undefined
   const conciergeGroupingKey = isConciergeType ? mapConciergeGroupingKey(payload) : undefined
+  // Résumé de commande normalisé par srv-fulltask (articles, montant, paiement, heure).
+  const order = (task.order && typeof task.order === 'object' ? task.order : undefined) as
+    | TaskOrder
+    | undefined
+  const orderLine = order?.summary
+    ? [order.summary, order.detail].filter(Boolean).join(' · ')
+    : order?.detail || ''
   const descriptionLine =
+    orderLine ||
     conciergeDetailLine ||
     (task.requestNote ? String(task.requestNote) : '')
+  // Heure de début des commandes (room service, navette, expérience…) :
+  // choisie par le voyageur dans WhatsApp, donc source « client ».
+  const orderPlannedTime = !showsGuestHour && order?.startTime ? order.startTime : undefined
 
   const checklistItems = (() => {
     const fromPayload = extractChecklistItems(payload)
@@ -532,8 +544,8 @@ export function fullTaskToListItem(
     confirmedCheckInTime: reservationMeta?.confirmedCheckInTime,
     confirmedCheckOutTime: reservationMeta?.confirmedCheckOutTime,
     guestRegistration: reservationMeta?.guestRegistration,
-    plannedTime,
-    hourSource,
+    plannedTime: plannedTime ?? orderPlannedTime,
+    hourSource: hourSource ?? (orderPlannedTime ? 'client' : undefined),
     guestHourChosen,
     requestedAt: requestedAtRaw || null,
     scheduledAt: scheduledAtRaw || null,
@@ -550,6 +562,7 @@ export function fullTaskToListItem(
     linkedItemId: payload.parentTaskId ? String(payload.parentTaskId) : null,
     descriptions: descriptionLine ? [{ description: descriptionLine }] : [],
     conciergeDetailLine,
+    order,
     conciergeGroupingKey,
     checklistItems: checklistItems.length ? checklistItems : undefined,
     notesText: notesText || undefined,

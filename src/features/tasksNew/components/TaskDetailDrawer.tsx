@@ -17,6 +17,7 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'react-toastify';
 import { T } from '../../../components/calendar-v3/_shared';
 import tasksService from '../../../services/fulltaskTasksService';
+import { TaskOrderBlock } from './TaskOrderBlock';
 import type { TaskListItem, TaskStatus } from '../../../types/tasks.types';
 import { TASK_STATUS_LABELS, normalizeTaskStatus } from '../../../types/tasks.types';
 import {
@@ -668,6 +669,9 @@ export default function TaskDetailDrawer({
           </Box>
         ) : null}
 
+        {/* Socle commun de la commande : articles, montant, heure, paiement (par type). */}
+        <TaskOrderBlock task={task} onUpdated={() => onSuccess?.()} />
+
         <CollapseBlock title="Exécution" defaultOpen={true}>
           <SectionLabel>Staff</SectionLabel>
           <FieldBox>
@@ -715,7 +719,11 @@ export default function TaskDetailDrawer({
               <SectionLabel>Source</SectionLabel>
               <FieldBox>
                 <Typography sx={{ fontSize: 13, fontWeight: 700, fontFamily: '"Geist Mono", monospace' }}>
-                  {task.source === 'orchestrator' ? 'Orchestration' : 'Manuel'}
+                  {task.source === 'orchestrator'
+                    ? 'Orchestration'
+                    : task.source === 'whatsapp'
+                      ? 'WhatsApp'
+                      : 'Manuel'}
                 </Typography>
               </FieldBox>
             </Box>

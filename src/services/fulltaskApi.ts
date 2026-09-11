@@ -57,6 +57,12 @@ export async function patchTask(id: string, body: Record<string, unknown>) {
   return data;
 }
 
+/** Suivi de paiement écrit par le staff (payé / partiel / sur place + mode). */
+export async function patchTaskPayment(id: string, body: Record<string, unknown>) {
+  const { data } = await apiClient.patch(`${BASE}/tasks/${encodeURIComponent(id)}/payment`, body);
+  return data;
+}
+
 export async function patchTaskStatus(id: string, status: string) {
   const { data } = await apiClient.patch(`${BASE}/tasks/${encodeURIComponent(id)}/status`, { status });
   return data;

@@ -33,14 +33,11 @@ function formatPlannedDateLabel(iso?: string | null): string {
   return d.isValid() ? d.format('DD MMM YY') : '—';
 }
 
+/** « 9h », « 9h30 » — on garde les minutes (créneau room service 20:30). */
 function plannedTimeLabel(task: TaskListItem): string | undefined {
-  if (task.plannedTime) {
-    const m = String(task.plannedTime).match(/^(\d{1,2})/);
-    if (m) return `${m[1]}h`;
-  }
-  if (task.scheduledAt) {
-    const m = String(task.scheduledAt).match(/^(\d{1,2})/);
-    if (m) return `${m[1]}h`;
+  for (const raw of [task.plannedTime, task.scheduledAt, task.order?.startTime]) {
+    const m = String(raw ?? '').match(/^(\d{1,2})(?::(\d{2}))?/);
+    if (m) return m[2] && m[2] !== '00' ? `${m[1]}h${m[2]}` : `${m[1]}h`;
   }
   return undefined;
 }
