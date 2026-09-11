@@ -70,6 +70,7 @@ moment.locale('fr');
 const AddTaskModal = lazyWithReload(() => import('../components/tasks/AddTaskModal').then(m => ({ default: m.AddTaskModal })));
 const AssignStaffDialog = lazyWithReload(() => import('../features/tasksNew/components/AssignStaffDialog.jsx'));
 const TaskDetailDrawer = lazyWithReload(() => import('../features/tasksNew/components/TaskDetailDrawer'));
+import { paymentStatusTone } from '../features/tasksNew/components/taskPaymentMeta';
 import { TaskPlannedCell } from '../components/tasks/TaskPlannedCell';
 import type { RegistrationFieldPatch } from '../components/reservations/ReservationRegistrationActions';
 import type { StayFieldPatch } from '../components/reservations/ReservationStayActions';
@@ -115,6 +116,7 @@ const COLUMN_WIDTHS = {
   urgence: '58px',
   source: '56px',
   status: '96px',
+  payment: '112px',
   assignedStaff: '96px',
   extras: '128px',
   description: '120px',
@@ -1166,7 +1168,18 @@ function renderPlannedHourLine(task: TaskListItem): ReactNode {
     typ === 'departure_declare' ||
     typ === 'cleaning_free' ||
     typ === 'cleaning_paid';
-  if (!showsHour) return null;
+  // Commandes (room service, navette, expérience…) : l'heure vient du résumé `order`.
+  if (!showsHour) {
+    const label = task.order?.startLabel;
+    if (!label) return null;
+    return (
+      <Tooltip title="Heure demandée par le voyageur" arrow placement="top">
+        <Typography sx={{ fontSize: 10, fontWeight: 700, color: hourSourceColor('client'), lineHeight: 1.2 }}>
+          {label}
+        </Typography>
+      </Tooltip>
+    );
+  }
   const time = task.plannedTime;
   if (!time) return null;
   const src = task.hourSource || 'default';
@@ -1353,13 +1366,22 @@ function formatEndParts(task: TaskListItem): { date: string; time?: string; kind
   };
 }
 
-function paymentChipMeta(status?: string): { bg: string; color: string } {
-  const s = status || 'NOT_PAID';
-  if (s === 'PAID') return { bg: 'rgba(10,143,94,0.14)', color: T.success };
-  if (s === 'PENDING') return { bg: 'rgba(196,101,6,0.14)', color: T.warning };
-  if (s === 'CANCELLED') return { bg: 'rgba(200,30,30,0.12)', color: T.error };
-  if (s === 'NOT_REQUIRED') return { bg: 'rgba(20,17,10,0.06)', color: T.text3 };
-  return { bg: 'rgba(20,17,10,0.06)', color: T.text2 };
+/** Filtre « Statut de paiement » → statuts du résumé `order.payment`. */
+const PAYMENT_FILTER_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'all', label: 'Tous' },
+  { value: 'to_collect', label: 'À encaisser (sur place + partiel)' },
+  { value: 'on_site', label: 'À régler sur place' },
+  { value: 'partial', label: 'Partiel' },
+  { value: 'pending_online', label: 'Lien envoyé' },
+  { value: 'paid', label: 'Payé' },
+  { value: 'none', label: 'Rien à encaisser' },
+];
+
+function matchesPaymentFilter(task: TaskListItem, filter: string): boolean {
+  if (!filter || filter === 'all') return true;
+  const status = task.order?.payment.status ?? 'none';
+  if (filter === 'to_collect') return status === 'on_site' || status === 'partial';
+  return status === filter;
 }
 
 function emergencyChipMeta(em: string | undefined): { bg: string; color: string } {
@@ -1855,6 +1877,9 @@ export function TasksListPage() {
 
   const displayTasks = useMemo(() => {
     let list = tasks;
+    if (listFilters.paymentStatus && listFilters.paymentStatus !== 'all') {
+      list = list.filter((task) => matchesPaymentFilter(task, listFilters.paymentStatus));
+    }
     if (listFilters.origin === 'task') {
       list = list.filter((task) => task.itemType === 'Task' && !task.isClientRequest);
     } else if (listFilters.origin === 'client') {
@@ -2354,6 +2379,53 @@ export function TasksListPage() {
               <MoreHorizIcon fontSize="small" />
             </IconButton>
           </Stack>
+        );
+      },
+    },
+    {
+      key: 'payment',
+      label: 'Paiement',
+      width: COLUMN_WIDTHS.payment,
+      render: (row: TaskRow) => {
+        const pay = row.order?.payment;
+        if (!pay || pay.status === 'none') {
+          return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
+        }
+        const tone = paymentStatusTone(pay.status);
+        const amount =
+          pay.status === 'partial' && pay.dueMad != null
+            ? `reste ${pay.dueMad} MAD`
+            : pay.totalMad != null
+              ? `${pay.totalMad} MAD`
+              : '';
+        return (
+          <Tooltip title={`${pay.statusLabel} · ${pay.methodLabel}`} arrow placement="top">
+            <Box sx={{ minWidth: 0 }}>
+              <Box
+                component="span"
+                sx={{
+                  display: 'inline-block',
+                  px: 0.75,
+                  py: '1px',
+                  borderRadius: '99px',
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  bgcolor: tone.bg,
+                  color: tone.color,
+                  whiteSpace: 'nowrap',
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {pay.status === 'partial' ? 'Partiel' : pay.statusLabel}
+              </Box>
+              <Typography sx={{ fontSize: 10.5, color: T.text2, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {pay.methodLabel}
+                {amount ? ` · ${amount}` : ''}
+              </Typography>
+            </Box>
+          </Tooltip>
         );
       },
     },
@@ -3350,11 +3422,11 @@ export function TasksListPage() {
                       onChange={(e) => setTempPayment(e.target.value)}
                       fullWidth
                     >
-                      <MenuItem value="all">Tous</MenuItem>
-                      <MenuItem value="NOT_REQUIRED">Non requis</MenuItem>
-                      <MenuItem value="PENDING">En attente</MenuItem>
-                      <MenuItem value="PAID">Payé</MenuItem>
-                      <MenuItem value="CANCELLED">Annulé</MenuItem>
+                      {PAYMENT_FILTER_OPTIONS.map((o) => (
+                        <MenuItem key={o.value} value={o.value}>
+                          {o.label}
+                        </MenuItem>
+                      ))}
                     </TextField>
                     <TextField
                       select

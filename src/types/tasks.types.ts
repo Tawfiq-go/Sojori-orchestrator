@@ -53,6 +53,8 @@ export interface TaskListItem {
   paymentStatus?: string;
   price?: number;
   paid?: boolean;
+  /** Résumé de commande normalisé (srv-fulltask `order`) : articles, montant, paiement, heure. */
+  order?: TaskOrder;
   emergency?: TaskEmergency | string;
   source?: string;
   staffName?: string | null;
@@ -247,6 +249,63 @@ export interface TaskUpdateFieldsPayload {
   startHour?: number;
   endHour?: number;
   price?: number;
+}
+
+export type TaskPaymentMethod = 'cash' | 'card' | 'card_tpe' | 'room_charge' | 'transfer';
+export type TaskPaymentStatus = 'paid' | 'partial' | 'pending_online' | 'on_site' | 'none';
+export type TaskOrderKind =
+  | 'room_service'
+  | 'breakfast'
+  | 'transport'
+  | 'groceries'
+  | 'experience'
+  | 'ambiance'
+  | 'cleaning'
+  | 'support'
+  | 'other';
+
+export interface TaskOrderItem {
+  label: string;
+  qty: number;
+  unitPriceMad: number | null;
+  lineTotalMad: number | null;
+  options: string[];
+  category?: string;
+  note?: string;
+}
+
+export interface TaskOrderPayment {
+  method: TaskPaymentMethod | null;
+  methodLabel: string;
+  status: TaskPaymentStatus;
+  statusLabel: string;
+  totalMad: number | null;
+  paidMad: number | null;
+  dueMad: number | null;
+  depositPercent: number | null;
+  recordedByStaff: boolean;
+}
+
+/** Miroir de `TaskOrder` (apps/srv-fulltask/src/services/taskOrderSummary.ts). */
+export interface TaskOrder {
+  kind: TaskOrderKind;
+  items: TaskOrderItem[];
+  itemCount: number;
+  summary: string;
+  detail: string | null;
+  totalMad: number | null;
+  currency: 'MAD';
+  payment: TaskOrderPayment;
+  startTime: string | null;
+  startLabel: string | null;
+}
+
+/** PATCH /api/v1/admin/fulltask/tasks/:id/payment */
+export interface TaskPaymentUpdatePayload {
+  status?: TaskPaymentStatus;
+  paidMad?: number | null;
+  method?: TaskPaymentMethod | null;
+  note?: string;
 }
 
 /** PATCH /api/v1/admin/fulltask/tasks/:id */
