@@ -33,12 +33,20 @@ function formatPlannedDateLabel(iso?: string | null): string {
   return d.isValid() ? d.format('DD MMM YY') : '—';
 }
 
-/** « 9h », « 9h30 » — on garde les minutes (créneau room service 20:30). */
+/**
+ * « 9h », « 9h30 » — on garde les minutes (créneau room service 20:30).
+ * Commande sans heure choisie : « ASAP » ; jamais « 0h » issu d'un minuit UTC.
+ */
 function plannedTimeLabel(task: TaskListItem): string | undefined {
-  for (const raw of [task.plannedTime, task.scheduledAt, task.order?.startTime]) {
+  for (const raw of [task.order?.startTime, task.plannedTime, task.scheduledAt]) {
     const m = String(raw ?? '').match(/^(\d{1,2})(?::(\d{2}))?/);
-    if (m) return m[2] && m[2] !== '00' ? `${m[1]}h${m[2]}` : `${m[1]}h`;
+    if (!m) continue;
+    const hh = Number(m[1]);
+    const mm = m[2] ?? '00';
+    if (hh === 0 && mm === '00') continue;
+    return mm !== '00' ? `${hh}h${mm}` : `${hh}h`;
   }
+  if (task.order?.startLabel && !task.order.startTime) return 'ASAP';
   return undefined;
 }
 

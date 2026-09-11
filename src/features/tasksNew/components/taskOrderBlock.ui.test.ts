@@ -32,7 +32,8 @@ describe('Tasks — order summary, payment follow-up, start time', () => {
     assert.match(mapper, /conciergeDetailLine: detailLine/);
     assert.match(mapper, /plannedTime: plannedTime \?\? orderPlannedTime/);
     assert.match(page, /const label = task\.order\?\.startLabel;/);
-    assert.match(cell, /\$\{m\[1\]\}h\$\{m\[2\]\}/);
+    assert.match(cell, /\$\{hh\}h\$\{mm\}/);
+    assert.match(cell, /return 'ASAP'/);
   });
   it('a WhatsApp task is no longer labelled « Manuel » in the drawer', () => {
     assert.match(drawer, /task\.source === 'whatsapp'\n\s+\? 'WhatsApp'/);
