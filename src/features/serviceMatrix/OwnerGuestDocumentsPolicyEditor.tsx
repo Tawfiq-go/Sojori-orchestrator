@@ -119,7 +119,7 @@ export default function OwnerGuestDocumentsPolicyEditor({ ownerKey }: Props) {
       </Typography>
       <Typography sx={{ fontSize: 11.5, color: V3.t3, mb: 1.25, lineHeight: 1.4 }}>
         Activez et réglez obligatoire / bloque l’accès. Le texte des contrats se configure
-        dans l’onglet Documents de chaque listing.
+        dans l’orchestration (ou l’onglet Documents) de chaque listing.
       </Typography>
       <Box sx={{ display: 'grid', gap: 1 }}>
         {documents.map((item) => {

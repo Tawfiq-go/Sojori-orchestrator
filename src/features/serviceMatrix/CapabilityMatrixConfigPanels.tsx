@@ -91,7 +91,7 @@ export function CapabilityGestionPanel({
   }
 
   if (key === 'cleaning_free' || key === 'cleaning_paid') {
-    // Contenu ménage (durées, prix, niveaux, linge) → onglet Ménage du listing.
+    // Contenu ménage (durées, prix, niveaux, linge) — éditeur listing embarqué.
     return (
       <Box sx={embeddedSx}>
         <MenageContentRedirectCard listingId={lid || undefined} templateMode={templateMode} />
@@ -99,7 +99,7 @@ export function CapabilityGestionPanel({
     );
   }
   if (key === 'cleaning_sojori') {
-    // Contenu → onglet Ménage du listing ; ici on garde l'ACTIVATION
+    // Contenu ménage embarqué ; ici on garde aussi l'ACTIVATION
     // (déclenchement auto checkout + filet DIRTY) via CleaningSojoriConfigTab.
     return (
       <Box sx={embeddedSx}>
@@ -150,7 +150,7 @@ export function CapabilityGestionPanel({
           <>
             <Alert severity="info" sx={{ fontSize: 12.5, mt: 1.5 }}>
               Modèle propriétaire : fiche et contrats par défaut. Chaque listing peut les
-              surcharger dans l&apos;onglet Documents.
+              surcharger dans son orchestration (ou l&apos;onglet Documents).
             </Alert>
             <RegistrationFormEditor ownerKey={templateOwnerKey} />
             <ContractSignatureConfig ownerKey={templateOwnerKey} />

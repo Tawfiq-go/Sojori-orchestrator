@@ -135,6 +135,16 @@ export function RegistrationPolicyToggles({
         gap: 1.25,
       }}
     >
+      <Box>
+        <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+          Politique d&apos;enregistrement (globale)
+        </Typography>
+        <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.35, lineHeight: 1.4 }}>
+          S&apos;applique à l&apos;enregistrement identité du listing (capability), pas à chaque
+          document. Les drapeaux obligatoire / bloque l&apos;accès par document se règlent dans
+          l&apos;éditeur ci-dessous.
+        </Typography>
+      </Box>
       <FormControlLabel
         control={
           <Switch

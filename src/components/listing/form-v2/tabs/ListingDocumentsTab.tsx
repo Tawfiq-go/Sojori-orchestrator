@@ -56,6 +56,8 @@ import {
 
 type Props = {
   listingId?: string | null;
+  /** Rendu dans l’onglet Orchestration → Enregistrement (pas de titre de page). */
+  embedded?: boolean;
 };
 
 type Starter = 'disclaimer' | 'short_term_rental';
@@ -84,7 +86,7 @@ function unwrapDoc(raw: unknown): ListingOrchestrationDoc | null {
   return (r as ListingOrchestrationDoc) ?? null;
 }
 
-export default function ListingDocumentsTab({ listingId }: Props) {
+export default function ListingDocumentsTab({ listingId, embedded = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -333,7 +335,9 @@ export default function ListingDocumentsTab({ listingId }: Props) {
   }
 
   return (
-    <Box sx={{ p: { xs: 1.5, md: 2 }, width: '100%', pb: { xs: 10, md: 2 } }}>
+    <Box sx={{ p: embedded ? 0 : { xs: 1.5, md: 2 }, width: '100%', pb: embedded ? 0 : { xs: 10, md: 2 } }}>
+      {!embedded && (
+        <>
       <Typography sx={{ fontSize: 11, fontWeight: 750, letterSpacing: '0.14em', textTransform: 'uppercase', color: V3.t4 }}>
         Listing
       </Typography>
@@ -343,6 +347,8 @@ export default function ListingDocumentsTab({ listingId }: Props) {
       <Typography sx={{ fontSize: 13, color: V3.t3, mt: 0.75, maxWidth: '70ch' }}>
         Chaque document récupère ses champs depuis la pièce, WhatsApp ou la réservation.
       </Typography>
+        </>
+      )}
 
       <Box
         sx={{
@@ -352,7 +358,7 @@ export default function ListingDocumentsTab({ listingId }: Props) {
           alignItems: 'start',
           width: '100%',
           maxWidth: 1440,
-          mt: 2.5,
+          mt: embedded ? 0 : 2.5,
           '@media (min-width:1100px)': { gridTemplateColumns: '340px minmax(0, 1fr)' },
         }}
       >
@@ -959,6 +965,10 @@ function WhoBlock({
   return (
     <Box>
       <SectionLabel>Qui / signature</SectionLabel>
+      <Typography sx={{ fontSize: 11, color: V3.t4, mb: 0.75, lineHeight: 1.4 }}>
+        Interrupteurs de ce document seulement — distincts de la politique globale
+        d’enregistrement identité (capability registration).
+      </Typography>
       <ToggleRow label="Actif" checked={item.enabled} onChange={(v) => onChange({ enabled: v })} />
       <ToggleRow
         label="Signature web"

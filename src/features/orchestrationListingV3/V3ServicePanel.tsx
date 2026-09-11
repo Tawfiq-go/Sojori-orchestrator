@@ -194,10 +194,9 @@ export default function V3ServicePanel({
     switch (activePanel) {
       case 'gestion':
         if (def.key === 'cleaning_free' || def.key === 'cleaning_paid') {
-          // Le contenu ménage (types, cadence par type de chambre, équipe, barème)
-          // s'édite ICI, dans l'orchestration — plus d'onglet Ménage dans la barre
-          // latérale du listing (décision Tawfiq 2026-09-08). Template owner : pas de
-          // listing, on garde le rappel.
+          // Le contenu ménage s'édite ICI (ListingMenageTab embarqué).
+          // L'onglet listing Ménage reste un second point d'entrée vers le même éditeur.
+          // Template owner : pas de listing, on garde le rappel.
           return (
             <MenageContentRedirectCard
               listingId={ownerTemplateMode ? undefined : listingId}
@@ -228,8 +227,8 @@ export default function V3ServicePanel({
           };
           return (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {/* Contenu ménage → onglet Ménage du listing ; ci-dessous l'activation
-                  du déclenchement checkout (CleaningSojoriConfigTab via CapabilityGestionPanel). */}
+              {/* Contenu ménage embarqué via CapabilityGestionPanel ;
+                  ci-dessous l'activation checkout (CleaningSojoriConfigTab). */}
               <CapabilityGestionPanel
                 def={def}
                 scope={matrixScope}

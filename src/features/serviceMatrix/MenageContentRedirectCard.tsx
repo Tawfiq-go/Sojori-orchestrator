@@ -40,11 +40,11 @@ export default function MenageContentRedirectCard({ listingId, templateMode = fa
       <Typography sx={{ fontSize: 18, lineHeight: 1 }}>🧹</Typography>
       <Box sx={{ flex: 1, minWidth: 220 }}>
         <Typography sx={{ fontSize: 13, fontWeight: 700, color: V3.t }}>
-          Le contenu du ménage se configure dans l&apos;onglet Ménage du listing
+          Le contenu du ménage se configure sur chaque listing
         </Typography>
         <Typography sx={{ fontSize: 11.5, color: V3.t3, lineHeight: 1.4 }}>
           Durées, prix, niveaux, linge et règles FdM
-          {templateMode ? ' — dans l’onglet Ménage de chaque listing.' : '.'}
+          {templateMode ? ' — dans l’orchestration de chaque listing.' : '.'}
           {' '}Ici : uniquement les activations (Gérer · Client · Tâche · Orchestrer).
         </Typography>
       </Box>

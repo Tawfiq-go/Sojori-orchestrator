@@ -3572,14 +3572,14 @@ export default function OrchestrationOverviewPanel({
             <DialogContent dividers sx={{ pt: 1.5 }}>
               <Box key={`gestion-${configDef.key}-${listingId ?? ownerKey}`}>
                   {configDef.key === 'cleaning_free' || configDef.key === 'cleaning_paid' ? (
-                    /* Contenu ménage (durées, prix, niveaux, linge) → onglet Ménage du listing. */
+                    /* Contenu ménage (durées, prix, niveaux, linge) — éditeur listing embarqué. */
                     <MenageContentRedirectCard
                       listingId={isListingScope ? listingId || undefined : undefined}
                       templateMode={!isListingScope}
                     />
                   ) : configDef.key === 'cleaning_sojori' ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {/* Contenu → onglet Ménage du listing ; l'activation du déclenchement
+                      {/* Contenu ménage embarqué ; l'activation du déclenchement
                           checkout reste ici (CleaningSojoriConfigTab via CapabilityGestionPanel). */}
                       <CapabilityGestionPanel
                         def={configDef}
