@@ -325,14 +325,16 @@ class MessagesService {
    * Paniers room service en attente (pas encore commandés).
    * GET /api/v1/ai/debug/room-service-carts
    */
-  async getRoomServiceCarts(): Promise<RoomServiceCartRow[]> {
+  async getRoomServiceCarts(ownerId?: string): Promise<RoomServiceCartRow[]> {
     try {
       const response = await apiClient.get<{
         success?: boolean;
         status?: string;
         error?: string;
         data?: { carts: RoomServiceCartRow[] };
-      }>(`${resolveWhatsappDebugBase('guest')}/room-service-carts`);
+      }>(`${resolveWhatsappDebugBase('guest')}/room-service-carts`, {
+        params: ownerId ? { ownerId } : undefined,
+      });
       const body = response.data;
       if (body.status === 'error' || body.success === false) {
         throw new Error(body.error || 'Échec chargement des paniers');
