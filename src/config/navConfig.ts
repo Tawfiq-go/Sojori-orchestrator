@@ -241,6 +241,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     items: [
       { id: 'tasks/list', label: 'Liste', iconType: 'check', iconColor: '#93C47D' },
       { id: 'tasks/team', label: 'Équipe', iconType: 'check', iconColor: '#93C47D', description: 'Staff terrain & admin WhatsApp' },
+      {
+        id: 'tasks/room-service-carts',
+        label: 'Paniers',
+        iconType: 'check',
+        iconColor: '#93C47D',
+        description: 'Room service ajouté côté voyageur, pas encore commandé',
+      },
     ],
   },
   {

@@ -31,6 +31,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'tasks/list': '/tasks',
   'tasks/planning': '/tasks/planning',
   'tasks/team': '/tasks/team',
+  'tasks/room-service-carts': '/tasks/room-service-carts',
   reports: '/reports',
   'reports/clients': '/reports/clients',
   'reports2/performance': '/reports2/performance',

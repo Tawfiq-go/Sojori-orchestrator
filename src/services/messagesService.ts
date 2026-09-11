@@ -30,6 +30,27 @@ function resolveGuestWhatsappDebugBase(): string {
 
 type WhatsappInboxKind = 'guest' | 'staff';
 
+export type RoomServiceCartItemRow = {
+  dish: string;
+  category: string;
+  qty: number;
+  unitPriceMad: number;
+  options: string[];
+  note: string | null;
+};
+
+export type RoomServiceCartRow = {
+  reservationId: string;
+  reservationCode: string | null;
+  guestName: string | null;
+  listingId: string | null;
+  ownerId: string | null;
+  items: RoomServiceCartItemRow[];
+  totalMad: number;
+  updatedAt: string;
+  expiresAt: string;
+};
+
 function shouldLogServiceError(_error: unknown, _silent?: boolean): boolean {
   /* Échecs HTTP loggés une fois par apiClient (tag HTTP, dédupliqué). */
   return false;
@@ -297,6 +318,28 @@ class MessagesService {
     } catch (error: unknown) {
       console.error('❌ Erreur envoi message:', error);
       throw new Error(extractHttpErrorMessage(error, 'Erreur lors de l\'envoi du message'));
+    }
+  }
+
+  /**
+   * Paniers room service en attente (pas encore commandés).
+   * GET /api/v1/ai/debug/room-service-carts
+   */
+  async getRoomServiceCarts(): Promise<RoomServiceCartRow[]> {
+    try {
+      const response = await apiClient.get<{
+        success?: boolean;
+        status?: string;
+        error?: string;
+        data?: { carts: RoomServiceCartRow[] };
+      }>(`${resolveWhatsappDebugBase('guest')}/room-service-carts`);
+      const body = response.data;
+      if (body.status === 'error' || body.success === false) {
+        throw new Error(body.error || 'Échec chargement des paniers');
+      }
+      return body.data?.carts ?? [];
+    } catch (error: unknown) {
+      throw new Error(extractHttpErrorMessage(error, 'Erreur lors du chargement des paniers'));
     }
   }
 
