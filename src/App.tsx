@@ -121,6 +121,9 @@ const TasksPlanningPageV2 = lazyWithReload(() =>
 const TasksStaffFulltaskPage = lazyWithReload(() =>
   import('./pages/TasksStaffFulltaskPage').then((module) => ({ default: module.default }))
 );
+const RoomServiceCartsPage = lazyWithReload(() =>
+  import('./pages/RoomServiceCartsPage').then((module) => ({ default: module.default }))
+);
 const ReportsHubPage = lazyWithReload(() =>
   import('./features/reports/ReportsHubPage').then((module) => ({
     default: module.ReportsHubPage,
@@ -475,6 +478,7 @@ function App() {
 
               {/* Claude Design V2 - Remplace les anciennes vues */}
               <Route path="/tasks/team" element={<LazyRoute><TasksStaffFulltaskPage /></LazyRoute>} />
+              <Route path="/tasks/room-service-carts" element={<LazyRoute><RoomServiceCartsPage /></LazyRoute>} />
               {/* Ma journée a sa propre entrée menu — /reports reste le hub des
                   autres rapports (ne réaffiche pas Ma journée, déjà accessible
                   à côté dans le menu). */}
