@@ -18,9 +18,11 @@ import ReservationSyncMonitorTab from './ReservationSyncMonitorTab';
 import SocketMonitoringPage from './SocketMonitoringPage';
 import APIMonitoringPage from './APIMonitoringPage';
 import CronMonitoringPage from './CronMonitoringPage';
+import FrictionsPage from './FrictionsPage';
 
 const TAB_OPTIONS = [
   { value: 'Summary', label: '📊 Summary' },
+  { value: 'Frictions', label: '🚧 Frictions' },
   { value: 'Logs', label: '📝 Logs' },
   { value: 'Metrics', label: '📈 Metrics' },
   { value: 'RabbitMQ', label: '🐰 RabbitMQ' },
@@ -43,6 +45,7 @@ const LEGACY_TAB = new Set(['Unified', 'Alertes', 'RU']);
 
 const TAB_BY_LOWER: Record<string, MonitorTab> = {
   summary: 'Summary',
+  frictions: 'Frictions',
   logs: 'Logs',
   metrics: 'Metrics',
   rabbitmq: 'RabbitMQ',
@@ -116,6 +119,7 @@ export default function MonitoringHubPage() {
 
           <Box sx={{ minWidth: 0 }}>
             {tab === 'Summary' && <UnifiedMonitoringPage />}
+            {tab === 'Frictions' && <FrictionsPage />}
             {tab === 'Logs' && <LogsPage />}
             {tab === 'Metrics' && <MetricsPageUltra />}
             {tab === 'RabbitMQ' && <RabbitMQPage />}
