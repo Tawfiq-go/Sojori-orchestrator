@@ -67,7 +67,7 @@ function toTimeInput(value?: string | null): string {
 function fmtDateFr(iso?: string): string {
   if (!iso) return '—';
   try {
-    return format(new Date(iso), 'EEEE d MMMM yyyy', { locale: fr });
+    return format(new Date(iso), 'EEE d MMM yyyy', { locale: fr });
   } catch {
     return '—';
   }
@@ -488,6 +488,16 @@ export default function TaskDetailDrawer({
           </Box>
         ) : null}
 
+        {/* Quand : date + heure client + heure Sojori sur une ligne (Tawfiq 11/09 : verticalité). */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+            gap: 1.25,
+            mb: 1.5,
+          }}
+        >
+        <Box>
         <SectionLabel>Date prévue</SectionLabel>
         {isEditing ? (
           <TextField
@@ -498,7 +508,6 @@ export default function TaskDetailDrawer({
             onChange={(e) => setForm((f) => ({ ...f, scheduledDate: e.target.value }))}
             InputLabelProps={{ shrink: true }}
             sx={{
-              mb: 1.75,
               '& .MuiOutlinedInput-root': {
                 fontSize: 12.5,
                 fontFamily: '"Geist Mono", monospace',
@@ -523,18 +532,15 @@ export default function TaskDetailDrawer({
                 {fmtDateFr(task.startDate)}
               </Typography>
             </FieldBox>
-            <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.5, mb: 1.75 }}>
+            <Typography sx={{ fontSize: 11, color: T.text3, mt: 0.5 }}>
               Créée {fmtDateTimeFr(task.createdAt)}
             </Typography>
           </>
         )}
+        </Box>
 
-        <SectionLabel>Heure demandée client (WhatsApp)</SectionLabel>
-        {clientTimeStr && !isEditing ? (
-          <Typography sx={{ fontSize: 11, color: T.text3, mb: 0.5, fontFamily: '"Geist Mono", monospace' }}>
-            Actuel: <Box component="b">{clientTimeStr || '—'}</Box>
-          </Typography>
-        ) : null}
+        <Box>
+        <SectionLabel>Heure client (WhatsApp)</SectionLabel>
         {isEditing ? (
           <TextField
             type="time"
@@ -543,10 +549,10 @@ export default function TaskDetailDrawer({
             value={form.requestedAt}
             onChange={(e) => setForm((f) => ({ ...f, requestedAt: e.target.value }))}
             InputLabelProps={{ shrink: true }}
-            sx={{ mb: 1.75, '& .MuiOutlinedInput-root': { borderRadius: '9px' } }}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px' } }}
           />
         ) : (
-          <Box sx={{ mb: 1.75 }}>
+          <Box>
             <FieldBox>
               <Typography
                 sx={{
@@ -563,13 +569,10 @@ export default function TaskDetailDrawer({
             </FieldBox>
           </Box>
         )}
+        </Box>
 
-        <SectionLabel>Heure planifiée Sojori</SectionLabel>
-        {sojoriTimeStr && !isEditing ? (
-          <Typography sx={{ fontSize: 11, color: T.text3, mb: 0.5, fontFamily: '"Geist Mono", monospace' }}>
-            Actuel: <Box component="b">{sojoriTimeStr || '—'}</Box>
-          </Typography>
-        ) : null}
+        <Box>
+        <SectionLabel>Heure Sojori</SectionLabel>
         {isEditing ? (
           <TextField
             type="time"
@@ -578,10 +581,10 @@ export default function TaskDetailDrawer({
             value={form.scheduledAt}
             onChange={(e) => setForm((f) => ({ ...f, scheduledAt: e.target.value }))}
             InputLabelProps={{ shrink: true }}
-            sx={{ mb: 1.75, '& .MuiOutlinedInput-root': { borderRadius: '9px' } }}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px' } }}
           />
         ) : (
-          <Box sx={{ mb: 0.5 }}>
+          <Box>
             <FieldBox>
               <Typography
                 sx={{
@@ -598,6 +601,8 @@ export default function TaskDetailDrawer({
             </FieldBox>
           </Box>
         )}
+        </Box>
+        </Box>
 
         {isEditing ? (
           <Box sx={{ mt: 1.75 }}>
