@@ -71,6 +71,7 @@ const AddTaskModal = lazyWithReload(() => import('../components/tasks/AddTaskMod
 const AssignStaffDialog = lazyWithReload(() => import('../features/tasksNew/components/AssignStaffDialog.jsx'));
 const TaskDetailDrawer = lazyWithReload(() => import('../features/tasksNew/components/TaskDetailDrawer'));
 import { paymentStatusTone } from '../features/tasksNew/components/taskPaymentMeta';
+import { buildTaskTypeOptions } from '../features/tasksNew/utils/taskTypeOptions';
 import { TaskPlannedCell } from '../components/tasks/TaskPlannedCell';
 import type { RegistrationFieldPatch } from '../components/reservations/ReservationRegistrationActions';
 import type { StayFieldPatch } from '../components/reservations/ReservationStayActions';
@@ -132,8 +133,8 @@ const toolbarFieldSx = {
 
 const SORT_FIELD_LABELS: Record<string, string> = {
   updatedAt: 'Dernière MAJ',
-  createdAt: 'Date création',
-  startDate: 'Date prévu',
+  createdAt: 'Date de création',
+  startDate: 'Date d’exécution',
   endDate: 'Date fin',
   reservationNumber: 'Réservation',
   itemNumber: 'Code',
@@ -1875,6 +1876,13 @@ export function TasksListPage() {
     };
   }, [requestedTaskId, authLoading, scope.scopeFetchReady, selectedTaskDetail, taskMapCaches]);
 
+  // Filtre Type : uniquement les types présents dans les tâches chargées, avec
+  // leur nombre (demande Tawfiq 12/09). Liste complète seulement quand rien n'est chargé.
+  const typeOptions = useMemo(() => {
+    const present = buildTaskTypeOptions(tasks, listFilters.subTypes);
+    return present.length ? present : CATEGORY_MULTI_OPTIONS;
+  }, [tasks, listFilters.subTypes]);
+
   const displayTasks = useMemo(() => {
     let list = tasks;
     if (listFilters.paymentStatus && listFilters.paymentStatus !== 'all') {
@@ -2834,8 +2842,8 @@ export function TasksListPage() {
                 renderValue={(v) => SORT_FIELD_LABELS[String(v)] || 'Tri'}
               >
                 <MenuItem value="updatedAt">Dernière MAJ</MenuItem>
-                <MenuItem value="createdAt">Date création</MenuItem>
-                <MenuItem value="startDate">Date prévu</MenuItem>
+                <MenuItem value="createdAt">Date de création</MenuItem>
+                <MenuItem value="startDate">Date d’exécution (prévu)</MenuItem>
                 <MenuItem value="endDate">Date fin</MenuItem>
                 <MenuItem value="reservationNumber">Réservation</MenuItem>
               </Select>
@@ -2985,7 +2993,7 @@ export function TasksListPage() {
                 }}
                 renderValue={(s) => `Type · ${(s as string[]).length || 'tous'}`}
               >
-                {CATEGORY_MULTI_OPTIONS.map((c) => (
+                {typeOptions.map((c) => (
                   <MenuItem key={c.id} value={c.id}>
                     <Checkbox checked={listFilters.subTypes.indexOf(c.id) > -1} size="small" />
                     <ListItemText primary={c.label} />
@@ -3073,8 +3081,8 @@ export function TasksListPage() {
                 renderValue={(v) => `Tri · ${SORT_FIELD_LABELS[String(v)] || ''}`}
               >
                 <MenuItem value="updatedAt">Dernière MAJ</MenuItem>
-                <MenuItem value="createdAt">Date création</MenuItem>
-                <MenuItem value="startDate">Date prévu</MenuItem>
+                <MenuItem value="createdAt">Date de création</MenuItem>
+                <MenuItem value="startDate">Date d’exécution (prévu)</MenuItem>
                 <MenuItem value="endDate">Date fin</MenuItem>
                 <MenuItem value="reservationNumber">Réservation</MenuItem>
               </Select>
@@ -3288,7 +3296,7 @@ export function TasksListPage() {
                         onChange={(e) => setTempListFilters((p) => ({ ...p, subTypes: e.target.value as string[] }))}
                         renderValue={(s) => `Types · ${(s as string[]).length || 'tous'}`}
                       >
-                        {CATEGORY_MULTI_OPTIONS.map((c) => (
+                        {typeOptions.map((c) => (
                           <MenuItem key={c.id} value={c.id}>
                             <Checkbox checked={tempListFilters.subTypes.indexOf(c.id) > -1} size="small" />
                             <ListItemText primary={c.label} />
@@ -3478,8 +3486,8 @@ export function TasksListPage() {
                         renderValue={(v) => SORT_FIELD_LABELS[String(v)] || 'Date prévue'}
                       >
                         <MenuItem value="updatedAt">Dernière MAJ</MenuItem>
-                        <MenuItem value="createdAt">Date création</MenuItem>
-                        <MenuItem value="startDate">Date prévu</MenuItem>
+                        <MenuItem value="createdAt">Date de création</MenuItem>
+                        <MenuItem value="startDate">Date d’exécution (prévu)</MenuItem>
                         <MenuItem value="endDate">Date fin</MenuItem>
                         <MenuItem value="reservationNumber">Réservation</MenuItem>
                       </Select>
