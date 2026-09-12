@@ -18,6 +18,7 @@ import { toast } from 'react-toastify';
 import { T } from '../../../components/calendar-v3/_shared';
 import tasksService from '../../../services/fulltaskTasksService';
 import { TaskOrderBlock } from './TaskOrderBlock';
+import { TaskPartnerBlock } from './TaskPartnerBlock';
 import type { TaskListItem, TaskStatus } from '../../../types/tasks.types';
 import { TASK_STATUS_LABELS, normalizeTaskStatus } from '../../../types/tasks.types';
 import {
@@ -674,6 +675,8 @@ export default function TaskDetailDrawer({
           </Box>
         ) : null}
 
+        {/* Réponse du partenaire (appel staff) : accepter → lien / confirmation au client. */}
+        <TaskPartnerBlock task={task} onUpdated={() => onSuccess?.()} />
         {/* Socle commun de la commande : articles, montant, heure, paiement (par type). */}
         <TaskOrderBlock task={task} onUpdated={() => onSuccess?.()} />
 

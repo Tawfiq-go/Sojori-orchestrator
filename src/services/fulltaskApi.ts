@@ -68,6 +68,17 @@ export async function patchTaskStatus(id: string, status: string) {
   return data;
 }
 
+/** Le staff a appelé le partenaire : oui → confirmed + lien/confirmation au client. */
+export async function partnerAcceptTask(id: string, body: Record<string, unknown>) {
+  const { data } = await apiClient.patch(`${BASE}/tasks/${encodeURIComponent(id)}/partner-accept`, body);
+  return data;
+}
+
+export async function partnerRefuseTask(id: string, body: Record<string, unknown>) {
+  const { data } = await apiClient.patch(`${BASE}/tasks/${encodeURIComponent(id)}/partner-refuse`, body);
+  return data;
+}
+
 /** Acceptation staff / admin (pending_partner → confirmed + sync plan). */
 export async function acceptTask(id: string, staffId?: string) {
   const body = staffId ? { staffId } : {};

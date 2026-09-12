@@ -2370,8 +2370,14 @@ export function TasksListPage() {
       render: (row: TaskRow) => {
         const status = normalizeTaskStatus(row.taskStatus);
         const waitingGuest = row.isClientRequest && status === 'CREATED';
-        const statusLabel = waitingGuest ? 'Attente invité' : TASK_STATUS_LABELS[status];
-        const statusVariant = waitingGuest ? 'warning' : TASK_STATUS_VARIANTS[status];
+        // Navette / expérience encore sans réponse du partenaire : le staff doit l'appeler.
+        const partnerPending = row.order?.partner?.status === 'pending' && status === 'CREATED';
+        const statusLabel = waitingGuest
+          ? 'Attente invité'
+          : partnerPending
+            ? '🤝 Partenaire ?'
+            : TASK_STATUS_LABELS[status];
+        const statusVariant = waitingGuest || partnerPending ? 'warning' : TASK_STATUS_VARIANTS[status];
         return (
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
             <Badge variant={statusVariant}>{statusLabel}</Badge>
