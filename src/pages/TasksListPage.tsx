@@ -1373,7 +1373,7 @@ const PAYMENT_FILTER_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'to_collect', label: 'À encaisser (sur place + partiel)' },
   { value: 'on_site', label: 'À régler sur place' },
   { value: 'partial', label: 'Partiel' },
-  { value: 'pending_online', label: 'Lien envoyé' },
+  { value: 'pending_online', label: 'Carte en ligne (lien)' },
   { value: 'paid', label: 'Payé' },
   { value: 'none', label: 'Rien à encaisser' },
 ];
