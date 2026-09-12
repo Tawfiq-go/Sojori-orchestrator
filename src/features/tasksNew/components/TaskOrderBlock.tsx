@@ -178,7 +178,7 @@ export function TaskOrderBlock({
           <Typography sx={{ fontSize: 12.5, color: T.text }}>
             {order.payment.split.onlinePaid ? '✓' : '⏳'} Acompte {order.payment.split.depositPercent} % ·{' '}
             {money(order.payment.split.onlineMad)} par carte en ligne
-            {order.payment.split.onlinePaid ? ' — payé' : ' — lien envoyé, en attente'}
+            {order.payment.split.onlinePaid ? ' — payé' : ' — en attente du paiement'}
           </Typography>
           <Typography sx={{ fontSize: 12.5, color: T.text }}>
             ◻ Reste {money(order.payment.split.remainderMad)} sur place (cash, TPE ou sur la note)
