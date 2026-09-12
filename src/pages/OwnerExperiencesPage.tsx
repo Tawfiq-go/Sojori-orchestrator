@@ -107,7 +107,7 @@ const PAY_METHODS: { v: PaymentMethod; l: string }[] = [
   { v: 'cash', l: '💵 Cash — Espèces à la livraison' },
   { v: 'card_tpe', l: '💳 Carte (TPE) — Terminal à la livraison' },
   { v: 'room_charge', l: '🏨 Sur la note — Réception au départ' },
-  { v: 'card', l: '🔗 Carte en ligne — Lien + acompte 30 %' },
+  { v: 'card', l: '🔗 Carte en ligne' },
   { v: 'transfer', l: '🏦 Virement' },
 ];
 
@@ -2073,6 +2073,14 @@ export function OwnerExperiencesPage() {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                 {PAY_METHODS.map((m) => {
                   const on = draft.payment.methods.includes(m.v);
+                  // Le libelle annoncait « acompte 30 % » en dur : il mentait des
+                  // que l'acompte etait configure autrement (constat Tawfiq 12/09).
+                  const label =
+                    m.v === 'card'
+                      ? draft.payment.collection === 'deposit' && draft.payment.depositPercent
+                        ? `${m.l} — Lien + acompte ${draft.payment.depositPercent} %`
+                        : `${m.l} — Lien de paiement`
+                      : m.l;
                   return (
                     <button
                       key={m.v}
@@ -2080,7 +2088,7 @@ export function OwnerExperiencesPage() {
                       style={on ? btnGold({ padding: '7px 13px', fontSize: 12.5 }) : btnOutline({ padding: '7px 13px', fontSize: 12.5 })}
                       onClick={() => toggleMethod(m.v)}
                     >
-                      {m.l}
+                      {label}
                     </button>
                   );
                 })}
