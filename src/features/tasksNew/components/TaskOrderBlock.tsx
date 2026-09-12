@@ -170,6 +170,22 @@ export function TaskOrderBlock({
         </Box>
       ) : null}
 
+      {order.payment.split ? (
+        <Box
+          data-testid="task-order-split"
+          sx={{ display: 'grid', gap: 0.25, fontSize: 12.5, color: T.text2, pl: 0.5 }}
+        >
+          <Typography sx={{ fontSize: 12.5, color: T.text }}>
+            {order.payment.split.onlinePaid ? '✓' : '⏳'} Acompte {order.payment.split.depositPercent} % ·{' '}
+            {money(order.payment.split.onlineMad)} par carte en ligne
+            {order.payment.split.onlinePaid ? ' — payé' : ' — lien envoyé, en attente'}
+          </Typography>
+          <Typography sx={{ fontSize: 12.5, color: T.text }}>
+            ◻ Reste {money(order.payment.split.remainderMad)} sur place (cash, TPE ou sur la note)
+          </Typography>
+        </Box>
+      ) : null}
+
       {hasMoney ? (
         <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center', flexWrap: 'wrap' }}>
           <TextField

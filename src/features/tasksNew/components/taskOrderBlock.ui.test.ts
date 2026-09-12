@@ -38,4 +38,11 @@ describe('Tasks — order summary, payment follow-up, start time', () => {
   it('a WhatsApp task is no longer labelled « Manuel » in the drawer', () => {
     assert.match(drawer, /task\.source === 'whatsapp'\n\s+\? 'WhatsApp'/);
   });
+  it('shows a deposit paid online plus the remainder on site, in the list and the drawer', () => {
+    assert.match(page, /en ligne \+ \$\{pay\.split\.remainderMad\} sur place/);
+    assert.match(page, /'Acompte payé' : 'Acompte à payer'/);
+    assert.match(block, /data-testid="task-order-split"/);
+    assert.match(block, /par carte en ligne/);
+    assert.match(block, /sur place \(cash, TPE ou sur la note\)/);
+  });
 });

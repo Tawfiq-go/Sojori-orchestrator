@@ -2406,6 +2406,10 @@ export function TasksListPage() {
             : pay.totalMad != null
               ? `${pay.totalMad} MAD`
               : '';
+        // Acompte en ligne + reste sur place : les deux montants, pas un seul mode.
+        const secondLine = pay.split
+          ? `${pay.split.onlinePaid ? '✓' : '⏳'} ${pay.split.onlineMad} en ligne + ${pay.split.remainderMad} sur place`
+          : `${pay.methodLabel}${amount ? ` · ${amount}` : ''}`;
         return (
           <Tooltip title={`${pay.statusLabel} · ${pay.methodLabel}`} arrow placement="top">
             <Box sx={{ minWidth: 0 }}>
@@ -2426,11 +2430,10 @@ export function TasksListPage() {
                   textOverflow: 'ellipsis',
                 }}
               >
-                {pay.status === 'partial' ? 'Partiel' : pay.statusLabel}
+                {pay.split ? (pay.split.onlinePaid ? 'Acompte payé' : 'Acompte à payer') : pay.status === 'partial' ? 'Partiel' : pay.statusLabel}
               </Box>
               <Typography sx={{ fontSize: 10.5, color: T.text2, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {pay.methodLabel}
-                {amount ? ` · ${amount}` : ''}
+                {secondLine}
               </Typography>
             </Box>
           </Tooltip>

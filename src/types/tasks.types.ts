@@ -284,6 +284,14 @@ export interface TaskOrderPayment {
   dueMad: number | null;
   depositPercent: number | null;
   recordedByStaff: boolean;
+  /** Acompte en ligne + reste sur place ; null si tout se règle d'un seul tenant. */
+  split: {
+    depositPercent: number;
+    onlineMad: number;
+    onlinePaid: boolean;
+    remainderMad: number;
+    label: string;
+  } | null;
 }
 
 /** Miroir de `TaskOrder` (apps/srv-fulltask/src/services/taskOrderSummary.ts). */
