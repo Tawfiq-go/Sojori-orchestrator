@@ -112,6 +112,7 @@ export const DEFAULT_TASK_NOTIFY_ENABLED: Record<(typeof FULLTASK_TASK_TYPES)[nu
   transport: true,
   groceries: true,
   concierge: true,
+  villa_experience: true,
   // Support / SC → Flows W/Z staff uniquement (hors catalogue admin).
   support: false,
   service_client: false,

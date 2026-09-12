@@ -25,6 +25,7 @@ export const FULLTASK_TASK_TYPES = [
   'groceries',
   'concierge',
   'room_service',
+  'villa_experience',
   'support',
   'service_client',
 ] as const;
@@ -48,9 +49,10 @@ export const FULLTASK_TASK_TYPE_LABELS: Record<FulltaskTaskTypeId, string> = {
   welcome_package: 'Pack bienvenue',
   minibar_check: 'Contrôle mini-bar',
   reception: 'Réception',
-  transport: 'Transport',
+  transport: 'Navette',
   groceries: 'Courses',
-  concierge: 'Conciergerie',
+  concierge: 'Expérience',
+  villa_experience: 'Ambiance',
   room_service: 'Room service',
   support: 'Support',
   service_client: 'Service client',
@@ -77,6 +79,7 @@ export const FULLTASK_TASK_TYPE_EMOJI: Partial<Record<FulltaskTaskTypeId, string
   groceries: '🛒',
   concierge: '🛎',
   room_service: '🍳',
+  villa_experience: '🌹',
   support: '🆘',
   service_client: '💌',
 };
