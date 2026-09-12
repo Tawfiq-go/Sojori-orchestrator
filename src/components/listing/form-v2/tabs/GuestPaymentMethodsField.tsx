@@ -6,7 +6,9 @@ const OPTIONS: Array<{ id: GuestPaymentMethod; label: string; hint: string }> = 
   { id: 'cash', label: '💵 Cash', hint: 'Espèces à la livraison' },
   { id: 'card_tpe', label: '💳 Carte (TPE)', hint: 'Terminal apporté à la livraison' },
   { id: 'room_charge', label: '🏨 Sur la note', hint: 'À régler à la réception au départ' },
-  { id: 'card', label: '🔗 Carte en ligne', hint: 'Lien sécurisé + acompte 30 %' },
+  // Ce champ ne connait que les modes, pas le pourcentage : annoncer « 30 % »
+  // mentait des qu'un autre acompte etait configure (constat Tawfiq 12/09).
+  { id: 'card', label: '🔗 Carte en ligne', hint: 'Lien de paiement sécurisé' },
 ];
 
 const ALLOWED = new Set<GuestPaymentMethod>(['cash', 'card', 'card_tpe', 'room_charge']);

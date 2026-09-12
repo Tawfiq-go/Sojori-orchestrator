@@ -70,7 +70,7 @@ const PAY_METHODS: { v: PaymentMethod; l: string }[] = [
   { v: 'cash', l: '💵 Cash — Espèces à la livraison' },
   { v: 'card_tpe', l: '💳 Carte (TPE) — Terminal à la livraison' },
   { v: 'room_charge', l: '🏨 Sur la note — Réception au départ' },
-  { v: 'card', l: '🔗 Carte en ligne — Lien + acompte 30 %' },
+  { v: 'card', l: '🔗 Carte en ligne' },
   { v: 'transfer', l: '🏦 Virement' },
 ];
 
@@ -2255,6 +2255,15 @@ export function PartnersAdminPage() {
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                     {PAY_METHODS.map((m) => {
                       const on = serviceDraft.payment.methods.includes(m.v);
+                      // Le libelle suit la config : « acompte 30 % » en dur mentait
+                      // des qu'un autre pourcentage etait choisi (constat Tawfiq 12/09).
+                      const label =
+                        m.v === 'card'
+                          ? serviceDraft.payment.collection === 'deposit' &&
+                            serviceDraft.payment.depositPercent
+                            ? `${m.l} — Lien + acompte ${serviceDraft.payment.depositPercent} %`
+                            : `${m.l} — Lien de paiement`
+                          : m.l;
                       return (
                         <Btn
                           key={m.v}
@@ -2276,7 +2285,7 @@ export function PartnersAdminPage() {
                             })
                           }
                         >
-                          {m.l}
+                          {label}
                         </Btn>
                       );
                     })}

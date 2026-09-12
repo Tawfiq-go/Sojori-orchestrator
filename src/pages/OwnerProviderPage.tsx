@@ -105,6 +105,8 @@ export function OwnerProviderPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
+  /** Fiche armee pour suppression : le second clic confirme. */
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const canEdit = ficheTab === 'own';
   const rows = ficheTab === 'own' ? ownRows : marketRows;
@@ -163,6 +165,38 @@ export function OwnerProviderPage() {
     setIsNew(false);
     setSelectedId(p.id);
     setDraft(toDraft(p));
+  };
+
+  /**
+   * Supprimer sa fiche provider.
+   *
+   * Le bouton manquait cote owner alors que la route existe : un owner ne
+   * pouvait pas retirer sa propre fiche (constat Tawfiq 12/09). La suppression
+   * emporte TOUTES les activites rattachees — le backend fait le deleteMany —
+   * d'ou la confirmation qui nomme ce qui part.
+   */
+  const remove = async () => {
+    if (!canEdit || isNew || !selectedId) return;
+    // Confirmation en DEUX TEMPS plutot qu'un `window.confirm` : la modale
+    // native gele l'onglet et reste invisible aux tests pilotes. Le premier
+    // clic arme, le second supprime — et l'intitule dit ce qui part.
+    if (confirmDelete !== selectedId) {
+      setConfirmDelete(selectedId);
+      return;
+    }
+    setConfirmDelete(null);
+    setSaving(true);
+    try {
+      await partnersApi.remove(selectedId);
+      toast.success('Fiche supprimee');
+      setIsNew(false);
+      setSelectedId(null);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Suppression echouee');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const save = async () => {
@@ -453,6 +487,24 @@ export function OwnerProviderPage() {
               >
                 Fermer
               </button>
+              {canEdit && !isNew && selectedId ? (
+                <button
+                  type="button"
+                  style={
+                    confirmDelete === selectedId
+                      ? { ...btnOutline(), marginLeft: 'auto', color: '#fff', background: '#b42318', borderColor: '#b42318' }
+                      : { ...btnOutline(), marginLeft: 'auto', color: '#b42318', borderColor: '#f0c2bd' }
+                  }
+                  disabled={saving}
+                  onClick={() => void remove()}
+                  onBlur={() => setConfirmDelete(null)}
+                  title="La fiche ET toutes ses activites rattachees seront supprimees"
+                >
+                  {confirmDelete === selectedId
+                    ? 'Confirmer : supprimer la fiche et ses activites'
+                    : 'Supprimer la fiche'}
+                </button>
+              ) : null}
             </div>
           </div>
         ) : null}
