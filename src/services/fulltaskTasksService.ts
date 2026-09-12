@@ -3,8 +3,12 @@ import * as fulltaskApi from './fulltaskApi';
 import reservationsService from './reservationsService';
 import { LEGACY_TO_FULLTASK_STATUS, explodeStaySeriesTasksForDashboard, fullTaskToListItem, stayLineTaskRef } from '../utils/fulltaskMappers';
 import type { ReservationMetaLike } from '../utils/fulltaskMappers';
-import type { TaskFulltaskUpdatePayload, TaskListItem, TasksSearchParams,
+import type {
+  TaskFulltaskUpdatePayload,
+  TaskListItem,
+  TaskPartnerGuestOutcome,
   TaskPaymentUpdatePayload,
+  TasksSearchParams,
 } from '../types/tasks.types';
 import { toLegacyAuthUser } from '../utils/legacyAuthUser';
 import {
@@ -373,6 +377,24 @@ class FulltaskTasksService {
     const { mongoId } = stayLineTaskRef(taskId);
     const res = await fulltaskApi.patchTaskPayment(mongoId, body as Record<string, unknown>);
     if (res?.success === false) throw new Error(res?.error || 'Paiement refusé');
+  }
+
+  /** Réponse du partenaire enregistrée par le staff après appel : oui. */
+  async partnerAccept(
+    taskId: string,
+    body: { quotedPriceMad?: number; byName?: string },
+  ): Promise<TaskPartnerGuestOutcome | null> {
+    const { mongoId } = stayLineTaskRef(taskId);
+    const res = await fulltaskApi.partnerAcceptTask(mongoId, body as Record<string, unknown>);
+    if (res?.success === false) throw new Error(res?.error || 'Acceptation refusée');
+    return (res?.guest as TaskPartnerGuestOutcome | undefined) ?? null;
+  }
+
+  /** Réponse du partenaire enregistrée par le staff après appel : non. */
+  async partnerRefuse(taskId: string, body: { reason?: string; byName?: string }): Promise<void> {
+    const { mongoId } = stayLineTaskRef(taskId);
+    const res = await fulltaskApi.partnerRefuseTask(mongoId, body as Record<string, unknown>);
+    if (res?.success === false) throw new Error(res?.error || 'Refus impossible');
   }
 
   async updateTaskStatus(

@@ -294,9 +294,33 @@ export interface TaskOrderPayment {
   } | null;
 }
 
+export type TaskPartnerStatus = 'none' | 'pending' | 'accepted' | 'refused';
+
+/** Cycle partenaire (navette, expérience, courses) : appel + réponse enregistrée par le staff, ou WhatsApp partenaire. */
+export interface TaskOrderPartner {
+  status: TaskPartnerStatus;
+  required: boolean;
+  providerMode: boolean;
+  acceptedAt: string | null;
+  refusedAt: string | null;
+  by: 'staff' | 'provider' | null;
+  byName: string | null;
+  guestNotifiedAt: string | null;
+  label: string;
+}
+
+/** Ce que le client a reçu après le « oui » (réponse de PATCH …/partner-accept). */
+export interface TaskPartnerGuestOutcome {
+  plan: 'link' | 'on_site' | 'nothing';
+  confirmationSent: boolean;
+  paymentLinkSent: boolean;
+  amountMad: number | null;
+}
+
 /** Miroir de `TaskOrder` (apps/srv-fulltask/src/services/taskOrderSummary.ts). */
 export interface TaskOrder {
   kind: TaskOrderKind;
+  partner?: TaskOrderPartner;
   items: TaskOrderItem[];
   itemCount: number;
   summary: string;
