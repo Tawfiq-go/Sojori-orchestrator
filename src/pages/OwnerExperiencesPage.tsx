@@ -171,6 +171,32 @@ function money(n: number) {
  * les formules ; prix modifiables ensuite. « Autre destination » n'y figure
  * pas : le flow guest l'ajoute automatiquement pour tout service transport.
  */
+/**
+ * Range les destinations d'une ville SANS toucher aux prix existants.
+ *
+ * Le bouton « + Marrakech » ajoutait les lignes du modele telles quelles : sur
+ * une navette deja renseignee, il ecrasait les tarifs du proprietaire (10 MAD
+ * remplace par les 330 du modele, constat Tawfiq 12/09). On etiquette donc
+ * d'abord ce qui existe deja sous le meme libelle, et on ne cree que ce qui
+ * manque vraiment.
+ */
+function applyCityToFormules<T extends { label: string; priceMad: number | null; city?: string }>(
+  formules: T[],
+  city: string,
+  proposals: Array<{ label: string; priceMad: number | null }>,
+): T[] {
+  const norm = (x: string) => x.trim().toLowerCase();
+  const kept = formules.filter((f) => f.label.trim());
+  const out = kept.map((f) => {
+    if ((f.city || '').trim()) return f;
+    return proposals.some((pr) => norm(pr.label) === norm(f.label)) ? { ...f, city } : f;
+  });
+  const missing = proposals
+    .filter((pr) => !out.some((f) => norm(f.label) === norm(pr.label) && (f.city || '').trim() === city))
+    .map((pr) => ({ ...pr, city }) as unknown as T);
+  return [...out, ...missing];
+}
+
 const NAVETTE_PROPOSALS: Record<string, Array<{ label: string; priceMad: number | null }>> = {
   Marrakech: [
     { label: 'Aéroport Marrakech', priceMad: 330 },
@@ -546,11 +572,21 @@ export function OwnerExperiencesPage() {
         buckets.set(cid, list);
       }
     }
+    // Mobilité d'abord : la navette est le service le plus demandé, et un tri
+    // alphabétique la reléguait derrière Aventure/Culture/Excursion.
+    const CATEGORY_ORDER = ['Mobilité', 'Food'];
     const keys = Array.from(buckets.keys()).sort((a, b) => {
       if (groupBy === 'city') {
         if (a === 'all') return -1;
         if (b === 'all') return 1;
         return cityName(a).localeCompare(cityName(b), 'fr');
+      }
+      const ia = CATEGORY_ORDER.indexOf(a);
+      const ib = CATEGORY_ORDER.indexOf(b);
+      if (ia !== -1 || ib !== -1) {
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
       }
       return a.localeCompare(b, 'fr');
     });
@@ -1566,7 +1602,9 @@ export function OwnerExperiencesPage() {
               </div>
             </section>
 
-            <section style={{ marginBottom: 22 }}>
+            {/* Pas de photos pour la navette : une destination n'en a pas, et le
+                bloc vide laissait croire qu'il manquait quelque chose. */}
+            <section style={{ marginBottom: 22, display: draft.kind === 'transport' ? 'none' : undefined }}>
               <div className="pa-lbl">Photos (max 3)</div>
               <p style={{ margin: '6px 0 8px', fontSize: 12, color: 'var(--pa-ink3)' }}>
                 JPEG, PNG ou WebP · max 1 Mo · idéal 1200×628
@@ -1629,18 +1667,36 @@ export function OwnerExperiencesPage() {
                     {Array.from(
                       new Set(draft.formules.map((f) => (f.city || '').trim()).filter(Boolean)),
                     ).map((city) => (
-                      <button
-                        key={city}
-                        type="button"
-                        style={
-                          activeCity === city
-                            ? btnGold({ padding: '6px 12px', fontSize: 13 })
-                            : btnOutline({ padding: '6px 12px', fontSize: 13 })
-                        }
-                        onClick={() => setActiveCity(city)}
-                      >
-                        {city}
-                      </button>
+                      <span key={city} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <button
+                          type="button"
+                          style={
+                            activeCity === city
+                              ? btnGold({ padding: '6px 12px', fontSize: 13 })
+                              : btnOutline({ padding: '6px 12px', fontSize: 13 })
+                          }
+                          onClick={() => setActiveCity(city)}
+                        >
+                          {city}
+                        </button>
+                        <button
+                          type="button"
+                          title={`Supprimer ${city} et ses destinations`}
+                          style={btnOutline({ padding: '6px 8px', fontSize: 12, opacity: 0.7 })}
+                          onClick={() => {
+                            // Retirer une ville retire SES destinations : les
+                            // laisser sans ville les rendrait visibles partout.
+                            const rest = draft.formules.filter(
+                              (f) => (f.city || '').trim() !== city,
+                            );
+                            setDraft((d) => ({ ...d, formules: rest }));
+                            const next = rest.map((f) => (f.city || '').trim()).find(Boolean) || '';
+                            setActiveCity(next);
+                          }}
+                        >
+                          ×
+                        </button>
+                      </span>
                     ))}
                     <input
                       className="pa-in"
@@ -1654,10 +1710,16 @@ export function OwnerExperiencesPage() {
                         if (!city) return;
                         setDraft((d) => {
                           const proposals = NAVETTE_PROPOSALS[city] || [];
-                          const rows = proposals.length
-                            ? proposals.map((pr) => ({ ...pr, city }))
-                            : [{ label: '', priceMad: 0 as number | null, city }];
-                          return { ...d, formules: [...d.formules.filter((f) => f.label.trim()), ...rows] };
+                          if (!proposals.length) {
+                            return {
+                              ...d,
+                              formules: [
+                                ...d.formules.filter((f) => f.label.trim()),
+                                { label: '', priceMad: 0 as number | null, city },
+                              ],
+                            };
+                          }
+                          return { ...d, formules: applyCityToFormules(d.formules, city, proposals) };
                         });
                         setActiveCity(city);
                         setNewCityName('');
@@ -1675,10 +1737,7 @@ export function OwnerExperiencesPage() {
                           onClick={() => {
                             setDraft((d) => ({
                               ...d,
-                              formules: [
-                                ...d.formules.filter((f) => f.label.trim()),
-                                ...NAVETTE_PROPOSALS[city].map((pr) => ({ ...pr, city })),
-                              ],
+                              formules: applyCityToFormules(d.formules, city, NAVETTE_PROPOSALS[city]),
                             }));
                             setActiveCity(city);
                           }}
@@ -1691,14 +1750,18 @@ export function OwnerExperiencesPage() {
               ) : null}
               {draft.formules
                 .map((f, i) => ({ f, i }))
-                .filter(
-                  ({ f }) =>
-                    draft.kind !== 'transport' ||
-                    (f.city || '').trim() ===
-                      (draft.formules.some((x) => (x.city || '').trim() === activeCity)
-                        ? activeCity
-                        : (draft.formules.find((x) => (x.city || '').trim())?.city || '').trim()),
-                )
+                .filter(({ f }) => {
+                  if (draft.kind !== 'transport') return true;
+                  // Une seule grille a la fois : melanger Marrakech et
+                  // Casablanca donnait deux « Aeroport Casablanca » a des prix
+                  // differents dans la meme liste. Tant qu'aucune ville n'est
+                  // choisie, on n'affiche rien — l'ecran invite a en choisir une.
+                  const cityOf = (x: { city?: string }) => (x.city || '').trim();
+                  const cities = draft.formules.map(cityOf).filter(Boolean);
+                  if (!cities.length) return true;
+                  const current = cities.includes(activeCity) ? activeCity : '';
+                  return current ? cityOf(f) === current : false;
+                })
                 .map(({ f, i }) => (
                 <div
                   key={i}
@@ -1752,8 +1815,22 @@ export function OwnerExperiencesPage() {
                   </button>
                 </div>
                 ))}
+              {/* Des villes existent mais aucune n'est selectionnee : l'ecran
+                  serait vide sans explication. */}
+              {draft.kind === 'transport' &&
+              draft.formules.some((f) => (f.city || '').trim()) &&
+              !draft.formules.some((f) => (f.city || '').trim() === activeCity) ? (
+                <div style={{ marginTop: 10, fontSize: 13, color: 'var(--pa-ink3)' }}>
+                  Choisissez une ville ci-dessus pour voir ses destinations.
+                </div>
+              ) : null}
               <button
                 type="button"
+                disabled={
+                  draft.kind === 'transport' &&
+                  draft.formules.some((f) => (f.city || '').trim()) &&
+                  !draft.formules.some((f) => (f.city || '').trim() === activeCity)
+                }
                 style={btnOutline({ marginTop: 10 })}
                 onClick={() =>
                   setDraft((d) => ({
