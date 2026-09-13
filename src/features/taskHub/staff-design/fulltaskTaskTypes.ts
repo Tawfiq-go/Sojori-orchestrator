@@ -100,7 +100,17 @@ export const REFERENCE_POINT_LABELS: Record<ReferencePoint, string> = {
   previous_step_done: 'Date tâche',
 };
 
-const PARTNER_AUTO_ASSIGN_TYPES = new Set(['transport', 'groceries', 'concierge']);
+/**
+ * Types éligibles au mode partenaire — DOIT rester identique à
+ * `PARTNER_TASK_TYPES` dans apps/srv-fulltask/src/types/domain.ts (repo
+ * backend My-Sojori/sojori-production), seule source de vérité côté
+ * serveur. Avant le 13/09/2026 cette liste était dupliquée 3 fois (2 fois
+ * dans le même service backend + ici) sans lien entre elles ; un ajout de
+ * type partenaire ne casserait aucun test, juste un comportement incohérent
+ * en prod. Testé par `taskTypeOptions.test.ts` : à chaque modif de cette
+ * constante, mettre à jour `PARTNER_TASK_TYPES` côté backend dans la même PR.
+ */
+export const PARTNER_AUTO_ASSIGN_TYPES = new Set(['transport', 'groceries', 'concierge']);
 
 /**
  * Référence par défaut relances / rappels / deadline — aligné srv-fulltask defaultSeeds.

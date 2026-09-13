@@ -13,6 +13,7 @@ import {
   DAY_DISPLAY_ORDER,
   LANG_OPTIONS,
   initials,
+  isPartnerFacingStaff,
   pillLabelForType,
   sanitizeStaffAllowedTaskTypes,
   type WorkLang,
@@ -818,6 +819,15 @@ export default function StaffPageView({
                   </div>
                 </div>
                 <div className="tasks">
+                  {isPartnerFacingStaff(s.allowedTaskTypes as string[]) ? (
+                    <span
+                      className="task-chip active"
+                      title="Appelle les partenaires (navette, expérience, courses) et enregistre leur réponse"
+                      style={{ background: 'var(--pd)', color: '#fff', borderColor: 'var(--pd)' }}
+                    >
+                      🤝 PARTENAIRE
+                    </span>
+                  ) : null}
                   {chipTypes.map((t) => {
                     const meta = pillLabelForType(t);
                     if (!meta) return null;
