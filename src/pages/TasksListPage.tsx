@@ -109,7 +109,6 @@ import {
 const COLUMN_WIDTHS = {
   itemNumber: '84px',
   category: '128px',
-  detail: '230px',
   reservation: '92px',
   listing: '112px',
   voyageur: '116px',
@@ -120,7 +119,7 @@ const COLUMN_WIDTHS = {
   status: '96px',
   payment: '112px',
   assignedStaff: '96px',
-  extras: '128px',
+  extras: '230px',
   description: '120px',
   createdAt: '92px',
 } as const;
@@ -731,7 +730,51 @@ function taskDeclarationSummary(task: TaskListItem): {
 }
 
 /** Bouton Infos → modal design (note, checklist, déclaration, images). */
-function TaskInfosCell({ task }: { task: TaskListItem }) {
+/** Détail par type : résumé de commande en tête, puis formule, catégorie, trajet, options, dates. */
+function TaskDetailCell({ task }: { task: TaskListItem }) {
+  if (!task.order) return null;
+  const lines = taskDetailLines(task);
+  if (!lines.length) return null;
+  const [head, ...rest] = lines;
+  const tip = lines.join('\n');
+  return (
+    <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tip}</span>} arrow placement="top">
+      <Box sx={{ minWidth: 0, maxWidth: '100%' }}>
+        <Typography
+          sx={{
+            fontSize: 11.5,
+            fontWeight: 600,
+            color: T.text,
+            lineHeight: 1.25,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {head}
+        </Typography>
+        {rest.length ? (
+          <Typography
+            sx={{
+              fontSize: 10.5,
+              color: T.text3,
+              lineHeight: 1.25,
+              mt: 0.25,
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+            }}
+          >
+            {rest.join(' · ')}
+          </Typography>
+        ) : null}
+      </Box>
+    </Tooltip>
+  );
+}
+
+function TaskInfosCell({ task, compact = false }: { task: TaskListItem; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [photoSrcs, setPhotoSrcs] = useState<string[]>([]);
   const checklist = task.checklistItems || [];
@@ -741,7 +784,9 @@ function TaskInfosCell({ task }: { task: TaskListItem }) {
   const hasChecklist = checklist.length > 0;
   const hasNotes = Boolean(notes);
   const hasPhotos = photos.length > 0 || task.hasGuestPhoto === true;
-  const hasAnything = hasChecklist || hasNotes || hasPhotos || declaration.hasContent;
+  // Sous une commande, le compteur d'enregistrés de la résa n'apprend rien au staff.
+  const showDeclaration = !compact && declaration.hasContent;
+  const hasAnything = hasChecklist || hasNotes || hasPhotos || showDeclaration;
   const photosKey = photos.join('|');
   const doneN = checklist.filter((c) => c.done).length;
   const totalN = checklist.length;
@@ -777,19 +822,21 @@ function TaskInfosCell({ task }: { task: TaskListItem }) {
   }, [open, photosKey]);
 
   if (!hasAnything) {
-    return <Typography sx={{ fontSize: 11, color: T.text4, textAlign: 'center' }}>—</Typography>;
+    // Sous un détail de commande, pas de tiret : la cellule est déjà remplie.
+    if (compact) return null;
+    return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
   }
 
   const photoCount = photos.length;
   const declareCount = declaration.cleaningItems.length
     ? declaration.cleaningItems.length
-    : declaration.hasContent
+    : showDeclaration
       ? declaration.done || declaration.members.length || 1
       : 0;
   const tipParts = [
     hasPhotos ? `${photoCount || '·'} image${photoCount > 1 ? 's' : ''}` : null,
     hasChecklist ? `checklist ${doneN}/${totalN}` : null,
-    declaration.hasContent
+    showDeclaration
       ? declaration.cleaningItems.length
         ? `${declareCount} déclaration${declareCount > 1 ? 's' : ''}`
         : `${declaration.done}/${declaration.total || '—'} enregistrés`
@@ -846,7 +893,7 @@ function TaskInfosCell({ task }: { task: TaskListItem }) {
                 {doneN}/{totalN}
               </Box>
             ) : null}
-            {declaration.hasContent ? (
+            {showDeclaration ? (
               <Box component="span" sx={badgeSx} title="Déclaration">
                 <InboxIcon sx={{ fontSize: 13, color: T.info }} />
                 {declaration.cleaningItems.length
@@ -913,7 +960,7 @@ function TaskInfosCell({ task }: { task: TaskListItem }) {
                 sx={{ height: 22, fontWeight: 800, bgcolor: T.bg1 }}
               />
             ) : null}
-            {declaration.hasContent ? (
+            {showDeclaration ? (
               <Chip
                 size="small"
                 icon={<InboxIcon sx={{ fontSize: '14px !important' }} />}
@@ -1002,7 +1049,7 @@ function TaskInfosCell({ task }: { task: TaskListItem }) {
             </Paper>
           ) : null}
 
-          {declaration.hasContent ? (
+          {showDeclaration ? (
             <Paper elevation={0} sx={{ p: 1.75, borderRadius: 2, border: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
                 <InboxIcon sx={{ fontSize: 18, color: T.info }} />
@@ -2347,53 +2394,6 @@ export function TasksListPage() {
       },
     },
     {
-      key: 'detail',
-      label: 'Détail',
-      width: COLUMN_WIDTHS.detail,
-      align: 'left' as const,
-      render: (row: TaskRow) => {
-        const lines = taskDetailLines(row);
-        if (!lines.length) return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
-        const [head, ...rest] = lines;
-        const tip = lines.join('\n');
-        return (
-          <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tip}</span>} arrow placement="top">
-            <Box sx={{ minWidth: 0, maxWidth: '100%' }}>
-              <Typography
-                sx={{
-                  fontSize: 11.5,
-                  fontWeight: 600,
-                  color: T.text,
-                  lineHeight: 1.25,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {head}
-              </Typography>
-              {rest.length ? (
-                <Typography
-                  sx={{
-                    fontSize: 10.5,
-                    color: T.text3,
-                    lineHeight: 1.25,
-                    mt: 0.25,
-                    overflow: 'hidden',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                  }}
-                >
-                  {rest.join(' · ')}
-                </Typography>
-              ) : null}
-            </Box>
-          </Tooltip>
-        );
-      },
-    },
-    {
       key: 'reservation',
       label: 'Résa',
       width: COLUMN_WIDTHS.reservation,
@@ -2555,10 +2555,13 @@ export function TasksListPage() {
       key: 'extras',
       label: 'Infos',
       width: COLUMN_WIDTHS.extras,
-      align: 'center' as const,
+      align: 'left' as const,
+      // Le détail propre à chaque type (commande, formule, trajet, options, dates)
+      // plutôt que toujours le compteur d'enregistrés (demande Tawfiq 13/09).
       render: (row: TaskRow) => (
-        <Box onClick={(e) => e.stopPropagation()}>
-          <TaskInfosCell task={row} />
+        <Box onClick={(e) => e.stopPropagation()} sx={{ minWidth: 0 }}>
+          <TaskDetailCell task={row} />
+          <TaskInfosCell task={row} compact={Boolean(row.order)} />
         </Box>
       ),
     },
