@@ -80,6 +80,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   'dynamic-pricing/portefeuille': '/dynamic-pricing/portefeuille',
   'dynamic-pricing/audit': '/dynamic-pricing/audit',
   'pricing/v2': '/pricing-v2',
+  'marketing/overview': '/marketing',
   channels: '/catalogue/channels',
   'admin/channels': '/channels?tab=Business&biz=api&api=m',
   'admin/channels/business': '/admin/channels?tab=Business&biz=api&api=m',

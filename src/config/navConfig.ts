@@ -354,6 +354,20 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
+    group: 'Marketing',
+    roles: PM_ROLES,
+    items: [
+      {
+        id: 'marketing/overview',
+        label: 'Marketing',
+        iconType: 'chart',
+        iconColor: '#B8881A',
+        badge: 'Beta',
+        description: 'Dépense publicitaire face aux réservations réelles',
+      },
+    ],
+  },
+  {
     group: 'Direct booking',
     roles: PM_ROLES,
     items: [

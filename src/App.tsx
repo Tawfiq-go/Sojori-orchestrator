@@ -236,6 +236,7 @@ const PricingAuditPage = lazyWithReload(() =>
 // Pricing v2 (nouveau moteur, mode shadow) — module GREENFIELD, zéro import de dynamic-pricing v1.
 const PricingV2Page = lazyWithReload(() => import('./features/pricing-v2/PricingV2Page'));
 const PricingV2PortfolioPage = lazyWithReload(() => import('./features/pricing-v2/PricingV2Portfolio'));
+const MarketingDashboardPage = lazyWithReload(() => import('./features/marketing/MarketingDashboard'));
 const ChannelsPage = lazyWithReload(() =>
   import('./pages/ChannelsPage').then((module) => ({ default: module.ChannelsPage }))
 );
@@ -553,6 +554,9 @@ function App() {
               <Route path="/pricing-v2" element={<LazyRoute><PricingV2PortfolioPage /></LazyRoute>} />
               <Route path="/pricing-v2/portefeuille" element={<Navigate to="/pricing-v2" replace />} />
               <Route path="/pricing-v2/bien/:listingId" element={<LazyRoute><PricingV2Page /></LazyRoute>} />
+
+              {/* Marketing Intelligence — dépense pub face aux réservations (srv-agents) */}
+              <Route path="/marketing" element={<LazyRoute><MarketingDashboardPage /></LazyRoute>} />
               {/* MULTI-ROOMTYPE (Nommos) — :roomTypeId optionnel, une villa d'un
                   listing multi. Absent = comportement single inchangé. */}
               <Route path="/pricing-v2/bien/:listingId/:roomTypeId" element={<LazyRoute><PricingV2Page /></LazyRoute>} />
