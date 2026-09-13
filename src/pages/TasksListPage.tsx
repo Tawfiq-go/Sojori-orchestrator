@@ -119,7 +119,7 @@ const COLUMN_WIDTHS = {
   status: '96px',
   payment: '112px',
   assignedStaff: '96px',
-  extras: '128px',
+  extras: '230px',
   description: '120px',
   createdAt: '92px',
 } as const;
@@ -730,7 +730,51 @@ function taskDeclarationSummary(task: TaskListItem): {
 }
 
 /** Bouton Infos → modal design (note, checklist, déclaration, images). */
-function TaskInfosCell({ task }: { task: TaskListItem }) {
+/** Détail par type : résumé de commande en tête, puis formule, catégorie, trajet, options, dates. */
+function TaskDetailCell({ task }: { task: TaskListItem }) {
+  if (!task.order) return null;
+  const lines = taskDetailLines(task);
+  if (!lines.length) return null;
+  const [head, ...rest] = lines;
+  const tip = lines.join('\n');
+  return (
+    <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tip}</span>} arrow placement="top">
+      <Box sx={{ minWidth: 0, maxWidth: '100%' }}>
+        <Typography
+          sx={{
+            fontSize: 11.5,
+            fontWeight: 600,
+            color: T.text,
+            lineHeight: 1.25,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {head}
+        </Typography>
+        {rest.length ? (
+          <Typography
+            sx={{
+              fontSize: 10.5,
+              color: T.text3,
+              lineHeight: 1.25,
+              mt: 0.25,
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+            }}
+          >
+            {rest.join(' · ')}
+          </Typography>
+        ) : null}
+      </Box>
+    </Tooltip>
+  );
+}
+
+function TaskInfosCell({ task, compact = false }: { task: TaskListItem; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [photoSrcs, setPhotoSrcs] = useState<string[]>([]);
   const checklist = task.checklistItems || [];
@@ -740,7 +784,9 @@ function TaskInfosCell({ task }: { task: TaskListItem }) {
   const hasChecklist = checklist.length > 0;
   const hasNotes = Boolean(notes);
   const hasPhotos = photos.length > 0 || task.hasGuestPhoto === true;
-  const hasAnything = hasChecklist || hasNotes || hasPhotos || declaration.hasContent;
+  // Sous une commande, le compteur d'enregistrés de la résa n'apprend rien au staff.
+  const showDeclaration = !compact && declaration.hasContent;
+  const hasAnything = hasChecklist || hasNotes || hasPhotos || showDeclaration;
   const photosKey = photos.join('|');
   const doneN = checklist.filter((c) => c.done).length;
   const totalN = checklist.length;
@@ -776,19 +822,21 @@ function TaskInfosCell({ task }: { task: TaskListItem }) {
   }, [open, photosKey]);
 
   if (!hasAnything) {
-    return <Typography sx={{ fontSize: 11, color: T.text4, textAlign: 'center' }}>—</Typography>;
+    // Sous un détail de commande, pas de tiret : la cellule est déjà remplie.
+    if (compact) return null;
+    return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
   }
 
   const photoCount = photos.length;
   const declareCount = declaration.cleaningItems.length
     ? declaration.cleaningItems.length
-    : declaration.hasContent
+    : showDeclaration
       ? declaration.done || declaration.members.length || 1
       : 0;
   const tipParts = [
     hasPhotos ? `${photoCount || '·'} image${photoCount > 1 ? 's' : ''}` : null,
     hasChecklist ? `checklist ${doneN}/${totalN}` : null,
-    declaration.hasContent
+    showDeclaration
       ? declaration.cleaningItems.length
         ? `${declareCount} déclaration${declareCount > 1 ? 's' : ''}`
         : `${declaration.done}/${declaration.total || '—'} enregistrés`
@@ -845,7 +893,7 @@ function TaskInfosCell({ task }: { task: TaskListItem }) {
                 {doneN}/{totalN}
               </Box>
             ) : null}
-            {declaration.hasContent ? (
+            {showDeclaration ? (
               <Box component="span" sx={badgeSx} title="Déclaration">
                 <InboxIcon sx={{ fontSize: 13, color: T.info }} />
                 {declaration.cleaningItems.length
@@ -912,7 +960,7 @@ function TaskInfosCell({ task }: { task: TaskListItem }) {
                 sx={{ height: 22, fontWeight: 800, bgcolor: T.bg1 }}
               />
             ) : null}
-            {declaration.hasContent ? (
+            {showDeclaration ? (
               <Chip
                 size="small"
                 icon={<InboxIcon sx={{ fontSize: '14px !important' }} />}
@@ -1001,7 +1049,7 @@ function TaskInfosCell({ task }: { task: TaskListItem }) {
             </Paper>
           ) : null}
 
-          {declaration.hasContent ? (
+          {showDeclaration ? (
             <Paper elevation={0} sx={{ p: 1.75, borderRadius: 2, border: `1px solid ${T.border}`, bgcolor: T.bg1 }}>
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
                 <InboxIcon sx={{ fontSize: 18, color: T.info }} />
@@ -1373,7 +1421,7 @@ const PAYMENT_FILTER_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'to_collect', label: 'À encaisser (sur place + partiel)' },
   { value: 'on_site', label: 'À régler sur place' },
   { value: 'partial', label: 'Partiel' },
-  { value: 'pending_online', label: 'Lien envoyé' },
+  { value: 'pending_online', label: 'Carte en ligne (lien)' },
   { value: 'paid', label: 'Payé' },
   { value: 'none', label: 'Rien à encaisser' },
 ];
@@ -1493,6 +1541,28 @@ function renderTimeslotClientBottom(task: TaskListItem) {
   );
 }
 
+/**
+ * Colonne Détail : ce que le voyageur a commandé, puis les précisions
+ * (formule, catégorie, trajet, passagers, options, dates, heure demandée).
+ */
+export function taskDetailLines(task: TaskListItem): string[] {
+  const order = task.order;
+  if (order && (order.summary || order.detail || order.items.length)) {
+    const head = order.summary || order.items[0]?.label || '';
+    const parts: string[] = [];
+    if (order.detail) parts.push(order.detail);
+    for (const item of order.items) {
+      for (const opt of item.options) if (opt && !parts.includes(opt)) parts.push(opt);
+      if (item.note && !parts.includes(item.note)) parts.push(item.note);
+    }
+    if (order.startLabel && !order.startTime) parts.push(order.startLabel);
+    return [head, ...parts].filter(Boolean);
+  }
+  const fallback = task.conciergeDetailLine || firstDescriptionLine(task);
+  if (fallback && fallback !== 'Sans description' && fallback !== task.type) return [fallback];
+  return [];
+}
+
 function categorySubline(task: TaskListItem): ReactNode {
   const typ = String(task.type || task.name || '').toLowerCase();
   if (
@@ -1548,6 +1618,9 @@ function categorySubline(task: TaskListItem): ReactNode {
       </Typography>
     );
   }
+
+  // Les commandes ont leur colonne Détail : la cellule Type reste le type seul.
+  if (task.order?.summary || task.order?.detail) return null;
 
   const desc = firstDescriptionLine(task);
   if (desc && desc !== 'Sans description' && desc !== task.type) {
@@ -2370,8 +2443,14 @@ export function TasksListPage() {
       render: (row: TaskRow) => {
         const status = normalizeTaskStatus(row.taskStatus);
         const waitingGuest = row.isClientRequest && status === 'CREATED';
-        const statusLabel = waitingGuest ? 'Attente invité' : TASK_STATUS_LABELS[status];
-        const statusVariant = waitingGuest ? 'warning' : TASK_STATUS_VARIANTS[status];
+        // Navette / expérience encore sans réponse du partenaire : le staff doit l'appeler.
+        const partnerPending = row.order?.partner?.status === 'pending' && status === 'CREATED';
+        const statusLabel = waitingGuest
+          ? 'Attente invité'
+          : partnerPending
+            ? 'Attente partenaire'
+            : TASK_STATUS_LABELS[status];
+        const statusVariant = waitingGuest || partnerPending ? 'warning' : TASK_STATUS_VARIANTS[status];
         return (
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'center' }}>
             <Badge variant={statusVariant}>{statusLabel}</Badge>
@@ -2406,6 +2485,10 @@ export function TasksListPage() {
             : pay.totalMad != null
               ? `${pay.totalMad} MAD`
               : '';
+        // Acompte en ligne + reste sur place : les deux montants, pas un seul mode.
+        const secondLine = pay.split
+          ? `${pay.split.onlinePaid ? '✓' : '⏳'} ${pay.split.onlineMad} en ligne + ${pay.split.remainderMad} sur place`
+          : `${pay.methodLabel}${amount ? ` · ${amount}` : ''}`;
         return (
           <Tooltip title={`${pay.statusLabel} · ${pay.methodLabel}`} arrow placement="top">
             <Box sx={{ minWidth: 0 }}>
@@ -2426,11 +2509,10 @@ export function TasksListPage() {
                   textOverflow: 'ellipsis',
                 }}
               >
-                {pay.status === 'partial' ? 'Partiel' : pay.statusLabel}
+                {pay.split ? (pay.split.onlinePaid ? 'Acompte payé' : 'Acompte à payer') : pay.status === 'partial' ? 'Partiel' : pay.statusLabel}
               </Box>
               <Typography sx={{ fontSize: 10.5, color: T.text2, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {pay.methodLabel}
-                {amount ? ` · ${amount}` : ''}
+                {secondLine}
               </Typography>
             </Box>
           </Tooltip>
@@ -2473,10 +2555,13 @@ export function TasksListPage() {
       key: 'extras',
       label: 'Infos',
       width: COLUMN_WIDTHS.extras,
-      align: 'center' as const,
+      align: 'left' as const,
+      // Le détail propre à chaque type (commande, formule, trajet, options, dates)
+      // plutôt que toujours le compteur d'enregistrés (demande Tawfiq 13/09).
       render: (row: TaskRow) => (
-        <Box onClick={(e) => e.stopPropagation()}>
-          <TaskInfosCell task={row} />
+        <Box onClick={(e) => e.stopPropagation()} sx={{ minWidth: 0 }}>
+          <TaskDetailCell task={row} />
+          <TaskInfosCell task={row} compact={Boolean(row.order)} />
         </Box>
       ),
     },

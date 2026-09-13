@@ -15,6 +15,7 @@ const KIND_TITLES: Record<TaskOrder['kind'], string> = {
   experience: 'Expérience',
   ambiance: 'Ambiance',
   cleaning: 'Ménage',
+  stay_option: 'Option séjour',
   support: 'Demande',
   other: 'Détail',
 };
@@ -167,6 +168,22 @@ export function TaskOrderBlock({
               Reste {money(order.payment.dueMad)}
             </Typography>
           ) : null}
+        </Box>
+      ) : null}
+
+      {order.payment.split ? (
+        <Box
+          data-testid="task-order-split"
+          sx={{ display: 'grid', gap: 0.25, fontSize: 12.5, color: T.text2, pl: 0.5 }}
+        >
+          <Typography sx={{ fontSize: 12.5, color: T.text }}>
+            {order.payment.split.onlinePaid ? '✓' : '⏳'} Acompte {order.payment.split.depositPercent} % ·{' '}
+            {money(order.payment.split.onlineMad)} par carte en ligne
+            {order.payment.split.onlinePaid ? ' — payé' : ' — en attente du paiement'}
+          </Typography>
+          <Typography sx={{ fontSize: 12.5, color: T.text }}>
+            ◻ Reste {money(order.payment.split.remainderMad)} sur place (cash, TPE ou sur la note)
+          </Typography>
         </Box>
       ) : null}
 
