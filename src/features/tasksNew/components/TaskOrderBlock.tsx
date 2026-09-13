@@ -15,6 +15,7 @@ const KIND_TITLES: Record<TaskOrder['kind'], string> = {
   experience: 'Expérience',
   ambiance: 'Ambiance',
   cleaning: 'Ménage',
+  stay_option: 'Option séjour',
   support: 'Demande',
   other: 'Détail',
 };
