@@ -109,6 +109,7 @@ import {
 const COLUMN_WIDTHS = {
   itemNumber: '84px',
   category: '128px',
+  detail: '230px',
   reservation: '92px',
   listing: '112px',
   voyageur: '116px',
@@ -1493,6 +1494,28 @@ function renderTimeslotClientBottom(task: TaskListItem) {
   );
 }
 
+/**
+ * Colonne Détail : ce que le voyageur a commandé, puis les précisions
+ * (formule, catégorie, trajet, passagers, options, dates, heure demandée).
+ */
+export function taskDetailLines(task: TaskListItem): string[] {
+  const order = task.order;
+  if (order && (order.summary || order.detail || order.items.length)) {
+    const head = order.summary || order.items[0]?.label || '';
+    const parts: string[] = [];
+    if (order.detail) parts.push(order.detail);
+    for (const item of order.items) {
+      for (const opt of item.options) if (opt && !parts.includes(opt)) parts.push(opt);
+      if (item.note && !parts.includes(item.note)) parts.push(item.note);
+    }
+    if (order.startLabel && !order.startTime) parts.push(order.startLabel);
+    return [head, ...parts].filter(Boolean);
+  }
+  const fallback = task.conciergeDetailLine || firstDescriptionLine(task);
+  if (fallback && fallback !== 'Sans description' && fallback !== task.type) return [fallback];
+  return [];
+}
+
 function categorySubline(task: TaskListItem): ReactNode {
   const typ = String(task.type || task.name || '').toLowerCase();
   if (
@@ -1548,6 +1571,9 @@ function categorySubline(task: TaskListItem): ReactNode {
       </Typography>
     );
   }
+
+  // Les commandes ont leur colonne Détail : la cellule Type reste le type seul.
+  if (task.order?.summary || task.order?.detail) return null;
 
   const desc = firstDescriptionLine(task);
   if (desc && desc !== 'Sans description' && desc !== task.type) {
@@ -2317,6 +2343,53 @@ export function TasksListPage() {
             </Tooltip>
             {categorySubline(row)}
           </Box>
+        );
+      },
+    },
+    {
+      key: 'detail',
+      label: 'Détail',
+      width: COLUMN_WIDTHS.detail,
+      align: 'left' as const,
+      render: (row: TaskRow) => {
+        const lines = taskDetailLines(row);
+        if (!lines.length) return <Typography sx={{ fontSize: 11, color: T.text4 }}>—</Typography>;
+        const [head, ...rest] = lines;
+        const tip = lines.join('\n');
+        return (
+          <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tip}</span>} arrow placement="top">
+            <Box sx={{ minWidth: 0, maxWidth: '100%' }}>
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color: T.text,
+                  lineHeight: 1.25,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {head}
+              </Typography>
+              {rest.length ? (
+                <Typography
+                  sx={{
+                    fontSize: 10.5,
+                    color: T.text3,
+                    lineHeight: 1.25,
+                    mt: 0.25,
+                    overflow: 'hidden',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                  }}
+                >
+                  {rest.join(' · ')}
+                </Typography>
+              ) : null}
+            </Box>
+          </Tooltip>
         );
       },
     },
