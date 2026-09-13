@@ -2375,7 +2375,7 @@ export function TasksListPage() {
         const statusLabel = waitingGuest
           ? 'Attente invité'
           : partnerPending
-            ? '🤝 Partenaire ?'
+            ? 'Attente partenaire'
             : TASK_STATUS_LABELS[status];
         const statusVariant = waitingGuest || partnerPending ? 'warning' : TASK_STATUS_VARIANTS[status];
         return (

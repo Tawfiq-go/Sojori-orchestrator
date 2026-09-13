@@ -428,7 +428,11 @@ export default function TaskDetailDrawer({
                 {typeEmoji} {task.itemNumber}
               </MetaChip>
               <MetaChip>{typeLabel}</MetaChip>
-              <MetaChip>{TASK_STATUS_LABELS[legacyStatus]}</MetaChip>
+              <MetaChip>
+                {task.order?.partner?.status === 'pending' && legacyStatus === 'CREATED'
+                  ? 'Attente partenaire'
+                  : TASK_STATUS_LABELS[legacyStatus]}
+              </MetaChip>
             </Stack>
             <Typography
               sx={{

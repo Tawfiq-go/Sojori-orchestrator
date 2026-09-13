@@ -261,6 +261,7 @@ export type TaskOrderKind =
   | 'experience'
   | 'ambiance'
   | 'cleaning'
+  | 'stay_option'
   | 'support'
   | 'other';
 
