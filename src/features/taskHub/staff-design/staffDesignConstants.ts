@@ -5,6 +5,7 @@
 import {
   FULLTASK_TASK_TYPES,
   FULLTASK_TASK_TYPE_EMOJI,
+  PARTNER_AUTO_ASSIGN_TYPES,
   labelForTaskTypeId,
   type FulltaskTaskTypeId,
 } from './fulltaskTaskTypes';
@@ -66,7 +67,8 @@ export type StaffRolePresetId =
   | 'sup_housekeeping'
   | 'sup_checkout'
   | 'inspector'
-  | 'room_service';
+  | 'room_service'
+  | 'partner_relations';
 
 export type StaffRolePreset = {
   id: StaffRolePresetId;
@@ -127,7 +129,22 @@ export const STAFF_ROLE_PRESETS: StaffRolePreset[] = [
     opsRole: 'agent',
     canInspect: false,
   },
+  {
+    id: 'partner_relations',
+    label: 'Relation partenaire',
+    hint:
+      'Appelle les partenaires (navette, expérience, courses) et enregistre leur réponse ' +
+      '— distinct du staff terrain (audit Tawfiq 13/09).',
+    taskTypes: [...PARTNER_AUTO_ASSIGN_TYPES],
+    opsRole: 'agent',
+    canInspect: false,
+  },
 ];
+
+/** Un staff a-t-il le rôle « relation partenaire » (au moins un type partenaire actif) ? */
+export function isPartnerFacingStaff(allowedTaskTypes: readonly string[]): boolean {
+  return allowedTaskTypes.some((t) => PARTNER_AUTO_ASSIGN_TYPES.has(t));
+}
 
 /**
  * ⚠️ CRITICAL : l'index DOIT suivre la convention JS/backend (Dimanche = 0),

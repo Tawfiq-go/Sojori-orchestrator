@@ -81,7 +81,12 @@ function bucketForStatus(status: string): BucketId {
 
 function statusLabel(status: string): string {
   switch (String(status || '').toLowerCase()) {
+    // Même bucket que 'new' (colonne « Attente acceptation ») mais libellé
+    // distinct : ici c'est le partenaire (navette/expérience/courses) qui doit
+    // répondre, pas une tâche staff à accepter — vocabulaire aligné sur
+    // taskOrderSummary.ts côté backend (audit Tawfiq 13/09).
     case 'pending_partner':
+      return 'Partenaire à confirmer';
     case 'new':
       return 'Attente acceptation';
     case 'confirmed':
