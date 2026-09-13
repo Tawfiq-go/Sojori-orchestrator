@@ -128,6 +128,32 @@ function mapConciergeGroupingKey(payload: Record<string, unknown>): string | und
   return undefined
 }
 
+/**
+ * Famille « Option séjour » : ambiance (villa_experience), piscine/beds
+ * (stay_option) et les 4 anciens tickets support pas encore migrés — un seul
+ * type/filtre visible, sous-catégorie (Ambiance / Piscine privée / Beds
+ * piscine) affichée à côté (demande Tawfiq 13/09 : « c'est même type tâche,
+ * on affiche direct Ambiance, Piscine ou Beds, jamais Support »).
+ */
+const STAY_OPTION_SUBLABELS: Record<string, string> = {
+  beds: 'Beds piscine',
+  private_pool: 'Piscine privée',
+}
+
+function mapStayOptionSubLabel(
+  taskType: string,
+  payload: Record<string, unknown>,
+): string | undefined {
+  if (taskType === 'villa_experience') {
+    return String(payload.serviceName ?? '').trim() || 'Ambiance'
+  }
+  const source = String(payload.optionKind ?? payload.source ?? '').trim()
+  if (taskType === 'stay_option' || (taskType === 'support' && source in STAY_OPTION_SUBLABELS)) {
+    return STAY_OPTION_SUBLABELS[source] || String(payload.optionLabel ?? '').trim() || 'Option séjour'
+  }
+  return undefined
+}
+
 /** Ligne liste + drawer : service, date, heure, passagers (payload + requestNote). */
 function buildConciergeDetailLine(
   payload: Record<string, unknown>,
@@ -433,6 +459,7 @@ export function fullTaskToListItem(
     ? buildConciergeDetailLine(payload, task.requestNote)
     : undefined
   const conciergeGroupingKey = isConciergeType ? mapConciergeGroupingKey(payload) : undefined
+  const stayOptionSubLabel = mapStayOptionSubLabel(taskType, payload)
   // Résumé de commande normalisé par srv-fulltask (articles, montant, paiement, heure).
   const order = (task.order && typeof task.order === 'object' ? task.order : undefined) as
     | TaskOrder
@@ -566,6 +593,7 @@ export function fullTaskToListItem(
     conciergeDetailLine: detailLine,
     order,
     conciergeGroupingKey,
+    stayOptionSubLabel,
     checklistItems: checklistItems.length ? checklistItems : undefined,
     notesText: notesText || undefined,
     cleaningDeclarations: cleaningDeclarations.length

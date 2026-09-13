@@ -328,17 +328,23 @@ export default function TaskDetailDrawer({
     };
   }, [taskKey]);
 
-  const typeLabel = useMemo(
-    () => (task?.subType ? labelForTaskTypeId(String(task.subType)) : '—'),
-    [task?.subType],
-  );
+  // Ambiance / piscine / beds = même famille « Option séjour » (jamais Support),
+  // y compris les anciens tickets support pas migrés (demande Tawfiq 13/09).
+  const isStayOptionFamily =
+    task?.type === 'villa_experience' || task?.type === 'stay_option' || Boolean(task?.stayOptionSubLabel);
+
+  const typeLabel = useMemo(() => {
+    if (isStayOptionFamily) return 'Option séjour';
+    return task?.subType ? labelForTaskTypeId(String(task.subType)) : '—';
+  }, [isStayOptionFamily, task?.subType]);
 
   const typeEmoji = useMemo(() => {
+    if (isStayOptionFamily) return '🏖️';
     const id = task?.subType || task?.type;
     return id && FULLTASK_TASK_TYPE_EMOJI[id as keyof typeof FULLTASK_TASK_TYPE_EMOJI]
       ? FULLTASK_TASK_TYPE_EMOJI[id as keyof typeof FULLTASK_TASK_TYPE_EMOJI]
       : '📋';
-  }, [task?.subType, task?.type]);
+  }, [isStayOptionFamily, task?.subType, task?.type]);
 
   const legacyStatus = task
     ? (normalizeTaskStatus(task.taskStatus) as TaskStatus)

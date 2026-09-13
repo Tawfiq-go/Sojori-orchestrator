@@ -95,6 +95,8 @@ export interface TaskListItem {
   supportCategoryLabel?: string;
   supportCategoryIcon?: string;
   conciergeGroupingKey?: string;
+  /** Sous-libellé de la famille « Option séjour » (Ambiance, Piscine privée, Beds piscine…) */
+  stayOptionSubLabel?: string;
   /** Détail affiché (ex. Massage · dim. 7 juin · 8h · 1 pers.) */
   conciergeDetailLine?: string;
   reservationCheckIn?: string;
