@@ -31,7 +31,11 @@ import {
 } from '../../finances/services/listingMediaApi';
 
 /** 1040px − 25 % */
+// Largeur adaptative : 780px sur petit écran, jusqu'à 1040px sur grand écran
+// (demande Tawfiq 13/09 : la modale gâchait l'espace dispo, « Option séjour »
+// et son détail se coupaient sur deux lignes faute de place).
 const DRAWER_WIDTH = 780;
+const DRAWER_WIDTH_WIDE = 1040;
 
 const STATUS_OPTIONS: TaskStatus[] = [
   'CREATED',
@@ -396,7 +400,7 @@ export default function TaskDetailDrawer({
       }}
       PaperProps={{
         sx: {
-          width: isMobile ? '100%' : `min(${DRAWER_WIDTH}px, 92vw)`,
+          width: isMobile ? '100%' : `min(max(${DRAWER_WIDTH}px, 62vw), ${DRAWER_WIDTH_WIDE}px, 92vw)`,
           maxWidth: '100vw',
           bgcolor: T.bg1,
           borderLeft: `1px solid ${T.border}`,

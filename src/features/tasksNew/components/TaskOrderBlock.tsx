@@ -84,17 +84,17 @@ export function TaskOrderBlock({
         bgcolor: T.bg1,
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, flexWrap: 'wrap' }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 800, color: T.text }}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 800, color: T.text, whiteSpace: 'nowrap' }}>
           {KIND_TITLES[order.kind]}
         </Typography>
         {order.itemCount > 0 ? (
-          <Typography sx={{ fontSize: 12, color: T.text3 }}>
+          <Typography sx={{ fontSize: 12, color: T.text3, whiteSpace: 'nowrap' }}>
             {order.itemCount} article{order.itemCount > 1 ? 's' : ''}
           </Typography>
         ) : null}
         {order.startLabel ? (
-          <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2, ml: 'auto' }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.text2, ml: 'auto', whiteSpace: 'nowrap', flexShrink: 0 }}>
             ⏰ {order.startLabel}
           </Typography>
         ) : null}
