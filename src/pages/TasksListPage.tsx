@@ -71,7 +71,7 @@ const AddTaskModal = lazyWithReload(() => import('../components/tasks/AddTaskMod
 const AssignStaffDialog = lazyWithReload(() => import('../features/tasksNew/components/AssignStaffDialog.jsx'));
 const TaskDetailDrawer = lazyWithReload(() => import('../features/tasksNew/components/TaskDetailDrawer'));
 import { paymentStatusTone } from '../features/tasksNew/components/taskPaymentMeta';
-import { buildTaskTypeOptions } from '../features/tasksNew/utils/taskTypeOptions';
+import { buildTaskTypeOptions, expandTaskTypeFilterIds } from '../features/tasksNew/utils/taskTypeOptions';
 import { TaskPlannedCell } from '../components/tasks/TaskPlannedCell';
 import type { RegistrationFieldPatch } from '../components/reservations/ReservationRegistrationActions';
 import type { StayFieldPatch } from '../components/reservations/ReservationStayActions';
@@ -1361,6 +1361,12 @@ function categoryLabel(task: TaskListItem): string {
     Support: '🆘 Support',
   };
 
+  // Famille « Option séjour » : ambiance, piscine/beds — jamais « Support »
+  // même pour les anciens tickets pas encore migrés (demande Tawfiq 13/09).
+  if (task.type === 'villa_experience' || task.type === 'stay_option' || task.stayOptionSubLabel) {
+    return `🏖️ Option séjour · ${task.stayOptionSubLabel || 'Option séjour'}`;
+  }
+
   const ft = task.subType || task.type || '';
   if (ft === 'support' || String(task.type || '').toLowerCase() === 'support') {
     const icon = task.supportCategoryIcon?.trim() || '🆘';
@@ -1797,7 +1803,7 @@ export function TasksListPage() {
         page,
         limit: rowsPerPage,
         listingIds: listFilters.listingIds.length ? listFilters.listingIds : undefined,
-        subTypes: listFilters.subTypes.length ? listFilters.subTypes : undefined,
+        subTypes: listFilters.subTypes.length ? expandTaskTypeFilterIds(listFilters.subTypes) : undefined,
         statuses: realStatuses.length ? realStatuses : undefined,
         sources: listFilters.sources.length ? listFilters.sources : undefined,
         staffCodes: listFilters.staffCodes.length ? listFilters.staffCodes : undefined,
