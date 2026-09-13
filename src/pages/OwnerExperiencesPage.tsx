@@ -692,7 +692,7 @@ export function OwnerExperiencesPage() {
       collection: needsRemote && draft.payment.collection === 'deposit' ? 'deposit' : 'full',
       depositPercent:
         needsRemote && draft.payment.collection === 'deposit'
-          ? Number(draft.payment.depositPercent) || 30
+          ? Number(draft.payment.depositPercent) || 20
           : null,
       timing: draft.payment.timing === 'on_confirmation' ? 'on_confirmation' : 'instant',
       linkTtlHours: needsRemote
@@ -2200,11 +2200,11 @@ export function OwnerExperiencesPage() {
                       min={1}
                       max={100}
                       placeholder="% acompte"
-                      value={draft.payment.depositPercent ?? 30}
+                      value={draft.payment.depositPercent ?? 20}
                       onChange={(e) =>
                         setDraft((d) => ({
                           ...d,
-                          payment: { ...d.payment, depositPercent: Number(e.target.value) || 30 },
+                          payment: { ...d.payment, depositPercent: Number(e.target.value) || 20 },
                         }))
                       }
                     />
