@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Box, Chip, Collapse, Stack, Tooltip, Typography } from "@mui/material";
 import type { MarketingDashboard, ScoredCampaign } from "./api";
 import { T, cardSx, kickerSx } from "./tokens";
@@ -367,10 +367,9 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
               const isOpen = open === c.campaignId;
               const v = VERDICT[c.verdict];
               return (
-                <>
+                <Fragment key={c.campaignId}>
                   <Box
                     component="tr"
-                    key={c.campaignId}
                     onClick={() => setOpen(isOpen ? null : c.campaignId)}
                     sx={{
                       cursor: "pointer",
@@ -386,7 +385,7 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                     </Cell>
                     <Cell>
                       <Box component="span" sx={{ fontSize: 12, color: T.mut }}>
-                        {c.from.slice(5)} → {c.to.slice(5)}
+                        {c.windowFrom.slice(5)} → {c.windowTo.slice(5)}
                       </Box>
                     </Cell>
                     <Cell num>{nf.format(Math.round(c.spendMad))}</Cell>
@@ -394,10 +393,17 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                     <Cell
                       num
                       color={
-                        c.ga4 && c.ga4.engagementPerSession < 3 ? T.crit : T.ink
+                        // Sous trois secondes, le visiteur n'a rien eu le
+                        // temps de voir : le signalement vaut avertissement.
+                        c.ga4EngagementPerSession !== undefined &&
+                        c.ga4EngagementPerSession < 3
+                          ? T.crit
+                          : T.ink
                       }
                     >
-                      {c.ga4 ? `${c.ga4.engagementPerSession} s` : "—"}
+                      {c.ga4EngagementPerSession !== undefined
+                        ? `${c.ga4EngagementPerSession} s`
+                        : "—"}
                     </Cell>
                     <Cell num>{c.reservations}</Cell>
                     <Cell num color={T.mut}>
@@ -442,14 +448,14 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                       </Box>
                     </Cell>
                   </Box>
-                  <Box component="tr" key={`${c.campaignId}-detail`}>
+                  <Box component="tr">
                     <Box component="td" colSpan={12} sx={{ p: 0, border: 0 }}>
                       <Collapse in={isOpen} unmountOnExit>
                         <Detail c={c} />
                       </Collapse>
                     </Box>
                   </Box>
-                </>
+                </Fragment>
               );
             })}
           </Box>
@@ -469,12 +475,12 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
         <Typography
           sx={{ fontSize: 12, color: T.mut, lineHeight: 1.7, mt: 0.8 }}
         >
-          La ligne de base est mesurée du {data.baselineFrom} au{" "}
-          {data.baselineTo}, et la saison sur {data.controlMarkets.length}{" "}
-          marchés ne recevant aucune publicité (coefficient ×
-          {data.seasonalFactor}). Sur des fenêtres courtes, le signe et l'ordre
-          de grandeur sont exploitables, la décimale ne l'est pas — la pastille
-          au bout de chaque nom indique ce que la ligne vaut.
+          La fenêtre analysée court du {data.windowFrom} au {data.windowTo}, et
+          la saison est mesurée sur les marchés ne recevant aucune publicité
+          (coefficient ×{data.campaigns[0]?.seasonalFactor ?? 1}). Sur des
+          fenêtres courtes, le signe et l'ordre de grandeur sont exploitables,
+          la décimale ne l'est pas — la pastille au bout de chaque nom indique
+          ce que la ligne vaut.
         </Typography>
       </Box>
     </Box>

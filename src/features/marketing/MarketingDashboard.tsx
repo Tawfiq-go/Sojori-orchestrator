@@ -26,6 +26,7 @@ import {
   fetchMarketingConnections,
   fetchMarketingDashboard,
   fetchMarketingOverview,
+  fetchTrackedListings,
   type MarketingConnection,
   type MarketingOverview,
 } from "./api";
@@ -41,6 +42,7 @@ import { T, cardSx, kickerSx } from "./tokens";
  * afficher un sélecteur vide vaudrait moins qu'une page qui marche.
  */
 const NOMMOS = {
+  tenantId: "6a76078abdcf7860a409ef46",
   listingId: "6a763507fc05d00aba524a23",
 };
 
@@ -183,34 +185,41 @@ export default function MarketingDashboard() {
     let alive = true;
     (async () => {
       try {
-        const conns = await fetchMarketingConnections();
+        // Le point de départ est l'établissement suivi, pas le compte
+        // publicitaire : `marketing_listings` porte déjà le client, la
+        // propriété Analytics et la période de référence. Partir des
+        // connexions obligerait à un appel de plus, refusé par la passerelle
+        // tant qu'aucun client n'est nommé — elle ne retombe jamais sur
+        // « tous les clients ».
+        const tracked = await fetchTrackedListings(NOMMOS.tenantId);
         if (!alive) return;
-        setConnections(conns);
-
-        const active = conns.find((c) => c.status === "active");
-        if (!active) {
-          setLoading(false);
-          return;
-        }
-        const data = await fetchMarketingOverview({
-          tenantId: active.tenantId,
-          from: range.from,
-          to: range.to,
-        });
-        if (!alive) return;
-        setOverview(data);
+        const listing = tracked.find((l) => l.active) ?? null;
+        const tenantId = listing?.tenantId ?? NOMMOS.tenantId;
+        const listingId = listing?.listingId ?? NOMMOS.listingId;
 
         // Lecture du dernier instantané calculé la nuit précédente — jamais
         // un appel aux régies : la page serait lente et consommerait des
         // quotas dont le dépassement bloquerait le compte du client.
+        const s = await fetchMarketingDashboard({ tenantId, listingId });
+        if (!alive) return;
+        setScores(s);
+
+        // La diffusion brute est secondaire : son échec ne doit pas emporter
+        // le rapprochement, qui est ce que la page vient montrer.
         try {
-          const s = await fetchMarketingDashboard({
-            tenantId: active.tenantId,
-            listingId: NOMMOS.listingId,
-          });
-          if (alive) setScores(s);
+          const [conns, data] = await Promise.all([
+            fetchMarketingConnections(tenantId),
+            fetchMarketingOverview({
+              tenantId,
+              from: range.from,
+              to: range.to,
+            }),
+          ]);
+          if (!alive) return;
+          setConnections(conns);
+          setOverview(data);
         } catch {
-          // Silencieux : la section ne s'affiche pas, le reste tient debout.
+          // Les sections de diffusion ne s'affichent pas ; le reste tient.
         }
       } catch (err) {
         if (!alive) return;

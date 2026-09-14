@@ -86,13 +86,19 @@ export type MarketingOverview = {
   }>;
 };
 
-export async function fetchMarketingConnections(): Promise<
-  MarketingConnection[]
-> {
+/**
+ * Comptes publicitaires suivis.
+ *
+ * `tenantId` est requis : la passerelle refuse un appel qui ne nomme aucun
+ * client plutôt que de retomber sur l'ensemble d'entre eux.
+ */
+export async function fetchMarketingConnections(
+  tenantId: string,
+): Promise<MarketingConnection[]> {
   const res = await apiClient.get<{
     success: boolean;
     connections: MarketingConnection[];
-  }>(`${BASE}/connections`);
+  }>(`${BASE}/connections`, { params: { tenantId } });
   return res.data?.connections ?? [];
 }
 
