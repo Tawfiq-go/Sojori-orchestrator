@@ -16,8 +16,8 @@
 // - Les montants arrivent déjà convertis en MAD par le collecteur, avec le
 //   taux et sa date. Ne jamais reconvertir côté front.
 // ════════════════════════════════════════════════════════════════════════════
-import { MICROSERVICE_BASE_URL } from '../../config/authConfig';
-import apiClient from '../../services/apiClient';
+import { MICROSERVICE_BASE_URL } from "../../config/authConfig";
+import apiClient from "../../services/apiClient";
 
 const BASE = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/marketing`;
 
@@ -26,11 +26,11 @@ export type AttributionLevel = 0 | 1 | 2 | 3;
 
 export type MarketingConnection = {
   tenantId: string;
-  provider: 'meta' | 'google';
+  provider: "meta" | "google";
   adAccountId: string;
   accountName?: string;
   currency?: string;
-  status: 'pending' | 'active' | 'revoked' | 'expired';
+  status: "pending" | "active" | "revoked" | "expired";
   connectedAt?: string;
   lastSyncAt?: string;
 };
@@ -86,10 +86,13 @@ export type MarketingOverview = {
   }>;
 };
 
-export async function fetchMarketingConnections(): Promise<MarketingConnection[]> {
-  const res = await apiClient.get<{ success: boolean; connections: MarketingConnection[] }>(
-    `${BASE}/connections`,
-  );
+export async function fetchMarketingConnections(): Promise<
+  MarketingConnection[]
+> {
+  const res = await apiClient.get<{
+    success: boolean;
+    connections: MarketingConnection[];
+  }>(`${BASE}/connections`);
   return res.data?.connections ?? [];
 }
 
@@ -98,8 +101,107 @@ export async function fetchMarketingOverview(params: {
   from: string;
   to: string;
 }): Promise<MarketingOverview> {
-  const res = await apiClient.get<{ success: boolean; data: MarketingOverview }>(
-    `${BASE}/overview`,
+  const res = await apiClient.get<{
+    success: boolean;
+    data: MarketingOverview;
+  }>(`${BASE}/overview`, { params });
+  return res.data.data;
+}
+
+/**
+ * Contribution estimée d'une campagne — **pas une attribution**.
+ *
+ * Aucun identifiant ne relie un clic Meta à une réservation Booking, et 91 %
+ * des réservations en viennent. Le chiffre est l'écart entre les réservations
+ * observées pendant la diffusion et ce que le marché produisait avant, corrigé
+ * de la saison. `confidence` dit ce qu'il vaut ; l'interface doit le montrer
+ * plutôt que d'afficher un nombre net.
+ */
+export type CampaignScore = {
+  campaignId: string;
+  campaignName: string;
+  country: string;
+  from: string;
+  to: string;
+  days: number;
+
+  spendMad: number;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+
+  reservations: number;
+  otaReservations: number;
+  directReservations: number;
+  revenueMad: number;
+  averageBasketMad: number;
+
+  expectedWithoutAds: number;
+  attributed: number;
+  attributedShare: number;
+
+  costPerReservationMad: number;
+  /** `null` quand la contribution est nulle ou négative : diviser n'a pas de sens. */
+  costPerAttributedMad: number | null;
+  /** À comparer aux 15–18 % d'une commission OTA. */
+  costShareOfRevenue: number | null;
+
+  /**
+   * Activité du site. Ne mesure pas les réservations — le site en produit deux
+   * pour 54 186 visiteurs — mais la qualité du trafic acheté.
+   */
+  ga4: {
+    sessions: number;
+    engagedSessions: number;
+    engagementPerSession: number;
+    itemsViewed: number;
+    addToCarts: number;
+    purchases: number;
+  } | null;
+
+  verdict: "accelerate" | "keep" | "stop" | "inconclusive";
+  confidence: "low" | "medium" | "high";
+  reason: string;
+};
+
+export type CampaignScores = {
+  listingId: string;
+  from: string;
+  to: string;
+  baselineFrom: string;
+  baselineTo: string;
+  seasonalFactor: number;
+  /** `false` quand le coefficient a été plafonné : les témoins manquaient de volume. */
+  seasonalTrustworthy: boolean;
+  controlMarkets: string[];
+  ga4Error: string | null;
+  campaigns: CampaignScore[];
+  totals: {
+    spendMad: number;
+    reservations: number;
+    expectedWithoutAds: number;
+    attributed: number;
+    revenueMad: number;
+    attributedRevenueMad: number;
+    /** Dépense ÷ CA total. Flatteur : inclut ce qui serait arrivé sans publicité. */
+    grossCostShare: number;
+    /** Dépense ÷ CA estimé de la contribution. C'est celui qui se compare à une OTA. */
+    netCostShare: number | null;
+  };
+};
+
+export async function fetchCampaignScores(params: {
+  tenantId: string;
+  listingId: string;
+  from: string;
+  to: string;
+  ga4PropertyId?: string;
+}): Promise<CampaignScores> {
+  const res = await apiClient.get<{ success: boolean; data: CampaignScores }>(
+    `${BASE}/campaign-scores`,
     { params },
   );
   return res.data.data;
