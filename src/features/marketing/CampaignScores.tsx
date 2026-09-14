@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Box, Chip, Collapse, Stack, Tooltip, Typography } from "@mui/material";
-import type { CampaignScore, CampaignScores as Scores } from "./api";
+import type { MarketingDashboard, ScoredCampaign } from "./api";
 import { T, cardSx, kickerSx } from "./tokens";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -36,7 +36,7 @@ const FLAG: Record<string, string> = {
 };
 
 const VERDICT: Record<
-  CampaignScore["verdict"],
+  ScoredCampaign["verdict"],
   { label: string; fg: string; bg: string }
 > = {
   accelerate: { label: "Accélérer", fg: T.ok, bg: T.okBg },
@@ -46,13 +46,13 @@ const VERDICT: Record<
 };
 
 /** Trois niveaux plutôt qu'un intervalle : le lecteur décide, il n'estime pas. */
-const CONFIDENCE: Record<CampaignScore["confidence"], string> = {
+const CONFIDENCE: Record<ScoredCampaign["confidence"], string> = {
   high: "Signal net — plus de 15 réservations observées",
   medium: "Signal modéré — 8 à 15 réservations, ordre de grandeur seulement",
   low: "Trop peu de réservations pour conclure",
 };
 
-function ConfidenceDot({ level }: { level: CampaignScore["confidence"] }) {
+function ConfidenceDot({ level }: { level: ScoredCampaign["confidence"] }) {
   const color = level === "high" ? T.ok : level === "medium" ? T.warn : T.mut;
   return (
     <Tooltip title={CONFIDENCE[level]} arrow>
@@ -130,7 +130,7 @@ function Head({ children, num }: { children: React.ReactNode; num?: boolean }) {
 }
 
 /** Détail d'une campagne — ouvert au clic sur sa ligne. */
-function Detail({ c }: { c: CampaignScore }) {
+function Detail({ c }: { c: ScoredCampaign }) {
   const rows: Array<[string, string, string?]> = [
     ["Dépense", mad(c.spendMad)],
     ["Impressions", nf.format(c.impressions)],
@@ -201,15 +201,18 @@ function Detail({ c }: { c: CampaignScore }) {
 
         <Box sx={{ flex: 1 }}>
           <Typography sx={{ ...kickerSx, mb: 1 }}>Activité du site</Typography>
-          {c.ga4 ? (
+          {c.ga4Sessions !== undefined ? (
             <>
               {(
                 [
-                  ["Sessions", nf.format(c.ga4.sessions)],
-                  ["Sessions engagées", nf.format(c.ga4.engagedSessions)],
-                  ["Engagement / session", `${c.ga4.engagementPerSession} s`],
-                  ["Ajouts au panier", String(c.ga4.addToCarts)],
-                  ["Achats sur le site", String(c.ga4.purchases)],
+                  ["Sessions", nf.format(c.ga4Sessions ?? 0)],
+                  ["Sessions engagées", nf.format(c.ga4EngagedSessions ?? 0)],
+                  [
+                    "Engagement / session",
+                    `${c.ga4EngagementPerSession ?? 0} s`,
+                  ],
+                  ["Ajouts au panier", String(c.ga4AddToCarts ?? 0)],
+                  ["Achats sur le site", String(c.ga4Purchases ?? 0)],
                 ] as Array<[string, string]>
               ).map(([k, v]) => (
                 <Stack
@@ -265,7 +268,7 @@ function Detail({ c }: { c: CampaignScore }) {
   );
 }
 
-export default function CampaignScores({ data }: { data: Scores }) {
+export default function CampaignScores({ data }: { data: MarketingDashboard }) {
   const [open, setOpen] = useState<string | null>(null);
 
   const { positives, negatives } = useMemo(() => {
@@ -327,18 +330,13 @@ export default function CampaignScores({ data }: { data: Scores }) {
           )}
         </Stack>
 
-        {!data.seasonalTrustworthy && (
+        {data.campaigns[0] && !data.campaigns[0].seasonalTrustworthy && (
           <Typography
             sx={{ fontSize: 12, color: T.warn, mt: 1.2, lineHeight: 1.5 }}
           >
             Le coefficient de saison a été plafonné : les marchés témoins
             manquaient de volume sur cette période. Les contributions sont à
             lire comme des ordres de grandeur.
-          </Typography>
-        )}
-        {data.ga4Error && (
-          <Typography sx={{ fontSize: 12, color: T.mut, mt: 0.8 }}>
-            Activité du site indisponible — {data.ga4Error}
           </Typography>
         )}
       </Box>

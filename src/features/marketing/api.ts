@@ -206,3 +206,124 @@ export async function fetchCampaignScores(params: {
   );
   return res.data.data;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// LECTURE DU TABLEAU DE BORD
+// ────────────────────────────────────────────────────────────────────────────
+// Ces appels lisent la base Sojori, jamais Meta ni Google Analytics : le
+// calcul tourne une fois par nuit côté serveur. Interroger les régies à chaque
+// affichage rendrait la page lente et consommerait des quotas dont le
+// dépassement bloquerait le compte publicitaire du client.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Une campagne telle que le job nocturne l'a figée. */
+export type ScoredCampaign = {
+  day: string;
+  campaignId: string;
+  campaignName: string;
+  country: string;
+  windowFrom: string;
+  windowTo: string;
+
+  spendMad: number;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+
+  reservations: number;
+  otaReservations: number;
+  directReservations: number;
+  revenueMad: number;
+  averageBasketMad: number;
+
+  expectedWithoutAds: number;
+  attributed: number;
+  attributedShare: number;
+
+  costPerReservationMad: number;
+  costPerAttributedMad: number | null;
+  costShareOfRevenue: number | null;
+
+  ga4Sessions?: number;
+  ga4EngagedSessions?: number;
+  ga4EngagementPerSession?: number;
+  ga4AddToCarts?: number;
+  ga4Purchases?: number;
+
+  verdict: "accelerate" | "keep" | "stop" | "inconclusive";
+  confidence: "low" | "medium" | "high";
+  reason: string;
+  seasonalFactor: number;
+  seasonalTrustworthy: boolean;
+};
+
+export type MarketingDashboard = {
+  listingId: string;
+  listingName: string | null;
+  /** `null` tant que le job nocturne n'a pas tourné une première fois. */
+  day: string | null;
+  windowFrom: string | null;
+  windowTo: string | null;
+  /** `true` quand aucun instantané n'existe encore — à dire, pas à masquer. */
+  pending: boolean;
+  campaigns: ScoredCampaign[];
+  totals: {
+    campaigns: number;
+    accelerate: number;
+    stop: number;
+    spendMad: number;
+    reservations: number;
+    attributed: number;
+    attributedRevenueMad: number;
+    /** Dépense ÷ CA estimé de la contribution. À comparer aux 15–18 % d'une OTA. */
+    netCostShare: number | null;
+  } | null;
+};
+
+export async function fetchMarketingDashboard(params: {
+  tenantId: string;
+  listingId: string;
+  day?: string;
+}): Promise<MarketingDashboard> {
+  const res = await apiClient.get<{
+    success: boolean;
+    data: MarketingDashboard;
+  }>(`${BASE}/dashboard`, { params });
+  return res.data.data;
+}
+
+export async function fetchCampaignHistory(params: {
+  tenantId: string;
+  listingId: string;
+  campaignId: string;
+  limit?: number;
+}): Promise<ScoredCampaign[]> {
+  const res = await apiClient.get<{
+    success: boolean;
+    history: ScoredCampaign[];
+  }>(`${BASE}/campaign-history`, { params });
+  return res.data?.history ?? [];
+}
+
+export type TrackedListing = {
+  tenantId: string;
+  listingId: string;
+  listingName?: string;
+  ga4PropertyId?: string;
+  baselineFrom?: string;
+  baselineTo?: string;
+  active: boolean;
+};
+
+export async function fetchTrackedListings(
+  tenantId: string,
+): Promise<TrackedListing[]> {
+  const res = await apiClient.get<{
+    success: boolean;
+    listings: TrackedListing[];
+  }>(`${BASE}/listings`, { params: { tenantId } });
+  return res.data?.listings ?? [];
+}

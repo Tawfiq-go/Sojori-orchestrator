@@ -24,13 +24,13 @@ import {
 import { StableChart } from "../../components/dashboard/DashboardV2.components";
 import {
   fetchMarketingConnections,
-  fetchCampaignScores,
+  fetchMarketingDashboard,
   fetchMarketingOverview,
   type MarketingConnection,
   type MarketingOverview,
 } from "./api";
 import CampaignScores from "./CampaignScores";
-import type { CampaignScores as Scores } from "./api";
+import type { MarketingDashboard as Dash } from "./api";
 import { T, cardSx, kickerSx } from "./tokens";
 
 /**
@@ -42,7 +42,6 @@ import { T, cardSx, kickerSx } from "./tokens";
  */
 const NOMMOS = {
   listingId: "6a763507fc05d00aba524a23",
-  ga4PropertyId: "505873069",
 };
 
 const FLAGS: Record<string, string> = {
@@ -170,7 +169,7 @@ export default function MarketingDashboard() {
     null,
   );
   const [overview, setOverview] = useState<MarketingOverview | null>(null);
-  const [scores, setScores] = useState<Scores | null>(null);
+  const [scores, setScores] = useState<Dash | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -201,15 +200,13 @@ export default function MarketingDashboard() {
         if (!alive) return;
         setOverview(data);
 
-        // La contribution est un second appel : il interroge Meta et GA4, et
-        // peut échouer sans que le rapprochement de base en pâtisse.
+        // Lecture du dernier instantané calculé la nuit précédente — jamais
+        // un appel aux régies : la page serait lente et consommerait des
+        // quotas dont le dépassement bloquerait le compte du client.
         try {
-          const s = await fetchCampaignScores({
+          const s = await fetchMarketingDashboard({
             tenantId: active.tenantId,
             listingId: NOMMOS.listingId,
-            from: range.from,
-            to: range.to,
-            ga4PropertyId: NOMMOS.ga4PropertyId,
           });
           if (alive) setScores(s);
         } catch {
