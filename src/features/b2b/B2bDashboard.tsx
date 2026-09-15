@@ -64,9 +64,9 @@ export default function B2bDashboard() {
         </Box>
 
         <Alert severity="info" sx={{ fontSize: 13 }}>
-          <strong>Module en construction.</strong> Seul l'onglet{" "}
-          <strong>Configuration</strong> est disponible — il sert à fixer la
-          politique commerciale avant d'écrire le code qui l'applique.
+          <strong>Module en cours de construction.</strong> La{" "}
+          <strong>Configuration</strong> est enregistrée et lue par le balayage
+          automatique. Les onglets Prospects et Devis restent à venir.
         </Alert>
 
         {/* ── Onglets ── */}

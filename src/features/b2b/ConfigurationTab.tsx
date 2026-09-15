@@ -6,11 +6,12 @@
 // chaque choix est suivi de ce qu'il coûte, parce qu'un client qui coche
 // « bloquer dès le devis » ne pense pas spontanément aux nuits invendues.
 // ════════════════════════════════════════════════════════════════════════════
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   MenuItem,
   Select,
   Slider,
@@ -21,6 +22,9 @@ import {
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
+import { useAuth } from "../../hooks/useAuth";
+import { resolveOwnerId } from "../onboarding/resolveOwnerId";
+import { fetchB2bPolicy, saveB2bPolicy } from "./api";
 import { T, cardSx, kickerSx } from "../marketing/tokens";
 import {
   type B2bPolicy,
@@ -88,9 +92,77 @@ function Consequence({ children }: { children: React.ReactNode }) {
 }
 
 export default function ConfigurationTab() {
+  const { user } = useAuth();
+  // Helper partagé : un compte Owner est son propre établissement, un membre
+  // du staff pointe vers son employeur. Le déduire à la main ici donnerait un
+  // écran vide pour tous les rôles sauf Owner.
+  const ownerId = resolveOwnerId(user) ?? "";
+
   const [policy, setPolicy] = useState<B2bPolicy>(DEFAULT_POLICY);
   const [saved, setSaved] = useState(false);
   const [reminderDraft, setReminderDraft] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  /** `false` = le PM n'a jamais enregistré, l'écran montre les valeurs par défaut. */
+  const [isConfigured, setIsConfigured] = useState(false);
+
+  useEffect(() => {
+    if (!ownerId) {
+      setLoading(false);
+      setLoadError(
+        "Aucun établissement identifié : impossible de charger la politique.",
+      );
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    fetchB2bPolicy(ownerId)
+      .then((stored) => {
+        if (cancelled) return;
+        // On ne garde que les champs du contrat : `ownerId`, `isConfigured` et
+        // `updatedAt` sont des méta-données, pas des réglages.
+        const { ownerId: _o, isConfigured: cfg, updatedAt: _u, ...rest } = stored;
+        setPolicy(rest as B2bPolicy);
+        setIsConfigured(cfg);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setLoadError(
+          e instanceof Error ? e.message : "Chargement de la politique impossible.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ownerId]);
+
+  const persist = useCallback(async () => {
+    if (!ownerId) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const stored = await saveB2bPolicy(ownerId, policy);
+      const { ownerId: _o, isConfigured: cfg, updatedAt: _u, ...rest } = stored;
+      // On réaffiche ce que le SERVEUR a retenu, pas ce qu'on lui a envoyé :
+      // il normalise (jalons dédoublonnés et triés), et masquer cet écart
+      // ferait croire à un enregistrement qui n'a pas eu lieu tel quel.
+      setPolicy(rest as B2bPolicy);
+      setIsConfigured(cfg);
+      setSaved(true);
+    } catch (e: unknown) {
+      setSaveError(
+        e instanceof Error ? e.message : "Enregistrement impossible.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [ownerId, policy]);
 
   /** Ajoute un jalon de relance, sans doublon, du plus lointain au plus proche. */
   const addReminder = () => {
@@ -123,8 +195,32 @@ export default function ConfigurationTab() {
     (v) => v.hours === policy.quoteValidityHours,
   );
 
+  if (loading) {
+    return (
+      <Stack alignItems="center" sx={{ py: 8 }} spacing={1.5}>
+        <CircularProgress size={24} sx={{ color: T.gold }} />
+        <Typography sx={{ fontSize: 13, color: T.mut }}>
+          Chargement de la politique…
+        </Typography>
+      </Stack>
+    );
+  }
+
   return (
     <Stack spacing={2.5}>
+      {loadError && (
+        <Alert severity="error" sx={{ fontSize: 13 }}>
+          {loadError}
+        </Alert>
+      )}
+      {!loadError && !isConfigured && (
+        <Alert severity="info" sx={{ fontSize: 13 }}>
+          Aucune politique enregistrée pour cet établissement : les valeurs
+          ci-dessous sont les réglages par défaut. Elles ne s'appliqueront
+          qu'une fois enregistrées.
+        </Alert>
+      )}
+
       {/* ── Ce que la configuration produit, en une phrase ── */}
       <Box
         sx={{
@@ -578,17 +674,22 @@ export default function ConfigurationTab() {
 
       {/* ── Enregistrement ── */}
       <Box sx={{ ...cardSx, bgcolor: T.bg }}>
-        <Alert severity="warning" sx={{ mb: 2, fontSize: 12.5 }}>
-          <strong>Non connecté au serveur.</strong> Le module B2B back-end
-          n'existe pas encore : ces réglages ne sont pas encore enregistrés ni
-          appliqués. Cet écran sert à valider la forme de la politique avant de
-          la coder — rien de ce qui est saisi ici n'agit sur les calendriers.
+        {saveError && (
+          <Alert severity="error" sx={{ mb: 2, fontSize: 12.5 }}>
+            {saveError}
+          </Alert>
+        )}
+        <Alert severity="info" sx={{ mb: 2, fontSize: 12.5 }}>
+          Cette politique s'applique aux <strong>nouvelles affaires</strong>.
+          Les devis déjà envoyés gardent les conditions annoncées au client :
+          chacun embarque sa propre copie, figée à l'envoi.
         </Alert>
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
           <Button
             variant="contained"
-            disabled={errors.length > 0}
-            onClick={() => setSaved(true)}
+            disabled={errors.length > 0 || saving || !ownerId}
+            onClick={() => void persist()}
+            startIcon={saving ? <CircularProgress size={14} color="inherit" /> : undefined}
             sx={{
               bgcolor: T.gold,
               textTransform: "none",
@@ -596,10 +697,11 @@ export default function ConfigurationTab() {
               "&:hover": { bgcolor: T.goldPure },
             }}
           >
-            Enregistrer la politique
+            {saving ? "Enregistrement…" : "Enregistrer la politique"}
           </Button>
           <Button
             variant="text"
+            disabled={saving}
             onClick={() => {
               setPolicy(DEFAULT_POLICY);
               setSaved(false);
@@ -614,9 +716,9 @@ export default function ConfigurationTab() {
               d'enregistrer.
             </Typography>
           )}
-          {saved && errors.length === 0 && (
+          {saved && !saving && errors.length === 0 && (
             <Typography sx={{ fontSize: 12.5, color: T.ok, fontWeight: 600 }}>
-              Politique retenue (localement).
+              Politique enregistrée.
             </Typography>
           )}
         </Stack>
