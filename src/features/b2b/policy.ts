@@ -46,6 +46,18 @@ export type BalanceDueMode =
   /** X jours avant la date d'arrivée — le plus sûr commercialement. */
   | "days_before_arrival";
 
+/**
+ * Ce que deviennent les réservations quand le devis expire sans acompte.
+ *
+ * Ce n'est pas une question technique mais commerciale, et elle se règle par
+ * PM : `cancel` garde la trace — savoir combien de devis n'aboutissent pas est
+ * la seule façon de mesurer si la politique de blocage est bien réglée, et le
+ * chemin de libération existe déjà (`CalendarBlock` de type
+ * `cancelled_reservation`). `delete` laisse un calendrier propre à ceux que
+ * l'historique encombre.
+ */
+export type OnQuoteExpired = "cancel" | "delete";
+
 /** Que faire du bien quand le solde n'est jamais arrivé. */
 export type OnBalanceMissed =
   /** On rouvre à la vente. L'acompte reste acquis ou non, c'est un autre sujet. */
@@ -79,7 +91,10 @@ export interface B2bPolicy {
   /** Nombre de jours, lu selon `balanceDueMode`. Ignoré si `on_arrival`. */
   balanceDueDays: number;
 
-  /* ---- 5. Défaut de paiement ---- */
+  /* ---- 5. Expiration du devis ---- */
+  onQuoteExpired: OnQuoteExpired;
+
+  /* ---- 6. Défaut de paiement ---- */
   onBalanceMissed: OnBalanceMissed;
   /**
    * Jours de tolérance après l'échéance avant d'appliquer `onBalanceMissed`.
@@ -88,6 +103,16 @@ export interface B2bPolicy {
    * pile le jour de l'échéance, c'est revendre une chambre déjà payée.
    */
   gracePeriodDays: number;
+
+  /* ---- 7. Relances ---- */
+  /**
+   * Jours avant échéance où l'on relance, du plus lointain au plus proche.
+   *
+   * Liste libre : `[7, 2]` relance une semaine puis l'avant-veille. Vide =
+   * aucune relance automatique. Un PM qui traite dix comptes les appelle
+   * lui-même ; celui qui en traite trois cents ne peut pas.
+   */
+  reminderDaysBefore: number[];
 }
 
 /**
@@ -106,8 +131,10 @@ export const DEFAULT_POLICY: B2bPolicy = {
   holdTrigger: "on_deposit",
   balanceDueMode: "days_before_arrival",
   balanceDueDays: 30,
+  onQuoteExpired: "cancel",
   onBalanceMissed: "release",
   gracePeriodDays: 3,
+  reminderDaysBefore: [7, 2],
 };
 
 /** Une incohérence de configuration, formulée pour être lue par le client. */
@@ -127,11 +154,14 @@ export interface PolicyWarning {
 export function validatePolicy(p: B2bPolicy): PolicyWarning[] {
   const out: PolicyWarning[] = [];
 
+  // Seule règle qui reste bloquante : une durée nulle ou négative ne décrit
+  // aucune situation commerciale, elle ferait expirer le devis avant son envoi.
   if (p.quoteValidityHours < 1) {
     out.push({
       field: "quoteValidityHours",
       severity: "error",
-      message: "Un devis doit rester valable au moins une heure.",
+      message:
+        "Une validité nulle ferait expirer le devis avant même son envoi. Minimum : une heure.",
     });
   }
 
@@ -139,9 +169,9 @@ export function validatePolicy(p: B2bPolicy): PolicyWarning[] {
     if (p.depositPercent <= 0 || p.depositPercent >= 100) {
       out.push({
         field: "depositPercent",
-        severity: "error",
+        severity: "warn",
         message:
-          "Un acompte se situe entre 1 et 99 %. Pour 100 %, choisir « paiement intégral ».",
+          "Un acompte se situe habituellement entre 1 et 99 %. Pour exiger la totalité, « paiement intégral » est plus lisible sur le devis.",
       });
     } else if (p.depositPercent < 10) {
       out.push({
@@ -156,9 +186,9 @@ export function validatePolicy(p: B2bPolicy): PolicyWarning[] {
   if (p.depositMode === "none" && p.holdTrigger === "on_deposit") {
     out.push({
       field: "holdTrigger",
-      severity: "error",
+      severity: "warn",
       message:
-        "Aucun acompte n'est demandé : le blocage ne peut pas attendre un versement qui n'arrivera jamais. Choisir « dès l'envoi du devis ».",
+        "Aucun acompte n'est demandé, mais le blocage attend un versement : le bien ne sera jamais bloqué automatiquement. À ne garder que si la confirmation se fait à la main.",
     });
   }
 
@@ -175,8 +205,9 @@ export function validatePolicy(p: B2bPolicy): PolicyWarning[] {
     if (p.balanceDueDays < 1) {
       out.push({
         field: "balanceDueDays",
-        severity: "error",
-        message: "Le délai doit être d'au moins un jour.",
+        severity: "warn",
+        message:
+          "Un délai nul rend le solde exigible immédiatement — c'est un paiement intégral déguisé.",
       });
     }
   }
@@ -204,9 +235,14 @@ export function validatePolicy(p: B2bPolicy): PolicyWarning[] {
 
 /** Résumé en une phrase — ce que le client verra en haut de l'écran. */
 export function describePolicy(p: B2bPolicy): string {
+  const preset = QUOTE_VALIDITY_PRESETS.find(
+    (v) => v.hours === p.quoteValidityHours,
+  );
   const validity =
-    QUOTE_VALIDITY_PRESETS.find((v) => v.hours === p.quoteValidityHours)
-      ?.label ?? `${p.quoteValidityHours} h`;
+    preset?.label ??
+    (p.quoteValidityHours >= 48
+      ? `${Math.round((p.quoteValidityHours / 24) * 10) / 10} jours`
+      : `${p.quoteValidityHours} h`);
 
   const money =
     p.depositMode === "none"

@@ -30,6 +30,15 @@ import {
   validatePolicy,
 } from "./policy";
 
+/** « 240 » → « 10 jours ». Une durée en heures ne se lit pas au-delà de 72. */
+function formatHours(h: number): string {
+  if (!Number.isFinite(h) || h <= 0) return "durée invalide";
+  if (h < 48) return `${h} heure${h > 1 ? "s" : ""}`;
+  const days = h / 24;
+  const rounded = Number.isInteger(days) ? days : Math.round(days * 10) / 10;
+  return `${rounded} jour${rounded > 1 ? "s" : ""}`;
+}
+
 /** Encadré de section — titre, explication, contenu. */
 function Section({
   step,
@@ -81,6 +90,25 @@ function Consequence({ children }: { children: React.ReactNode }) {
 export default function ConfigurationTab() {
   const [policy, setPolicy] = useState<B2bPolicy>(DEFAULT_POLICY);
   const [saved, setSaved] = useState(false);
+  const [reminderDraft, setReminderDraft] = useState("");
+
+  /** Ajoute un jalon de relance, sans doublon, du plus lointain au plus proche. */
+  const addReminder = () => {
+    const d = Number(reminderDraft);
+    if (!Number.isFinite(d) || d < 0 || reminderDraft.trim() === "") return;
+    setPolicy((p) =>
+      p.reminderDaysBefore.includes(d)
+        ? p
+        : {
+            ...p,
+            reminderDaysBefore: [...p.reminderDaysBefore, d].sort(
+              (a, b) => b - a,
+            ),
+          },
+    );
+    setSaved(false);
+    setReminderDraft("");
+  };
 
   const set = <K extends keyof B2bPolicy>(key: K, value: B2bPolicy[K]) => {
     setPolicy((p) => ({ ...p, [key]: value }));
@@ -142,16 +170,24 @@ export default function ConfigurationTab() {
               {v.label}
             </ToggleButton>
           ))}
+        </Stack>
+
+        <Stack direction="row" spacing={1.5} alignItems="center" mt={2}>
           <TextField
             size="small"
             type="number"
-            label="Sur-mesure (h)"
-            value={isCustomValidity ? policy.quoteValidityHours : ""}
+            label="Ou saisir en heures"
+            value={policy.quoteValidityHours}
             onChange={(e) =>
-              set("quoteValidityHours", Number(e.target.value) || 1)
+              set("quoteValidityHours", Number(e.target.value) || 0)
             }
-            sx={{ width: 150 }}
+            sx={{ width: 180 }}
           />
+          <Typography sx={{ fontSize: 12.5, color: T.mut }}>
+            {isCustomValidity
+              ? `Durée sur-mesure — ${formatHours(policy.quoteValidityHours)}.`
+              : "Aucune limite : saisir la durée voulue, même hors des raccourcis."}
+          </Typography>
         </Stack>
 
         <Stack direction="row" alignItems="center" spacing={1} mt={2}>
@@ -196,23 +232,44 @@ export default function ConfigurationTab() {
 
         {policy.depositMode === "deposit" && (
           <Box mt={3} px={1}>
-            <Typography sx={{ fontSize: 13, color: T.ink2, mb: 1 }}>
-              Pourcentage demandé :{" "}
-              <strong style={{ color: T.ink, fontSize: 15 }}>
-                {policy.depositPercent} %
-              </strong>
-            </Typography>
+            <Stack direction="row" spacing={2} alignItems="center" mb={1.5}>
+              <TextField
+                size="small"
+                type="number"
+                label="Acompte (%)"
+                value={policy.depositPercent}
+                onChange={(e) =>
+                  set("depositPercent", Number(e.target.value) || 0)
+                }
+                sx={{ width: 140 }}
+              />
+              <Stack direction="row" spacing={0.75}>
+                {[10, 20, 30, 50, 70].map((v) => (
+                  <Button
+                    key={v}
+                    size="small"
+                    variant={policy.depositPercent === v ? "contained" : "text"}
+                    onClick={() => set("depositPercent", v)}
+                    sx={{
+                      minWidth: 48,
+                      textTransform: "none",
+                      fontSize: 12.5,
+                      ...(policy.depositPercent === v
+                        ? { bgcolor: T.gold, "&:hover": { bgcolor: T.goldPure } }
+                        : { color: T.mut }),
+                    }}
+                  >
+                    {v} %
+                  </Button>
+                ))}
+              </Stack>
+            </Stack>
             <Slider
-              value={policy.depositPercent}
+              value={Math.min(Math.max(policy.depositPercent, 0), 100)}
               onChange={(_, v) => set("depositPercent", v as number)}
-              min={5}
-              max={95}
-              step={5}
-              marks={[
-                { value: 20, label: "20 %" },
-                { value: 50, label: "50 %" },
-                { value: 80, label: "80 %" },
-              ]}
+              min={0}
+              max={100}
+              step={1}
               sx={{ color: T.gold }}
             />
           </Box>
@@ -327,10 +384,49 @@ export default function ConfigurationTab() {
         </Section>
       )}
 
-      {/* ── 5. Défaut de paiement ── */}
+      {/* ── 5. Expiration du devis ── */}
+      <Section
+        step={5}
+        title="Ce que deviennent les réservations quand le devis expire"
+        why="Un devis non signé laisse derrière lui des réservations non payées. Les effacer donne un calendrier propre ; les annuler garde la mémoire de ce qui n'a pas abouti."
+      >
+        <ToggleButtonGroup
+          exclusive
+          value={policy.onQuoteExpired}
+          onChange={(_, v) => v && set("onQuoteExpired", v)}
+          size="small"
+          sx={{ flexWrap: "wrap", gap: 1 }}
+        >
+          <ToggleButton value="cancel" sx={tbSx}>
+            Passer en annulé
+          </ToggleButton>
+          <ToggleButton value="delete" sx={tbSx}>
+            Supprimer
+          </ToggleButton>
+        </ToggleButtonGroup>
+
+        <Consequence>
+          {policy.onQuoteExpired === "cancel" ? (
+            <>
+              Le bien est libéré et la réservation reste visible en annulé.
+              C'est ce qui permet de savoir, dans trois mois, quelle part des
+              devis n'aboutit pas — et donc si le déclencheur de blocage de
+              l'étape 3 est bien réglé.
+            </>
+          ) : (
+            <>
+              Le bien est libéré et la réservation disparaît. Calendrier plus
+              lisible, mais aucun moyen de mesurer le taux de transformation :
+              un devis perdu ne laisse aucune trace.
+            </>
+          )}
+        </Consequence>
+      </Section>
+
+      {/* ── 6. Défaut de paiement ── */}
       {policy.depositMode !== "full" && (
         <Section
-          step={5}
+          step={6}
           title="Si le solde n'arrive jamais"
           why="La question que personne ne se pose avant qu'elle ne se produise. Elle doit être tranchée à l'avance, pas dans l'urgence la veille d'une arrivée."
         >
@@ -369,6 +465,98 @@ export default function ConfigurationTab() {
             {policy.onBalanceMissed === "release"
               ? "Le bien repart à la vente automatiquement. Le sort de l'acompte déjà versé reste une décision commerciale, traitée hors de cet écran."
               : "Le bien reste bloqué et l'affaire remonte en alerte pour arbitrage manuel. À réserver aux comptes stratégiques."}
+          </Consequence>
+        </Section>
+      )}
+
+      {/* ── 7. Relances ── */}
+      {policy.depositMode !== "full" && (
+        <Section
+          step={7}
+          title="Relances avant échéance"
+          why="Combien de jours avant l'échéance du solde on rappelle au client qu'il doit payer. Un PM qui suit dix comptes les appelle lui-même ; celui qui en suit trois cents ne peut pas."
+        >
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap mb={2}>
+            {policy.reminderDaysBefore.length === 0 && (
+              <Typography sx={{ fontSize: 13, color: T.mut, py: 0.75 }}>
+                Aucune relance automatique.
+              </Typography>
+            )}
+            {policy.reminderDaysBefore.map((d) => (
+              <Box
+                key={d}
+                sx={{
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: "999px",
+                  bgcolor: T.goldBg,
+                  border: `1px solid ${T.goldSoft}`,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: T.ink,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75,
+                }}
+              >
+                J−{d}
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={() =>
+                    set(
+                      "reminderDaysBefore",
+                      policy.reminderDaysBefore.filter((x) => x !== d),
+                    )
+                  }
+                  sx={{
+                    border: "none",
+                    bgcolor: "transparent",
+                    cursor: "pointer",
+                    color: T.mut,
+                    fontSize: 15,
+                    lineHeight: 1,
+                    p: 0,
+                  }}
+                >
+                  ×
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <TextField
+              size="small"
+              type="number"
+              label="Ajouter J−"
+              value={reminderDraft}
+              onChange={(e) => setReminderDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addReminder();
+                }
+              }}
+              sx={{ width: 130 }}
+            />
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={addReminder}
+              sx={{
+                textTransform: "none",
+                borderColor: T.line,
+                color: T.ink,
+              }}
+            >
+              Ajouter
+            </Button>
+          </Stack>
+
+          <Consequence>
+            Liste libre, sans limite de nombre. Les relances partent dans
+            l'ordre décroissant — J−7 puis J−2 avec le réglage par défaut.
           </Consequence>
         </Section>
       )}

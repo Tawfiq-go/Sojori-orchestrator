@@ -501,12 +501,12 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
-    group: "Commercial B2B",
+    group: "Sales B2B",
     roles: PM_ROLES,
     items: [
       {
         id: "b2b/overview",
-        label: "Agent B2B",
+        label: "Configuration",
         iconType: "building",
         iconColor: "#1E5B57",
         badge: "Beta",

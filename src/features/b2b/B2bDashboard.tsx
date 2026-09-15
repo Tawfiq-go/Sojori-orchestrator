@@ -50,11 +50,11 @@ export default function B2bDashboard() {
       <Stack spacing={2.5} sx={{ maxWidth: 1080, mx: "auto" }}>
         {/* ── En-tête ── */}
         <Box>
-          <Typography sx={kickerSx}>Commercial</Typography>
+          <Typography sx={kickerSx}>Sales B2B</Typography>
           <Typography
             sx={{ fontSize: 26, fontWeight: 800, color: T.ink, lineHeight: 1.2 }}
           >
-            Agent commercial B2B
+            Configuration commerciale
           </Typography>
           <Typography sx={{ fontSize: 14, color: T.ink2, mt: 0.75, maxWidth: 680 }}>
             Prospection d'entreprises, agences et comptes corporate : qualifier,
