@@ -356,10 +356,20 @@ export default function CampaignPage() {
         />
         <Kpi label="Taux de clic" value={`${campaign.ctr.toFixed(1)} %`} />
         <Kpi
-          label="Réservations attribuées"
-          value={`${campaign.attributed > 0 ? "+" : ""}${campaign.attributed.toFixed(1)}`}
-          hint={`sur ${campaign.reservations} observées`}
-          tone={campaign.attributed > 0 ? "ok" : "crit"}
+          label="Écart à la normale"
+          value={campaign.lift == null ? "—" : `×${campaign.lift.toFixed(1)}`}
+          hint={
+            campaign.lift == null
+              ? `${campaign.reservations} réservations observées`
+              : `${(campaign.liftPercent ?? 0) > 0 ? "+" : ""}${campaign.liftPercent} % · ${campaign.reservations} observées contre ${campaign.expectedWithoutAds.toFixed(1)} attendues`
+          }
+          tone={
+            campaign.lift == null
+              ? undefined
+              : campaign.lift > 1
+                ? "ok"
+                : "crit"
+          }
         />
         <Kpi
           label="Coût sur CA généré"
@@ -435,8 +445,12 @@ export default function CampaignPage() {
             v={campaign.expectedWithoutAds.toFixed(1)}
           />
           <Row
-            k="Attribué à la publicité"
-            v={`${campaign.attributed > 0 ? "+" : ""}${campaign.attributed.toFixed(1)}`}
+            k="Écart à la normale"
+            v={
+              campaign.lift == null
+                ? "—"
+                : `×${campaign.lift.toFixed(1)}  (${(campaign.liftPercent ?? 0) > 0 ? "+" : ""}${campaign.liftPercent} %)`
+            }
             bold
           />
           <Row k="Chiffre d'affaires" v={mad(campaign.revenueMad)} />

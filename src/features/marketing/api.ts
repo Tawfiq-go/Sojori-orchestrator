@@ -146,8 +146,18 @@ export type CampaignScore = {
   averageBasketMad: number;
 
   expectedWithoutAds: number;
+  /**
+   * Écart brut en réservations. **Ne jamais l'afficher seul** : un nombre
+   * négatif se lit comme « la publicité a détruit des réservations », ce qui
+   * n'a pas de sens. Sert au calcul du coût par réservation ; pour
+   * l'affichage, préférer `lift` et `liftPercent`.
+   */
   attributed: number;
   attributedShare: number;
+  /** Observé ÷ attendu : `2.6` = « 2,6 fois plus que d'habitude ». */
+  lift?: number | null;
+  /** Le même écart en pourcentage : `+155` ou `-79`. */
+  liftPercent?: number | null;
 
   costPerReservationMad: number;
   /** `null` quand la contribution est nulle ou négative : diviser n'a pas de sens. */

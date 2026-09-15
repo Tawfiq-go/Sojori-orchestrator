@@ -218,7 +218,7 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
               <Head num>Résa</Head>
               <Head num>OTA</Head>
               <Head num>Sans pub</Head>
-              <Head num>Attribué</Head>
+              <Head num>Écart</Head>
               <Head num>Coût/attr.</Head>
               <Head num>% du CA</Head>
               <Head>Verdict</Head>
@@ -274,9 +274,27 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                   <Cell num color={T.mut}>
                     {c.expectedWithoutAds.toFixed(1)}
                   </Cell>
-                  <Cell num bold color={c.attributed > 0 ? T.ok : T.crit}>
-                    {c.attributed > 0 ? "+" : ""}
-                    {c.attributed.toFixed(1)}
+                  <Cell
+                    num
+                    bold
+                    color={c.lift == null ? T.mut : c.lift > 1 ? T.ok : T.crit}
+                  >
+                    {/* Un multiple, pas un décompte : « −3 réservations » se
+                        lirait comme « la publicité en a détruit trois ». */}
+                    {c.lift == null ? (
+                      "—"
+                    ) : (
+                      <>
+                        ×{c.lift.toFixed(1)}
+                        <Box
+                          component="span"
+                          sx={{ fontSize: 11, color: T.mut, ml: 0.5 }}
+                        >
+                          {(c.liftPercent ?? 0) > 0 ? "+" : ""}
+                          {c.liftPercent} %
+                        </Box>
+                      </>
+                    )}
                   </Cell>
                   <Cell num>
                     {c.costPerAttributedMad === null
