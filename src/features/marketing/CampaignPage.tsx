@@ -90,20 +90,67 @@ function Kpi({
   );
 }
 
+/**
+ * Une ligne libellé / valeur.
+ *
+ * Une grille à deux colonnes plutôt qu'un `Stack` en ligne : ce dernier passe
+ * à la ligne quand la largeur manque, et le libellé se retrouve seul au-dessus
+ * de son chiffre. La lecture se perd — on ne sait plus quelle valeur appartient
+ * à quoi. La grille garde les deux côte à côte à toute largeur, le libellé
+ * passant sur deux lignes s'il le faut.
+ *
+ * Le filet pointillé entre les deux guide l'œil jusqu'au chiffre, comme dans
+ * un relevé.
+ */
 function Row({ k, v, bold }: { k: string; v: string; bold?: boolean }) {
   return (
-    <Stack direction="row" justifyContent="space-between" sx={{ py: 0.55 }}>
-      <Typography sx={{ fontSize: 13, color: T.ink2 }}>{k}</Typography>
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: "1fr auto",
+        alignItems: "baseline",
+        gap: 1,
+        py: 0.65,
+        borderBottom: `1px solid ${T.line2}`,
+        "&:last-of-type": { borderBottom: "none" },
+      }}
+    >
       <Typography
         sx={{
-          fontSize: 13,
+          fontSize: 12.5,
+          color: T.ink2,
+          lineHeight: 1.35,
+          position: "relative",
+          overflow: "hidden",
+          "&::after": {
+            content: '""',
+            position: "absolute",
+            bottom: "0.28em",
+            ml: 0.75,
+            width: "100%",
+            borderBottom: `1px dotted ${T.line}`,
+          },
+        }}
+      >
+        <Box
+          component="span"
+          sx={{ position: "relative", bgcolor: T.card, pr: 0.25 }}
+        >
+          {k}
+        </Box>
+      </Typography>
+      <Typography
+        sx={{
+          fontSize: bold ? 14 : 13,
           fontFamily: T.mono,
-          fontWeight: bold ? 650 : 400,
+          fontWeight: bold ? 650 : 450,
+          color: bold ? T.ink : T.ink2,
+          whiteSpace: "nowrap",
         }}
       >
         {v}
       </Typography>
-    </Stack>
+    </Box>
   );
 }
 
@@ -348,12 +395,17 @@ export default function CampaignPage() {
         </Typography>
       </Box>
 
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        spacing={2}
-        sx={{ mb: 2.5 }}
+      <Box
+        sx={{
+          display: "grid",
+          // Trois colonnes quand la place le permet, deux puis une sinon —
+          // jamais de colonne si étroite que le libellé passe sous sa valeur.
+          gridTemplateColumns: "repeat(auto-fit, minmax(270px, 1fr))",
+          gap: 2,
+          mb: 2.5,
+        }}
       >
-        <Box sx={{ ...cardSx, flex: 1 }}>
+        <Box sx={{ ...cardSx }}>
           <Typography sx={{ ...kickerSx, mb: 1 }}>Diffusion</Typography>
           <Row k="Dépense" v={mad(campaign.spendMad)} bold />
           <Row k="Impressions" v={nf.format(campaign.impressions)} />
@@ -364,7 +416,7 @@ export default function CampaignPage() {
           <Row k="Coût pour mille" v={`${campaign.cpm.toFixed(1)} MAD`} />
         </Box>
 
-        <Box sx={{ ...cardSx, flex: 1 }}>
+        <Box sx={{ ...cardSx }}>
           <Typography sx={{ ...kickerSx, mb: 1 }}>
             Réservations {FLAG[campaign.country] ?? ""} {campaign.country}
           </Typography>
@@ -391,7 +443,7 @@ export default function CampaignPage() {
           <Row k="Panier moyen" v={mad(campaign.averageBasketMad)} />
         </Box>
 
-        <Box sx={{ ...cardSx, flex: 1 }}>
+        <Box sx={{ ...cardSx }}>
           <Typography sx={{ ...kickerSx, mb: 1 }}>Activité du site</Typography>
           {campaign.ga4Sessions !== undefined ? (
             <>
@@ -432,7 +484,7 @@ export default function CampaignPage() {
             </Typography>
           )}
         </Box>
-      </Stack>
+      </Box>
 
       <Box sx={{ ...cardSx, p: 0, overflow: "hidden" }}>
         <Box sx={{ px: 2.5, pt: 2.5, pb: 1 }}>
