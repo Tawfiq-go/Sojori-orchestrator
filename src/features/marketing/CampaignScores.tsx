@@ -215,7 +215,8 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
               <Head num>Dépense</Head>
               <Head num>CTR</Head>
               <Head num>Durée sess.</Head>
-              <Head num>Panier/sess.</Head>
+              <Head num>Paniers</Head>
+              <Head num>Taux</Head>
               <Head num>Résa</Head>
               <Head num>OTA</Head>
               <Head num>Sans pub</Head>
@@ -275,6 +276,13 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                     // villa : l'intention la plus proche d'une réservation que
                     // le site sache mesurer.
                   >
+                    {typeof c.marketAddToCarts === "number"
+                      ? c.marketAddToCarts
+                      : "—"}
+                  </Cell>
+                  <Cell num color={T.mut}>
+                    {/* Paniers rapportés aux sessions : un taux se compare
+                        entre marchés de tailles différentes, un nombre non. */}
                     {typeof c.marketAddToCartRate === "number"
                       ? `${c.marketAddToCartRate.toFixed(2)} %`
                       : "—"}

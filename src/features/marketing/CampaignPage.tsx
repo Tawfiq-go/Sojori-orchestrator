@@ -490,16 +490,21 @@ export default function CampaignPage() {
                     Marché {campaign.country}, tous canaux
                   </Typography>
                   <Row
-                    k="Paniers pour cent sessions"
+                    k="Paniers pendant la diffusion"
+                    v={String(campaign.marketAddToCarts)}
+                    bold
+                  />
+                  <Row
+                    k="Taux (paniers / sessions)"
                     v={`${(campaign.marketAddToCartRate ?? 0).toFixed(2)} %`}
                     bold
                   />
                   <Row
-                    k="Paniers pendant la diffusion"
-                    v={String(campaign.marketAddToCarts)}
+                    k="Paniers période de référence"
+                    v={String(campaign.marketAddToCartsBefore ?? 0)}
                   />
                   <Row
-                    k="Taux sur la période de référence"
+                    k="Taux période de référence"
                     v={`${(campaign.marketAddToCartRateBefore ?? 0).toFixed(2)} %`}
                   />
                 </>
