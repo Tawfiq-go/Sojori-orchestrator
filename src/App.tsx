@@ -330,6 +330,10 @@ const MarketingDashboardPage = lazyWithReload(
 const MarketingCampaignPage = lazyWithReload(
   () => import("./features/marketing/CampaignPage"),
 );
+// Agent commercial B2B — prospection entreprises (module en construction).
+const B2bDashboardPage = lazyWithReload(
+  () => import("./features/b2b/B2bDashboard"),
+);
 const ChannelsPage = lazyWithReload(() =>
   import("./pages/ChannelsPage").then((module) => ({
     default: module.ChannelsPage,
@@ -1301,6 +1305,16 @@ function App() {
                     element={
                       <LazyRoute>
                         <MarketingCampaignPage />
+                      </LazyRoute>
+                    }
+                  />
+
+                  {/* Agent commercial B2B — devis, acomptes, blocage (srv-user) */}
+                  <Route
+                    path="/b2b"
+                    element={
+                      <LazyRoute>
+                        <B2bDashboardPage />
                       </LazyRoute>
                     }
                   />

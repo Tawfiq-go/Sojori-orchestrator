@@ -501,6 +501,20 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
+    group: "Commercial B2B",
+    roles: PM_ROLES,
+    items: [
+      {
+        id: "b2b/overview",
+        label: "Agent B2B",
+        iconType: "building",
+        iconColor: "#1E5B57",
+        badge: "Beta",
+        description: "Entreprises, devis et acomptes — configuration",
+      },
+    ],
+  },
+  {
     group: "Direct booking",
     roles: PM_ROLES,
     items: [
