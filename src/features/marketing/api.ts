@@ -263,6 +263,22 @@ export type ScoredCampaign = {
   costPerAttributedMad: number | null;
   costShareOfRevenue: number | null;
 
+  /**
+   * Comportement du marché visé sur le site, que la campagne porte ou non un
+   * paramètre d'URL — ce qui couvre les campagnes invisibles autrement.
+   */
+  marketSessions?: number;
+  marketSessionsBefore?: number;
+  marketAverageSessionDuration?: number;
+  /**
+   * Ajouts au panier du marché. Signal d'intention le plus proche d'une
+   * réservation : dates et villa choisies. Ces visiteurs n'achèteront pas ici
+   * — le site enregistre trois achats pour quarante-deux mille visiteurs —
+   * mais ils sont prêts à réserver.
+   */
+  marketAddToCarts?: number;
+  marketAddToCartsBefore?: number;
+
   ga4Sessions?: number;
   ga4EngagedSessions?: number;
   /**

@@ -483,12 +483,30 @@ export default function CampaignPage() {
                 k="Achats sur le site"
                 v={String(campaign.ga4Purchases ?? 0)}
               />
+              {typeof campaign.marketAddToCarts === "number" && (
+                <>
+                  <Box sx={{ height: 12 }} />
+                  <Typography sx={{ ...kickerSx, mb: 0.5 }}>
+                    Marché {campaign.country}, tous canaux
+                  </Typography>
+                  <Row
+                    k="Paniers pendant la diffusion"
+                    v={String(campaign.marketAddToCarts)}
+                    bold
+                  />
+                  <Row
+                    k="Paniers période de référence"
+                    v={String(campaign.marketAddToCartsBefore ?? 0)}
+                  />
+                </>
+              )}
               <Typography
                 sx={{ fontSize: 11.5, color: T.mut, mt: 1, lineHeight: 1.5 }}
               >
                 Le site ne mesure pas les réservations — la plupart passent par
-                une plateforme externe. Ces chiffres disent si le trafic acheté
-                regarde quelque chose.
+                une plateforme externe. Un ajout au panier dit en revanche que
+                le visiteur a choisi ses dates et sa villa : c'est l'intention
+                la plus proche d'une réservation que le site sache mesurer.
               </Typography>
             </>
           ) : (

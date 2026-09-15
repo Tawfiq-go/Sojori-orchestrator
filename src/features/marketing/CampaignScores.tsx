@@ -215,6 +215,7 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
               <Head num>Dépense</Head>
               <Head num>CTR</Head>
               <Head num>Durée sess.</Head>
+              <Head num>Paniers</Head>
               <Head num>Résa</Head>
               <Head num>OTA</Head>
               <Head num>Sans pub</Head>
@@ -265,6 +266,17 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                   >
                     {c.ga4AverageSessionDuration !== undefined
                       ? `${Math.round(c.ga4AverageSessionDuration)} s`
+                      : "—"}
+                  </Cell>
+                  <Cell
+                    num
+                    color={T.mut}
+                    // Le panier dit que quelqu'un a choisi ses dates et sa
+                    // villa : l'intention la plus proche d'une réservation que
+                    // le site sache mesurer.
+                  >
+                    {typeof c.marketAddToCarts === "number"
+                      ? c.marketAddToCarts
                       : "—"}
                   </Cell>
                   <Cell num>{c.reservations}</Cell>
