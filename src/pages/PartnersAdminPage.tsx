@@ -951,7 +951,7 @@ export function PartnersAdminPage() {
             collection: needsRemote && serviceDraft.payment.collection === 'deposit' ? 'deposit' : 'full',
             depositPercent:
               needsRemote && serviceDraft.payment.collection === 'deposit'
-                ? Number(serviceDraft.payment.depositPercent) || 30
+                ? Number(serviceDraft.payment.depositPercent) || 20
                 : null,
             timing: (serviceDraft.payment.timing === 'instant'
               ? 'instant'
@@ -2326,13 +2326,13 @@ export function PartnersAdminPage() {
                       {serviceDraft.payment.collection === 'deposit' ? (
                         <Field
                           label="% acompte"
-                          value={String(serviceDraft.payment.depositPercent ?? 30)}
+                          value={String(serviceDraft.payment.depositPercent ?? 20)}
                           onChange={(v) =>
                             setServiceDraft((d) => ({
                               ...d,
                               payment: {
                                 ...d.payment,
-                                depositPercent: Number(v) || 30,
+                                depositPercent: Number(v) || 20,
                               },
                             }))
                           }

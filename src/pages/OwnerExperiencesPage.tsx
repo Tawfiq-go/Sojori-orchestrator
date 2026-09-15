@@ -602,7 +602,15 @@ export function OwnerExperiencesPage() {
     }));
   }, [filtered, cityName, groupBy]);
 
-  const openNew = () => {
+  /**
+   * Creer une activite — le type est fixe ICI, a la creation.
+   *
+   * Il n'est plus modifiable ensuite : une navette n'est pas une experience
+   * comme les autres (menu WhatsApp dedie, trajets, sens aller/retour), et
+   * rebasculer le type d'un service existant le sortait de son menu en
+   * changeant sa categorie au passage (demande Tawfiq 12/09).
+   */
+  const openNew = (kind: Draft['kind'] = 'experience') => {
     if (!canEditCatalog) return;
     if (!partners.length) {
       toast.error('Déclarez d’abord une fiche provider (Expériences → Ma fiche)');
@@ -614,6 +622,8 @@ export function OwnerExperiencesPage() {
     const preferred =
       partners.find((p) => p.active !== false)?.id || partners[0]?.id || '';
     draft0.partnerId = preferred;
+    draft0.kind = kind;
+    if (kind === 'transport') draft0.category = 'Mobilité';
     setDraft(draft0);
     setFormTab('config');
   };
@@ -682,7 +692,7 @@ export function OwnerExperiencesPage() {
       collection: needsRemote && draft.payment.collection === 'deposit' ? 'deposit' : 'full',
       depositPercent:
         needsRemote && draft.payment.collection === 'deposit'
-          ? Number(draft.payment.depositPercent) || 30
+          ? Number(draft.payment.depositPercent) || 20
           : null,
       timing: draft.payment.timing === 'on_confirmation' ? 'on_confirmation' : 'instant',
       linkTtlHours: needsRemote
@@ -1019,9 +1029,14 @@ export function OwnerExperiencesPage() {
             </>
           ) : null}
           {canEditCatalog ? (
-            <button type="button" style={btnGold()} onClick={openNew}>
-              + Nouvelle expérience
-            </button>
+            <>
+              <button type="button" style={btnOutline()} onClick={() => openNew('transport')}>
+                + Nouvelle navette
+              </button>
+              <button type="button" style={btnGold()} onClick={() => openNew('experience')}>
+                + Nouvelle expérience
+              </button>
+            </>
           ) : null}
         </div>
       </div>
@@ -1484,37 +1499,17 @@ export function OwnerExperiencesPage() {
             </section>
             <section style={{ marginBottom: 22 }}>
               <div className="pa-lbl">Type</div>
+              {/*
+                Le type est fixe a la creation et ne se change plus ensuite :
+                repasser une navette en « experience » la sortait du menu
+                Navette du chatbot et changeait sa categorie au passage
+                (demande Tawfiq 12/09). Pour creer une navette : bouton
+                « + Nouvelle navette » du catalogue.
+              */}
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                {([
-                  { v: 'experience' as const, l: '✨ Expérience' },
-                  { v: 'transport' as const, l: '🚐 Transport / Navette' },
-                ]).map((t) => (
-                  <button
-                    key={t.v}
-                    type="button"
-                    style={draft.kind === t.v ? btnGold({}) : btnOutline({})}
-                    onClick={() =>
-                      setDraft((d) => ({
-                        ...d,
-                        kind: t.v,
-                        category:
-                          t.v === 'transport'
-                            ? 'Mobilité'
-                            : t.v === 'room_service'
-                              ? 'Food'
-                              : d.category === 'Mobilité' || d.category === 'Food'
-                                ? 'Aventure'
-                                : d.category,
-                        optionGroups:
-                          t.v === 'room_service' && !d.optionGroups.length
-                            ? [emptyOptionGroup()]
-                            : d.optionGroups,
-                      }))
-                    }
-                  >
-                    {t.l}
-                  </button>
-                ))}
+                <span style={{ ...btnGold({}), cursor: 'default' }}>
+                  {draft.kind === 'transport' ? '🚐 Transport / Navette' : '✨ Expérience'}
+                </span>
               </div>
               {draft.kind === 'room_service' ? (
                 <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
@@ -2205,11 +2200,11 @@ export function OwnerExperiencesPage() {
                       min={1}
                       max={100}
                       placeholder="% acompte"
-                      value={draft.payment.depositPercent ?? 30}
+                      value={draft.payment.depositPercent ?? 20}
                       onChange={(e) =>
                         setDraft((d) => ({
                           ...d,
-                          payment: { ...d.payment, depositPercent: Number(e.target.value) || 30 },
+                          payment: { ...d.payment, depositPercent: Number(e.target.value) || 20 },
                         }))
                       }
                     />
