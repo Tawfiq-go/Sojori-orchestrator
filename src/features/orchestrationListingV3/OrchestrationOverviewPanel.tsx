@@ -1386,12 +1386,14 @@ export default function OrchestrationOverviewPanel({
             toast.info('Déjà aligné sur l’activation propriétaire');
             return;
           }
-          const next = await saveListingServiceActivation(listingId, patch);
-          setActivationStatus(next.services ?? []);
-          // Sync capability decisions both ways (ON and OFF). Direct put — not
-          // saveCapPatch — so the activation gate does not block on stale OFF.
+          // Sync capability decisions both ways (ON and OFF), by direct put.
+          // Ordre imposé par le garde-fou serveur (assertCapabilitiesAllowedForSave,
+          // qui relit l'activation FRAÎCHE) : au OFF, envoyer les decisions AVANT
+          // de couper l'activation, sinon le PUT est refusé — c'était le 500
+          // silencieux vu sur Test majorelle le 15/09. Au ON, l'inverse.
           const def = getCapabilityDefinition(capKey);
-          if (def) {
+          const syncDecisions = async () => {
+            if (!def) return;
             await listingsService.putListingOrchestration(listingId, {
               capabilities: {
                 [capKey]: {
@@ -1410,7 +1412,11 @@ export default function OrchestrationOverviewPanel({
                 },
               },
             });
-          }
+          };
+          if (!value) await syncDecisions();
+          const next = await saveListingServiceActivation(listingId, patch);
+          setActivationStatus(next.services ?? []);
+          if (value) await syncDecisions();
           toast.success(value ? 'Service activé pour cette annonce' : 'Service désactivé pour cette annonce');
           setDoc((prev) => {
             if (!prev) return prev;
