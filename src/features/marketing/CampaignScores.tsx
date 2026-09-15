@@ -1,6 +1,7 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Box, Chip, Collapse, Stack, Tooltip, Typography } from "@mui/material";
-import type { MarketingDashboard, ScoredCampaign } from "./api";
+import type { CampaignDay, MarketingDashboard, ScoredCampaign } from "./api";
+import { fetchCampaignDays } from "./api";
 import { T, cardSx, kickerSx } from "./tokens";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -129,8 +130,142 @@ function Head({ children, num }: { children: React.ReactNode; num?: boolean }) {
   );
 }
 
+/**
+ * La diffusion jour par jour.
+ *
+ * Répond à « qu'a donné ma publicité hier » — mais seulement pour ce qui se
+ * compte au jour. La contribution n'y figure pas : un marché produit ici entre
+ * zéro et quatre réservations quotidiennes, et la répartir jour par jour
+ * afficherait une précision qui n'existe pas.
+ */
+function DailyBreakdown({
+  tenantId,
+  listingId,
+  campaignId,
+}: {
+  tenantId: string;
+  listingId: string;
+  campaignId: string;
+}) {
+  const [days, setDays] = useState<CampaignDay[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetchCampaignDays({ tenantId, listingId, campaignId })
+      .then((d) => alive && setDays(d.days))
+      .catch(() => alive && setFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, [tenantId, listingId, campaignId]);
+
+  if (failed) {
+    return (
+      <Typography sx={{ fontSize: 12.5, color: T.mut }}>
+        Détail quotidien indisponible.
+      </Typography>
+    );
+  }
+  if (!days) {
+    return (
+      <Typography sx={{ fontSize: 12.5, color: T.mut }}>Chargement…</Typography>
+    );
+  }
+  if (!days.length) {
+    return (
+      <Typography sx={{ fontSize: 12.5, color: T.mut }}>
+        Aucune diffusion enregistrée sur la période.
+      </Typography>
+    );
+  }
+
+  const maxSpend = Math.max(...days.map((d) => d.spendMad), 1);
+
+  return (
+    <Box sx={{ overflowX: "auto" }}>
+      <Box
+        component="table"
+        sx={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}
+      >
+        <Box component="thead">
+          <Box component="tr">
+            <Head>Jour</Head>
+            <Head num>Dépense</Head>
+            <Head num>Impressions</Head>
+            <Head num>Clics</Head>
+            <Head num>CTR</Head>
+            <Head num>CPC</Head>
+            <Head>&nbsp;</Head>
+          </Box>
+        </Box>
+        <Box component="tbody">
+          {days.map((d) => (
+            <Box component="tr" key={d.day}>
+              <Cell>
+                <Box component="span" sx={{ fontSize: 12.5 }}>
+                  {d.day.slice(5)}
+                </Box>
+              </Cell>
+              <Cell num>{nf.format(Math.round(d.spendMad))}</Cell>
+              <Cell num color={T.mut}>
+                {nf.format(d.impressions)}
+              </Cell>
+              <Cell num>{nf.format(d.clicks)}</Cell>
+              <Cell
+                num
+                bold
+                color={d.ctr >= 5 ? T.ok : d.ctr < 2 ? T.crit : T.ink}
+              >
+                {d.ctr.toFixed(1)} %
+              </Cell>
+              <Cell num color={T.mut}>
+                {d.cpc.toFixed(2)}
+              </Cell>
+              <Cell width="26%">
+                <Box
+                  sx={{
+                    height: 6,
+                    borderRadius: "3px",
+                    bgcolor: T.line2,
+                    overflow: "hidden",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      height: "100%",
+                      width: `${(d.spendMad / maxSpend) * 100}%`,
+                      bgcolor: T.gold,
+                    }}
+                  />
+                </Box>
+              </Cell>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+      <Typography
+        sx={{ fontSize: 11.5, color: T.mut, mt: 1.2, lineHeight: 1.5 }}
+      >
+        La diffusion se lit au jour — c'est ce que la régie facture. Les
+        réservations, non : ce marché en produit entre zéro et quatre par jour,
+        et les répartir afficherait une précision qui n'existe pas. La
+        contribution ci-dessus porte sur la semaine.
+      </Typography>
+    </Box>
+  );
+}
+
 /** Détail d'une campagne — ouvert au clic sur sa ligne. */
-function Detail({ c }: { c: ScoredCampaign }) {
+function Detail({
+  c,
+  tenantId,
+  listingId,
+}: {
+  c: ScoredCampaign;
+  tenantId: string;
+  listingId: string;
+}) {
   const rows: Array<[string, string, string?]> = [
     ["Dépense", mad(c.spendMad)],
     ["Impressions", nf.format(c.impressions)],
@@ -208,8 +343,12 @@ function Detail({ c }: { c: ScoredCampaign }) {
                   ["Sessions", nf.format(c.ga4Sessions ?? 0)],
                   ["Sessions engagées", nf.format(c.ga4EngagedSessions ?? 0)],
                   [
-                    "Engagement / session",
-                    `${c.ga4EngagementPerSession ?? 0} s`,
+                    "Durée moyenne d'une session",
+                    `${c.ga4AverageSessionDuration ?? 0} s`,
+                  ],
+                  [
+                    "Sessions réellement investies",
+                    `${c.ga4EngagementRate ?? 0} %`,
                   ],
                   ["Ajouts au panier", String(c.ga4AddToCarts ?? 0)],
                   ["Achats sur le site", String(c.ga4Purchases ?? 0)],
@@ -263,6 +402,17 @@ function Detail({ c }: { c: ScoredCampaign }) {
         <Typography sx={{ fontSize: 12.5, color: T.ink2, mt: 0.3 }}>
           {c.reason}
         </Typography>
+      </Box>
+
+      <Box sx={{ mt: 2.5 }}>
+        <Typography sx={{ ...kickerSx, mb: 1 }}>
+          Diffusion jour par jour
+        </Typography>
+        <DailyBreakdown
+          tenantId={tenantId}
+          listingId={listingId}
+          campaignId={c.campaignId}
+        />
       </Box>
     </Box>
   );
@@ -352,7 +502,7 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
               <Head>Période</Head>
               <Head num>Dépense</Head>
               <Head num>CTR</Head>
-              <Head num>Engag.</Head>
+              <Head num>Durée sess.</Head>
               <Head num>Résa</Head>
               <Head num>OTA</Head>
               <Head num>Sans pub</Head>
@@ -393,16 +543,16 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                     <Cell
                       num
                       color={
-                        // Sous trois secondes, le visiteur n'a rien eu le
-                        // temps de voir : le signalement vaut avertissement.
-                        c.ga4EngagementPerSession !== undefined &&
-                        c.ga4EngagementPerSession < 3
+                        // Sous trente secondes, le visiteur n'a guère eu le
+                        // temps de lire : le signalement vaut avertissement.
+                        c.ga4AverageSessionDuration !== undefined &&
+                        c.ga4AverageSessionDuration < 30
                           ? T.crit
                           : T.ink
                       }
                     >
-                      {c.ga4EngagementPerSession !== undefined
-                        ? `${c.ga4EngagementPerSession} s`
+                      {c.ga4AverageSessionDuration !== undefined
+                        ? `${Math.round(c.ga4AverageSessionDuration)} s`
                         : "—"}
                     </Cell>
                     <Cell num>{c.reservations}</Cell>
@@ -451,7 +601,11 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                   <Box component="tr">
                     <Box component="td" colSpan={12} sx={{ p: 0, border: 0 }}>
                       <Collapse in={isOpen} unmountOnExit>
-                        <Detail c={c} />
+                        <Detail
+                          c={c}
+                          tenantId={data.tenantId}
+                          listingId={data.listingId}
+                        />
                       </Collapse>
                     </Box>
                   </Box>

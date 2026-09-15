@@ -255,7 +255,15 @@ export type ScoredCampaign = {
 
   ga4Sessions?: number;
   ga4EngagedSessions?: number;
-  ga4EngagementPerSession?: number;
+  /**
+   * Durée réelle d'une session, en secondes — pas le temps d'onglet actif.
+   * Ce dernier ne démarre quasiment jamais dans le navigateur intégré de
+   * Facebook et rendait une seconde là où la session en dure quatre-vingt-
+   * quinze.
+   */
+  ga4AverageSessionDuration?: number;
+  /** Part des sessions que Google classe comme réellement investies. */
+  ga4EngagementRate?: number;
   ga4AddToCarts?: number;
   ga4Purchases?: number;
 
@@ -332,4 +340,57 @@ export async function fetchTrackedListings(
     listings: TrackedListing[];
   }>(`${BASE}/listings`, { params: { tenantId } });
   return res.data?.listings ?? [];
+}
+
+/**
+ * Détail d'une campagne au jour le jour.
+ *
+ * La diffusion se lit quotidiennement — Meta facture par jour. La
+ * contribution, non : sur cet établissement un marché produit entre zéro et
+ * quatre réservations par jour, et l'écart face à une ligne de base n'y
+ * signifie rien. Elle reste celle de la fenêtre, rendue à part.
+ */
+export type CampaignDay = {
+  day: string;
+  spendMad: number;
+  impressions: number;
+  clicks: number;
+  reach: number;
+  ctr: number;
+  cpc: number;
+};
+
+export type CampaignDays = {
+  listingId: string;
+  campaignId: string;
+  campaignName: string;
+  country: string | null;
+  days: CampaignDay[];
+  window: {
+    day: string;
+    from: string;
+    to: string;
+    reservations: number;
+    otaReservations: number;
+    expectedWithoutAds: number;
+    attributed: number;
+    costPerAttributedMad: number | null;
+    costShareOfRevenue: number | null;
+    verdict: ScoredCampaign["verdict"];
+    confidence: ScoredCampaign["confidence"];
+  } | null;
+};
+
+export async function fetchCampaignDays(params: {
+  tenantId: string;
+  listingId: string;
+  campaignId: string;
+  from?: string;
+  to?: string;
+}): Promise<CampaignDays> {
+  const res = await apiClient.get<{ success: boolean; data: CampaignDays }>(
+    `${BASE}/campaign-days`,
+    { params },
+  );
+  return res.data.data;
 }

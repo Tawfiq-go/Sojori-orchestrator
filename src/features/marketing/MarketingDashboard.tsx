@@ -80,33 +80,6 @@ function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Bandeau permanent : ce que les chiffres disent, et ce qu'ils ne disent pas. */
-function AttributionNotice({ level }: { level: number }) {
-  if (level >= 1) return null;
-  return (
-    <Box
-      sx={{
-        ...cardSx,
-        borderLeft: `3px solid ${T.warn}`,
-        bgcolor: T.warnBg,
-        mb: 2.5,
-        p: 2,
-      }}
-    >
-      <Typography sx={{ fontWeight: 700, fontSize: 14, color: T.ink, mb: 0.5 }}>
-        Signal observé, pas attribution démontrée
-      </Typography>
-      <Typography sx={{ fontSize: 13.5, color: T.ink2, lineHeight: 1.6 }}>
-        Les réservations affichées sont celles créées pendant la période — rien
-        ne prouve qu'elles viennent de la publicité. Les campagnes n'ont pas de
-        lien de suivi, et la majorité des réservations arrive par une plateforme
-        externe où la publicité est invisible. Ces chiffres se lisent comme une
-        coïncidence mesurée.
-      </Typography>
-    </Box>
-  );
-}
-
 function Kpi({
   label,
   value,
@@ -298,8 +271,6 @@ export default function MarketingDashboard() {
 
       {overview && (
         <>
-          <AttributionNotice level={overview.attributionLevel} />
-
           <Box
             sx={{
               display: "grid",
