@@ -2780,8 +2780,9 @@ export default function OrchestrationOverviewPanel({
           >
             {group.id === 'concierge' && isListingScope ? (
               <Typography sx={{ fontSize: 11.5, color: V3.t3, mb: 1.25, lineHeight: 1.45 }}>
-                Les expériences (J3) et la <b>navette</b> (expérience Transport) se cochent
-                dans l’onglet listing <b>Expériences</b>. Ici : Courses uniquement — le
+                Les expériences (J3) et la <b>navette</b> se cochent dans l’onglet listing
+                <b> Expériences → Catalogue partagé</b> (la navette se crée d’abord dans
+                Expériences → Catalogue). Ici : le suivi du vol (Transport) et les Courses — le
                 transport legacy est remplacé.
               </Typography>
             ) : null}
@@ -3695,9 +3696,11 @@ export default function OrchestrationOverviewPanel({
                       return (
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                           <Typography sx={{ fontSize: 13, color: V3.t3 }}>
-                            Les destinations et prix de la navette se gèrent dans l’onglet
-                            listing <b>Expériences</b>. Ici : la politique de <b>suivi du vol</b> —
-                            chaque vérification a un coût, chaque client choisit les siennes.
+                            La navette se crée dans <b>Expériences → Catalogue</b> (« + Nouvelle
+                            navette » : destinations, prix, paiement), puis se coche sur ce listing
+                            dans l’onglet <b>Expériences → Catalogue partagé</b>. Ici : la politique
+                            de <b>suivi du vol</b> — chaque vérification a un coût, chaque client
+                            choisit les siennes.
                           </Typography>
                           <FormControlLabel
                             control={

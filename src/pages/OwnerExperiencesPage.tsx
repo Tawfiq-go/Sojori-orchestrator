@@ -395,7 +395,11 @@ export function OwnerExperiencesPage() {
           .list({ includePlatform: false, ownerId: requestOwnerId ? String(requestOwnerId) : undefined })
           .catch(() => [] as Partner[]),
         listingsService.getCities({ limit: 200 }).catch(() => null),
-        partnersApi.listMarketAdoptions(ownerParams).catch(() => [] as string[]),
+        // Les adoptions marché sont propres à un owner : en vue Plateforme il n'y en
+        // a pas, et l'API répond 400 « ownerId required » — on ne l'appelle pas.
+        requestOwnerId
+          ? partnersApi.listMarketAdoptions(ownerParams).catch(() => [] as string[])
+          : Promise.resolve([] as string[]),
       ]);
       setMarketAdopted(new Set((adoptedIds || []).map(String)));
       const partnersArr = Array.isArray(partnersList) ? partnersList : [];

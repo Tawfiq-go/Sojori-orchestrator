@@ -15,13 +15,44 @@ function levelColor(level: RuntimeLogEntry['level']): string {
   return '#e5e7eb';
 }
 
+/**
+ * Le panneau est un outil de dev : ouvert par défaut, il recouvrait le coin
+ * bas-droit des pages et avalait les clics sur les boutons d'enregistrement
+ * (constaté sur le picker Catalogue partagé — trois « Enregistrer » perdus
+ * avant de comprendre). Il démarre donc réduit, et retient le choix.
+ */
+const OPEN_STORAGE_KEY = 'sojori.devRuntimeLog.open';
+
+function readStoredOpen(): boolean {
+  try {
+    return window.localStorage.getItem(OPEN_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function storeOpen(open: boolean): void {
+  try {
+    window.localStorage.setItem(OPEN_STORAGE_KEY, open ? '1' : '0');
+  } catch {
+    // stockage indisponible (navigation privée) : on garde l'état en mémoire
+  }
+}
+
 export function DevRuntimeLogPanel() {
-  const [open, setOpen] = useState(true);
-  const [tick, setTick] = useState(0);
+  const [open, setOpenState] = useState<boolean>(readStoredOpen);
+  // Compteur muet : ne sert qu'à forcer le rendu quand un log arrive.
+  const [, setTick] = useState(0);
+
+  const setOpen = (next: boolean) => {
+    storeOpen(next);
+    setOpenState(next);
+  };
 
   useEffect(() => subscribeRuntimeLogs(() => setTick((n) => n + 1)), []);
 
   const logs = [...getRuntimeLogs()].reverse();
+  const alerts = logs.filter((e) => e.level === 'warn' || e.level === 'error').length;
 
   if (!isRuntimeLogPanelEnabled()) {
     return null;
@@ -170,7 +201,8 @@ export function DevRuntimeLogPanel() {
               boxShadow: 4,
             }}
           >
-            Logs ({getRuntimeLogs().length})
+            Logs ({logs.length}
+            {alerts > 0 ? ` · ${alerts} ⚠` : ''})
           </Button>
         </Tooltip>
       )}
