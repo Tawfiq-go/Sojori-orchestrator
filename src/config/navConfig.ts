@@ -1,10 +1,10 @@
-import { Roles } from '../constants/roles';
+import { Roles } from "../constants/roles";
 import {
   DEFAULT_LANDLORD_DASHBOARD_GRANTS,
   grantAllows,
   isWorkerAdminAccess,
   type FeatureGrant,
-} from '../utils/ownerRoutePermissions';
+} from "../utils/ownerRoutePermissions";
 
 /** Rôles autorisés sur un groupe ou item (absent = hérite du groupe). */
 export type NavRole = (typeof Roles)[keyof typeof Roles];
@@ -16,7 +16,7 @@ export type NavRole = (typeof Roles)[keyof typeof Roles];
  * ⚠️ Ce filtre masque l'entrée dans la sidebar — la donnée reste protégée
  * côté API par l'auth du service (le front n'est jamais la seule barrière).
  */
-export const CRM_ALLOWED_EMAILS = ['tawfiq.gouach@sojori.com'];
+export const CRM_ALLOWED_EMAILS = ["tawfiq.gouach@sojori.com"];
 
 export type NavItemConfig = {
   id: string;
@@ -50,7 +50,12 @@ export type NavGroupConfig = {
 const ADMIN_ROLES: NavRole[] = [Roles.SuperAdmin, Roles.Admin];
 /** Staff Sojori / property managers — pilotage client (pas infra admin). */
 const PM_ROLES: NavRole[] = [Roles.SuperAdmin, Roles.Admin, Roles.Owner];
-const OPS_ROLES: NavRole[] = [Roles.SuperAdmin, Roles.Admin, Roles.Owner, Roles.Worker];
+const OPS_ROLES: NavRole[] = [
+  Roles.SuperAdmin,
+  Roles.Admin,
+  Roles.Owner,
+  Roles.Worker,
+];
 const WORKER_ONLY: NavRole[] = [Roles.Worker];
 
 /**
@@ -59,214 +64,286 @@ const WORKER_ONLY: NavRole[] = [Roles.Worker];
  */
 export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
   {
-    group: 'Reports',
+    group: "Reports",
     roles: PM_ROLES,
     items: [
       {
-        id: 'ma-journee',
-        label: 'Ma journée',
-        iconType: 'calendar',
-        iconColor: '#B8881A',
-        badge: 'Live',
-        description: 'Arrivées, départs, ménage, expériences et messages — écran d’atterrissage',
+        id: "ma-journee",
+        label: "Ma journée",
+        iconType: "calendar",
+        iconColor: "#B8881A",
+        badge: "Live",
+        description:
+          "Arrivées, départs, ménage, expériences et messages — écran d’atterrissage",
       },
       {
-        id: 'reports',
-        label: 'Reports',
-        iconType: 'document',
-        iconColor: '#b8851a',
-        description: 'Tableau de bord, analytics et tous les rapports — filtré hôtel/LCD',
+        id: "reports",
+        label: "Reports",
+        iconType: "document",
+        iconColor: "#b8851a",
+        description:
+          "Tableau de bord, analytics et tous les rapports — filtré hôtel/LCD",
       },
     ],
   },
   {
-    group: 'Vue ops',
+    group: "Vue ops",
     roles: PM_ROLES,
     items: [
       {
-        id: 'planning',
-        label: 'Planning',
-        iconType: 'calendar',
-        iconColor: '#E06666',
-        description: 'Résas · tasks · messages — grille par appartement',
+        id: "planning",
+        label: "Planning",
+        iconType: "calendar",
+        iconColor: "#E06666",
+        description: "Résas · tasks · messages — grille par appartement",
       },
       {
-        id: 'orch/cockpit',
-        label: 'Cockpit IA',
-        iconType: 'settings',
-        iconColor: '#b8851a',
-        badge: 'AI',
+        id: "orch/cockpit",
+        label: "Cockpit IA",
+        iconType: "settings",
+        iconColor: "#b8851a",
+        badge: "AI",
       },
       {
-        id: 'ops-board',
-        label: 'Ops Board',
-        iconType: 'monitor',
-        iconColor: '#1E5B57',
-        badge: 'Live',
-        description: 'Suivi unités · ménage · arrivées — Nommos (kanban HK)',
+        id: "ops-board",
+        label: "Ops Board",
+        iconType: "monitor",
+        iconColor: "#1E5B57",
+        badge: "Live",
+        description: "Suivi unités · ménage · arrivées — Nommos (kanban HK)",
       },
     ],
   },
   {
-    group: 'Réception',
+    group: "Réception",
     roles: PM_ROLES,
     items: [
       {
-        id: 'reception/rack',
-        label: 'Rack d’affectation',
-        iconType: 'calendar',
-        iconColor: '#2d4a6b',
-        badge: 'NEW',
-        description: 'Qui dort où — chambres × jours, conflits détectés avant la pose',
+        id: "reception/rack",
+        label: "Rack d’affectation",
+        iconType: "calendar",
+        iconColor: "#2d4a6b",
+        badge: "NEW",
+        description:
+          "Qui dort où — chambres × jours, conflits détectés avant la pose",
       },
     ],
   },
   {
-    group: 'Ménage',
+    group: "Ménage",
     roles: PM_ROLES,
     items: [
       {
-        id: 'menage/rack',
-        label: 'La journée',
-        iconType: 'calendar',
-        iconColor: '#B8881A',
-        badge: 'Live',
-        description: 'La journée ménage — fenêtres départ→arrivée, blocs, retards (Nommos)',
+        id: "menage/rack",
+        label: "La journée",
+        iconType: "calendar",
+        iconColor: "#B8881A",
+        badge: "Live",
+        description:
+          "La journée ménage — fenêtres départ→arrivée, blocs, retards (Nommos)",
       },
       {
-        id: 'menage/repartition',
-        label: 'La répartition',
-        iconType: 'calendar',
-        iconColor: '#B8881A',
-        badge: 'NEW',
-        description: 'Répartition ménage — colonnes par femme de ménage, crédits (lecture seule)',
+        id: "menage/repartition",
+        label: "La répartition",
+        iconType: "calendar",
+        iconColor: "#B8881A",
+        badge: "NEW",
+        description:
+          "Répartition ménage — colonnes par femme de ménage, crédits (lecture seule)",
       },
       {
-        id: 'menage/semaine',
-        label: 'La semaine',
-        iconType: 'calendar',
-        iconColor: '#B8881A',
-        badge: 'NEW',
-        description: 'Villas × 7 jours, crédits par jour vs capacité — quel jour va déborder ?',
+        id: "menage/semaine",
+        label: "La semaine",
+        iconType: "calendar",
+        iconColor: "#B8881A",
+        badge: "NEW",
+        description:
+          "Villas × 7 jours, crédits par jour vs capacité — quel jour va déborder ?",
       },
       {
-        id: 'menage/equipe',
-        label: 'L’équipe',
-        iconType: 'calendar',
-        iconColor: '#B8881A',
-        badge: 'NEW',
-        description: 'Qui travaille quand, capacité, plafonds de crédits — jamais de score',
+        id: "menage/equipe",
+        label: "L’équipe",
+        iconType: "calendar",
+        iconColor: "#B8881A",
+        badge: "NEW",
+        description:
+          "Qui travaille quand, capacité, plafonds de crédits — jamais de score",
       },
     ],
   },
   {
-    group: 'Calendrier',
+    group: "Calendrier",
     roles: PM_ROLES,
     items: [
-      { id: 'calendar/multi', label: 'Vue Multi', iconType: 'calendar', iconColor: '#E06666' },
-      { id: 'calendar/simple', label: 'Vue Simple', iconType: 'calendar', iconColor: '#E06666' },
+      {
+        id: "calendar/multi",
+        label: "Vue Multi",
+        iconType: "calendar",
+        iconColor: "#E06666",
+      },
+      {
+        id: "calendar/simple",
+        label: "Vue Simple",
+        iconType: "calendar",
+        iconColor: "#E06666",
+      },
     ],
   },
   {
-    group: 'Réservations',
+    group: "Réservations",
     roles: OPS_ROLES,
     items: [
-      { id: 'reservations', label: 'Liste', iconType: 'calendar', iconColor: '#E06666' },
-      { id: 'payments', label: 'Paiements', iconType: 'chart', iconColor: '#5B9BD5', roles: PM_ROLES },
+      {
+        id: "reservations",
+        label: "Liste",
+        iconType: "calendar",
+        iconColor: "#E06666",
+      },
+      {
+        id: "payments",
+        label: "Paiements",
+        iconType: "chart",
+        iconColor: "#5B9BD5",
+        roles: PM_ROLES,
+      },
     ],
   },
   {
-    group: 'Clients',
+    group: "Clients",
     roles: ADMIN_ROLES,
     items: [
       {
-        id: 'customers',
-        label: 'Fiches clients',
-        iconType: 'chart',
-        iconColor: '#7C5CD6',
-        description: 'CRM — clients dédupliqués, séjours, CA, canaux (données personnelles)',
+        id: "customers",
+        label: "Fiches clients",
+        iconType: "chart",
+        iconColor: "#7C5CD6",
+        description:
+          "CRM — clients dédupliqués, séjours, CA, canaux (données personnelles)",
         /** Données personnelles : verrou nominatif, pas seulement le rôle. */
         restrictedToEmails: CRM_ALLOWED_EMAILS,
       },
     ],
   },
   {
-    group: 'Inbox Guest',
+    group: "Inbox Guest",
     roles: PM_ROLES,
     items: [
-      { id: 'comms/guests', label: 'WhatsApp', iconType: 'chat', iconColor: '#25D366' },
       {
-        id: 'comms/owner-inbox',
-        label: 'Resa Proprio',
-        iconType: 'chat',
-        iconColor: '#0F766E',
-        roles: PM_ROLES,
-        description: 'Échanges bookers sur le n° Réservation (+212 669-742611)',
-        badge: 'NEW',
+        id: "comms/guests",
+        label: "WhatsApp",
+        iconType: "chat",
+        iconColor: "#25D366",
       },
-      { id: 'comms/ota', label: 'Messages OTA', iconType: 'chat', iconColor: '#FF5A5F' },
-      { id: 'comms/leads', label: 'Demande', iconType: 'chat', iconColor: '#6D9EEB' },
-      { id: 'comms/reviews', label: 'Avis', iconType: 'chat', iconColor: '#E6B022' },
+      {
+        id: "comms/owner-inbox",
+        label: "Resa Proprio",
+        iconType: "chat",
+        iconColor: "#0F766E",
+        roles: PM_ROLES,
+        description: "Échanges bookers sur le n° Réservation (+212 669-742611)",
+        badge: "NEW",
+      },
+      {
+        id: "comms/ota",
+        label: "Messages OTA",
+        iconType: "chat",
+        iconColor: "#FF5A5F",
+      },
+      {
+        id: "comms/leads",
+        label: "Demande",
+        iconType: "chat",
+        iconColor: "#6D9EEB",
+      },
+      {
+        id: "comms/reviews",
+        label: "Avis",
+        iconType: "chat",
+        iconColor: "#E6B022",
+      },
     ],
   },
   {
-    group: 'Inbox Staff',
+    group: "Inbox Staff",
     roles: PM_ROLES,
     items: [
-      { id: 'comms/staff', label: 'Staff WhatsApp', iconType: 'chat', iconColor: '#B45309', badgeRed: true },
-      { id: 'comms/admin', label: 'Admin WhatsApp', iconType: 'chat', iconColor: '#7C3AED' },
+      {
+        id: "comms/staff",
+        label: "Staff WhatsApp",
+        iconType: "chat",
+        iconColor: "#B45309",
+        badgeRed: true,
+      },
+      {
+        id: "comms/admin",
+        label: "Admin WhatsApp",
+        iconType: "chat",
+        iconColor: "#7C3AED",
+      },
       // Numéro booking sans owner → Inbox plateforme Admin uniquement
       {
-        id: 'comms/booking',
-        label: 'Inbox Resa',
-        iconType: 'chat',
-        iconColor: '#0D9488',
+        id: "comms/booking",
+        label: "Inbox Resa",
+        iconType: "chat",
+        iconColor: "#0D9488",
         roles: ADMIN_ROLES,
-        description: 'Ligne résa Sojori — conversations sans owner',
+        description: "Ligne résa Sojori — conversations sans owner",
       },
       // Vue unifiée web + WhatsApp des demandes de réservation (analyse client)
       {
-        id: 'comms/conversations',
-        label: 'Conversations Résa',
-        iconType: 'chat',
-        iconColor: '#2D6CB5',
+        id: "comms/conversations",
+        label: "Conversations Résa",
+        iconType: "chat",
+        iconColor: "#2D6CB5",
         roles: ADMIN_ROLES,
-        description: 'Demandes clients web + WhatsApp unifiées',
+        description: "Demandes clients web + WhatsApp unifiées",
       },
     ],
   },
   {
-    group: 'Task',
+    group: "Task",
     roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
     items: [
-      { id: 'tasks/list', label: 'Liste', iconType: 'check', iconColor: '#93C47D' },
-      { id: 'tasks/team', label: 'Équipe', iconType: 'check', iconColor: '#93C47D', description: 'Staff terrain & admin WhatsApp' },
       {
-        id: 'tasks/room-service-carts',
-        label: 'Paniers',
-        iconType: 'check',
-        iconColor: '#93C47D',
-        description: 'Room service ajouté côté voyageur, pas encore commandé',
+        id: "tasks/list",
+        label: "Liste",
+        iconType: "check",
+        iconColor: "#93C47D",
+      },
+      {
+        id: "tasks/team",
+        label: "Équipe",
+        iconType: "check",
+        iconColor: "#93C47D",
+        description: "Staff terrain & admin WhatsApp",
+      },
+      {
+        id: "tasks/room-service-carts",
+        label: "Paniers",
+        iconType: "check",
+        iconColor: "#93C47D",
+        description: "Room service ajouté côté voyageur, pas encore commandé",
       },
     ],
   },
   {
-    group: 'Extra',
+    group: "Extra",
     roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
     items: [
       {
-        id: 'tasks/extras/ventes',
-        label: 'Ventes',
-        iconType: 'chart',
-        iconColor: '#E6B022',
-        description: 'Tous les extras vendus — restauration, prestations, mini-bar',
+        id: "tasks/extras/ventes",
+        label: "Ventes",
+        iconType: "chart",
+        iconColor: "#E6B022",
+        description:
+          "Tous les extras vendus — restauration, prestations, mini-bar",
       },
       {
-        id: 'tasks/extras/configuration',
-        label: 'Catalogue',
-        iconType: 'settings',
-        iconColor: '#E6B022',
-        description: 'Produits, prix, TVA — ce qui est vendable',
+        id: "tasks/extras/configuration",
+        label: "Catalogue",
+        iconType: "settings",
+        iconColor: "#E6B022",
+        description: "Produits, prix, TVA — ce qui est vendable",
       },
     ],
   },
@@ -279,184 +356,265 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
      * garder sous « Extra » les rangeait avec le chiffre d'affaires, où
      * personne ne va pour préparer une villa.
      */
-    group: 'Stock',
+    group: "Stock",
     roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
     items: [
       {
-        id: 'tasks/extras/minibar',
-        label: 'Mini-bar',
-        iconType: 'check',
-        iconColor: '#93C47D',
-        description: 'Dotation et consommations par villa — réassort, seuils',
+        id: "tasks/extras/minibar",
+        label: "Mini-bar",
+        iconType: "check",
+        iconColor: "#93C47D",
+        description: "Dotation et consommations par villa — réassort, seuils",
       },
     ],
   },
   {
-    group: 'Orchestration',
+    group: "Orchestration",
     roles: PM_ROLES,
     core: true,
     items: [
-      { id: 'orch/plans', label: 'Plans par séjour', iconType: 'settings', iconColor: '#666666', badge: 'CORE' },
-      { id: 'orch/workflows', label: 'Messages clients', iconType: 'settings', iconColor: '#666666' },
-    ],
-  },
-  {
-    group: 'Expériences',
-    roles: PM_ROLES,
-    items: [
       {
-        id: 'providers',
-        label: 'Ma fiche',
-        iconType: 'building',
-        iconColor: '#E6B022',
-        description: 'Se déclarer pour vendre (forSale)',
+        id: "orch/plans",
+        label: "Plans par séjour",
+        iconType: "settings",
+        iconColor: "#666666",
+        badge: "CORE",
       },
       {
-        id: 'experiences',
-        label: 'Catalogue',
-        iconType: 'home',
-        iconColor: '#E6B022',
-        description: 'Activités par ville · lettre J',
+        id: "orch/workflows",
+        label: "Messages clients",
+        iconType: "settings",
+        iconColor: "#666666",
       },
     ],
   },
   {
-    group: 'Annonces',
+    group: "Expériences",
     roles: PM_ROLES,
     items: [
       {
-        id: 'listings/configuration',
-        label: 'Configuration',
-        iconType: 'home',
-        iconColor: '#E6B022',
-        description: 'Établissement · structure, contenu, publication',
+        id: "providers",
+        label: "Ma fiche",
+        iconType: "building",
+        iconColor: "#E6B022",
+        description: "Se déclarer pour vendre (forSale)",
       },
-      { id: 'listings/list', label: 'Listings', iconType: 'home', iconColor: '#D4A574' },
-      { id: 'listings/mapping', label: 'Mapping RU', iconType: 'link', iconColor: '#6D9EEB', roles: ADMIN_ROLES },
-      { id: 'listings/orchestration-model', label: 'Modèle orchestration', iconType: 'home', iconColor: '#D4A574' },
-      { id: 'chatbot/listing', label: 'Listing chatbot', iconType: 'home', iconColor: '#D4A574' },
       {
-        id: 'admin/ChannelManager/channel-manager',
-        label: 'Channel Manager',
-        iconType: 'link',
-        iconColor: '#6D9EEB',
-        description: 'RU · connexion Airbnb & OTA',
+        id: "experiences",
+        label: "Catalogue",
+        iconType: "home",
+        iconColor: "#E6B022",
+        description: "Activités par ville · lettre J",
       },
     ],
   },
   {
-    group: 'Prix dynamique',
-    roles: PM_ROLES,
-    items: [
-      { id: 'pricing/portfolio', label: 'Prix dynamique', iconType: 'trending', iconColor: '#93C47D' },
-      { id: 'pricing/audit', label: 'Audit prix', iconType: 'trending', iconColor: '#93C47D' },
-      { id: 'pricing/v2', label: 'Dynamic Price V2', iconType: 'trending', iconColor: '#B8881A', badge: 'Beta' },
-    ],
-  },
-  {
-    group: 'Marketing',
+    group: "Annonces",
     roles: PM_ROLES,
     items: [
       {
-        id: 'marketing/overview',
-        label: 'Marketing',
-        iconType: 'chart',
-        iconColor: '#B8881A',
-        badge: 'Beta',
-        description: 'Dépense publicitaire face aux réservations réelles',
+        id: "listings/configuration",
+        label: "Configuration",
+        iconType: "home",
+        iconColor: "#E6B022",
+        description: "Établissement · structure, contenu, publication",
+      },
+      {
+        id: "listings/list",
+        label: "Listings",
+        iconType: "home",
+        iconColor: "#D4A574",
+      },
+      {
+        id: "listings/mapping",
+        label: "Mapping RU",
+        iconType: "link",
+        iconColor: "#6D9EEB",
+        roles: ADMIN_ROLES,
+      },
+      {
+        id: "listings/orchestration-model",
+        label: "Modèle orchestration",
+        iconType: "home",
+        iconColor: "#D4A574",
+      },
+      {
+        id: "chatbot/listing",
+        label: "Listing chatbot",
+        iconType: "home",
+        iconColor: "#D4A574",
+      },
+      {
+        id: "admin/ChannelManager/channel-manager",
+        label: "Channel Manager",
+        iconType: "link",
+        iconColor: "#6D9EEB",
+        description: "RU · connexion Airbnb & OTA",
       },
     ],
   },
   {
-    group: 'Direct booking',
+    group: "Prix dynamique",
     roles: PM_ROLES,
     items: [
       {
-        id: 'comms/owner-booking',
-        label: 'Resa Proprio · Numéros',
-        iconType: 'chat',
-        iconColor: '#0F766E',
+        id: "pricing/portfolio",
+        label: "Prix dynamique",
+        iconType: "trending",
+        iconColor: "#93C47D",
+      },
+      {
+        id: "pricing/audit",
+        label: "Audit prix",
+        iconType: "trending",
+        iconColor: "#93C47D",
+      },
+      {
+        id: "pricing/v2",
+        label: "Dynamic Price V2",
+        iconType: "trending",
+        iconColor: "#B8881A",
+        badge: "Beta",
+      },
+    ],
+  },
+  {
+    group: "Marketing",
+    roles: PM_ROLES,
+    items: [
+      {
+        id: "marketing/overview",
+        label: "Marketing",
+        iconType: "chart",
+        iconColor: "#B8881A",
+        badge: "Beta",
+        description: "Dépense publicitaire face aux réservations réelles",
+      },
+      {
+        id: "marketing/campaigns",
+        label: "Campagnes",
+        iconType: "megaphone",
+        iconColor: "#B8881A",
+        badge: "Beta",
+        description: "Une campagne, son détail jour par jour",
+      },
+    ],
+  },
+  {
+    group: "Direct booking",
+    roles: PM_ROLES,
+    items: [
+      {
+        id: "comms/owner-booking",
+        label: "Resa Proprio · Numéros",
+        iconType: "chat",
+        iconColor: "#0F766E",
         roles: PM_ROLES,
         description:
-          'Allowlist sur le numéro Réservation (+212 669-742611) — pas le numéro Staff',
+          "Allowlist sur le numéro Réservation (+212 669-742611) — pas le numéro Staff",
       },
       {
-        id: 'direct-booking/config',
-        label: 'Config',
-        icon: '🌐',
-        badge: 'NEW',
-        description: 'Domaine, thème, forme, réseaux sociaux du site client',
+        id: "direct-booking/config",
+        label: "Config",
+        icon: "🌐",
+        badge: "NEW",
+        description: "Domaine, thème, forme, réseaux sociaux du site client",
       },
       {
-        id: 'direct-booking/preview',
-        label: 'Preview',
-        icon: '👁️',
-        description: 'Aperçu du site page par page, mobile et desktop',
+        id: "direct-booking/preview",
+        label: "Preview",
+        icon: "👁️",
+        description: "Aperçu du site page par page, mobile et desktop",
       },
     ],
   },
   {
-    group: 'Équipe',
+    group: "Équipe",
     roles: OPS_ROLES,
     items: [
-      { id: 'staff', label: 'Staff', iconType: 'worker', iconColor: '#D4A574', roles: PM_ROLES },
-      { id: 'chatbot/whitelist', label: 'Whitelist', iconType: 'robot', iconColor: '#7C3AED', roles: PM_ROLES },
       {
-        id: 'equipe/mon-profil',
-        label: 'Mon profil PM',
-        icon: '👤',
+        id: "staff",
+        label: "Staff",
+        iconType: "worker",
+        iconColor: "#D4A574",
+        roles: PM_ROLES,
+      },
+      {
+        id: "chatbot/whitelist",
+        label: "Whitelist",
+        iconType: "robot",
+        iconColor: "#7C3AED",
+        roles: PM_ROLES,
+      },
+      {
+        id: "equipe/mon-profil",
+        label: "Mon profil PM",
+        icon: "👤",
         roles: [Roles.Owner],
-        description: 'Coordonnées, entreprise et vitrine sojori.com',
+        description: "Coordonnées, entreprise et vitrine sojori.com",
       },
       {
-        id: 'equipe/onboarding',
-        label: 'On-boarding',
-        icon: '🚀',
+        id: "equipe/onboarding",
+        label: "On-boarding",
+        icon: "🚀",
         roles: PM_ROLES,
-        description: 'Configuration initiale PM — équipe, import Airbnb, orchestration',
+        description:
+          "Configuration initiale PM — équipe, import Airbnb, orchestration",
       },
       {
-        id: 'equipe/notifications',
-        label: 'Notifications',
-        icon: '🔔',
+        id: "equipe/notifications",
+        label: "Notifications",
+        icon: "🔔",
         roles: PM_ROLES,
-        description: 'Alertes cloche dashboard — historique & configuration',
+        description: "Alertes cloche dashboard — historique & configuration",
       },
-      { id: 'my-tasks', label: 'Mes tâches', iconType: 'check', iconColor: '#93C47D', roles: WORKER_ONLY },
-      { id: 'my-sched', label: 'Mon planning', iconType: 'calendar', iconColor: '#E06666', roles: WORKER_ONLY },
+      {
+        id: "my-tasks",
+        label: "Mes tâches",
+        iconType: "check",
+        iconColor: "#93C47D",
+        roles: WORKER_ONLY,
+      },
+      {
+        id: "my-sched",
+        label: "Mon planning",
+        iconType: "calendar",
+        iconColor: "#E06666",
+        roles: WORKER_ONLY,
+      },
     ],
   },
   // "Rapports" et "Rapports 2" fusionnés dans le groupe "Reports" (voir plus haut,
   // à côté de Dashboard) — tous les rapports vivent maintenant sur /reports,
   // filtrés dynamiquement par reportsConfig.ts selon le tag hôtel/LCD du PM.
   {
-    group: 'Finances',
+    group: "Finances",
     roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner, Roles.Landlord],
     items: [
       {
-        id: 'finances/landlords',
-        label: 'Propriétaires',
-        iconType: 'worker',
-        iconColor: '#B8851A',
+        id: "finances/landlords",
+        label: "Propriétaires",
+        iconType: "worker",
+        iconColor: "#B8851A",
         roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
       },
       {
-        id: 'finances/ledger',
-        label: 'Dépenses & extras',
-        iconType: 'chart',
-        iconColor: '#C81E1E',
+        id: "finances/ledger",
+        label: "Dépenses & extras",
+        iconType: "chart",
+        iconColor: "#C81E1E",
       },
       {
-        id: 'finances/reports',
-        label: 'Rapports P&L',
-        iconType: 'document',
-        iconColor: '#93C47D',
+        id: "finances/reports",
+        label: "Rapports P&L",
+        iconType: "document",
+        iconColor: "#93C47D",
       },
       {
-        id: 'finances/branding',
-        label: 'En-tête & logo P&L',
-        iconType: 'document',
-        iconColor: '#B8851A',
+        id: "finances/branding",
+        label: "En-tête & logo P&L",
+        iconType: "document",
+        iconColor: "#B8851A",
         roles: [Roles.SuperAdmin, Roles.Admin, Roles.Owner],
       },
     ],
@@ -467,158 +625,204 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
 export const ADMIN_NAV_GROUPS: NavGroupConfig[] = [
   {
     // Distinct du groupe owner « Expériences » : même nom = clé React + état collapsed en collision.
-    group: 'Expériences · admin',
+    group: "Expériences · admin",
     roles: ADMIN_ROLES,
     items: [
       {
-        id: 'admin/partners',
-        label: 'Expériences',
-        iconType: 'building',
-        iconColor: '#E6B022',
-        description: 'Fiches (liées à un owner) + catalogue',
+        id: "admin/partners",
+        label: "Expériences",
+        iconType: "building",
+        iconColor: "#E6B022",
+        description: "Fiches (liées à un owner) + catalogue",
         sub: [
-          { id: 'admin/partners/list', label: 'Fiches' },
-          { id: 'admin/partners/concierge', label: 'Catalogue' },
+          { id: "admin/partners/list", label: "Fiches" },
+          { id: "admin/partners/concierge", label: "Catalogue" },
         ],
       },
     ],
   },
   {
-    group: 'Logs API',
+    group: "Logs API",
     roles: ADMIN_ROLES,
     items: [
       {
-        id: 'admin/channels',
-        label: 'Logs RU',
-        iconType: 'link',
-        iconColor: '#6D9EEB',
-        description: 'Logs Rental United — Summary, Business, Debug',
+        id: "admin/channels",
+        label: "Logs RU",
+        iconType: "link",
+        iconColor: "#6D9EEB",
+        description: "Logs Rental United — Summary, Business, Debug",
         sub: [
-          { id: 'admin/channels/summary', label: 'Summary' },
-          { id: 'admin/channels/business', label: 'Business' },
-          { id: 'admin/channels/logapiru', label: 'LogApiRU' },
-          { id: 'admin/channels/logapimews', label: 'LogApiMews' },
-          { id: 'admin/channels/debug', label: 'Debug' },
+          { id: "admin/channels/summary", label: "Summary" },
+          { id: "admin/channels/business", label: "Business" },
+          { id: "admin/channels/logapiru", label: "LogApiRU" },
+          { id: "admin/channels/logapimews", label: "LogApiMews" },
+          { id: "admin/channels/debug", label: "Debug" },
         ],
       },
       {
-        id: 'admin/sojori-logs',
-        label: 'Logs estimation marché',
-        iconType: 'document',
-        iconColor: '#E6B022',
-        description: 'Logs estimation & données marché Sojori',
+        id: "admin/sojori-logs",
+        label: "Logs estimation marché",
+        iconType: "document",
+        iconColor: "#E6B022",
+        description: "Logs estimation & données marché Sojori",
       },
     ],
   },
   {
-    group: 'Monitor & infra',
+    group: "Monitor & infra",
     roles: ADMIN_ROLES,
     items: [
       {
-        id: 'monitor',
-        label: 'Monitoring',
-        iconType: 'monitor',
-        iconColor: '#C81E1E',
-        badge: 'Live',
+        id: "monitor",
+        label: "Monitoring",
+        iconType: "monitor",
+        iconColor: "#C81E1E",
+        badge: "Live",
         sub: [
-          { id: 'mon/summary', label: 'Résumé' },
-          { id: 'mon/logs', label: 'Logs' },
-          { id: 'mon/metrics', label: 'Métriques' },
-          { id: 'mon/rabbit', label: 'RabbitMQ' },
-          { id: 'mon/wa', label: 'WhatsApp API' },
-          { id: 'mon/ai', label: 'AI usage' },
-          { id: 'mon/infra', label: 'Infrastructure' },
-          { id: 'mon/res-sync', label: 'Sync réservations' },
+          { id: "mon/summary", label: "Résumé" },
+          { id: "mon/logs", label: "Logs" },
+          { id: "mon/metrics", label: "Métriques" },
+          { id: "mon/rabbit", label: "RabbitMQ" },
+          { id: "mon/wa", label: "WhatsApp API" },
+          { id: "mon/ai", label: "AI usage" },
+          { id: "mon/infra", label: "Infrastructure" },
+          { id: "mon/res-sync", label: "Sync réservations" },
         ],
       },
     ],
   },
   {
-    group: 'Cost',
+    group: "Cost",
     roles: ADMIN_ROLES,
     items: [
       {
-        id: 'pricing/summary',
-        label: 'Summary',
-        iconType: 'chart',
-        iconColor: '#0D9488',
-        badge: 'Live',
-        description: 'Récap consommation par owner et par mois — RU, WhatsApp, IA, AirROI',
+        id: "pricing/summary",
+        label: "Summary",
+        iconType: "chart",
+        iconColor: "#0D9488",
+        badge: "Live",
+        description:
+          "Récap consommation par owner et par mois — RU, WhatsApp, IA, AirROI",
       },
       {
-        id: 'pricing/ru',
-        label: 'Listings RU',
-        iconType: 'building',
-        iconColor: '#0D9488',
-        description: 'Listings synchronisés RU par owner vs coût $700/200',
+        id: "pricing/ru",
+        label: "Listings RU",
+        iconType: "building",
+        iconColor: "#0D9488",
+        description: "Listings synchronisés RU par owner vs coût $700/200",
       },
       {
-        id: 'pricing/whatsapp',
-        label: 'WhatsApp',
-        iconType: 'chat',
-        iconColor: '#0D9488',
-        description: 'Volume de messages WhatsApp (guest + staff) par owner',
+        id: "pricing/whatsapp",
+        label: "WhatsApp",
+        iconType: "chat",
+        iconColor: "#0D9488",
+        description: "Volume de messages WhatsApp (guest + staff) par owner",
       },
       {
-        id: 'pricing/ai',
-        label: 'IA',
-        iconType: 'robot',
-        iconColor: '#0D9488',
-        description: 'Appels IA par owner',
+        id: "pricing/ai",
+        label: "IA",
+        iconType: "robot",
+        iconColor: "#0D9488",
+        description: "Appels IA par owner",
       },
       {
-        id: 'pricing/airroi',
-        label: 'AirROI',
-        iconType: 'trending',
-        iconColor: '#0D9488',
-        description: 'Coût réel AirROI par owner (dynamic pricing)',
+        id: "pricing/airroi",
+        label: "AirROI",
+        iconType: "trending",
+        iconColor: "#0D9488",
+        description: "Coût réel AirROI par owner (dynamic pricing)",
       },
     ],
   },
   {
-    group: 'Administration',
+    group: "Administration",
     roles: ADMIN_ROLES,
     items: [
-      { id: 'admin/pms', label: 'Owners · PMs', iconType: 'building', iconColor: '#A6A6A6' },
-      { id: 'admin/pm-lifecycle', label: 'Suivi onboarding PM', icon: '📋', iconColor: '#0D9488' },
       {
-        id: 'crm',
-        label: 'CRM Sojori',
-        iconType: 'chat',
-        iconColor: '#6D9EEB',
-        description: 'Demandes PMS, leads commerciaux, rendez-vous — admin uniquement',
+        id: "admin/pms",
+        label: "Owners · PMs",
+        iconType: "building",
+        iconColor: "#A6A6A6",
       },
-      { id: 'admin/roles', label: 'Rôles & groupes', iconType: 'shield', iconColor: '#C81E1E' },
-      { id: 'admin/mapping', label: 'Mapping global', iconType: 'link', iconColor: '#6D9EEB' },
-      { id: 'admin/settings', label: 'Paramètres', iconType: 'settings', iconColor: '#666666' },
       {
-        id: 'admin/settings/pm-simulation',
-        label: 'Simulation PM',
-        icon: '🎭',
-        iconColor: '#B45309',
-        description: 'Voir l’application comme un Property Manager (mode audit)',
+        id: "admin/pm-lifecycle",
+        label: "Suivi onboarding PM",
+        icon: "📋",
+        iconColor: "#0D9488",
+      },
+      {
+        id: "crm",
+        label: "CRM Sojori",
+        iconType: "chat",
+        iconColor: "#6D9EEB",
+        description:
+          "Demandes PMS, leads commerciaux, rendez-vous — admin uniquement",
+      },
+      {
+        id: "admin/roles",
+        label: "Rôles & groupes",
+        iconType: "shield",
+        iconColor: "#C81E1E",
+      },
+      {
+        id: "admin/mapping",
+        label: "Mapping global",
+        iconType: "link",
+        iconColor: "#6D9EEB",
+      },
+      {
+        id: "admin/settings",
+        label: "Paramètres",
+        iconType: "settings",
+        iconColor: "#666666",
+      },
+      {
+        id: "admin/settings/pm-simulation",
+        label: "Simulation PM",
+        icon: "🎭",
+        iconColor: "#B45309",
+        description:
+          "Voir l’application comme un Property Manager (mode audit)",
       },
     ],
   },
   {
-    group: 'Temp',
+    group: "Temp",
     roles: ADMIN_ROLES,
     items: [
-      { id: 'temp/pricing-calendar', label: 'Tarifs calendrier (legacy)', icon: '📈' },
-      { id: 'temp/settings-template', label: 'Templates mail', icon: '📧' },
-      { id: 'temp/settings-currency', label: 'Devises', icon: '💱' },
-      { id: 'temp/settings-admin-config', label: 'Pays & villes', icon: '🌍' },
-      { id: 'temp/channel-distribution', label: 'Distribution channels', icon: '📡' },
-      { id: 'temp/equipe-groups', label: 'Groupes staff', icon: '👨‍👩‍👧‍👦' },
-      { id: 'temp/booking-clients', label: 'Clients Sojori Booking', icon: '🛒' },
+      {
+        id: "temp/pricing-calendar",
+        label: "Tarifs calendrier (legacy)",
+        icon: "📈",
+      },
+      { id: "temp/settings-template", label: "Templates mail", icon: "📧" },
+      { id: "temp/settings-currency", label: "Devises", icon: "💱" },
+      { id: "temp/settings-admin-config", label: "Pays & villes", icon: "🌍" },
+      {
+        id: "temp/channel-distribution",
+        label: "Distribution channels",
+        icon: "📡",
+      },
+      { id: "temp/equipe-groups", label: "Groupes staff", icon: "👨‍👩‍👧‍👦" },
+      {
+        id: "temp/booking-clients",
+        label: "Clients Sojori Booking",
+        icon: "🛒",
+      },
     ],
   },
 ];
 
 /** @deprecated alias — préférer OWNER_NAV_GROUPS + navGroupsForRole */
-export const NAV_GROUPS: NavGroupConfig[] = [...OWNER_NAV_GROUPS, ...ADMIN_NAV_GROUPS];
+export const NAV_GROUPS: NavGroupConfig[] = [
+  ...OWNER_NAV_GROUPS,
+  ...ADMIN_NAV_GROUPS,
+];
 
-function roleAllowed(allowed: NavRole[] | undefined, role: string | null | undefined): boolean {
+function roleAllowed(
+  allowed: NavRole[] | undefined,
+  role: string | null | undefined,
+): boolean {
   if (!allowed?.length) return true;
   if (!role) return false;
   return allowed.includes(role as NavRole);
@@ -630,7 +834,9 @@ function emailAllowed(
   email: string | null | undefined,
 ): boolean {
   if (!allowed?.length) return true;
-  const e = String(email ?? '').trim().toLowerCase();
+  const e = String(email ?? "")
+    .trim()
+    .toLowerCase();
   if (!e) return false;
   return allowed.some((a) => a.trim().toLowerCase() === e);
 }
@@ -674,7 +880,7 @@ function filterNavItemsByGrants(
         if (!sub.length) return null;
         return { ...item, sub };
       }
-      if (grantAllows(grants, item.id, 'get', ownerAccess)) {
+      if (grantAllows(grants, item.id, "get", ownerAccess)) {
         return { ...item, sub: undefined };
       }
       return null;
@@ -697,15 +903,18 @@ export function navGroupsForWorker(
   }).filter((g) => g.items.length > 0);
 }
 
-function normalizeNavRole(role: string | null | undefined): string | null | undefined {
+function normalizeNavRole(
+  role: string | null | undefined,
+): string | null | undefined {
   if (role == null) return role;
   const r = String(role).trim();
   const lower = r.toLowerCase();
-  if (r === Roles.Worker || lower === 'worker' || lower === 'staff') return Roles.Worker;
-  if (r === Roles.Owner || lower === 'owner') return Roles.Owner;
-  if (r === Roles.Admin || lower === 'admin') return Roles.Admin;
-  if (r === Roles.SuperAdmin || lower === 'superadmin') return Roles.SuperAdmin;
-  if (r === Roles.Landlord || lower === 'landlord') return Roles.Landlord;
+  if (r === Roles.Worker || lower === "worker" || lower === "staff")
+    return Roles.Worker;
+  if (r === Roles.Owner || lower === "owner") return Roles.Owner;
+  if (r === Roles.Admin || lower === "admin") return Roles.Admin;
+  if (r === Roles.SuperAdmin || lower === "superadmin") return Roles.SuperAdmin;
+  if (r === Roles.Landlord || lower === "landlord") return Roles.Landlord;
   return r;
 }
 
@@ -737,7 +946,7 @@ export function navGroupsForRole(
   if (navRole === Roles.Landlord) {
     const stripPmOnly = (items: NavItemConfig[]): NavItemConfig[] =>
       items
-        .filter((item) => item.id !== 'finances/landlords')
+        .filter((item) => item.id !== "finances/landlords")
         .map((item) =>
           item.sub?.length ? { ...item, sub: stripPmOnly(item.sub) } : item,
         )
@@ -754,7 +963,9 @@ export function navGroupsForRole(
       .filter((g) => g.items.length > 0);
   }
 
-  const ownerGroups = OWNER_NAV_GROUPS.filter((g) => roleAllowed(g.roles, navRole))
+  const ownerGroups = OWNER_NAV_GROUPS.filter((g) =>
+    roleAllowed(g.roles, navRole),
+  )
     .map((g) => filterGroup(g, navRole, email))
     .filter((g) => g.items.length > 0);
 
@@ -762,7 +973,9 @@ export function navGroupsForRole(
     return ownerGroups;
   }
 
-  const adminGroups = ADMIN_NAV_GROUPS.filter((g) => roleAllowed(g.roles, navRole))
+  const adminGroups = ADMIN_NAV_GROUPS.filter((g) =>
+    roleAllowed(g.roles, navRole),
+  )
     .map((g) => filterGroup(g, navRole, email))
     .filter((g) => g.items.length > 0);
 
@@ -773,18 +986,18 @@ export function navGroupsForRole(
 export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Reports: false,
   Calendrier: false,
-  'Prix dynamique': false,
+  "Prix dynamique": false,
   Pricing: false,
   Réservations: false,
   Task: false,
   Extra: false,
   Orchestration: false,
   Expériences: false,
-  'Expériences · admin': true,
+  "Expériences · admin": true,
   Providers: false,
   Annonces: false,
-  'Inbox Guest': false,
-  'Inbox Staff': false,
+  "Inbox Guest": false,
+  "Inbox Staff": false,
   Inbox: false,
   Guest: false,
   Staff: false,
@@ -796,8 +1009,8 @@ export const NAV_DEFAULT_COLLAPSED: Record<string, boolean> = {
   Finances: true,
   Partenaires: false,
   Providers: false,
-  'Logs API': true,
-  'Monitor & infra': true,
+  "Logs API": true,
+  "Monitor & infra": true,
   Cost: true,
   Administration: false,
   Temp: true,

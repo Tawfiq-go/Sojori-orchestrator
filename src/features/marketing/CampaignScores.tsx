@@ -1,7 +1,7 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { Box, Chip, Collapse, Stack, Tooltip, Typography } from "@mui/material";
-import type { CampaignDay, MarketingDashboard, ScoredCampaign } from "./api";
-import { fetchCampaignDays } from "./api";
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { Box, Chip, Stack, Tooltip, Typography } from "@mui/material";
+import type { MarketingDashboard, ScoredCampaign } from "./api";
 import { T, cardSx, kickerSx } from "./tokens";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -130,309 +130,8 @@ function Head({ children, num }: { children: React.ReactNode; num?: boolean }) {
   );
 }
 
-/**
- * La diffusion jour par jour.
- *
- * Répond à « qu'a donné ma publicité hier » — mais seulement pour ce qui se
- * compte au jour. La contribution n'y figure pas : un marché produit ici entre
- * zéro et quatre réservations quotidiennes, et la répartir jour par jour
- * afficherait une précision qui n'existe pas.
- */
-function DailyBreakdown({
-  tenantId,
-  listingId,
-  campaignId,
-}: {
-  tenantId: string;
-  listingId: string;
-  campaignId: string;
-}) {
-  const [days, setDays] = useState<CampaignDay[] | null>(null);
-  const [normal, setNormal] = useState<number | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    fetchCampaignDays({ tenantId, listingId, campaignId })
-      .then((d) => {
-        if (!alive) return;
-        setDays(d.days);
-        setNormal(d.dailyNormal);
-      })
-      .catch(() => alive && setFailed(true));
-    return () => {
-      alive = false;
-    };
-  }, [tenantId, listingId, campaignId]);
-
-  if (failed) {
-    return (
-      <Typography sx={{ fontSize: 12.5, color: T.mut }}>
-        Détail quotidien indisponible.
-      </Typography>
-    );
-  }
-  if (!days) {
-    return (
-      <Typography sx={{ fontSize: 12.5, color: T.mut }}>Chargement…</Typography>
-    );
-  }
-  if (!days.length) {
-    return (
-      <Typography sx={{ fontSize: 12.5, color: T.mut }}>
-        Aucune diffusion enregistrée sur la période.
-      </Typography>
-    );
-  }
-
-  const maxSpend = Math.max(...days.map((d) => d.spendMad), 1);
-
-  return (
-    <Box sx={{ overflowX: "auto" }}>
-      <Box
-        component="table"
-        sx={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}
-      >
-        <Box component="thead">
-          <Box component="tr">
-            <Head>Jour</Head>
-            <Head num>Dépense</Head>
-            <Head num>Clics</Head>
-            <Head num>CTR</Head>
-            <Head num>Sessions</Head>
-            <Head num>Durée</Head>
-            <Head num>Résa</Head>
-            <Head num>OTA</Head>
-            <Head>&nbsp;</Head>
-          </Box>
-        </Box>
-        <Box component="tbody">
-          {days.map((d) => (
-            <Box component="tr" key={d.day}>
-              <Cell>
-                <Box component="span" sx={{ fontSize: 12.5 }}>
-                  {d.day.slice(5)}
-                </Box>
-              </Cell>
-              <Cell num>{nf.format(Math.round(d.spendMad))}</Cell>
-              <Cell num color={T.mut}>
-                {nf.format(d.impressions)}
-              </Cell>
-              <Cell num>{nf.format(d.clicks)}</Cell>
-              <Cell
-                num
-                bold
-                color={d.ctr >= 5 ? T.ok : d.ctr < 2 ? T.crit : T.ink}
-              >
-                {d.ctr.toFixed(1)} %
-              </Cell>
-              <Cell num color={T.mut}>
-                {d.cpc.toFixed(2)}
-              </Cell>
-              <Cell width="26%">
-                <Box
-                  sx={{
-                    height: 6,
-                    borderRadius: "3px",
-                    bgcolor: T.line2,
-                    overflow: "hidden",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      height: "100%",
-                      width: `${(d.spendMad / maxSpend) * 100}%`,
-                      bgcolor: T.gold,
-                    }}
-                  />
-                </Box>
-              </Cell>
-            </Box>
-          ))}
-        </Box>
-      </Box>
-      <Typography
-        sx={{ fontSize: 11.5, color: T.mut, mt: 1.2, lineHeight: 1.5 }}
-      >
-        {normal !== null && (
-          <>
-            Hors publicité, ce marché réserve{" "}
-            <b>{normal.toFixed(2)} fois par jour</b> en moyenne — c'est la
-            référence pour lire la colonne « Résa ».{" "}
-          </>
-        )}
-        La diffusion se lit au jour — c'est ce que la régie facture. La
-        contribution, non : sur ces volumes, l'écart d'une seule journée reste
-        du bruit. Celle affichée plus haut porte sur la semaine.
-      </Typography>
-    </Box>
-  );
-}
-
-/** Détail d'une campagne — ouvert au clic sur sa ligne. */
-function Detail({
-  c,
-  tenantId,
-  listingId,
-}: {
-  c: ScoredCampaign;
-  tenantId: string;
-  listingId: string;
-}) {
-  const rows: Array<[string, string, string?]> = [
-    ["Dépense", mad(c.spendMad)],
-    ["Impressions", nf.format(c.impressions)],
-    ["Portée", nf.format(c.reach)],
-    ["Clics", nf.format(c.clicks)],
-    ["CTR", `${c.ctr.toFixed(2)} %`],
-    ["CPC", `${c.cpc.toFixed(2)} MAD`],
-    ["CPM", `${c.cpm.toFixed(1)} MAD`],
-  ];
-
-  const resa: Array<[string, string]> = [
-    ["Réservations du marché", String(c.reservations)],
-    ["dont OTA (Booking…)", String(c.otaReservations)],
-    ["dont direct", String(c.directReservations)],
-    ["Estimé sans publicité", c.expectedWithoutAds.toFixed(1)],
-    [
-      "Attribué à la publicité",
-      `${c.attributed > 0 ? "+" : ""}${c.attributed.toFixed(1)}`,
-    ],
-    ["CA de la fenêtre", mad(c.revenueMad)],
-    ["Panier moyen", mad(c.averageBasketMad)],
-  ];
-
-  return (
-    <Box
-      sx={{ px: 2, py: 2, bgcolor: T.bg, borderBottom: `1px solid ${T.line}` }}
-    >
-      <Stack direction={{ xs: "column", md: "row" }} spacing={3}>
-        <Box sx={{ flex: 1 }}>
-          <Typography sx={{ ...kickerSx, mb: 1 }}>Diffusion Meta</Typography>
-          {rows.map(([k, v]) => (
-            <Stack
-              key={k}
-              direction="row"
-              justifyContent="space-between"
-              sx={{ py: 0.4 }}
-            >
-              <Typography sx={{ fontSize: 12.5, color: T.ink2 }}>
-                {k}
-              </Typography>
-              <Typography sx={{ fontSize: 12.5, fontFamily: T.mono }}>
-                {v}
-              </Typography>
-            </Stack>
-          ))}
-        </Box>
-
-        <Box sx={{ flex: 1 }}>
-          <Typography sx={{ ...kickerSx, mb: 1 }}>
-            Réservations {FLAG[c.country] ?? ""} {c.country}
-          </Typography>
-          {resa.map(([k, v]) => (
-            <Stack
-              key={k}
-              direction="row"
-              justifyContent="space-between"
-              sx={{ py: 0.4 }}
-            >
-              <Typography sx={{ fontSize: 12.5, color: T.ink2 }}>
-                {k}
-              </Typography>
-              <Typography sx={{ fontSize: 12.5, fontFamily: T.mono }}>
-                {v}
-              </Typography>
-            </Stack>
-          ))}
-        </Box>
-
-        <Box sx={{ flex: 1 }}>
-          <Typography sx={{ ...kickerSx, mb: 1 }}>Activité du site</Typography>
-          {c.ga4Sessions !== undefined ? (
-            <>
-              {(
-                [
-                  ["Sessions", nf.format(c.ga4Sessions ?? 0)],
-                  ["Sessions engagées", nf.format(c.ga4EngagedSessions ?? 0)],
-                  [
-                    "Durée moyenne d'une session",
-                    `${c.ga4AverageSessionDuration ?? 0} s`,
-                  ],
-                  [
-                    "Sessions réellement investies",
-                    `${c.ga4EngagementRate ?? 0} %`,
-                  ],
-                  ["Ajouts au panier", String(c.ga4AddToCarts ?? 0)],
-                  ["Achats sur le site", String(c.ga4Purchases ?? 0)],
-                ] as Array<[string, string]>
-              ).map(([k, v]) => (
-                <Stack
-                  key={k}
-                  direction="row"
-                  justifyContent="space-between"
-                  sx={{ py: 0.4 }}
-                >
-                  <Typography sx={{ fontSize: 12.5, color: T.ink2 }}>
-                    {k}
-                  </Typography>
-                  <Typography sx={{ fontSize: 12.5, fontFamily: T.mono }}>
-                    {v}
-                  </Typography>
-                </Stack>
-              ))}
-              <Typography
-                sx={{ fontSize: 11.5, color: T.mut, mt: 1, lineHeight: 1.5 }}
-              >
-                Le site ne mesure pas les réservations — la plupart passent par
-                une plateforme externe. Ces chiffres disent si le trafic acheté
-                regarde quelque chose.
-              </Typography>
-            </>
-          ) : (
-            <Typography sx={{ fontSize: 12.5, color: T.mut, lineHeight: 1.6 }}>
-              Aucune donnée de site pour cette campagne : elle ne porte pas de
-              paramètre d'URL exploitable, ou son trafic n'a pas été identifié.
-            </Typography>
-          )}
-        </Box>
-      </Stack>
-
-      <Box
-        sx={{
-          mt: 2,
-          p: 1.5,
-          borderRadius: "8px",
-          bgcolor: VERDICT[c.verdict].bg,
-          borderLeft: `3px solid ${VERDICT[c.verdict].fg}`,
-        }}
-      >
-        <Typography
-          sx={{ fontSize: 13, fontWeight: 650, color: VERDICT[c.verdict].fg }}
-        >
-          {VERDICT[c.verdict].label}
-        </Typography>
-        <Typography sx={{ fontSize: 12.5, color: T.ink2, mt: 0.3 }}>
-          {c.reason}
-        </Typography>
-      </Box>
-
-      <Box sx={{ mt: 2.5 }}>
-        <Typography sx={{ ...kickerSx, mb: 1 }}>
-          Diffusion jour par jour
-        </Typography>
-        <DailyBreakdown
-          tenantId={tenantId}
-          listingId={listingId}
-          campaignId={c.campaignId}
-        />
-      </Box>
-    </Box>
-  );
-}
-
 export default function CampaignScores({ data }: { data: MarketingDashboard }) {
-  const [open, setOpen] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const { positives, negatives } = useMemo(() => {
     const pos = data.campaigns.filter((c) => c.attributed > 0.3);
@@ -527,102 +226,90 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
           </Box>
           <Box component="tbody">
             {data.campaigns.map((c) => {
-              const isOpen = open === c.campaignId;
               const v = VERDICT[c.verdict];
               return (
-                <Fragment key={c.campaignId}>
-                  <Box
-                    component="tr"
-                    onClick={() => setOpen(isOpen ? null : c.campaignId)}
-                    sx={{
-                      cursor: "pointer",
-                      bgcolor: isOpen ? T.bg : "transparent",
-                      "&:hover": { bgcolor: T.line2 },
-                    }}
-                  >
-                    <Cell width="26%">
-                      <Box component="span" sx={{ fontWeight: 550 }}>
-                        {FLAG[c.country] ?? ""} {c.campaignName}
-                      </Box>
-                      <ConfidenceDot level={c.confidence} />
-                    </Cell>
-                    <Cell>
-                      <Box component="span" sx={{ fontSize: 12, color: T.mut }}>
-                        {c.windowFrom.slice(5)} → {c.windowTo.slice(5)}
-                      </Box>
-                    </Cell>
-                    <Cell num>{nf.format(Math.round(c.spendMad))}</Cell>
-                    <Cell num>{c.ctr.toFixed(1)} %</Cell>
-                    <Cell
-                      num
-                      color={
-                        // Sous trente secondes, le visiteur n'a guère eu le
-                        // temps de lire : le signalement vaut avertissement.
-                        c.ga4AverageSessionDuration !== undefined &&
-                        c.ga4AverageSessionDuration < 30
-                          ? T.crit
-                          : T.ink
-                      }
-                    >
-                      {c.ga4AverageSessionDuration !== undefined
-                        ? `${Math.round(c.ga4AverageSessionDuration)} s`
-                        : "—"}
-                    </Cell>
-                    <Cell num>{c.reservations}</Cell>
-                    <Cell num color={T.mut}>
-                      {c.otaReservations}
-                    </Cell>
-                    <Cell num color={T.mut}>
-                      {c.expectedWithoutAds.toFixed(1)}
-                    </Cell>
-                    <Cell num bold color={c.attributed > 0 ? T.ok : T.crit}>
-                      {c.attributed > 0 ? "+" : ""}
-                      {c.attributed.toFixed(1)}
-                    </Cell>
-                    <Cell num>
-                      {c.costPerAttributedMad === null
-                        ? "—"
-                        : nf.format(Math.round(c.costPerAttributedMad))}
-                    </Cell>
-                    <Cell
-                      num
-                      bold
-                      color={c.costShareOfRevenue === null ? T.mut : v.fg}
-                    >
-                      {c.costShareOfRevenue === null
-                        ? "—"
-                        : `${c.costShareOfRevenue} %`}
-                    </Cell>
-                    <Cell>
-                      <Box
-                        component="span"
-                        sx={{
-                          px: 1,
-                          py: 0.3,
-                          borderRadius: "5px",
-                          bgcolor: v.bg,
-                          color: v.fg,
-                          fontSize: 11.5,
-                          fontWeight: 650,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {v.label}
-                      </Box>
-                    </Cell>
-                  </Box>
-                  <Box component="tr">
-                    <Box component="td" colSpan={12} sx={{ p: 0, border: 0 }}>
-                      <Collapse in={isOpen} unmountOnExit>
-                        <Detail
-                          c={c}
-                          tenantId={data.tenantId}
-                          listingId={data.listingId}
-                        />
-                      </Collapse>
+                <Box
+                  component="tr"
+                  key={c.campaignId}
+                  onClick={() =>
+                    navigate(`/marketing/campagne/${c.campaignId}`)
+                  }
+                  sx={{
+                    cursor: "pointer",
+                    "&:hover": { bgcolor: T.line2 },
+                  }}
+                >
+                  <Cell width="26%">
+                    <Box component="span" sx={{ fontWeight: 550 }}>
+                      {FLAG[c.country] ?? ""} {c.campaignName}
                     </Box>
-                  </Box>
-                </Fragment>
+                    <ConfidenceDot level={c.confidence} />
+                  </Cell>
+                  <Cell>
+                    <Box component="span" sx={{ fontSize: 12, color: T.mut }}>
+                      {c.windowFrom.slice(5)} → {c.windowTo.slice(5)}
+                    </Box>
+                  </Cell>
+                  <Cell num>{nf.format(Math.round(c.spendMad))}</Cell>
+                  <Cell num>{c.ctr.toFixed(1)} %</Cell>
+                  <Cell
+                    num
+                    color={
+                      // Sous trente secondes, le visiteur n'a guère eu le
+                      // temps de lire : le signalement vaut avertissement.
+                      c.ga4AverageSessionDuration !== undefined &&
+                      c.ga4AverageSessionDuration < 30
+                        ? T.crit
+                        : T.ink
+                    }
+                  >
+                    {c.ga4AverageSessionDuration !== undefined
+                      ? `${Math.round(c.ga4AverageSessionDuration)} s`
+                      : "—"}
+                  </Cell>
+                  <Cell num>{c.reservations}</Cell>
+                  <Cell num color={T.mut}>
+                    {c.otaReservations}
+                  </Cell>
+                  <Cell num color={T.mut}>
+                    {c.expectedWithoutAds.toFixed(1)}
+                  </Cell>
+                  <Cell num bold color={c.attributed > 0 ? T.ok : T.crit}>
+                    {c.attributed > 0 ? "+" : ""}
+                    {c.attributed.toFixed(1)}
+                  </Cell>
+                  <Cell num>
+                    {c.costPerAttributedMad === null
+                      ? "—"
+                      : nf.format(Math.round(c.costPerAttributedMad))}
+                  </Cell>
+                  <Cell
+                    num
+                    bold
+                    color={c.costShareOfRevenue === null ? T.mut : v.fg}
+                  >
+                    {c.costShareOfRevenue === null
+                      ? "—"
+                      : `${c.costShareOfRevenue} %`}
+                  </Cell>
+                  <Cell>
+                    <Box
+                      component="span"
+                      sx={{
+                        px: 1,
+                        py: 0.3,
+                        borderRadius: "5px",
+                        bgcolor: v.bg,
+                        color: v.fg,
+                        fontSize: 11.5,
+                        fontWeight: 650,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {v.label}
+                    </Box>
+                  </Cell>
+                </Box>
               );
             })}
           </Box>
