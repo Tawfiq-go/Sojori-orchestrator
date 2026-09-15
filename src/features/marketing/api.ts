@@ -277,7 +277,14 @@ export type ScoredCampaign = {
    * mais ils sont prêts à réserver.
    */
   marketAddToCarts?: number;
+  /**
+   * Paniers pour cent sessions. Un taux, pas un nombre : 76 paniers marocains
+   * contre 12 britanniques ne disent rien tant qu'on ignore que le premier
+   * marché a reçu deux fois plus de visiteurs.
+   */
+  marketAddToCartRate?: number;
   marketAddToCartsBefore?: number;
+  marketAddToCartRateBefore?: number;
 
   ga4Sessions?: number;
   ga4EngagedSessions?: number;
