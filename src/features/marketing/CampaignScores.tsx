@@ -148,12 +148,17 @@ function DailyBreakdown({
   campaignId: string;
 }) {
   const [days, setDays] = useState<CampaignDay[] | null>(null);
+  const [normal, setNormal] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
     fetchCampaignDays({ tenantId, listingId, campaignId })
-      .then((d) => alive && setDays(d.days))
+      .then((d) => {
+        if (!alive) return;
+        setDays(d.days);
+        setNormal(d.dailyNormal);
+      })
       .catch(() => alive && setFailed(true));
     return () => {
       alive = false;
@@ -192,10 +197,12 @@ function DailyBreakdown({
           <Box component="tr">
             <Head>Jour</Head>
             <Head num>Dépense</Head>
-            <Head num>Impressions</Head>
             <Head num>Clics</Head>
             <Head num>CTR</Head>
-            <Head num>CPC</Head>
+            <Head num>Sessions</Head>
+            <Head num>Durée</Head>
+            <Head num>Résa</Head>
+            <Head num>OTA</Head>
             <Head>&nbsp;</Head>
           </Box>
         </Box>
@@ -247,10 +254,16 @@ function DailyBreakdown({
       <Typography
         sx={{ fontSize: 11.5, color: T.mut, mt: 1.2, lineHeight: 1.5 }}
       >
-        La diffusion se lit au jour — c'est ce que la régie facture. Les
-        réservations, non : ce marché en produit entre zéro et quatre par jour,
-        et les répartir afficherait une précision qui n'existe pas. La
-        contribution ci-dessus porte sur la semaine.
+        {normal !== null && (
+          <>
+            Hors publicité, ce marché réserve{" "}
+            <b>{normal.toFixed(2)} fois par jour</b> en moyenne — c'est la
+            référence pour lire la colonne « Résa ».{" "}
+          </>
+        )}
+        La diffusion se lit au jour — c'est ce que la régie facture. La
+        contribution, non : sur ces volumes, l'écart d'une seule journée reste
+        du bruit. Celle affichée plus haut porte sur la semaine.
       </Typography>
     </Box>
   );

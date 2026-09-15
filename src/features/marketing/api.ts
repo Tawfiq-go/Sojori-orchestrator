@@ -358,6 +358,13 @@ export type CampaignDay = {
   reach: number;
   ctr: number;
   cpc: number;
+  /** Activité du marché visé sur le site — `null` sans propriété Analytics. */
+  sessions: number | null;
+  averageSessionDuration: number | null;
+  /** Réservations du marché ce jour-là, toutes origines. */
+  reservations: number;
+  otaReservations: number;
+  revenueMad: number;
 };
 
 export type CampaignDays = {
@@ -365,6 +372,12 @@ export type CampaignDays = {
   campaignId: string;
   campaignName: string;
   country: string | null;
+  /**
+   * Ce que ce marché réserve par jour **hors publicité**, mesuré sur la
+   * période de référence de l'établissement. Sans cette normale, quatre
+   * réservations un mardi ne veulent rien dire.
+   */
+  dailyNormal: number | null;
   days: CampaignDay[];
   window: {
     day: string;
