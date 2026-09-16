@@ -31,6 +31,7 @@ import { T, cardSx, kickerSx } from "../marketing/tokens";
 import { resolveOwnerId } from "../onboarding/resolveOwnerId";
 import {
   deleteTemplate,
+  generateTemplatePdf,
   fetchTemplates,
   fetchVariableCatalog,
   previewTemplate,
@@ -98,6 +99,19 @@ export default function DocumentsTab() {
   const [editing, setEditing] = useState<Partial<DocumentTemplate> | null>(null);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<TemplatePreview | null>(null);
+  const [generating, setGenerating] = useState<string | null>(null);
+
+  const generate = async (id: string, audience: "partner" | "client") => {
+    setGenerating(`${id}-${audience}`);
+    setError(null);
+    try {
+      await generateTemplatePdf(ownerId, id, audience);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Génération impossible.");
+    } finally {
+      setGenerating(null);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!ownerId) {
@@ -324,6 +338,37 @@ export default function DocumentsTab() {
                   sx={{ textTransform: "none", borderColor: T.line, color: T.ink }}
                 >
                   Aperçu
+                </Button>
+                {/* Deux boutons distincts plutôt qu'un menu : le choix de la
+                    version est trop conséquent pour être caché derrière un
+                    clic de plus. On voit d'emblée qu'il y en a deux. */}
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={generating === `${t.id}-partner`}
+                  onClick={() => void generate(t.id, "partner")}
+                  sx={{
+                    textTransform: "none",
+                    fontWeight: 650,
+                    bgcolor: T.gold,
+                    "&:hover": { bgcolor: T.goldPure },
+                  }}
+                >
+                  {generating === `${t.id}-partner` ? "…" : "PDF partenaire"}
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={generating === `${t.id}-client`}
+                  onClick={() => void generate(t.id, "client")}
+                  sx={{
+                    textTransform: "none",
+                    fontWeight: 650,
+                    bgcolor: T.ok,
+                    "&:hover": { bgcolor: T.ok },
+                  }}
+                >
+                  {generating === `${t.id}-client` ? "…" : "PDF client"}
                 </Button>
                 <Button
                   size="small"
