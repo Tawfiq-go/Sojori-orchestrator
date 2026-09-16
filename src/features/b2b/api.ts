@@ -717,3 +717,36 @@ export async function fetchSignatureImage(ownerId: string): Promise<string | nul
     return null;
   }
 }
+
+/**
+ * Génère et télécharge le PDF d'un modèle.
+ *
+ * ⚠️ `audience` décide du contenu : « client » retire les blocs masqués, dont
+ * la commission. Un PDF envoyé ne se rattrape pas — le nom du fichier porte
+ * donc l'audience, pour qu'on ne confonde pas les deux versions sur un bureau.
+ */
+export async function generateTemplatePdf(
+  ownerId: string,
+  id: string,
+  audience: "partner" | "client",
+): Promise<void> {
+  try {
+    const res = await apiClient.post(
+      `${DOCS_BASE}/templates/${id}/generate`,
+      { audience, ownerId },
+      { params: { ownerId, tenantId: ownerId }, responseType: "blob" },
+    );
+    const url = URL.createObjectURL(res.data as Blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `document-${audience === "client" ? "client" : "partenaire"}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Libère la mémoire : un blob non révoqué reste alloué tant que la page
+    // est ouverte, et le PM en génère plusieurs par affaire.
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    throw readable(error, "Génération du PDF impossible.");
+  }
+}
