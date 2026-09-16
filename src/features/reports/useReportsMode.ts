@@ -27,7 +27,11 @@ export function useReportsMode(): 'hotel' | 'lcd' {
       .get(`${SRV_USER}/user/get-account-by-id/${encodeURIComponent(ownerId)}`)
       .then(({ data }) => {
         if (cancelled) return;
-        const mode = data?.data?.reportsMode || data?.reportsMode;
+        // get-account-by-id répond `{ success, account }` : sans `account`, le
+        // mode retombait sur « lcd » pour tout le monde et le hub montrait à un
+        // hôtel les rapports multi-biens (constaté sur Nommos le 16/09/2026).
+        const mode =
+          data?.account?.reportsMode || data?.data?.reportsMode || data?.reportsMode;
         setFetchedMode(mode === 'hotel' ? 'hotel' : 'lcd');
       })
       .catch(() => {
