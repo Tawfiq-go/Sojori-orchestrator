@@ -18,6 +18,7 @@ import { useState } from "react";
 import { Alert, Box, Stack, Tab, Tabs, Typography } from "@mui/material";
 import { T, cardSx, kickerSx } from "../marketing/tokens";
 import ConfigurationTab from "./ConfigurationTab";
+import InboxTab from "./InboxTab";
 import OutboxTab from "./OutboxTab";
 
 /** Onglet encore vide — dit ce qu'il attend, sans simuler de données. */
@@ -38,13 +39,14 @@ function Placeholder({ title, waiting }: { title: string; waiting: string }) {
 }
 
 const TABS = [
+  { key: "inbox", label: "Messages" },
   { key: "outbox", label: "À relancer" },
   { key: "prospects", label: "Prospects" },
   { key: "config", label: "Configuration" },
 ] as const;
 
 export default function B2bDashboard() {
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("outbox");
+  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("inbox");
 
   return (
     <Box sx={{ bgcolor: T.bg, minHeight: "100%", p: { xs: 2, md: 3 } }}>
@@ -94,6 +96,8 @@ export default function B2bDashboard() {
             ))}
           </Tabs>
         </Box>
+
+        {tab === "inbox" && <InboxTab />}
 
         {tab === "outbox" && <OutboxTab />}
 

@@ -24,8 +24,10 @@ function readable(error: unknown, fallback: string): Error {
   )?.response?.data?.error;
   if (serverMessage) return new Error(serverMessage);
   if (status === 404)
+    // Volontairement neutre : ce helper sert la politique, la file et la
+    // messagerie. Nommer l'une des trois induit en erreur sur les deux autres.
     return new Error(
-      "Service indisponible : la politique commerciale n'est pas encore déployée sur cet environnement.",
+      "Service indisponible : le module B2B n'est pas encore déployé sur cet environnement.",
     );
   if (status === 401 || status === 403)
     return new Error("Accès refusé à la politique de cet établissement.");
@@ -136,5 +138,105 @@ export async function handleOutboxMessage(
     );
   } catch (error) {
     throw readable(error, "Mise à jour du message impossible.");
+  }
+}
+
+/* ────────────────────────── Inbox commerciale ────────────────────────── */
+
+const INBOX_BASE = `${AGENTS_BASE}/inbox`;
+
+/** Un fil de discussion avec un interlocuteur. */
+export interface InboxThread {
+  id: string;
+  channel: "email" | "whatsapp";
+  contactAddress: string;
+  contactName: string | null;
+  subject: string | null;
+  lastMessageAt: string | null;
+  lastInboundAt: string | null;
+  lastPreview: string | null;
+  unreadCount: number;
+}
+
+export interface InboxMessage {
+  id: string;
+  direction: "inbound" | "outbound";
+  from: string;
+  to: string;
+  subject: string | null;
+  body: string;
+  sentAt: string;
+  /** Renseigné quand l'envoi a échoué — la ligne reste visible malgré tout. */
+  error: string | null;
+}
+
+export interface InboxThreadDetail {
+  id: string;
+  channel: "email" | "whatsapp";
+  contactAddress: string;
+  contactName: string | null;
+  subject: string | null;
+  messages: InboxMessage[];
+}
+
+export async function fetchInboxThreads(ownerId: string): Promise<InboxThread[]> {
+  try {
+    const { data } = await apiClient.get<{ success: boolean; data: InboxThread[] }>(
+      `${INBOX_BASE}/threads`,
+      { params: { ownerId, tenantId: ownerId } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Chargement de la messagerie impossible.");
+  }
+}
+
+export async function fetchInboxThread(
+  ownerId: string,
+  threadId: string,
+): Promise<InboxThreadDetail> {
+  try {
+    const { data } = await apiClient.get<{ success: boolean; data: InboxThreadDetail }>(
+      `${INBOX_BASE}/threads/${threadId}`,
+      { params: { ownerId, tenantId: ownerId } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Ouverture du fil impossible.");
+  }
+}
+
+/**
+ * Envoie une réponse.
+ *
+ * ⚠️ Ce message part VRAIMENT au client depuis b2b@sojori.com. C'est le seul
+ * geste de cet écran dont l'effet sort de Sojori et ne se rattrape pas.
+ */
+export async function replyToInboxThread(
+  ownerId: string,
+  threadId: string,
+  body: string,
+): Promise<void> {
+  try {
+    await apiClient.post(
+      `${INBOX_BASE}/threads/${threadId}/reply`,
+      { body, ownerId },
+      { params: { ownerId, tenantId: ownerId } },
+    );
+  } catch (error) {
+    throw readable(error, "Envoi de la réponse impossible.");
+  }
+}
+
+/** Relève la boîte maintenant, sans attendre le passage automatique. */
+export async function collectInbox(ownerId: string): Promise<{ imported: number; unresolved: number }> {
+  try {
+    const { data } = await apiClient.post<{
+      success: boolean;
+      data: { imported: number; unresolved: number };
+    }>(`${INBOX_BASE}/collect`, { ownerId }, { params: { ownerId, tenantId: ownerId } });
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Relève de la boîte impossible.");
   }
 }
