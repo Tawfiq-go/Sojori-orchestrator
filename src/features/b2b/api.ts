@@ -612,3 +612,108 @@ export async function previewTemplate(
     throw readable(error, "Aperçu impossible.");
   }
 }
+
+/* ─────────────────── Profil d'entreprise du PM ─────────────────── */
+
+const PROFILE_BASE = `${AGENTS_BASE}/profile`;
+
+export interface CompanyProfile {
+  tenantId: string;
+  isConfigured: boolean;
+
+  tradeName: string | null;
+  legalName: string | null;
+  legalForm: string | null;
+  shareCapital: string | null;
+
+  address: string | null;
+  city: string | null;
+  postalCode: string | null;
+  country: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+
+  /** Identifiant Commun de l'Entreprise — distinct du numéro de TVA. */
+  ice: string | null;
+  rc: string | null;
+  patente: string | null;
+  if: string | null;
+  cnss: string | null;
+
+  signatoryTitle: string | null;
+  signatoryFirstName: string | null;
+  signatoryLastName: string | null;
+  signatoryRole: string | null;
+  signatoryAuthority: string | null;
+
+  bankName: string | null;
+  bankRib: string | null;
+  bankIban: string | null;
+  bankSwift: string | null;
+
+  footerNote: string | null;
+
+  /** L'image n'est pas renvoyée avec le profil — seulement sa présence. */
+  hasSignature: boolean;
+  hasStamp: boolean;
+  updatedAt: string | null;
+}
+
+export async function fetchCompanyProfile(ownerId: string): Promise<CompanyProfile> {
+  try {
+    const { data } = await apiClient.get<{ success: boolean; data: CompanyProfile }>(
+      PROFILE_BASE,
+      { params: { ownerId, tenantId: ownerId } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Chargement du profil impossible.");
+  }
+}
+
+export interface SignaturePayload {
+  /** Image en base64, avec ou sans le préfixe `data:`. */
+  base64: string;
+  contentType: "image/png" | "image/jpeg";
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Enregistre le profil.
+ *
+ * ⚠️ `signature` n'est envoyée que si elle a changé : l'omettre laisse celle
+ * déjà enregistrée intacte. Envoyer `null` l'efface volontairement.
+ */
+export async function saveCompanyProfile(
+  ownerId: string,
+  profile: Partial<CompanyProfile> & { tradeName: string },
+  signature?: SignaturePayload | null,
+): Promise<{ hasSignature: boolean }> {
+  try {
+    const body: Record<string, unknown> = { ...profile, ownerId };
+    if (signature !== undefined) body.signature = signature;
+    const { data } = await apiClient.put<{
+      success: boolean;
+      data: { hasSignature: boolean };
+    }>(PROFILE_BASE, body, { params: { ownerId, tenantId: ownerId } });
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Enregistrement du profil impossible.");
+  }
+}
+
+/** L'image elle-même, pour l'aperçu — chargée à la demande. */
+export async function fetchSignatureImage(ownerId: string): Promise<string | null> {
+  try {
+    const { data } = await apiClient.get<{
+      success: boolean;
+      data: { dataUrl: string };
+    }>(`${PROFILE_BASE}/signature`, { params: { ownerId, tenantId: ownerId } });
+    return data.data.dataUrl;
+  } catch {
+    // Absence de signature = 404, ce n'est pas une erreur à remonter.
+    return null;
+  }
+}

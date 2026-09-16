@@ -23,6 +23,7 @@ import { resolveOwnerId } from "../onboarding/resolveOwnerId";
 import { fetchB2bKpis, type B2bKpis } from "./api";
 import ConfigurationTab from "./ConfigurationTab";
 import DocumentsTab from "./DocumentsTab";
+import ProfileTab from "./ProfileTab";
 import InboxTab from "./InboxTab";
 import PipelineTab from "./PipelineTab";
 import ProspectsTab from "./ProspectsTab";
@@ -77,6 +78,7 @@ const TABS = [
   { key: "pipeline", label: "Pipeline" },
   { key: "prospects", label: "Prospects" },
   { key: "documents", label: "Documents" },
+  { key: "profile", label: "Entreprise" },
   { key: "config", label: "Configuration" },
 ] as const;
 
@@ -190,6 +192,8 @@ export default function B2bDashboard() {
         {tab === "prospects" && <ProspectsTab />}
 
         {tab === "documents" && <DocumentsTab />}
+
+        {tab === "profile" && <ProfileTab />}
 
         {tab === "outbox" && <OutboxTab />}
 
