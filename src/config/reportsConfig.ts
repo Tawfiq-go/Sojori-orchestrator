@@ -42,6 +42,8 @@ const T = {
 
 export const REPORTS_CATALOG: ReportEntry[] = [
   // Live — écrans d'action / pilotage temps réel
+  // Tableau de bord, Performance par bien et Analytics : LCD seulement — un hôtel
+  // (Multi) lit ses chiffres dans les rapports hôtel (décision Tawfiq 16/09/2026).
   // Ma journée n'apparaît pas ici : elle a sa propre entrée dans le menu
   // latéral (à côté de "Reports"), la remontrer dans ce hub serait redondant.
   {
@@ -52,7 +54,7 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Réservations, revenus, occupation, ADR, RevPAR, sources et top biens — la vue pilotage visuelle.',
     accent: T.primary,
     route: '/dashboard',
-    mode: 'both',
+    mode: 'lcd',
   },
   {
     id: 'dashboard/performance-par-bien',
@@ -62,7 +64,7 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Matrice bien × mois : nuits ouvertes/vendues, revenu, ADR, RevPAR, pickup 7/30j, lead time, canaux — vues Mois, Année et Avis. Basé sur le calendrier de disponibilité (source alimentée pour tous les PM, vérifié en base 2026-09-04).',
     accent: T.primary,
     route: '/dashboard/performance-par-bien',
-    mode: 'both',
+    mode: 'lcd',
   },
   {
     id: 'analytics',
@@ -72,7 +74,7 @@ export const REPORTS_CATALOG: ReportEntry[] = [
       'Analyse avancée : évolution des revenus, sources, saisonnalité 12 mois, durée de séjour, performance par bien.',
     accent: T.lightBlue,
     route: '/analytics',
-    mode: 'both',
+    mode: 'lcd',
   },
   {
     id: 'admin/owner-monitor',
