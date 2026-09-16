@@ -67,11 +67,18 @@ export default function SectionIdentite({ structure, onChanged }: Props) {
               placeholder="non renseigné — usage interne"
               onSave={save('nickname')}
             />
-            <EditableField
-              label="Type d'établissement"
-              value={b.propertyType}
-              onSave={save('propertyType')}
-            />
+            <Box>
+              <EditableField
+                label="Type d'établissement"
+                value={b.propertyType}
+                placeholder="Villa, Appartement, Riad, Maison, Studio…"
+                onSave={save('propertyType')}
+              />
+              <Typography sx={{ fontSize: 11, color: T.ink3, mt: 0.5, lineHeight: 1.4 }}>
+                C'est le mot que le chatbot WhatsApp emploie avec le voyageur (« votre villa »,
+                « votre appartement »), dans sa langue.
+              </Typography>
+            </Box>
             <EditableField label="Ville" value={b.city} onSave={save('city')} />
             <EditableField label="Quartier" value={b.district} onSave={save('place')} />
             <EditableField label="Adresse" value={b.address} onSave={save('address')} />
