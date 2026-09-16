@@ -69,3 +69,62 @@ export async function saveB2bPolicy(
     throw readable(error, "Enregistrement de la politique impossible.");
   }
 }
+
+/* ────────────────────────── File de sortie ────────────────────────── */
+
+/**
+ * Un message à relancer.
+ *
+ * ⚠️ `pending` signifie « il faudrait relancer », JAMAIS « le client a été
+ * relancé ». Aucun envoi automatique n'existe : c'est le PM qui envoie depuis
+ * sa boîte, puis marque la ligne traitée.
+ */
+export interface OutboxMessage {
+  id: string;
+  groupId: string;
+  groupLabel: string;
+  groupStatus: string | null;
+  kind: "payment_reminder" | "quote_expiring";
+  status: "pending" | "sent_manually" | "sent" | "dismissed";
+  recipientEmail: string | null;
+  recipientName: string | null;
+  subject: string;
+  body: string;
+  reason: string;
+  amountMad: number;
+  dueAt: string | null;
+  createdAt: string;
+  handledAt: string | null;
+}
+
+export async function fetchB2bOutbox(
+  ownerId: string,
+  status: "pending" | "all" = "pending",
+): Promise<OutboxMessage[]> {
+  try {
+    const { data } = await apiClient.get<{ success: boolean; data: OutboxMessage[] }>(
+      `${BASE}/outbox`,
+      { params: { ownerId, status } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Chargement de la file impossible.");
+  }
+}
+
+/** `sent_manually` = le PM a envoyé lui-même. `dismissed` = relance inutile. */
+export async function handleOutboxMessage(
+  ownerId: string,
+  id: string,
+  status: "sent_manually" | "dismissed",
+): Promise<void> {
+  try {
+    await apiClient.post(
+      `${BASE}/outbox/${id}/handle`,
+      { status, ownerId },
+      { params: { ownerId } },
+    );
+  } catch (error) {
+    throw readable(error, "Mise à jour du message impossible.");
+  }
+}

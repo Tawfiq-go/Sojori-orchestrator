@@ -18,6 +18,7 @@ import { useState } from "react";
 import { Alert, Box, Stack, Tab, Tabs, Typography } from "@mui/material";
 import { T, cardSx, kickerSx } from "../marketing/tokens";
 import ConfigurationTab from "./ConfigurationTab";
+import OutboxTab from "./OutboxTab";
 
 /** Onglet encore vide — dit ce qu'il attend, sans simuler de données. */
 function Placeholder({ title, waiting }: { title: string; waiting: string }) {
@@ -37,13 +38,13 @@ function Placeholder({ title, waiting }: { title: string; waiting: string }) {
 }
 
 const TABS = [
+  { key: "outbox", label: "À relancer" },
   { key: "prospects", label: "Prospects" },
-  { key: "devis", label: "Devis" },
   { key: "config", label: "Configuration" },
 ] as const;
 
 export default function B2bDashboard() {
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("config");
+  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("outbox");
 
   return (
     <Box sx={{ bgcolor: T.bg, minHeight: "100%", p: { xs: 2, md: 3 } }}>
@@ -65,8 +66,9 @@ export default function B2bDashboard() {
 
         <Alert severity="info" sx={{ fontSize: 13 }}>
           <strong>Module en cours de construction.</strong> La{" "}
-          <strong>Configuration</strong> est enregistrée et lue par le balayage
-          automatique. Les onglets Prospects et Devis restent à venir.
+          <strong>Configuration</strong> est enregistrée et lue par le suivi des
+          échéances, qui alimente <strong>À relancer</strong>. L'onglet
+          Prospects reste à venir.
         </Alert>
 
         {/* ── Onglets ── */}
@@ -93,6 +95,8 @@ export default function B2bDashboard() {
           </Tabs>
         </Box>
 
+        {tab === "outbox" && <OutboxTab />}
+
         {tab === "config" && <ConfigurationTab />}
 
         {tab === "prospects" && (
@@ -102,12 +106,7 @@ export default function B2bDashboard() {
           />
         )}
 
-        {tab === "devis" && (
-          <Placeholder
-            title="Les devis ne sont pas encore implémentés"
-            waiting="C'est l'étape 2, celle que configure l'onglet voisin. Un devis portera une date d'expiration, un montant, et posera une réservation provisoire sur le bien concerné."
-          />
-        )}
+
       </Stack>
     </Box>
   );
