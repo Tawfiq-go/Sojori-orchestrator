@@ -475,3 +475,140 @@ export async function fetchB2bKpis(ownerId: string): Promise<B2bKpis> {
     throw readable(error, "Chargement des indicateurs impossible.");
   }
 }
+
+/* ─────────────────── Modèles de devis et de contrat ─────────────────── */
+
+const DOCS_BASE = `${AGENTS_BASE}/documents`;
+
+export type BlockType =
+  | "text"
+  | "line_items"
+  | "totals"
+  | "installments"
+  | "commission"
+  | "signatures";
+
+export interface TemplateBlock {
+  type: BlockType;
+  title: string | null;
+  body: string | null;
+  /**
+   * Le bloc figure-t-il dans la version destinée au CLIENT FINAL ?
+   *
+   * ⚠️ C'est ce drapeau qui évite de montrer au client la marge de son agence.
+   */
+  visibleForClient: boolean;
+}
+
+export interface TemplateSignatory {
+  side: string;
+  name: string | null;
+  role: string | null;
+}
+
+export interface DocumentTemplate {
+  id: string;
+  kind: "quote" | "contract";
+  name: string;
+  blocks: TemplateBlock[];
+  signatories: TemplateSignatory[];
+  isDefault: boolean;
+  updatedAt: string;
+}
+
+export interface VariableDefinition {
+  key: string;
+  label: string;
+  sample: string;
+}
+
+export interface VariableFamily {
+  family: string;
+  variables: VariableDefinition[];
+}
+
+export async function fetchVariableCatalog(
+  ownerId: string,
+): Promise<VariableFamily[]> {
+  try {
+    const { data } = await apiClient.get<{ success: boolean; data: VariableFamily[] }>(
+      `${DOCS_BASE}/variables`,
+      { params: { ownerId, tenantId: ownerId } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Chargement des variables impossible.");
+  }
+}
+
+export async function fetchTemplates(ownerId: string): Promise<DocumentTemplate[]> {
+  try {
+    const { data } = await apiClient.get<{ success: boolean; data: DocumentTemplate[] }>(
+      `${DOCS_BASE}/templates`,
+      { params: { ownerId, tenantId: ownerId } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Chargement des modèles impossible.");
+  }
+}
+
+/** Renvoie les variables mal orthographiées — non bloquantes, mais à savoir. */
+export async function saveTemplate(
+  ownerId: string,
+  template: Partial<DocumentTemplate> & { name: string; kind: "quote" | "contract" },
+): Promise<{ id: string; unknownVariables: string[] }> {
+  try {
+    const { data } = await apiClient.put<{
+      success: boolean;
+      data: { id: string; unknownVariables: string[] };
+    }>(`${DOCS_BASE}/templates/${template.id ?? ""}`, template, {
+      params: { ownerId, tenantId: ownerId },
+    });
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Enregistrement du modèle impossible.");
+  }
+}
+
+export async function deleteTemplate(ownerId: string, id: string): Promise<void> {
+  try {
+    await apiClient.delete(`${DOCS_BASE}/templates/${id}`, {
+      params: { ownerId, tenantId: ownerId },
+    });
+  } catch (error) {
+    throw readable(error, "Suppression impossible.");
+  }
+}
+
+export interface RenderedBlock {
+  type: BlockType;
+  title: string | null;
+  body: string | null;
+}
+
+export interface TemplatePreview {
+  name: string;
+  kind: "quote" | "contract";
+  /** Ce que reçoit le partenaire — tous les blocs. */
+  partner: RenderedBlock[];
+  /** Ce que reçoit le client final — sans les blocs masqués. */
+  client: RenderedBlock[];
+  hiddenForClient: number;
+}
+
+export async function previewTemplate(
+  ownerId: string,
+  id: string,
+): Promise<TemplatePreview> {
+  try {
+    const { data } = await apiClient.post<{ success: boolean; data: TemplatePreview }>(
+      `${DOCS_BASE}/templates/${id}/preview`,
+      {},
+      { params: { ownerId, tenantId: ownerId } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Aperçu impossible.");
+  }
+}
