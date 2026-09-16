@@ -138,16 +138,24 @@ function Head({ children, num }: { children: React.ReactNode; num?: boolean }) {
 export default function CampaignScores({ data }: { data: MarketingDashboard }) {
   const navigate = useNavigate();
 
-  const { positives, negatives } = useMemo(() => {
-    const pos = data.campaigns.filter((c) => c.attributed > 0.3);
+  const { positives, negatives, shared } = useMemo(() => {
+    // Une campagne dont le marché est visé par plusieurs campagnes ne peut
+    // être dite ni contributive ni sans effet : les réservations sont celles
+    // du marché entier et rien ne dit laquelle les a produites. La ranger dans
+    // « sans effet mesuré » la condamnerait sur une mesure qui n'existe pas.
+    const isShared = (c: ScoredCampaign) =>
+      data.campaigns.filter((x) => x.country === c.country).length > 1;
+    const measurable = data.campaigns.filter((c) => !isShared(c));
     return {
-      positives: pos,
-      negatives: data.campaigns.filter((c) => c.attributed <= 0.3),
+      positives: measurable.filter((c) => c.attributed > 0.3),
+      negatives: measurable.filter((c) => c.attributed <= 0.3),
+      shared: data.campaigns.filter(isShared),
     };
   }, [data.campaigns]);
 
   const spendPositive = positives.reduce((s, c) => s + c.spendMad, 0);
   const spendNegative = negatives.reduce((s, c) => s + c.spendMad, 0);
+  const spendShared = shared.reduce((s, c) => s + c.spendMad, 0);
 
   return (
     <Box sx={{ ...cardSx, p: 0, overflow: "hidden" }}>
@@ -173,6 +181,18 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
             label={`${positives.length} contributives · ${mad(spendPositive)}`}
             sx={{ bgcolor: T.okBg, color: T.ok, fontWeight: 650, fontSize: 12 }}
           />
+          {shared.length > 0 && (
+            <Chip
+              size="small"
+              label={`${shared.length} non mesurables · ${mad(spendShared)}`}
+              sx={{
+                bgcolor: T.warnBg,
+                color: T.warn,
+                fontWeight: 650,
+                fontSize: 12,
+              }}
+            />
+          )}
           <Chip
             size="small"
             label={`${negatives.length} sans effet mesuré · ${mad(spendNegative)}`}
@@ -240,8 +260,10 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
               // 3 + 3 = 6 réservations alors qu'il n'y en a que 3, partagées.
               // La mention rend le partage visible au lieu de le laisser
               // deviner.
-              const sharesMarket =
-                data.campaigns.filter((x) => x.country === c.country).length > 1;
+              const sameMarket = data.campaigns.filter(
+                (x) => x.country === c.country,
+              );
+              const sharesMarket = sameMarket.length > 1;
               return (
                 <Box
                   component="tr"
@@ -259,6 +281,28 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                       {FLAG[c.country] ?? ""} {c.campaignName}
                     </Box>
                     <ConfidenceDot level={c.confidence} />
+                    {/*
+                      L'avertissement vit SUR la ligne, pas seulement en légende
+                      de bas de tableau : quelqu'un qui lit une ligne ne lit pas
+                      forcément le pied de page, et c'est précisément là qu'il
+                      décide de couper une campagne. Rien n'est réparti au
+                      prorata — répartir 3 réservations en « 2,1 » et « 0,9 »
+                      donnerait à une hypothèse l'apparence d'une mesure.
+                    */}
+                    {sharesMarket && (
+                      <Box
+                        sx={{
+                          fontSize: 11,
+                          color: T.warn,
+                          mt: 0.4,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        ◈ {sameMarket.length} campagnes sur ce marché — les
+                        réservations affichées sont celles du marché entier,
+                        impossible de savoir laquelle les a produites.
+                      </Box>
+                    )}
                   </Cell>
                   <Cell>
                     <Box component="span" sx={{ fontSize: 12, color: T.mut }}>
