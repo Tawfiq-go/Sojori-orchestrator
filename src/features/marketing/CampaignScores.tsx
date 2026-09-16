@@ -113,7 +113,40 @@ function Cell({
   );
 }
 
-function Head({ children, num }: { children: React.ReactNode; num?: boolean }) {
+/**
+ * D'où vient une colonne.
+ *
+ * Trois origines, qui n'ont pas la même valeur de preuve :
+ *   Meta   — facturé par la régie, vérifiable sur la facture ;
+ *   GA4    — mesuré sur le site, une session est un fait ;
+ *   Sojori — nos réservations, exactes mais sans lien avec la campagne ;
+ *   estimé — calculé, jamais observé. C'est le cas de tout ce qui relie une
+ *            campagne à une réservation : le lien n'existe pas, il est déduit
+ *            d'un écart de marché.
+ *
+ * Afficher la source sous chaque intitulé évite la lecture qui coûte le plus
+ * cher : prendre une estimation pour une mesure.
+ */
+type Source = "Meta" | "GA4" | "GA4 · marché" | "Sojori" | "estimé";
+
+const SOURCE_COLOR: Record<Source, string> = {
+  Meta: T.mut,
+  GA4: T.mut,
+  "GA4 · marché": T.mut,
+  Sojori: T.mut,
+  // L'estimation se distingue à l'œil : c'est la seule qui n'est pas mesurée.
+  estimé: T.warn,
+};
+
+function Head({
+  children,
+  num,
+  src,
+}: {
+  children: React.ReactNode;
+  num?: boolean;
+  src?: Source;
+}) {
   return (
     <Box
       component="th"
@@ -131,6 +164,21 @@ function Head({ children, num }: { children: React.ReactNode; num?: boolean }) {
       }}
     >
       {children}
+      {src && (
+        <Box
+          sx={{
+            fontSize: 8.5,
+            fontWeight: 600,
+            letterSpacing: "0.02em",
+            textTransform: "none",
+            color: SOURCE_COLOR[src],
+            fontStyle: src === "estimé" ? "italic" : "normal",
+            mt: 0.15,
+          }}
+        >
+          {src}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -235,26 +283,27 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
         >
           <Box component="thead">
             <Box component="tr">
-              <Head>Campagne</Head>
+              <Head src="Meta">Campagne</Head>
               <Head>Période</Head>
-              <Head num>Dépense</Head>
-              <Head num>CTR</Head>
-              <Head num>Durée sess.</Head>
-              <Head num>Paniers</Head>
-              <Head num>Taux</Head>
-              <Head num>Résa</Head>
-              <Head num>OTA</Head>
-              <Head num>Sans pub</Head>
-              <Head num>Écart</Head>
-              <Head num>Coût/attr.</Head>
-              <Head num>% du CA</Head>
-              <Head>Verdict</Head>
+              <Head num src="Meta">Dépense</Head>
+              <Head num src="Meta">CTR</Head>
+              <Head num src="GA4">Durée sess.</Head>
+              <Head num src="GA4">Paniers camp.</Head>
+              <Head num src="GA4 · marché">Paniers marché</Head>
+              <Head num src="GA4 · marché">Taux</Head>
+              <Head num src="Sojori">Résa</Head>
+              <Head num src="Sojori">OTA</Head>
+              <Head num src="estimé">Sans pub</Head>
+              <Head num src="estimé">Écart</Head>
+              <Head num src="estimé">Coût/résa est.</Head>
+              <Head num src="estimé">% du CA</Head>
+              <Head src="estimé">Verdict</Head>
             </Box>
           </Box>
           <Box component="tbody">
             {data.campaigns.map((c) => {
               const v = VERDICT[c.verdict];
-              // ⚠️ Paniers, Résa, OTA et « Sans pub » décrivent le MARCHÉ, pas
+              // ⚠️ « Paniers marché », Résa, OTA et « Sans pub » décrivent le MARCHÉ, pas
               // la campagne. Quand deux campagnes visent le même pays, elles
               // affichent les mêmes chiffres — et un lecteur les additionne :
               // 3 + 3 = 6 réservations alors qu'il n'y en a que 3, partagées.
@@ -332,6 +381,16 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                     // Le panier dit que quelqu'un a choisi ses dates et sa
                     // villa : l'intention la plus proche d'une réservation que
                     // le site sache mesurer.
+                  >
+                    {typeof c.ga4AddToCarts === "number" ? c.ga4AddToCarts : "—"}
+                  </Cell>
+                  <Cell
+                    num
+                    color={T.mut}
+                    // Le MARCHÉ entier, pas cette campagne : tout le trafic du
+                    // pays, publicitaire ou non. Deux campagnes visant le même
+                    // marché affichent donc le même nombre — d'où la colonne
+                    // précédente, qui seule dit ce que CETTE campagne a produit.
                   >
                     {typeof c.marketAddToCarts === "number"
                       ? c.marketAddToCarts
