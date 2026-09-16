@@ -249,7 +249,10 @@ export default function PipelineTab() {
 
       {opportunities.length > 0 && (
         <Box sx={{ overflowX: "auto", pb: 1 }}>
-          <Stack direction="row" spacing={1.5} sx={{ minWidth: 1100 }}>
+          {/* Le `minWidth` ne force le défilement que si l'écran est plus
+              étroit que les sept colonnes réunies. Au-delà, elles s'étirent
+              et occupent toute la largeur disponible. */}
+          <Stack direction="row" spacing={1.5} sx={{ minWidth: 1000 }}>
             {STAGES.map((s) => {
               const cards = byStage.get(s.key) ?? [];
               return (

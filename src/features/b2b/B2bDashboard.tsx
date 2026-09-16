@@ -34,7 +34,7 @@ export default function B2bDashboard() {
 
   return (
     <Box sx={{ bgcolor: T.bg, minHeight: "100%", p: { xs: 2, md: 3 } }}>
-      <Stack spacing={2.5} sx={{ maxWidth: 1080, mx: "auto" }}>
+      <Stack spacing={2.5}>
         {/* ── En-tête ── */}
         <Box>
           <Typography sx={kickerSx}>Sales B2B</Typography>
