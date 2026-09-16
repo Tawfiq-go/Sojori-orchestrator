@@ -15,10 +15,8 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
+  Divider,
+  Drawer,
   MenuItem,
   Select,
   Stack,
@@ -81,6 +79,9 @@ export default function PipelineTab() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const [newProspect, setNewProspect] = useState(false);
+  /** Affaire dont on saisit la raison de perte — panneau, jamais window.prompt. */
+  const [losing, setLosing] = useState<Opportunity | null>(null);
+  const [lostReason, setLostReason] = useState("");
   const [form, setForm] = useState({
     companyName: "",
     contactName: "",
@@ -163,15 +164,24 @@ export default function PipelineTab() {
     }
   };
 
-  const move = async (o: Opportunity, stage: OpportunityStage) => {
+  const move = async (
+    o: Opportunity,
+    stage: OpportunityStage,
+    reason?: string,
+  ) => {
+    // « Perdu » ouvre le panneau : la raison d'un échec est ce qui permet
+    // d'apprendre de ce qui n'aboutit pas, et un window.prompt se ferme d'un
+    // Échap sans qu'on s'en aperçoive.
+    if (stage === "lost" && reason === undefined) {
+      setLosing(o);
+      setLostReason("");
+      return;
+    }
     setBusyId(o.id);
     setError(null);
     try {
-      const reason =
-        stage === "lost"
-          ? (window.prompt("Pourquoi cette affaire est-elle perdue ?") ?? "")
-          : undefined;
       await moveOpportunity(ownerId, o.id, stage, reason || undefined);
+      setLosing(null);
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Déplacement impossible.");
@@ -363,18 +373,25 @@ export default function PipelineTab() {
         </Box>
       )}
 
-      {/* ─────────────────────── Saisie d'un prospect ─────────────────────── */}
-      <Dialog
+      {/* ─────────────────────── Saisie d'un prospect ───────────────────────
+          Panneau latéral plutôt qu'une fenêtre modale : c'est le pattern des
+          autres écrans Sojori (planning, minibar, tâches). Une modale coupe
+          l'écran et fait perdre le contexte — ici le commercial garde son
+          pipeline sous les yeux pendant qu'il saisit. */}
+      <Drawer
+        anchor="right"
         open={newProspect}
         onClose={() => !saving && setNewProspect(false)}
-        maxWidth="sm"
-        fullWidth
       >
-        <DialogTitle sx={{ fontSize: 17, fontWeight: 700 }}>
-          Nouveau prospect
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 0.5 }}>
+        <Box sx={{ width: { xs: "100vw", sm: 460 }, p: 2.5 }}>
+          <Typography sx={{ fontSize: 18, fontWeight: 700, color: T.ink }}>
+            Nouveau prospect
+          </Typography>
+          <Typography sx={{ fontSize: 13, color: T.ink2, mb: 2.5 }}>
+            Une entreprise, une agence ou un comité d'entreprise à démarcher.
+          </Typography>
+
+          <Stack spacing={2}>
             <TextField
               label="Entreprise"
               required
@@ -441,30 +458,89 @@ export default function PipelineTab() {
               obligatoire, mais sans lui aucune relance ne pourra partir.
             </Typography>
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button
-            onClick={() => setNewProspect(false)}
-            disabled={saving}
-            sx={{ textTransform: "none", color: T.mut }}
-          >
-            Annuler
-          </Button>
-          <Button
-            variant="contained"
-            disabled={!form.companyName.trim() || saving}
-            onClick={() => void saveProspect()}
-            sx={{
-              textTransform: "none",
-              fontWeight: 700,
-              bgcolor: T.gold,
-              "&:hover": { bgcolor: T.goldPure },
-            }}
-          >
-            {saving ? "Création…" : "Créer"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+
+          <Divider sx={{ my: 2.5 }} />
+
+          <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+            <Button
+              onClick={() => setNewProspect(false)}
+              disabled={saving}
+              sx={{ textTransform: "none", color: T.mut }}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="contained"
+              disabled={!form.companyName.trim() || saving}
+              onClick={() => void saveProspect()}
+              sx={{
+                textTransform: "none",
+                fontWeight: 700,
+                bgcolor: T.gold,
+                "&:hover": { bgcolor: T.goldPure },
+              }}
+            >
+              {saving ? "Création…" : "Créer"}
+            </Button>
+          </Stack>
+        </Box>
+      </Drawer>
+
+      {/* ───────────────────── Raison de la perte ───────────────────── */}
+      <Drawer
+        anchor="right"
+        open={!!losing}
+        onClose={() => !busyId && setLosing(null)}
+      >
+        <Box sx={{ width: { xs: "100vw", sm: 420 }, p: 2.5 }}>
+          <Typography sx={{ fontSize: 18, fontWeight: 700, color: T.ink }}>
+            Affaire perdue
+          </Typography>
+          <Typography sx={{ fontSize: 13, color: T.ink2, mb: 2.5 }}>
+            {losing?.companyName ?? losing?.label}
+          </Typography>
+
+          <TextField
+            label="Pourquoi ?"
+            placeholder="Budget, dates indisponibles, concurrent, sans réponse…"
+            multiline
+            minRows={3}
+            fullWidth
+            size="small"
+            value={lostReason}
+            onChange={(e) => setLostReason(e.target.value)}
+          />
+          <Typography sx={{ fontSize: 12, color: T.mut, mt: 1.5, lineHeight: 1.6 }}>
+            Facultatif, mais c'est la seule façon de savoir plus tard ce qui
+            n'aboutit pas — et pourquoi.
+          </Typography>
+
+          <Divider sx={{ my: 2.5 }} />
+
+          <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+            <Button
+              onClick={() => setLosing(null)}
+              disabled={!!busyId}
+              sx={{ textTransform: "none", color: T.mut }}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="contained"
+              disabled={!!busyId}
+              onClick={() => losing && void move(losing, "lost", lostReason)}
+              sx={{
+                textTransform: "none",
+                fontWeight: 700,
+                bgcolor: T.crit,
+                "&:hover": { bgcolor: T.crit },
+              }}
+            >
+              {busyId ? "Enregistrement…" : "Marquer perdue"}
+            </Button>
+          </Stack>
+        </Box>
+      </Drawer>
     </Stack>
   );
 }
