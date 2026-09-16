@@ -240,3 +240,131 @@ export async function collectInbox(ownerId: string): Promise<{ imported: number;
     throw readable(error, "Relève de la boîte impossible.");
   }
 }
+
+/* ──────────────────────────── Pipeline ──────────────────────────── */
+
+const PIPELINE_BASE = `${AGENTS_BASE}/pipeline`;
+
+export type OpportunityStage =
+  | "to_contact"
+  | "contacted"
+  | "discussing"
+  | "quote_sent"
+  | "deposit_paid"
+  | "won"
+  | "lost";
+
+export interface Prospect {
+  id: string;
+  companyName: string;
+  contactName: string | null;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  country: string | null;
+  segment: string | null;
+  notes: string | null;
+  status: "new" | "contacted" | "replied" | "discarded";
+  companyId: string | null;
+  lastContactedAt: string | null;
+  createdAt: string;
+}
+
+export interface Opportunity {
+  id: string;
+  label: string;
+  stage: OpportunityStage;
+  /** `false` = étape dérivée du devis réel, non déplaçable à la main. */
+  stageIsManual: boolean;
+  companyName: string | null;
+  contactName: string | null;
+  email: string | null;
+  estimatedValueMad: number | null;
+  expectedArrival: string | null;
+  expectedGuests: number | null;
+  nextActionAt: string | null;
+  nextAction: string | null;
+  lostReason: string | null;
+  reservationGroupId: string | null;
+  updatedAt: string;
+}
+
+export async function fetchProspects(ownerId: string): Promise<Prospect[]> {
+  try {
+    const { data } = await apiClient.get<{ success: boolean; data: Prospect[] }>(
+      `${PIPELINE_BASE}/prospects`,
+      { params: { ownerId, tenantId: ownerId } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Chargement des prospects impossible.");
+  }
+}
+
+export async function createProspect(
+  ownerId: string,
+  prospect: Partial<Prospect> & { companyName: string },
+): Promise<{ id: string }> {
+  try {
+    const { data } = await apiClient.post<{ success: boolean; data: { id: string } }>(
+      `${PIPELINE_BASE}/prospects`,
+      { ...prospect, ownerId },
+      { params: { ownerId, tenantId: ownerId } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Création du prospect impossible.");
+  }
+}
+
+export async function fetchOpportunities(ownerId: string): Promise<Opportunity[]> {
+  try {
+    const { data } = await apiClient.get<{ success: boolean; data: Opportunity[] }>(
+      `${PIPELINE_BASE}/opportunities`,
+      { params: { ownerId, tenantId: ownerId } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Chargement du pipeline impossible.");
+  }
+}
+
+export async function createOpportunity(
+  ownerId: string,
+  payload: { label: string; prospectId?: string; estimatedValueMad?: number },
+): Promise<{ id: string }> {
+  try {
+    const { data } = await apiClient.post<{ success: boolean; data: { id: string } }>(
+      `${PIPELINE_BASE}/opportunities`,
+      { ...payload, ownerId },
+      { params: { ownerId, tenantId: ownerId } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Création de l'affaire impossible.");
+  }
+}
+
+/**
+ * Déplace une affaire.
+ *
+ * ⚠️ Le serveur refuse les étapes dérivées du devis réel (`quote_sent`,
+ * `deposit_paid`, `won`) : elles reflètent un acompte encaissé, pas une
+ * intention. L'écran ne doit pas les proposer.
+ */
+export async function moveOpportunity(
+  ownerId: string,
+  id: string,
+  stage: OpportunityStage,
+  lostReason?: string,
+): Promise<void> {
+  try {
+    await apiClient.post(
+      `${PIPELINE_BASE}/opportunities/${id}/stage`,
+      { stage, lostReason, ownerId },
+      { params: { ownerId, tenantId: ownerId } },
+    );
+  } catch (error) {
+    throw readable(error, "Déplacement impossible.");
+  }
+}

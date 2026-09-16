@@ -19,29 +19,13 @@ import { Alert, Box, Stack, Tab, Tabs, Typography } from "@mui/material";
 import { T, cardSx, kickerSx } from "../marketing/tokens";
 import ConfigurationTab from "./ConfigurationTab";
 import InboxTab from "./InboxTab";
+import PipelineTab from "./PipelineTab";
 import OutboxTab from "./OutboxTab";
-
-/** Onglet encore vide — dit ce qu'il attend, sans simuler de données. */
-function Placeholder({ title, waiting }: { title: string; waiting: string }) {
-  return (
-    <Box sx={{ ...cardSx, textAlign: "center", py: 6 }}>
-      <Typography sx={{ ...kickerSx, mb: 1 }}>À venir</Typography>
-      <Typography sx={{ fontSize: 17, fontWeight: 700, color: T.ink, mb: 1 }}>
-        {title}
-      </Typography>
-      <Typography
-        sx={{ fontSize: 13.5, color: T.ink2, maxWidth: 520, mx: "auto", lineHeight: 1.7 }}
-      >
-        {waiting}
-      </Typography>
-    </Box>
-  );
-}
 
 const TABS = [
   { key: "inbox", label: "Messages" },
   { key: "outbox", label: "À relancer" },
-  { key: "prospects", label: "Prospects" },
+  { key: "pipeline", label: "Pipeline" },
   { key: "config", label: "Configuration" },
 ] as const;
 
@@ -69,8 +53,7 @@ export default function B2bDashboard() {
         <Alert severity="info" sx={{ fontSize: 13 }}>
           <strong>Module en cours de construction.</strong> La{" "}
           <strong>Configuration</strong> est enregistrée et lue par le suivi des
-          échéances, qui alimente <strong>À relancer</strong>. L'onglet
-          Prospects reste à venir.
+          échéances, qui alimente <strong>À relancer</strong>.
         </Alert>
 
         {/* ── Onglets ── */}
@@ -99,17 +82,11 @@ export default function B2bDashboard() {
 
         {tab === "inbox" && <InboxTab />}
 
+        {tab === "pipeline" && <PipelineTab />}
+
         {tab === "outbox" && <OutboxTab />}
 
         {tab === "config" && <ConfigurationTab />}
-
-        {tab === "prospects" && (
-          <Placeholder
-            title="Aucun prospect n'est encore suivi"
-            waiting="La collection est vide et le modèle Prospect reste à créer (étape 5). Cet onglet listera les entreprises contactées, leur dernière interaction et la prochaine action à mener."
-          />
-        )}
-
 
       </Stack>
     </Box>
