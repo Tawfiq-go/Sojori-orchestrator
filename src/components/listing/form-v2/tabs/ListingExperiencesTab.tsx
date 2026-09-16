@@ -258,7 +258,8 @@ export default function ListingExperiencesTab({
     <Box sx={{ p: { xs: 1.5, md: 2 }, width: '100%' }}>
       <Typography sx={{ mb: 1.5, fontSize: 12, color: 'text.secondary' }}>
         Ce que le voyageur voit dans WhatsApp sous ✨ Expériences. Les ambiances, la piscine et les
-        beds sont dans Options séjour ; la navette dans Orchestration → Transport.
+        beds sont dans Options séjour. La navette se crée dans Expériences → Catalogue, se coche
+        ici dans « Catalogue partagé », et son suivi du vol se règle dans Orchestration → Transport.
       </Typography>
 
       <TabSection

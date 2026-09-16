@@ -1386,12 +1386,14 @@ export default function OrchestrationOverviewPanel({
             toast.info('Déjà aligné sur l’activation propriétaire');
             return;
           }
-          const next = await saveListingServiceActivation(listingId, patch);
-          setActivationStatus(next.services ?? []);
-          // Sync capability decisions both ways (ON and OFF). Direct put — not
-          // saveCapPatch — so the activation gate does not block on stale OFF.
+          // Sync capability decisions both ways (ON and OFF), by direct put.
+          // Ordre imposé par le garde-fou serveur (assertCapabilitiesAllowedForSave,
+          // qui relit l'activation FRAÎCHE) : au OFF, envoyer les decisions AVANT
+          // de couper l'activation, sinon le PUT est refusé — c'était le 500
+          // silencieux vu sur Test majorelle le 15/09. Au ON, l'inverse.
           const def = getCapabilityDefinition(capKey);
-          if (def) {
+          const syncDecisions = async () => {
+            if (!def) return;
             await listingsService.putListingOrchestration(listingId, {
               capabilities: {
                 [capKey]: {
@@ -1410,7 +1412,11 @@ export default function OrchestrationOverviewPanel({
                 },
               },
             });
-          }
+          };
+          if (!value) await syncDecisions();
+          const next = await saveListingServiceActivation(listingId, patch);
+          setActivationStatus(next.services ?? []);
+          if (value) await syncDecisions();
           toast.success(value ? 'Service activé pour cette annonce' : 'Service désactivé pour cette annonce');
           setDoc((prev) => {
             if (!prev) return prev;
@@ -2780,8 +2786,9 @@ export default function OrchestrationOverviewPanel({
           >
             {group.id === 'concierge' && isListingScope ? (
               <Typography sx={{ fontSize: 11.5, color: V3.t3, mb: 1.25, lineHeight: 1.45 }}>
-                Les expériences (J3) et la <b>navette</b> (expérience Transport) se cochent
-                dans l’onglet listing <b>Expériences</b>. Ici : Courses uniquement — le
+                Les expériences (J3) et la <b>navette</b> se cochent dans l’onglet listing
+                <b> Expériences → Catalogue partagé</b> (la navette se crée d’abord dans
+                Expériences → Catalogue). Ici : le suivi du vol (Transport) et les Courses — le
                 transport legacy est remplacé.
               </Typography>
             ) : null}
@@ -3695,9 +3702,11 @@ export default function OrchestrationOverviewPanel({
                       return (
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                           <Typography sx={{ fontSize: 13, color: V3.t3 }}>
-                            Les destinations et prix de la navette se gèrent dans l’onglet
-                            listing <b>Expériences</b>. Ici : la politique de <b>suivi du vol</b> —
-                            chaque vérification a un coût, chaque client choisit les siennes.
+                            La navette se crée dans <b>Expériences → Catalogue</b> (« + Nouvelle
+                            navette » : destinations, prix, paiement), puis se coche sur ce listing
+                            dans l’onglet <b>Expériences → Catalogue partagé</b>. Ici : la politique
+                            de <b>suivi du vol</b> — chaque vérification a un coût, chaque client
+                            choisit les siennes.
                           </Typography>
                           <FormControlLabel
                             control={

@@ -15,8 +15,103 @@ import {
   levelDurationsSubtitle,
   parseFrequencyTiers,
   real30j,
+  type FrequencyTierVue,
   type Real30j,
 } from './menageTypeCards';
+
+/** Colonnes de la table des paliers : de · à · incluses · au-delà · supprimer. */
+const TIER_GRID = '88px 88px 120px 1fr 32px';
+/** Colonnes des formules payantes : actif · nom · prix · description · supprimer. */
+const FORMULA_GRID = '56px minmax(140px, 1fr) 96px minmax(180px, 2fr) 32px';
+
+/**
+ * Paliers tels qu'on les enregistre : bornes entières ≥ 1, fin ≥ début,
+ * quota ≥ 0, triés par nuit de début. Une ligne incohérente est ignorée
+ * plutôt que d'être envoyée au serveur.
+ */
+function normalizeTiers(rows: FrequencyTierVue[]): FrequencyTierVue[] {
+  return rows
+    .map(t => ({
+      startDay: Math.max(1, Math.round(Number(t.startDay) || 0)),
+      endDay: Math.max(1, Math.round(Number(t.endDay) || 0)),
+      numberOfCleaning: Math.max(0, Math.round(Number(t.numberOfCleaning) || 0)),
+    }))
+    .filter(t => t.endDay >= t.startDay)
+    .sort((a, b) => a.startDay - b.startDay);
+}
+
+/** Formule payante telle que le voyageur la voit (une ligne du flow WhatsApp). */
+type PaidFormula = {
+  id: string;
+  enabled: boolean;
+  labelFr: string;
+  descriptionFr: string;
+  price: number;
+  /** Heures — champ requis par le schéma listing, invisible pour le voyageur. */
+  duration: number;
+};
+
+/**
+ * Offre Sojori par défaut (décision Tawfiq 16/09/2026) : tout logement entier en
+ * ménage payant propose Express / Confort / Complet tant que le PM n'a rien
+ * enregistré ici. Le chatbot applique le même défaut (paidCleaningDefaults.ts) :
+ * ce que l'écran montre est ce que le voyageur voit.
+ */
+const SOJORI_DEFAULT_FORMULAS: PaidFormula[] = [
+  { id: 'express', enabled: true, labelFr: 'Express', descriptionFr: 'Ménage rapide : surfaces, sols et salle de bain', price: 150, duration: 2 },
+  { id: 'confort', enabled: true, labelFr: 'Confort', descriptionFr: 'Ménage rapide + serviettes propres', price: 250, duration: 2.5 },
+  { id: 'complet', enabled: true, labelFr: 'Complet', descriptionFr: 'Ménage complet, serviettes et draps inclus', price: 400, duration: 3 },
+];
+
+function hasOwnFormulas(raw: unknown): boolean {
+  return Array.isArray(raw) && raw.some(s => Boolean(s) && typeof s === 'object');
+}
+
+function parsePaidFormulas(raw: unknown): PaidFormula[] {
+  if (!hasOwnFormulas(raw)) return SOJORI_DEFAULT_FORMULAS.map(f => ({ ...f }));
+  return (raw as unknown[])
+    .filter((s): s is Record<string, unknown> => Boolean(s) && typeof s === 'object')
+    .map((s, i) => {
+      const name = (s.name as { fr?: string } | undefined) ?? {};
+      const desc = (s.description as { fr?: string } | undefined) ?? {};
+      return {
+        id: String(s.id || `paid_${i}`),
+        enabled: s.enabled !== false,
+        labelFr: String(name.fr ?? ''),
+        descriptionFr: String(desc.fr ?? ''),
+        price: Math.max(0, Number(s.price) || 0),
+        duration: Math.max(0.5, Number(s.duration) || 2),
+      };
+    });
+}
+
+function normalizeFormulas(rows: PaidFormula[]): PaidFormula[] {
+  return rows
+    .map(f => ({
+      ...f,
+      labelFr: f.labelFr.trim(),
+      descriptionFr: f.descriptionFr.trim(),
+      price: Math.max(0, Math.round(Number(f.price) || 0)),
+      duration: Math.max(0.5, Number(f.duration) || 2),
+    }))
+    .filter(f => f.labelFr.length > 0);
+}
+
+/** Schéma `paidCleaningServiceType` du listing — identique à l'ancien onglet Ménage. */
+function serializeFormula(f: PaidFormula, index: number): Record<string, unknown> {
+  return {
+    id: f.id,
+    enabled: f.enabled,
+    name: { fr: f.labelFr, en: f.labelFr, ar: f.labelFr },
+    description: { fr: f.descriptionFr, en: f.descriptionFr, ar: '' },
+    duration: f.duration,
+    price: f.price,
+    currency: 'MAD',
+    timeslotMode: 'dynamic',
+    timeslots: [],
+    displayOrder: index,
+  };
+}
 
 type Props = {
   listingId: string;
@@ -140,7 +235,121 @@ export default function V3MenageTypeCards({
       .finally(() => setSaving(false));
   };
 
-  const tiers = parseFrequencyTiers(listingValues.frequency);
+  /**
+   * Paliers (Listing.frequency) : édition locale pendant la frappe, écriture
+   * au blur / ajout / suppression — même canal que menageOps
+   * (updateListingProperty), optimistic + rollback.
+   */
+  // État dérivé du doc : on le resynchronise pendant le rendu quand la
+  // fréquence reçue change (pattern React « derive state from props »), pas
+  // dans un effet — la règle set-state-in-effect le refuse à juste titre.
+  const frequencyKey = JSON.stringify(listingValues.frequency ?? null);
+  const [tierState, setTierState] = useState<{
+    key: string;
+    rows: FrequencyTierVue[];
+    /** Dernière version écrite (ou reçue) — pour ne pas ré-enregistrer à l'identique. */
+    saved: FrequencyTierVue[];
+  }>(() => {
+    const rows = parseFrequencyTiers(listingValues.frequency);
+    return { key: frequencyKey, rows, saved: rows };
+  });
+  const [tiersSaving, setTiersSaving] = useState(false);
+  if (tierState.key !== frequencyKey) {
+    const rows = parseFrequencyTiers(listingValues.frequency);
+    setTierState({ key: frequencyKey, rows, saved: rows });
+  }
+  const tierRows = tierState.rows;
+  const editTier = (index: number, patch: Partial<FrequencyTierVue>) => {
+    setTierState(s => ({ ...s, rows: s.rows.map((t, i) => (i === index ? { ...t, ...patch } : t)) }));
+  };
+  const persistTiers = (rows: FrequencyTierVue[]) => {
+    const next = normalizeTiers(rows);
+    const prev = tierState.saved;
+    if (JSON.stringify(next) === JSON.stringify(prev)) {
+      setTierState(s => ({ ...s, rows: next }));
+      return;
+    }
+    setTierState(s => ({ ...s, rows: next }));
+    setTiersSaving(true);
+    listingsService
+      .updateListingProperty(listingId, { frequency: next })
+      .then(() => {
+        setTierState(s => ({ ...s, saved: next }));
+        onListingPatch?.({ frequency: next });
+      })
+      .catch((e: unknown) => {
+        setTierState(s => ({ ...s, rows: prev }));
+        toast.error(e instanceof Error ? e.message : 'Enregistrement des paliers impossible');
+      })
+      .finally(() => setTiersSaving(false));
+  };
+  const commitTiers = () => persistTiers(tierRows);
+
+  /**
+   * Formules payantes vues par le voyageur (WhatsApp lit
+   * `paidCleaningConfig.serviceTypes`, pas les niveaux Normal / Grand qui ne
+   * servent qu'au staff — constaté le 16/09 : les prix réglés ici n'apparaissaient
+   * pas dans le flow). Même canal d'écriture, même schéma que l'ancien onglet.
+   */
+  const paidCfg = (listingValues.paidCleaningConfig ?? {}) as Record<string, unknown>;
+  const formulasKey = JSON.stringify(paidCfg.serviceTypes ?? null);
+  const [formulaState, setFormulaState] = useState<{
+    key: string;
+    rows: PaidFormula[];
+    saved: PaidFormula[];
+  }>(() => {
+    const rows = parsePaidFormulas(paidCfg.serviceTypes);
+    return { key: formulasKey, rows, saved: rows };
+  });
+  const [formulasSaving, setFormulasSaving] = useState(false);
+  if (formulaState.key !== formulasKey) {
+    const rows = parsePaidFormulas(paidCfg.serviceTypes);
+    setFormulaState({ key: formulasKey, rows, saved: rows });
+  }
+  const formulas = formulaState.rows;
+  const editFormula = (index: number, patch: Partial<PaidFormula>) => {
+    setFormulaState(s => ({ ...s, rows: s.rows.map((f, i) => (i === index ? { ...f, ...patch } : f)) }));
+  };
+  const persistFormulas = (rows: PaidFormula[]) => {
+    const next = normalizeFormulas(rows);
+    const prev = formulaState.saved;
+    if (JSON.stringify(next) === JSON.stringify(prev)) {
+      setFormulaState(s => ({ ...s, rows: next }));
+      return;
+    }
+    setFormulaState(s => ({ ...s, rows: next }));
+    setFormulasSaving(true);
+    const paidCleaningConfig = {
+      ...paidCfg,
+      enabled: next.some(f => f.enabled),
+      whatsappMessageMode: 'standard',
+      serviceTypes: next.map(serializeFormula),
+    };
+    listingsService
+      .updateListingProperty(listingId, { paidCleaningConfig })
+      .then(() => {
+        setFormulaState(s => ({ ...s, saved: next }));
+        onListingPatch?.({ paidCleaningConfig });
+      })
+      .catch((e: unknown) => {
+        setFormulaState(s => ({ ...s, rows: prev }));
+        toast.error(e instanceof Error ? e.message : 'Enregistrement des formules impossible');
+      })
+      .finally(() => setFormulasSaving(false));
+  };
+  const commitFormulas = () => persistFormulas(formulas);
+  const addFormula = () =>
+    persistFormulas([
+      ...formulas,
+      { id: `paid_${Date.now().toString(36)}`, enabled: true, labelFr: 'Nouvelle formule', descriptionFr: '', price: 0, duration: 2 },
+    ]);
+  const removeFormula = (index: number) => persistFormulas(formulas.filter((_, i) => i !== index));
+  const addTier = () => {
+    const last = tierRows[tierRows.length - 1];
+    const startDay = last ? last.endDay + 1 : 1;
+    persistTiers([...tierRows, { startDay, endDay: startDay + 6, numberOfCleaning: 1 }]);
+  };
+  const removeTier = (index: number) => persistTiers(tierRows.filter((_, i) => i !== index));
   const flex = cfg.flexibility;
   const cadenceAlways = cfg.included.always === true;
   const cadenceEvery = Math.max(1, Number(cfg.included.everyNDays) || 1);
@@ -344,41 +553,116 @@ export default function V3MenageTypeCards({
           }
         >
           <Box sx={{ opacity: cadenceAlways ? 0.45 : 1, pointerEvents: cadenceAlways ? 'none' : 'auto' }}>
-          {tiers.length > 0 ? (
-            <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: '10px', overflow: 'hidden' }}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, px: 1.25, py: 0.75, bgcolor: V3.alt }}>
-                {['Palier séjour', 'Recouches incluses', 'Au-delà'].map(h => (
-                  <Typography key={h} sx={sectionLabelSx}>{h}</Typography>
-                ))}
-              </Box>
-              {tiers.map((t, i) => (
-                <Box
-                  key={`${t.startDay}-${t.endDay}`}
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr 1fr',
-                    gap: 1,
-                    px: 1.25,
-                    py: 0.75,
-                    borderTop: `1px solid ${V3.b}`,
-                    bgcolor: i % 2 === 0 ? '#fff' : V3.alt,
-                  }}
-                >
-                  <Typography sx={{ fontSize: 12, fontWeight: 600, color: V3.t }}>{formatTierRange(t)}</Typography>
-                  <Typography sx={{ fontSize: 12, fontWeight: 800, color: V3.pd, fontFamily: 'monospace' }}>
-                    {t.numberOfCleaning}
-                  </Typography>
-                  <Typography sx={{ fontSize: 12, color: V3.t2 }}>
-                    {cfg.paid.normal.price > 0 ? `payante — ${cfg.paid.normal.price} MAD` : 'payante'}
-                  </Typography>
-                </Box>
+          {/* Paliers éditables en place : l'ancien éditeur (V3CleaningIncludedPanel)
+              n'était plus monté nulle part — la table renvoyait vers un panneau
+              inexistant (constaté le 16/09 en voulant régler 10–20 / 21–30 nuits). */}
+          <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: '10px', overflow: 'hidden' }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: TIER_GRID, gap: 1, px: 1.25, py: 0.75, bgcolor: V3.alt }}>
+              {['De (nuit)', 'À (nuit)', 'Recouches incluses', 'Au-delà', ''].map((h, i) => (
+                <Typography key={`${h}-${i}`} sx={sectionLabelSx}>{h}</Typography>
               ))}
             </Box>
-          ) : (
-            <Typography sx={{ fontSize: 12, color: V3.t3, fontStyle: 'italic' }}>
-              Paliers configurés dans Orchestration (Ménage inclus · paliers &amp; créneaux).
+            {tierRows.map((t, i) => (
+              <Box
+                key={`tier-${i}`}
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: TIER_GRID,
+                  gap: 1,
+                  px: 1.25,
+                  py: 0.5,
+                  alignItems: 'center',
+                  borderTop: `1px solid ${V3.b}`,
+                  bgcolor: i % 2 === 0 ? '#fff' : V3.alt,
+                }}
+              >
+                <TextField
+                  size="small"
+                  type="number"
+                  inputProps={{ min: 1, max: 365, 'aria-label': `Palier ${i + 1} : de` }}
+                  value={t.startDay}
+                  onChange={e => editTier(i, { startDay: Number(e.target.value) })}
+                  onBlur={commitTiers}
+                  sx={fieldSx}
+                />
+                <TextField
+                  size="small"
+                  type="number"
+                  inputProps={{ min: 1, max: 365, 'aria-label': `Palier ${i + 1} : à` }}
+                  value={t.endDay}
+                  onChange={e => editTier(i, { endDay: Number(e.target.value) })}
+                  onBlur={commitTiers}
+                  sx={fieldSx}
+                />
+                <TextField
+                  size="small"
+                  type="number"
+                  inputProps={{ min: 0, max: 60, 'aria-label': `Palier ${i + 1} : recouches incluses` }}
+                  value={t.numberOfCleaning}
+                  onChange={e => editTier(i, { numberOfCleaning: Number(e.target.value) })}
+                  onBlur={commitTiers}
+                  sx={fieldSx}
+                />
+                <Typography sx={{ fontSize: 12, color: V3.t2 }}>
+                  {t.numberOfCleaning === 0
+                    ? cfg.paid.normal.price > 0
+                      ? `tout payant — ${cfg.paid.normal.price} MAD`
+                      : 'tout payant'
+                    : cfg.paid.normal.price > 0
+                      ? `payante — ${cfg.paid.normal.price} MAD`
+                      : 'payante'}
+                </Typography>
+                <Box
+                  component="button"
+                  type="button"
+                  aria-label={`Supprimer le palier ${formatTierRange(t)}`}
+                  onClick={() => removeTier(i)}
+                  sx={{
+                    border: 'none',
+                    bgcolor: 'transparent',
+                    color: V3.t3,
+                    cursor: 'pointer',
+                    fontSize: 16,
+                    lineHeight: 1,
+                    p: 0.5,
+                    '&:hover': { color: V3.t },
+                  }}
+                >
+                  ×
+                </Box>
+              </Box>
+            ))}
+            {tierRows.length === 0 && (
+              <Typography sx={{ fontSize: 12, color: V3.t3, fontStyle: 'italic', px: 1.25, py: 1 }}>
+                Aucun palier : toutes les recouches sont payantes.
+              </Typography>
+            )}
+          </Box>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5, mt: 1 }}>
+            <Box
+              component="button"
+              type="button"
+              onClick={addTier}
+              sx={{
+                border: `1px solid ${V3.b}`,
+                borderRadius: '8px',
+                bgcolor: '#fff',
+                color: V3.t,
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 600,
+                px: 1.25,
+                py: 0.5,
+                '&:hover': { borderColor: V3.bs },
+              }}
+            >
+              + Palier
+            </Box>
+            <Typography sx={{ fontSize: 11, color: V3.t3 }}>
+              Nuits du séjour → recouches incluses ; 0 = toutes payantes. Hors de tout palier : payant.
+              {tiersSaving ? ' · enregistrement…' : ''}
             </Typography>
-          )}
+          </Stack>
           </Box>
 
           <Stack direction="row" sx={{ gap: 2, flexWrap: 'wrap', mt: 1.25 }}>
@@ -608,6 +892,98 @@ export default function V3MenageTypeCards({
               />
             ))}
           </Box>
+        </Section>
+        <Section
+          label="Formules proposées au voyageur (WhatsApp)"
+          caption={
+            hasOwnFormulas(paidCfg.serviceTypes)
+              ? 'Le flow ménage payant affiche ces formules — nom · prix — et calcule le total. Les niveaux ci-dessus servent au staff (durées, crédits).'
+              : 'Offre Sojori par défaut (Express 150 · Confort 250 · Complet 400) : c\'est ce que le voyageur voit tant que rien n\'est enregistré ici. Modifiez une valeur pour adopter vos propres formules.'
+          }
+        >
+          <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: '10px', overflow: 'hidden' }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: FORMULA_GRID, gap: 1, px: 1.25, py: 0.75, bgcolor: V3.alt }}>
+              {['Actif', 'Nom (FR)', 'Prix (MAD)', 'Description (FR)', ''].map((h, i) => (
+                <Typography key={`${h}-${i}`} sx={sectionLabelSx}>{h}</Typography>
+              ))}
+            </Box>
+            {formulas.map((f, i) => (
+              <Box
+                key={f.id}
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: FORMULA_GRID,
+                  gap: 1,
+                  px: 1.25,
+                  py: 0.5,
+                  alignItems: 'center',
+                  borderTop: `1px solid ${V3.b}`,
+                  bgcolor: i % 2 === 0 ? '#fff' : V3.alt,
+                }}
+              >
+                <Switch
+                  size="small"
+                  checked={f.enabled}
+                  inputProps={{ 'aria-label': `Formule ${f.labelFr || i + 1} : proposée` }}
+                  onChange={e => persistFormulas(formulas.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))}
+                />
+                <TextField
+                  size="small"
+                  inputProps={{ 'aria-label': `Formule ${i + 1} : nom` }}
+                  value={f.labelFr}
+                  placeholder="Express"
+                  onChange={e => editFormula(i, { labelFr: e.target.value })}
+                  onBlur={commitFormulas}
+                  sx={fieldSx}
+                />
+                <TextField
+                  size="small"
+                  type="number"
+                  inputProps={{ min: 0, 'aria-label': `Formule ${i + 1} : prix` }}
+                  value={f.price}
+                  onChange={e => editFormula(i, { price: Number(e.target.value) })}
+                  onBlur={commitFormulas}
+                  sx={fieldSx}
+                />
+                <TextField
+                  size="small"
+                  inputProps={{ 'aria-label': `Formule ${i + 1} : description` }}
+                  value={f.descriptionFr}
+                  placeholder="Serviettes et draps inclus"
+                  onChange={e => editFormula(i, { descriptionFr: e.target.value })}
+                  onBlur={commitFormulas}
+                  sx={fieldSx}
+                />
+                <Box
+                  component="button"
+                  type="button"
+                  aria-label={`Supprimer la formule ${f.labelFr || i + 1}`}
+                  onClick={() => removeFormula(i)}
+                  sx={{ border: 'none', bgcolor: 'transparent', color: V3.t3, cursor: 'pointer', fontSize: 16, lineHeight: 1, p: 0.5, '&:hover': { color: V3.t } }}
+                >
+                  ×
+                </Box>
+              </Box>
+            ))}
+            {formulas.length === 0 && (
+              <Typography sx={{ fontSize: 12, color: V3.t3, fontStyle: 'italic', px: 1.25, py: 1 }}>
+                Aucune formule : le voyageur ne peut pas commander de ménage payant.
+              </Typography>
+            )}
+          </Box>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5, mt: 1 }}>
+            <Box
+              component="button"
+              type="button"
+              onClick={addFormula}
+              sx={{ border: `1px solid ${V3.b}`, borderRadius: '8px', bgcolor: '#fff', color: V3.t, cursor: 'pointer', fontSize: 12, fontWeight: 600, px: 1.25, py: 0.5, '&:hover': { borderColor: V3.bs } }}
+            >
+              + Formule
+            </Box>
+            <Typography sx={{ fontSize: 11, color: V3.t3 }}>
+              Une formule sans nom n'est pas enregistrée.{formulasSaving ? ' · enregistrement…' : ''}
+            </Typography>
+          </Stack>
         </Section>
       </TypeCard>
       )}

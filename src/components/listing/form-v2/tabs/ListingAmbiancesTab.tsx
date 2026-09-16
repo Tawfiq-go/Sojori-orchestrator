@@ -455,7 +455,7 @@ export default function ListingAmbiancesTab({
       <TabSection
         id="ambiances"
         icon="🌹"
-        title="Ambiances villa"
+        title="Ambiances"
         summary={ambianceSummary}
         open={Boolean(open.ambiances)}
         onToggle={() => toggleOpen('ambiances')}
