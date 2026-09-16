@@ -20,14 +20,17 @@ import {
 } from "@mui/material";
 import { useAuth } from "../../hooks/useAuth";
 import { T, cardSx, kickerSx } from "../marketing/tokens";
-import { resolveOwnerId } from "../onboarding/resolveOwnerId";
+import { isAdminRole, resolveOwnerId } from "../onboarding/resolveOwnerId";
 import {
+  assignThread,
   collectInbox,
   fetchInboxThread,
   fetchInboxThreads,
+  fetchUnassignedThreads,
   replyToInboxThread,
   type InboxThread,
   type InboxThreadDetail,
+  type UnassignedThread,
 } from "./api";
 
 function when(iso: string | null): string {
@@ -44,8 +47,12 @@ function when(iso: string | null): string {
 export default function InboxTab() {
   const { user } = useAuth();
   const ownerId = resolveOwnerId(user) ?? "";
+  const isAdmin = isAdminRole(user);
 
   const [threads, setThreads] = useState<InboxThread[]>([]);
+  /** Fils qu'aucun signal n'a rattachés — visibles du seul administrateur. */
+  const [unassigned, setUnassigned] = useState<UnassignedThread[]>([]);
+  const [assigning, setAssigning] = useState<string | null>(null);
   const [openThread, setOpenThread] = useState<InboxThreadDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,12 +71,17 @@ export default function InboxTab() {
     setError(null);
     try {
       setThreads(await fetchInboxThreads(ownerId));
+      // La file « à rattacher » ne concerne que l'administrateur : un PM ne
+      // doit pas voir des messages dont rien ne dit qu'ils lui appartiennent.
+      if (isAdmin) {
+        setUnassigned(await fetchUnassignedThreads(ownerId));
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Chargement impossible.");
     } finally {
       setLoading(false);
     }
-  }, [ownerId]);
+  }, [ownerId, isAdmin]);
 
   useEffect(() => {
     void load();
@@ -105,6 +117,22 @@ export default function InboxTab() {
       setError(e instanceof Error ? e.message : "Envoi impossible.");
     } finally {
       setSending(false);
+    }
+  };
+
+  const assign = async (threadId: string) => {
+    setAssigning(threadId);
+    setError(null);
+    try {
+      // Un seul établissement suivi aujourd'hui : on rattache au sien. Le jour
+      // où il y en aura plusieurs, il faudra un choix explicite — deviner
+      // ferait lire à un PM l'échange commercial d'un autre.
+      await assignThread(ownerId, threadId, ownerId);
+      await load();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Rattachement impossible.");
+    } finally {
+      setAssigning(null);
     }
   };
 
@@ -278,6 +306,84 @@ export default function InboxTab() {
         <Alert severity="info" sx={{ fontSize: 13 }}>
           {notice}
         </Alert>
+      )}
+
+      {/* La file « à rattacher » : ces messages n'apparaissent chez AUCUN
+          établissement. Sans cet encadré, un email de prospect dort sans que
+          personne ne le sache. Réservé à l'administrateur. */}
+      {isAdmin && unassigned.length > 0 && (
+        <Box
+          sx={{
+            ...cardSx,
+            bgcolor: T.warnBg,
+            borderColor: T.goldSoft,
+          }}
+        >
+          <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.ink, mb: 0.5 }}>
+            {unassigned.length} message(s) sans établissement
+          </Typography>
+          <Typography sx={{ fontSize: 12.5, color: T.ink2, mb: 2, lineHeight: 1.6 }}>
+            Rien n'a permis de dire à qui ils appartiennent — ni l'adresse de
+            réponse, ni un fil existant. Ils n'apparaissent chez aucun
+            gestionnaire tant qu'ils ne sont pas rattachés.
+          </Typography>
+
+          <Stack spacing={1.25}>
+            {unassigned.map((u) => (
+              <Box
+                key={u.id}
+                sx={{
+                  bgcolor: T.card,
+                  border: `1px solid ${T.line}`,
+                  borderRadius: "8px",
+                  p: 1.5,
+                }}
+              >
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="flex-start"
+                  spacing={1.5}
+                  flexWrap="wrap"
+                  useFlexGap
+                >
+                  <Box sx={{ minWidth: 0, flex: "1 1 280px" }}>
+                    <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: T.ink }}>
+                      {u.contactName ?? u.contactAddress}
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, color: T.mut }}>
+                      {u.contactAddress} · {when(u.lastInboundAt)}
+                    </Typography>
+                    {u.subject && (
+                      <Typography sx={{ fontSize: 12.5, color: T.ink2, mt: 0.5 }}>
+                        {u.subject}
+                      </Typography>
+                    )}
+                    {u.matchReason && (
+                      <Typography sx={{ fontSize: 11.5, color: T.warn, mt: 0.5 }}>
+                        {u.matchReason}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disabled={assigning === u.id}
+                    onClick={() => void assign(u.id)}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 700,
+                      bgcolor: T.gold,
+                      "&:hover": { bgcolor: T.goldPure },
+                    }}
+                  >
+                    {assigning === u.id ? "…" : "Rattacher"}
+                  </Button>
+                </Stack>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
       )}
       {error && (
         <Alert severity="error" sx={{ fontSize: 13 }}>

@@ -368,3 +368,53 @@ export async function moveOpportunity(
     throw readable(error, "Déplacement impossible.");
   }
 }
+
+/* ─────────────────── File « à rattacher » — admin seul ─────────────────── */
+
+/**
+ * Un fil qu'aucun signal n'a permis de rattacher à un établissement.
+ *
+ * ⚠️ Ces messages n'apparaissent chez AUCUN property manager. Sans cet écran,
+ * un email de prospect dort sans que personne ne le sache.
+ */
+export interface UnassignedThread {
+  id: string;
+  channel: "email" | "whatsapp";
+  contactAddress: string;
+  contactName: string | null;
+  subject: string | null;
+  lastPreview: string | null;
+  lastInboundAt: string | null;
+  /** Pourquoi la cascade n'a pas tranché — aide à décider. */
+  matchReason: string | null;
+}
+
+export async function fetchUnassignedThreads(
+  ownerId: string,
+): Promise<UnassignedThread[]> {
+  try {
+    const { data } = await apiClient.get<{
+      success: boolean;
+      data: UnassignedThread[];
+    }>(`${INBOX_BASE}/unassigned`, { params: { ownerId, tenantId: ownerId } });
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Chargement des messages non rattachés impossible.");
+  }
+}
+
+export async function assignThread(
+  ownerId: string,
+  threadId: string,
+  tenantId: string,
+): Promise<void> {
+  try {
+    await apiClient.post(
+      `${INBOX_BASE}/unassigned/${threadId}/assign`,
+      { tenantId, ownerId },
+      { params: { ownerId, tenantId: ownerId } },
+    );
+  } catch (error) {
+    throw readable(error, "Rattachement impossible.");
+  }
+}
