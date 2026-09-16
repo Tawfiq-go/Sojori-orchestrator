@@ -43,7 +43,12 @@ const VERDICT: Record<
   accelerate: { label: "Accélérer", fg: T.ok, bg: T.okBg },
   keep: { label: "Maintenir", fg: T.warn, bg: T.warnBg },
   stop: { label: "Arrêter", fg: T.crit, bg: T.critBg },
-  inconclusive: { label: "Trop peu de données", fg: T.mut, bg: T.line2 },
+  // « Trop peu de données » se lit comme un jugement définitif sur une
+  // campagne terminée. Or celles qui portent ce verdict diffusent encore : le
+  // signal est simplement trop faible POUR L'INSTANT. Dire « en cours » décrit
+  // la situation réelle et n'invite pas à couper une campagne qui n'a pas
+  // encore eu le temps de produire.
+  inconclusive: { label: "Signal en cours", fg: T.mut, bg: T.line2 },
 };
 
 /** Trois niveaux plutôt qu'un intervalle : le lecteur décide, il n'estime pas. */
@@ -108,7 +113,40 @@ function Cell({
   );
 }
 
-function Head({ children, num }: { children: React.ReactNode; num?: boolean }) {
+/**
+ * D'où vient une colonne.
+ *
+ * Trois origines, qui n'ont pas la même valeur de preuve :
+ *   Meta   — facturé par la régie, vérifiable sur la facture ;
+ *   GA4    — mesuré sur le site, une session est un fait ;
+ *   Sojori — nos réservations, exactes mais sans lien avec la campagne ;
+ *   estimé — calculé, jamais observé. C'est le cas de tout ce qui relie une
+ *            campagne à une réservation : le lien n'existe pas, il est déduit
+ *            d'un écart de marché.
+ *
+ * Afficher la source sous chaque intitulé évite la lecture qui coûte le plus
+ * cher : prendre une estimation pour une mesure.
+ */
+type Source = "Meta" | "GA4" | "GA4 · marché" | "Sojori" | "estimé";
+
+const SOURCE_COLOR: Record<Source, string> = {
+  Meta: T.mut,
+  GA4: T.mut,
+  "GA4 · marché": T.mut,
+  Sojori: T.mut,
+  // L'estimation se distingue à l'œil : c'est la seule qui n'est pas mesurée.
+  estimé: T.warn,
+};
+
+function Head({
+  children,
+  num,
+  src,
+}: {
+  children: React.ReactNode;
+  num?: boolean;
+  src?: Source;
+}) {
   return (
     <Box
       component="th"
@@ -126,6 +164,21 @@ function Head({ children, num }: { children: React.ReactNode; num?: boolean }) {
       }}
     >
       {children}
+      {src && (
+        <Box
+          sx={{
+            fontSize: 8.5,
+            fontWeight: 600,
+            letterSpacing: "0.02em",
+            textTransform: "none",
+            color: SOURCE_COLOR[src],
+            fontStyle: src === "estimé" ? "italic" : "normal",
+            mt: 0.15,
+          }}
+        >
+          {src}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -133,16 +186,24 @@ function Head({ children, num }: { children: React.ReactNode; num?: boolean }) {
 export default function CampaignScores({ data }: { data: MarketingDashboard }) {
   const navigate = useNavigate();
 
-  const { positives, negatives } = useMemo(() => {
-    const pos = data.campaigns.filter((c) => c.attributed > 0.3);
+  const { positives, negatives, shared } = useMemo(() => {
+    // Une campagne dont le marché est visé par plusieurs campagnes ne peut
+    // être dite ni contributive ni sans effet : les réservations sont celles
+    // du marché entier et rien ne dit laquelle les a produites. La ranger dans
+    // « sans effet mesuré » la condamnerait sur une mesure qui n'existe pas.
+    const isShared = (c: ScoredCampaign) =>
+      data.campaigns.filter((x) => x.country === c.country).length > 1;
+    const measurable = data.campaigns.filter((c) => !isShared(c));
     return {
-      positives: pos,
-      negatives: data.campaigns.filter((c) => c.attributed <= 0.3),
+      positives: measurable.filter((c) => c.attributed > 0.3),
+      negatives: measurable.filter((c) => c.attributed <= 0.3),
+      shared: data.campaigns.filter(isShared),
     };
   }, [data.campaigns]);
 
   const spendPositive = positives.reduce((s, c) => s + c.spendMad, 0);
   const spendNegative = negatives.reduce((s, c) => s + c.spendMad, 0);
+  const spendShared = shared.reduce((s, c) => s + c.spendMad, 0);
 
   return (
     <Box sx={{ ...cardSx, p: 0, overflow: "hidden" }}>
@@ -168,6 +229,18 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
             label={`${positives.length} contributives · ${mad(spendPositive)}`}
             sx={{ bgcolor: T.okBg, color: T.ok, fontWeight: 650, fontSize: 12 }}
           />
+          {shared.length > 0 && (
+            <Chip
+              size="small"
+              label={`${shared.length} non mesurables · ${mad(spendShared)}`}
+              sx={{
+                bgcolor: T.warnBg,
+                color: T.warn,
+                fontWeight: 650,
+                fontSize: 12,
+              }}
+            />
+          )}
           <Chip
             size="small"
             label={`${negatives.length} sans effet mesuré · ${mad(spendNegative)}`}
@@ -210,25 +283,36 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
         >
           <Box component="thead">
             <Box component="tr">
-              <Head>Campagne</Head>
+              <Head src="Meta">Campagne</Head>
               <Head>Période</Head>
-              <Head num>Dépense</Head>
-              <Head num>CTR</Head>
-              <Head num>Durée sess.</Head>
-              <Head num>Paniers</Head>
-              <Head num>Taux</Head>
-              <Head num>Résa</Head>
-              <Head num>OTA</Head>
-              <Head num>Sans pub</Head>
-              <Head num>Écart</Head>
-              <Head num>Coût/attr.</Head>
-              <Head num>% du CA</Head>
-              <Head>Verdict</Head>
+              <Head num src="Meta">Dépense</Head>
+              <Head num src="Meta">CTR</Head>
+              <Head num src="GA4">Durée sess.</Head>
+              <Head num src="GA4">Paniers camp.</Head>
+              <Head num src="GA4 · marché">Paniers marché</Head>
+              <Head num src="GA4 · marché">Taux</Head>
+              <Head num src="Sojori">Résa</Head>
+              <Head num src="Sojori">OTA</Head>
+              <Head num src="estimé">Sans pub</Head>
+              <Head num src="estimé">Écart</Head>
+              <Head num src="estimé">Coût/résa est.</Head>
+              <Head num src="estimé">% du CA</Head>
+              <Head src="estimé">Verdict</Head>
             </Box>
           </Box>
           <Box component="tbody">
             {data.campaigns.map((c) => {
               const v = VERDICT[c.verdict];
+              // ⚠️ « Paniers marché », Résa, OTA et « Sans pub » décrivent le MARCHÉ, pas
+              // la campagne. Quand deux campagnes visent le même pays, elles
+              // affichent les mêmes chiffres — et un lecteur les additionne :
+              // 3 + 3 = 6 réservations alors qu'il n'y en a que 3, partagées.
+              // La mention rend le partage visible au lieu de le laisser
+              // deviner.
+              const sameMarket = data.campaigns.filter(
+                (x) => x.country === c.country,
+              );
+              const sharesMarket = sameMarket.length > 1;
               return (
                 <Box
                   component="tr"
@@ -246,6 +330,28 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                       {FLAG[c.country] ?? ""} {c.campaignName}
                     </Box>
                     <ConfidenceDot level={c.confidence} />
+                    {/*
+                      L'avertissement vit SUR la ligne, pas seulement en légende
+                      de bas de tableau : quelqu'un qui lit une ligne ne lit pas
+                      forcément le pied de page, et c'est précisément là qu'il
+                      décide de couper une campagne. Rien n'est réparti au
+                      prorata — répartir 3 réservations en « 2,1 » et « 0,9 »
+                      donnerait à une hypothèse l'apparence d'une mesure.
+                    */}
+                    {sharesMarket && (
+                      <Box
+                        sx={{
+                          fontSize: 11,
+                          color: T.warn,
+                          mt: 0.4,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        ◈ {sameMarket.length} campagnes sur ce marché — les
+                        réservations affichées sont celles du marché entier,
+                        impossible de savoir laquelle les a produites.
+                      </Box>
+                    )}
                   </Cell>
                   <Cell>
                     <Box component="span" sx={{ fontSize: 12, color: T.mut }}>
@@ -276,6 +382,16 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                     // villa : l'intention la plus proche d'une réservation que
                     // le site sache mesurer.
                   >
+                    {typeof c.ga4AddToCarts === "number" ? c.ga4AddToCarts : "—"}
+                  </Cell>
+                  <Cell
+                    num
+                    color={T.mut}
+                    // Le MARCHÉ entier, pas cette campagne : tout le trafic du
+                    // pays, publicitaire ou non. Deux campagnes visant le même
+                    // marché affichent donc le même nombre — d'où la colonne
+                    // précédente, qui seule dit ce que CETTE campagne a produit.
+                  >
                     {typeof c.marketAddToCarts === "number"
                       ? c.marketAddToCarts
                       : "—"}
@@ -287,7 +403,18 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                       ? `${c.marketAddToCartRate.toFixed(2)} %`
                       : "—"}
                   </Cell>
-                  <Cell num>{c.reservations}</Cell>
+                  <Cell num>
+                    {c.reservations}
+                    {sharesMarket && (
+                      <Box
+                        component="span"
+                        sx={{ fontSize: 10, color: T.mut, ml: 0.4 }}
+                        title={`Réservations du marché ${c.country}, partagées avec les autres campagnes de ce pays — ne pas additionner.`}
+                      >
+                        ◈
+                      </Box>
+                    )}
+                  </Cell>
                   <Cell num color={T.mut}>
                     {c.otaReservations}
                   </Cell>
@@ -374,6 +501,20 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
           la décimale ne l'est pas — la pastille au bout de chaque nom indique
           ce que la ligne vaut.
         </Typography>
+        {data.campaigns.some(
+          (c) =>
+            data.campaigns.filter((x) => x.country === c.country).length > 1,
+        ) && (
+          <Typography
+            sx={{ fontSize: 12, color: T.warn, lineHeight: 1.7, mt: 0.8 }}
+          >
+            <b>◈ Chiffres de marché, à ne pas additionner.</b> Plusieurs
+            campagnes visent le même pays : les réservations affichées sont
+            celles du marché entier, identiques sur chaque ligne. Les
+            additionner compterait deux fois les mêmes séjours. La dépense et le
+            CTR, eux, appartiennent bien à chaque campagne.
+          </Typography>
+        )}
       </Box>
     </Box>
   );

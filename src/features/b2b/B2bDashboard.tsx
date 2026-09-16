@@ -14,47 +14,115 @@
 //   4. Canal d'envoi ET réception
 //   5. L'agent, en dernier
 // ════════════════════════════════════════════════════════════════════════════
-import { useState } from "react";
-import { Alert, Box, Stack, Tab, Tabs, Typography } from "@mui/material";
+import { useLocation } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Alert, Box, Skeleton, Stack, Tab, Tabs, Typography } from "@mui/material";
 import { T, cardSx, kickerSx } from "../marketing/tokens";
+import { useAuth } from "../../hooks/useAuth";
+import { resolveOwnerId } from "../onboarding/resolveOwnerId";
+import { fetchB2bKpis, type B2bKpis } from "./api";
 import ConfigurationTab from "./ConfigurationTab";
+import DocumentsTab from "./DocumentsTab";
+import InboxTab from "./InboxTab";
+import PipelineTab from "./PipelineTab";
+import ProspectsTab from "./ProspectsTab";
+import OutboxTab from "./OutboxTab";
 
-/** Onglet encore vide — dit ce qu'il attend, sans simuler de données. */
-function Placeholder({ title, waiting }: { title: string; waiting: string }) {
+/** Carte d'indicateur — même forme que celles du module Marketing. */
+function Kpi({
+  label,
+  value,
+  sub,
+  loading,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  loading?: boolean;
+}) {
   return (
-    <Box sx={{ ...cardSx, textAlign: "center", py: 6 }}>
-      <Typography sx={{ ...kickerSx, mb: 1 }}>À venir</Typography>
-      <Typography sx={{ fontSize: 17, fontWeight: 700, color: T.ink, mb: 1 }}>
-        {title}
-      </Typography>
-      <Typography
-        sx={{ fontSize: 13.5, color: T.ink2, maxWidth: 520, mx: "auto", lineHeight: 1.7 }}
-      >
-        {waiting}
-      </Typography>
+    <Box sx={{ ...cardSx, p: 2, flex: "1 1 220px", minWidth: 200 }}>
+      <Typography sx={kickerSx}>{label}</Typography>
+      {loading ? (
+        <Skeleton width={110} height={34} sx={{ mt: 0.5 }} />
+      ) : (
+        <Typography
+          sx={{
+            fontSize: 26,
+            fontWeight: 650,
+            letterSpacing: "-0.02em",
+            color: T.ink,
+            mt: 0.25,
+          }}
+        >
+          {value}
+        </Typography>
+      )}
+      {sub && (
+        <Typography sx={{ fontSize: 12, color: T.mut, mt: 0.25, lineHeight: 1.5 }}>
+          {sub}
+        </Typography>
+      )}
     </Box>
   );
 }
 
+function mad(n: number): string {
+  return `${Math.round(n).toLocaleString("fr-FR").replace(/\u202f|\u00a0/g, " ")} MAD`;
+}
+
 const TABS = [
+  { key: "inbox", label: "Messages" },
+  { key: "outbox", label: "À relancer" },
+  { key: "pipeline", label: "Pipeline" },
   { key: "prospects", label: "Prospects" },
-  { key: "devis", label: "Devis" },
+  { key: "documents", label: "Documents" },
   { key: "config", label: "Configuration" },
 ] as const;
 
 export default function B2bDashboard() {
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("config");
+  // L'URL décide de l'onglet ouvert : /b2b/configuration est une entrée de
+  // menu à part entière, elle doit atterrir sur le bon onglet.
+  const { pathname } = useLocation();
+  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>(
+    pathname.includes("/configuration") ? "config" : "inbox",
+  );
+
+  const { user } = useAuth();
+  const ownerId = resolveOwnerId(user) ?? "";
+  const [kpis, setKpis] = useState<B2bKpis | null>(null);
+  const [kpisLoading, setKpisLoading] = useState(true);
+
+  const loadKpis = useCallback(async () => {
+    if (!ownerId) {
+      setKpisLoading(false);
+      return;
+    }
+    try {
+      setKpis(await fetchB2bKpis(ownerId));
+    } catch {
+      // Un indicateur indisponible ne doit pas empêcher d'utiliser l'écran :
+      // les cartes affichent « — » et le travail continue.
+      setKpis(null);
+    } finally {
+      setKpisLoading(false);
+    }
+  }, [ownerId]);
+
+  useEffect(() => {
+    void loadKpis();
+  }, [loadKpis]);
 
   return (
     <Box sx={{ bgcolor: T.bg, minHeight: "100%", p: { xs: 2, md: 3 } }}>
-      <Stack spacing={2.5} sx={{ maxWidth: 1080, mx: "auto" }}>
+      <Stack spacing={2.5}>
         {/* ── En-tête ── */}
         <Box>
           <Typography sx={kickerSx}>Sales B2B</Typography>
           <Typography
             sx={{ fontSize: 26, fontWeight: 800, color: T.ink, lineHeight: 1.2 }}
           >
-            Configuration commerciale
+            Agent commercial B2B
           </Typography>
           <Typography sx={{ fontSize: 14, color: T.ink2, mt: 0.75, maxWidth: 680 }}>
             Prospection d'entreprises, agences et comptes corporate : qualifier,
@@ -63,10 +131,32 @@ export default function B2bDashboard() {
           </Typography>
         </Box>
 
+        {/* Les deux chiffres qu'un commercial regarde en premier. */}
+        <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+          <Kpi
+            label="Affaires en cours"
+            value={kpis ? String(kpis.openOpportunities) : "—"}
+            sub="Ni gagnées, ni perdues"
+            loading={kpisLoading}
+          />
+          <Kpi
+            label="Valeur du pipeline"
+            value={kpis ? mad(kpis.pipelineValueMad) : "—"}
+            sub={
+              kpis && kpis.openOpportunities > 0
+                ? kpis.opportunitiesWithValue < kpis.openOpportunities
+                  ? `Estimation — ${kpis.opportunitiesWithValue} affaire(s) chiffrée(s) sur ${kpis.openOpportunities}`
+                  : "Montants espérés, pas des engagements"
+                : "Montants espérés, pas des engagements"
+            }
+            loading={kpisLoading}
+          />
+        </Stack>
+
         <Alert severity="info" sx={{ fontSize: 13 }}>
           <strong>Module en cours de construction.</strong> La{" "}
-          <strong>Configuration</strong> est enregistrée et lue par le balayage
-          automatique. Les onglets Prospects et Devis restent à venir.
+          <strong>Configuration</strong> est enregistrée et lue par le suivi des
+          échéances, qui alimente <strong>À relancer</strong>.
         </Alert>
 
         {/* ── Onglets ── */}
@@ -93,21 +183,18 @@ export default function B2bDashboard() {
           </Tabs>
         </Box>
 
+        {tab === "inbox" && <InboxTab />}
+
+        {tab === "pipeline" && <PipelineTab />}
+
+        {tab === "prospects" && <ProspectsTab />}
+
+        {tab === "documents" && <DocumentsTab />}
+
+        {tab === "outbox" && <OutboxTab />}
+
         {tab === "config" && <ConfigurationTab />}
 
-        {tab === "prospects" && (
-          <Placeholder
-            title="Aucun prospect n'est encore suivi"
-            waiting="La collection est vide et le modèle Prospect reste à créer (étape 5). Cet onglet listera les entreprises contactées, leur dernière interaction et la prochaine action à mener."
-          />
-        )}
-
-        {tab === "devis" && (
-          <Placeholder
-            title="Les devis ne sont pas encore implémentés"
-            waiting="C'est l'étape 2, celle que configure l'onglet voisin. Un devis portera une date d'expiration, un montant, et posera une réservation provisoire sur le bien concerné."
-          />
-        )}
       </Stack>
     </Box>
   );

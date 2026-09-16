@@ -63,11 +63,6 @@ const WORKER_ONLY: NavRole[] = [Roles.Worker];
  * SuperAdmin & Admin voient en plus les sections infra en bas (navGroupsForRole).
  */
 export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
-  // Ordre et périmètre Owner arrêtés avec Tawfiq le 16/09/2026, en simulation PM sur
-  // le compte de Mohamed-Ali Sarhi : Reports, Calendrier, Réservations en tête ; Direct
-  // booking, Ops Board, Configuration des annonces, Whitelist et On-boarding restent aux
-  // admins Sojori (ADMIN_ROLES). Prochaine étape : une liste d'accès par propriétaire,
-  // comme les featureGrants des Workers, plutôt que ce réglage global.
   {
     group: "Reports",
     roles: PM_ROLES,
@@ -92,43 +87,6 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     ],
   },
   {
-    group: "Calendrier",
-    roles: PM_ROLES,
-    items: [
-      {
-        id: "calendar/multi",
-        label: "Vue Multi",
-        iconType: "calendar",
-        iconColor: "#E06666",
-      },
-      {
-        id: "calendar/simple",
-        label: "Vue Simple",
-        iconType: "calendar",
-        iconColor: "#E06666",
-      },
-    ],
-  },
-  {
-    group: "Réservations",
-    roles: OPS_ROLES,
-    items: [
-      {
-        id: "reservations",
-        label: "Liste",
-        iconType: "calendar",
-        iconColor: "#E06666",
-      },
-      {
-        id: "payments",
-        label: "Paiements",
-        iconType: "chart",
-        iconColor: "#5B9BD5",
-        roles: PM_ROLES,
-      },
-    ],
-  },
-  {
     group: "Vue ops",
     roles: PM_ROLES,
     items: [
@@ -148,7 +106,6 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
       },
       {
         id: "ops-board",
-        roles: ADMIN_ROLES,
         label: "Ops Board",
         iconType: "monitor",
         iconColor: "#1E5B57",
@@ -211,6 +168,43 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         badge: "NEW",
         description:
           "Qui travaille quand, capacité, plafonds de crédits — jamais de score",
+      },
+    ],
+  },
+  {
+    group: "Calendrier",
+    roles: PM_ROLES,
+    items: [
+      {
+        id: "calendar/multi",
+        label: "Vue Multi",
+        iconType: "calendar",
+        iconColor: "#E06666",
+      },
+      {
+        id: "calendar/simple",
+        label: "Vue Simple",
+        iconType: "calendar",
+        iconColor: "#E06666",
+      },
+    ],
+  },
+  {
+    group: "Réservations",
+    roles: OPS_ROLES,
+    items: [
+      {
+        id: "reservations",
+        label: "Liste",
+        iconType: "calendar",
+        iconColor: "#E06666",
+      },
+      {
+        id: "payments",
+        label: "Paiements",
+        iconType: "chart",
+        iconColor: "#5B9BD5",
+        roles: PM_ROLES,
       },
     ],
   },
@@ -420,7 +414,6 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     items: [
       {
         id: "listings/configuration",
-        roles: ADMIN_ROLES,
         label: "Configuration",
         iconType: "home",
         iconColor: "#E6B022",
@@ -513,24 +506,32 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     items: [
       {
         id: "b2b/overview",
-        label: "Configuration",
+        label: "Relances & devis",
         iconType: "building",
         iconColor: "#1E5B57",
         badge: "Beta",
-        description: "Entreprises, devis et acomptes — configuration",
+        description: "Messages, relances à traiter et pipeline commercial",
+      },
+      {
+        id: "b2b/config",
+        label: "Configuration",
+        iconType: "settings",
+        iconColor: "#1E5B57",
+        badge: "Beta",
+        description: "Devis, acompte, blocage et relances — la politique du PM",
       },
     ],
   },
   {
     group: "Direct booking",
-    roles: ADMIN_ROLES,
+    roles: PM_ROLES,
     items: [
       {
         id: "comms/owner-booking",
         label: "Resa Proprio · Numéros",
         iconType: "chat",
         iconColor: "#0F766E",
-        roles: ADMIN_ROLES,
+        roles: PM_ROLES,
         description:
           "Allowlist sur le numéro Réservation (+212 669-742611) — pas le numéro Staff",
       },
@@ -565,7 +566,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         label: "Whitelist",
         iconType: "robot",
         iconColor: "#7C3AED",
-        roles: ADMIN_ROLES,
+        roles: PM_ROLES,
       },
       {
         id: "equipe/mon-profil",
@@ -578,7 +579,7 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         id: "equipe/onboarding",
         label: "On-boarding",
         icon: "🚀",
-        roles: ADMIN_ROLES,
+        roles: PM_ROLES,
         description:
           "Configuration initiale PM — équipe, import Airbnb, orchestration",
       },

@@ -83,6 +83,7 @@ export const NAV_TO_ROUTE: Record<string, string> = {
   "marketing/overview": "/marketing",
   "marketing/campaigns": "/marketing/campagnes",
   "b2b/overview": "/b2b",
+  "b2b/config": "/b2b/configuration",
   channels: "/catalogue/channels",
   "admin/channels": "/channels?tab=Business&biz=api&api=m",
   "admin/channels/business": "/admin/channels?tab=Business&biz=api&api=m",
