@@ -58,7 +58,7 @@ export default function OutboxTab() {
     setLoading(true);
     setError(null);
     try {
-      setRows(await fetchB2bOutbox(ownerId, "pending"));
+      setRows(await fetchB2bOutbox(ownerId, "open"));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Chargement impossible.");
     } finally {
@@ -172,11 +172,16 @@ export default function OutboxTab() {
                 </Stack>
 
                 <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>
-                  {row.groupLabel}
+                  {row.label ?? "Affaire sans libellé"}
                 </Typography>
                 <Typography sx={{ fontSize: 12.5, color: T.mut, mt: 0.25 }}>
                   {row.reason}
                 </Typography>
+                {row.status === "failed" && row.lastError && (
+                  <Typography sx={{ fontSize: 12, color: T.crit, mt: 0.5 }}>
+                    Envoi tenté sans succès : {row.lastError}
+                  </Typography>
+                )}
               </Box>
 
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>

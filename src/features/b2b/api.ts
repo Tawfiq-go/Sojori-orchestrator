@@ -34,6 +34,15 @@ function readable(error: unknown, fallback: string): Error {
 
 const BASE = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/b2b`;
 
+/**
+ * La file d'actions vit dans srv-agents, pas dans srv-reservations.
+ *
+ * Rédiger un message et choisir un canal sont des gestes d'agent commercial.
+ * srv-reservations détecte l'échéance — il tient les calendriers et les
+ * paiements — puis dépose l'action ici. Deux passerelles donc, une par service.
+ */
+const AGENTS_BASE = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/marketing/commercial`;
+
 /** Ce que renvoie le serveur : la politique, plus deux méta-données. */
 export interface StoredB2bPolicy extends B2bPolicy {
   ownerId: string;
@@ -81,30 +90,31 @@ export async function saveB2bPolicy(
  */
 export interface OutboxMessage {
   id: string;
-  groupId: string;
-  groupLabel: string;
-  groupStatus: string | null;
   kind: "payment_reminder" | "quote_expiring";
-  status: "pending" | "sent_manually" | "sent" | "dismissed";
+  status: "pending" | "sent" | "sent_manually" | "dismissed" | "failed";
+  /** Contexte lisible : « Séminaire Axa — mars 2027 ». */
+  label: string | null;
   recipientEmail: string | null;
-  recipientName: string | null;
   subject: string;
   body: string;
   reason: string;
   amountMad: number;
   dueAt: string | null;
+  sentAt: string | null;
+  /** Renseigné quand un envoi a été tenté et a échoué. */
+  lastError: string | null;
+  attempts: number;
   createdAt: string;
-  handledAt: string | null;
 }
 
 export async function fetchB2bOutbox(
   ownerId: string,
-  status: "pending" | "all" = "pending",
+  status: "open" | "all" = "open",
 ): Promise<OutboxMessage[]> {
   try {
     const { data } = await apiClient.get<{ success: boolean; data: OutboxMessage[] }>(
-      `${BASE}/outbox`,
-      { params: { ownerId, status } },
+      `${AGENTS_BASE}/outbox`,
+      { params: { ownerId, tenantId: ownerId, status } },
     );
     return data.data;
   } catch (error) {
@@ -120,9 +130,9 @@ export async function handleOutboxMessage(
 ): Promise<void> {
   try {
     await apiClient.post(
-      `${BASE}/outbox/${id}/handle`,
+      `${AGENTS_BASE}/outbox/${id}/handle`,
       { status, ownerId },
-      { params: { ownerId } },
+      { params: { ownerId, tenantId: ownerId } },
     );
   } catch (error) {
     throw readable(error, "Mise à jour du message impossible.");
