@@ -51,9 +51,25 @@ type PaidFormula = {
   duration: number;
 };
 
+/**
+ * Offre Sojori par défaut (décision Tawfiq 16/09/2026) : tout logement entier en
+ * ménage payant propose Express / Confort / Complet tant que le PM n'a rien
+ * enregistré ici. Le chatbot applique le même défaut (paidCleaningDefaults.ts) :
+ * ce que l'écran montre est ce que le voyageur voit.
+ */
+const SOJORI_DEFAULT_FORMULAS: PaidFormula[] = [
+  { id: 'express', enabled: true, labelFr: 'Express', descriptionFr: 'Ménage rapide : surfaces, sols et salle de bain', price: 150, duration: 2 },
+  { id: 'confort', enabled: true, labelFr: 'Confort', descriptionFr: 'Ménage rapide + serviettes propres', price: 250, duration: 2.5 },
+  { id: 'complet', enabled: true, labelFr: 'Complet', descriptionFr: 'Ménage complet, serviettes et draps inclus', price: 400, duration: 3 },
+];
+
+function hasOwnFormulas(raw: unknown): boolean {
+  return Array.isArray(raw) && raw.some(s => Boolean(s) && typeof s === 'object');
+}
+
 function parsePaidFormulas(raw: unknown): PaidFormula[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
+  if (!hasOwnFormulas(raw)) return SOJORI_DEFAULT_FORMULAS.map(f => ({ ...f }));
+  return (raw as unknown[])
     .filter((s): s is Record<string, unknown> => Boolean(s) && typeof s === 'object')
     .map((s, i) => {
       const name = (s.name as { fr?: string } | undefined) ?? {};
@@ -879,7 +895,11 @@ export default function V3MenageTypeCards({
         </Section>
         <Section
           label="Formules proposées au voyageur (WhatsApp)"
-          caption="Le flow ménage payant affiche ces formules — nom · prix — et calcule le total. Les niveaux ci-dessus servent au staff (durées, crédits)."
+          caption={
+            hasOwnFormulas(paidCfg.serviceTypes)
+              ? 'Le flow ménage payant affiche ces formules — nom · prix — et calcule le total. Les niveaux ci-dessus servent au staff (durées, crédits).'
+              : 'Offre Sojori par défaut (Express 150 · Confort 250 · Complet 400) : c\'est ce que le voyageur voit tant que rien n\'est enregistré ici. Modifiez une valeur pour adopter vos propres formules.'
+          }
         >
           <Box sx={{ border: `1px solid ${V3.b}`, borderRadius: '10px', overflow: 'hidden' }}>
             <Box sx={{ display: 'grid', gridTemplateColumns: FORMULA_GRID, gap: 1, px: 1.25, py: 0.75, bgcolor: V3.alt }}>
