@@ -55,7 +55,7 @@ export default function B2bDashboard() {
           <Typography
             sx={{ fontSize: 26, fontWeight: 800, color: T.ink, lineHeight: 1.2 }}
           >
-            Configuration commerciale
+            Agent commercial B2B
           </Typography>
           <Typography sx={{ fontSize: 14, color: T.ink2, mt: 0.75, maxWidth: 680 }}>
             Prospection d'entreprises, agences et comptes corporate : qualifier,

@@ -506,11 +506,13 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
     items: [
       {
         id: "b2b/overview",
-        label: "Configuration",
+        // Distinct du nom de groupe, sinon le fil d'Ariane affiche deux fois
+        // le même libellé (« Sales B2B › Sales B2B »).
+        label: "Relances & devis",
         iconType: "building",
         iconColor: "#1E5B57",
         badge: "Beta",
-        description: "Entreprises, devis et acomptes — configuration",
+        description: "Relances à traiter, prospects et politique commerciale",
       },
     ],
   },
