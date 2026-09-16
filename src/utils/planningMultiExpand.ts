@@ -120,7 +120,9 @@ export function expandPlanningListingRows(
     const rtResas = listing.reservations.filter((r) => reservationMatchesRoomType(r, rt));
     for (const r of rtResas) claimed.add(r.reservationId);
 
-    if (rtResas.length === 0) continue;
+    // Tous les types restent visibles, même sans résa sur la fenêtre : un hôtel
+    // lit son parc entier comme dans le calendrier (Nommos n'affichait que
+    // « Villa Confort » sur 30 jours — décision Tawfiq 16/09/2026).
 
     const rooms = Array.isArray(rt.rooms) ? rt.rooms : [];
     const rtKey = roomTypeExpandKey(listing.listingId, rt.id);

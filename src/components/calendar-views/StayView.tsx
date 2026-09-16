@@ -184,7 +184,8 @@ export default function StayView({
   const [multiExpanded, setMultiExpanded] = useState<Record<string, boolean>>({});
   const [roomTypeExpanded, setRoomTypeExpanded] = useState<Record<string, boolean>>({});
 
-  // Premier affichage : buildings Multi ouverts (roomTypes visibles, rooms repliés).
+  // Premier affichage : buildings Multi ouverts, roomTypes ET rooms visibles —
+  // un hôtel veut ses chambres d'emblée, comme dans le calendrier (Tawfiq 16/09).
   useEffect(() => {
     setMultiExpanded((prev) => {
       let changed = false;
@@ -194,6 +195,21 @@ export default function StayView({
         if (next[l.listingId] === undefined) {
           next[l.listingId] = true;
           changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    setRoomTypeExpanded((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const l of listings) {
+        if (!isPlanningMultiHotel(l)) continue;
+        for (const rt of l.roomTypes || []) {
+          const key = roomTypeExpandKey(l.listingId, rt.id);
+          if (next[key] === undefined) {
+            next[key] = true;
+            changed = true;
+          }
         }
       }
       return changed ? next : prev;
