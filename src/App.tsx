@@ -1318,6 +1318,16 @@ function App() {
                       </LazyRoute>
                     }
                   />
+                  {/* Même écran, ouvert directement sur l'onglet Configuration :
+                      deux entrées de menu, un seul composant. */}
+                  <Route
+                    path="/b2b/configuration"
+                    element={
+                      <LazyRoute>
+                        <B2bDashboardPage />
+                      </LazyRoute>
+                    }
+                  />
                   {/* MULTI-ROOMTYPE (Nommos) — :roomTypeId optionnel, une villa d'un
                   listing multi. Absent = comportement single inchangé. */}
                   <Route

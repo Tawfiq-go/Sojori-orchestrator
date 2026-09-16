@@ -42,25 +42,29 @@ const STAGES: {
   key: OpportunityStage;
   label: string;
   manual: boolean;
+  /** Filet coloré en tête de colonne — la progression se lit d'un coup d'œil. */
+  accent: string;
   hint?: string;
 }[] = [
-  { key: "to_contact", label: "À contacter", manual: true },
-  { key: "contacted", label: "Contacté", manual: true },
-  { key: "discussing", label: "En discussion", manual: true },
+  { key: "to_contact", label: "À contacter", manual: true, accent: T.line },
+  { key: "contacted", label: "Contacté", manual: true, accent: T.goldSoft },
+  { key: "discussing", label: "En discussion", manual: true, accent: T.gold },
   {
     key: "quote_sent",
     label: "Devis envoyé",
     manual: false,
+    accent: T.goldPure,
     hint: "Posé par l'envoi du devis",
   },
   {
     key: "deposit_paid",
     label: "Acompte reçu",
     manual: false,
+    accent: T.ok,
     hint: "Posé par l'encaissement",
   },
-  { key: "won", label: "Gagné", manual: false, hint: "Séjour soldé" },
-  { key: "lost", label: "Perdu", manual: true },
+  { key: "won", label: "Gagné", manual: false, accent: T.ok, hint: "Séjour soldé" },
+  { key: "lost", label: "Perdu", manual: true, accent: T.crit },
 ];
 
 function mad(n: number | null): string {
@@ -72,7 +76,7 @@ export default function PipelineTab() {
   const { user } = useAuth();
   const ownerId = resolveOwnerId(user) ?? "";
 
-  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [prospectCount, setProspectCount] = useState(0);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,10 +107,12 @@ export default function PipelineTab() {
     setError(null);
     try {
       const [p, o] = await Promise.all([
-        fetchProspects(ownerId),
+        // Le pipeline n'affiche que les affaires : les prospects servent au
+        // décompte, la liste complète vit dans son propre onglet.
+        fetchProspects(ownerId, { limit: 1 }),
         fetchOpportunities(ownerId),
       ]);
-      setProspects(p);
+      setProspectCount(p.total);
       setOpportunities(o);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Chargement impossible.");
@@ -224,7 +230,7 @@ export default function PipelineTab() {
           Ajouter un prospect
         </Button>
         <Typography sx={{ fontSize: 12.5, color: T.mut }}>
-          {prospects.length} prospect(s) · {opportunities.length} affaire(s)
+          {prospectCount} prospect(s) · {opportunities.length} affaire(s)
         </Typography>
       </Stack>
 
@@ -255,6 +261,10 @@ export default function PipelineTab() {
           <Stack direction="row" spacing={1.5} sx={{ minWidth: 1000 }}>
             {STAGES.map((s) => {
               const cards = byStage.get(s.key) ?? [];
+              const columnValue = cards.reduce(
+                (sum, c) => sum + (c.estimatedValueMad ?? 0),
+                0,
+              );
               return (
                 <Box
                   key={s.key}
@@ -267,21 +277,49 @@ export default function PipelineTab() {
                     p: 1.25,
                   }}
                 >
+                  {/* Un filet coloré par étape : l'œil situe la colonne sans
+                      lire son titre, et la progression se voit d'un coup. */}
+                  <Box
+                    sx={{
+                      height: 3,
+                      borderRadius: 2,
+                      bgcolor: s.accent,
+                      mb: 1.25,
+                    }}
+                  />
                   <Stack
                     direction="row"
                     justifyContent="space-between"
                     alignItems="baseline"
-                    mb={1}
+                    mb={0.25}
                   >
                     <Typography
                       sx={{ fontSize: 12, fontWeight: 700, color: T.ink }}
                     >
                       {s.label}
                     </Typography>
-                    <Typography sx={{ fontSize: 11.5, color: T.mut }}>
+                    <Typography
+                      sx={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: cards.length ? T.ink : T.mut,
+                        bgcolor: cards.length ? T.line2 : "transparent",
+                        px: cards.length ? 0.75 : 0,
+                        borderRadius: "10px",
+                      }}
+                    >
                       {cards.length}
                     </Typography>
                   </Stack>
+                  {/* Le cumul par colonne : savoir combien pèse « En discussion »
+                      vaut mieux que compter des cartes. */}
+                  {columnValue > 0 && (
+                    <Typography
+                      sx={{ fontSize: 11.5, color: T.mut, mb: 1, fontWeight: 600 }}
+                    >
+                      {mad(columnValue)}
+                    </Typography>
+                  )}
                   {s.hint && (
                     <Typography
                       sx={{ fontSize: 10.5, color: T.mut, mb: 1, lineHeight: 1.4 }}
@@ -291,6 +329,19 @@ export default function PipelineTab() {
                   )}
 
                   <Stack spacing={1}>
+                    {cards.length === 0 && (
+                      <Typography
+                        sx={{
+                          fontSize: 11.5,
+                          color: T.mut,
+                          textAlign: "center",
+                          py: 2,
+                          fontStyle: "italic",
+                        }}
+                      >
+                        aucune
+                      </Typography>
+                    )}
                     {cards.map((o) => (
                       <Box
                         key={o.id}
@@ -300,6 +351,11 @@ export default function PipelineTab() {
                           borderRadius: "8px",
                           p: 1.25,
                           opacity: busyId === o.id ? 0.5 : 1,
+                          transition: "border-color .15s, box-shadow .15s",
+                          "&:hover": {
+                            borderColor: T.gold,
+                            boxShadow: "0 1px 6px rgba(0,0,0,.06)",
+                          },
                         }}
                       >
                         <Typography
@@ -310,6 +366,18 @@ export default function PipelineTab() {
                         {o.contactName && (
                           <Typography sx={{ fontSize: 11.5, color: T.mut }}>
                             {o.contactName}
+                          </Typography>
+                        )}
+                        {o.expectedArrival && (
+                          <Typography
+                            sx={{ fontSize: 11, color: T.mut, mt: 0.4 }}
+                          >
+                            {new Date(o.expectedArrival).toLocaleDateString("fr-FR", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                            {o.expectedGuests ? ` · ${o.expectedGuests} pers.` : ""}
                           </Typography>
                         )}
                         {o.estimatedValueMad !== null && (

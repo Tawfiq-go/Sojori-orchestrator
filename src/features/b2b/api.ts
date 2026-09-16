@@ -289,13 +289,33 @@ export interface Opportunity {
   updatedAt: string;
 }
 
-export async function fetchProspects(ownerId: string): Promise<Prospect[]> {
+export interface ProspectQuery {
+  /** Recherche : nom, contact, email, ville, segment. */
+  q?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}
+
+/** Une page de résultats, avec le total pour savoir ce qui n'est pas montré. */
+export interface Paged<T> {
+  rows: T[];
+  total: number;
+}
+
+export async function fetchProspects(
+  ownerId: string,
+  query: ProspectQuery = {},
+): Promise<Paged<Prospect>> {
   try {
-    const { data } = await apiClient.get<{ success: boolean; data: Prospect[] }>(
-      `${PIPELINE_BASE}/prospects`,
-      { params: { ownerId, tenantId: ownerId } },
-    );
-    return data.data;
+    const { data } = await apiClient.get<{
+      success: boolean;
+      data: Prospect[];
+      total: number;
+    }>(`${PIPELINE_BASE}/prospects`, {
+      params: { ownerId, tenantId: ownerId, ...query },
+    });
+    return { rows: data.data, total: data.total ?? data.data.length };
   } catch (error) {
     throw readable(error, "Chargement des prospects impossible.");
   }
@@ -416,5 +436,28 @@ export async function assignThread(
     );
   } catch (error) {
     throw readable(error, "Rattachement impossible.");
+  }
+}
+
+/* ──────────────────────────── Indicateurs ──────────────────────────── */
+
+export interface B2bKpis {
+  /** Affaires ni gagnées ni perdues — celles qui demandent encore du travail. */
+  openOpportunities: number;
+  /** Somme des montants espérés. ⚠️ Une estimation saisie, pas un engagement. */
+  pipelineValueMad: number;
+  /** Combien portent réellement un montant — dit ce que vaut le total. */
+  opportunitiesWithValue: number;
+}
+
+export async function fetchB2bKpis(ownerId: string): Promise<B2bKpis> {
+  try {
+    const { data } = await apiClient.get<{ success: boolean; data: B2bKpis }>(
+      `${PIPELINE_BASE}/kpis`,
+      { params: { ownerId, tenantId: ownerId } },
+    );
+    return data.data;
+  } catch (error) {
+    throw readable(error, "Chargement des indicateurs impossible.");
   }
 }
