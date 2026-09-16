@@ -1,6 +1,10 @@
 /**
  * Direct booking — Preview : le site du client page par page (iframe du vrai
- * moteur sojori.com avec thème + forme appliqués), mobile et desktop.
+ * moteur de réservation avec thème + forme appliqués), mobile et desktop.
+ *
+ * Le moteur vit sur book.sojori.com (sojori-app) depuis le 14/09/2026 ;
+ * sojori.com est le site SaaS et refuse l'iframe (X-Frame-Options: DENY) —
+ * « sojori.com refused to connect » constaté par Tawfiq le 16/09.
  * Charge la config sauvée (pmProfile.directBooking) ; les sélecteurs de
  * thème/forme testent en live SANS sauver — le bouton Config enregistre.
  * Admin : le filtre propriétaire en haut choisit le PM (comme Équipe).
@@ -31,10 +35,17 @@ const SHAPES = [
   { id: 'galbe', label: 'Galbé' },
 ];
 
+/** Moteur de réservation embarqué — surchargeable en local (VITE_DIRECT_BOOKING_URL). */
+const DIRECT_BOOKING_SITE = (
+  (import.meta.env.VITE_DIRECT_BOOKING_URL as string | undefined) || 'https://book.sojori.com'
+).replace(/\/+$/, '');
+
 const PAGES = [
   { id: 'home', label: 'Accueil', path: (_slug: string) => '/' },
   { id: 'search', label: 'Recherche', path: (_slug: string) => '/search' },
-  { id: 'vitrine', label: 'Vitrine', path: (slug: string) => (slug ? `/pm/${slug}` : '/') },
+  // La vitrine du PM est la page d'accueil filtrée par `pm=<slug>` (ajouté plus bas) :
+  // book.sojori.com n'a pas de route /pm/<slug>.
+  { id: 'vitrine', label: 'Vitrine', path: () => '/' },
 ];
 
 function DirectBookingPreviewInner() {
@@ -99,7 +110,7 @@ function DirectBookingPreviewInner() {
   // Scope tenant : slug si défini, sinon ownerId (accepté par le backend) —
   // un client tout neuf sans slug voit SON site (vide) et jamais la marketplace.
   const pmScope = slug || targetOwnerId;
-  const src = `https://sojori.com${currentPage.path(slug)}?theme=${theme}&shape=${shape}&fresh=1${pmScope ? `&pm=${encodeURIComponent(pmScope)}` : ''}`;
+  const src = `${DIRECT_BOOKING_SITE}${currentPage.path(slug)}?theme=${theme}&shape=${shape}&fresh=1${pmScope ? `&pm=${encodeURIComponent(pmScope)}` : ''}`;
   const unsaved = theme !== savedTheme;
 
   return (
