@@ -1,10 +1,13 @@
 // ════════════════════════════════════════════════════════════════════════════
-// Sales B2B · MESSAGES — lire les échanges et répondre au client
+// Sales B2B · MESSAGES — liste à gauche, conversation à droite
 // ────────────────────────────────────────────────────────────────────────────
+// Même principe que l'Inbox Guest : on ne quitte jamais la liste pour lire un
+// fil. Remplacer la liste par la conversation fait perdre le contexte — on ne
+// voit plus qui attend une réponse pendant qu'on en rédige une.
+//
 // ⚠️ Une réponse envoyée d'ici PART VRAIMENT, depuis b2b@sojori.com. C'est le
 // seul geste du module dont l'effet sort de Sojori et ne se rattrape pas.
-// L'écran le dit avant l'envoi, et affiche l'adresse expéditrice : personne ne
-// doit cliquer « Envoyer » en croyant enregistrer un brouillon.
+// L'écran le dit sous le bouton et nomme l'adresse expéditrice.
 // ════════════════════════════════════════════════════════════════════════════
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -13,9 +16,9 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Divider,
   Stack,
   TextField,
+  ToggleButton,
   Typography,
 } from "@mui/material";
 import { useAuth } from "../../hooks/useAuth";
@@ -40,7 +43,7 @@ function when(iso: string | null): string {
   if (days === 0)
     return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   if (days === 1) return "hier";
-  if (days < 7) return `il y a ${days} j`;
+  if (days < 7) return `${days} j`;
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
@@ -50,15 +53,20 @@ export default function InboxTab() {
   const isAdmin = isAdminRole(user);
 
   const [threads, setThreads] = useState<InboxThread[]>([]);
-  /** Fils qu'aucun signal n'a rattachés — visibles du seul administrateur. */
+  const [total, setTotal] = useState(0);
   const [unassigned, setUnassigned] = useState<UnassignedThread[]>([]);
-  const [assigning, setAssigning] = useState<string | null>(null);
   const [openThread, setOpenThread] = useState<InboxThreadDetail | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const [q, setQ] = useState("");
+  const [unreadOnly, setUnreadOnly] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [collecting, setCollecting] = useState(false);
+  const [assigning, setAssigning] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -70,29 +78,33 @@ export default function InboxTab() {
     setLoading(true);
     setError(null);
     try {
-      setThreads(await fetchInboxThreads(ownerId));
-      // La file « à rattacher » ne concerne que l'administrateur : un PM ne
-      // doit pas voir des messages dont rien ne dit qu'ils lui appartiennent.
-      if (isAdmin) {
-        setUnassigned(await fetchUnassignedThreads(ownerId));
-      }
+      const res = await fetchInboxThreads(ownerId, {
+        q: q.trim() || undefined,
+        unread: unreadOnly ? "1" : undefined,
+        limit: 100,
+      });
+      setThreads(res.rows);
+      setTotal(res.total);
+      if (isAdmin) setUnassigned(await fetchUnassignedThreads(ownerId));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Chargement impossible.");
     } finally {
       setLoading(false);
     }
-  }, [ownerId, isAdmin]);
+  }, [ownerId, isAdmin, q, unreadOnly]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    // La recherche attend la fin de la frappe.
+    const t = setTimeout(() => void load(), q ? 350 : 0);
+    return () => clearTimeout(t);
+  }, [load, q]);
 
   const open = async (id: string) => {
     setError(null);
     setDraft("");
+    setSelectedId(id);
     try {
       setOpenThread(await fetchInboxThread(ownerId, id));
-      // Le fil vient d'être lu : le compteur local suit le serveur.
       setThreads((prev) =>
         prev.map((t) => (t.id === id ? { ...t, unreadCount: 0 } : t)),
       );
@@ -108,31 +120,14 @@ export default function InboxTab() {
     try {
       await replyToInboxThread(ownerId, openThread.id, draft.trim());
       setDraft("");
-      // On relit le fil plutôt que d'y ajouter le message localement : le
-      // serveur inscrit aussi les envois en échec, et l'écran doit montrer ce
-      // qui s'est réellement passé, pas ce qu'on espérait.
+      // On relit depuis le serveur : il inscrit aussi les envois en échec, et
+      // l'écran doit montrer ce qui s'est passé, pas ce qu'on espérait.
       setOpenThread(await fetchInboxThread(ownerId, openThread.id));
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Envoi impossible.");
     } finally {
       setSending(false);
-    }
-  };
-
-  const assign = async (threadId: string) => {
-    setAssigning(threadId);
-    setError(null);
-    try {
-      // Un seul établissement suivi aujourd'hui : on rattache au sien. Le jour
-      // où il y en aura plusieurs, il faudra un choix explicite — deviner
-      // ferait lire à un PM l'échange commercial d'un autre.
-      await assignThread(ownerId, threadId, ownerId);
-      await load();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Rattachement impossible.");
-    } finally {
-      setAssigning(null);
     }
   };
 
@@ -155,156 +150,73 @@ export default function InboxTab() {
     }
   };
 
-  if (loading) {
-    return (
-      <Stack alignItems="center" sx={{ py: 8 }} spacing={1.5}>
-        <CircularProgress size={24} sx={{ color: T.gold }} />
-        <Typography sx={{ fontSize: 13, color: T.mut }}>
-          Chargement des messages…
-        </Typography>
-      </Stack>
-    );
-  }
+  const assign = async (threadId: string) => {
+    setAssigning(threadId);
+    setError(null);
+    try {
+      await assignThread(ownerId, threadId, ownerId);
+      await load();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Rattachement impossible.");
+    } finally {
+      setAssigning(null);
+    }
+  };
 
-  /* ─────────────────────────── Un fil ouvert ─────────────────────────── */
-  if (openThread) {
-    return (
-      <Stack spacing={2}>
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <Button
-            size="small"
-            onClick={() => setOpenThread(null)}
-            sx={{ textTransform: "none", color: T.mut }}
-          >
-            ← Tous les messages
-          </Button>
-        </Stack>
-
-        <Box sx={cardSx}>
-          <Typography sx={kickerSx}>{openThread.channel}</Typography>
-          <Typography sx={{ fontSize: 17, fontWeight: 700, color: T.ink }}>
-            {openThread.contactName ?? openThread.contactAddress}
-          </Typography>
-          <Typography sx={{ fontSize: 12.5, color: T.mut }}>
-            {openThread.contactAddress}
-          </Typography>
-        </Box>
-
-        {error && (
-          <Alert severity="error" sx={{ fontSize: 13 }}>
-            {error}
-          </Alert>
-        )}
-
-        <Stack spacing={1.5}>
-          {openThread.messages.map((m) => (
-            <Box
-              key={m.id}
-              sx={{
-                ...cardSx,
-                bgcolor: m.direction === "outbound" ? T.goldBg : T.card,
-                borderColor: m.direction === "outbound" ? T.goldSoft : T.line,
-                ml: m.direction === "outbound" ? { xs: 0, sm: 6 } : 0,
-                mr: m.direction === "outbound" ? 0 : { xs: 0, sm: 6 },
-              }}
-            >
-              <Stack
-                direction="row"
-                justifyContent="space-between"
-                alignItems="baseline"
-                mb={0.75}
-                flexWrap="wrap"
-                useFlexGap
-              >
-                <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: T.ink2 }}>
-                  {m.direction === "outbound" ? `Nous → ${m.to}` : m.from}
-                </Typography>
-                <Typography sx={{ fontSize: 12, color: T.mut }}>
-                  {when(m.sentAt)}
-                </Typography>
-              </Stack>
-              {m.subject && (
-                <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.ink, mb: 0.5 }}>
-                  {m.subject}
-                </Typography>
-              )}
-              <Typography
-                sx={{
-                  fontSize: 13,
-                  color: T.ink2,
-                  whiteSpace: "pre-wrap",
-                  lineHeight: 1.65,
-                }}
-              >
-                {m.body}
-              </Typography>
-              {m.error && (
-                <Alert severity="error" sx={{ mt: 1.5, fontSize: 12 }}>
-                  Ce message n'est pas parti : {m.error}
-                </Alert>
-              )}
-            </Box>
-          ))}
-        </Stack>
-
-        <Divider />
-
-        <Box sx={cardSx}>
-          <Typography sx={{ ...kickerSx, mb: 1 }}>Répondre</Typography>
-          <TextField
-            multiline
-            minRows={5}
-            fullWidth
-            placeholder="Votre réponse…"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            sx={{ mb: 1.5 }}
-          />
-          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
-            <Button
-              variant="contained"
-              disabled={!draft.trim() || sending}
-              onClick={() => void send()}
-              startIcon={sending ? <CircularProgress size={14} color="inherit" /> : undefined}
-              sx={{
-                textTransform: "none",
-                fontWeight: 700,
-                bgcolor: T.gold,
-                "&:hover": { bgcolor: T.goldPure },
-              }}
-            >
-              {sending ? "Envoi…" : "Envoyer au client"}
-            </Button>
-            <Typography sx={{ fontSize: 12.5, color: T.mut }}>
-              Part immédiatement depuis <strong>b2b@sojori.com</strong>.
-            </Typography>
-          </Stack>
-        </Box>
-      </Stack>
-    );
-  }
-
-  /* ──────────────────────────── Liste des fils ──────────────────────────── */
   return (
     <Stack spacing={2}>
-      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
-        <Button
-          size="small"
-          variant="outlined"
-          disabled={collecting}
-          onClick={() => void collect()}
-          sx={{ textTransform: "none", borderColor: T.line, color: T.ink }}
-        >
-          {collecting ? "Relève en cours…" : "Relever la boîte"}
-        </Button>
-        <Typography sx={{ fontSize: 12.5, color: T.mut }}>
-          Les nouveaux messages arrivent aussi automatiquement.
-        </Typography>
-      </Stack>
+      {/* ─────────────────── Filtres, en haut ─────────────────── */}
+      <Box sx={{ ...cardSx, p: 2 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+          <TextField
+            size="small"
+            placeholder="Rechercher un expéditeur, un sujet…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            sx={{ flex: "1 1 280px", bgcolor: T.card }}
+          />
+          <ToggleButton
+            value="unread"
+            selected={unreadOnly}
+            onChange={() => setUnreadOnly((v) => !v)}
+            size="small"
+            sx={{
+              textTransform: "none",
+              px: 2,
+              borderColor: T.line,
+              "&.Mui-selected": {
+                bgcolor: T.goldBg,
+                borderColor: T.gold,
+                color: T.ink,
+                fontWeight: 700,
+              },
+            }}
+          >
+            Non lus
+          </ToggleButton>
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={collecting}
+            onClick={() => void collect()}
+            sx={{ textTransform: "none", borderColor: T.line, color: T.ink }}
+          >
+            {collecting ? "Relève…" : "Relever la boîte"}
+          </Button>
+          <Typography sx={{ fontSize: 12.5, color: T.mut }}>
+            {loading ? "…" : `${total} conversation(s)`}
+          </Typography>
+        </Stack>
+      </Box>
 
       {notice && (
         <Alert severity="info" sx={{ fontSize: 13 }}>
           {notice}
+        </Alert>
+      )}
+      {error && (
+        <Alert severity="error" sx={{ fontSize: 13 }}>
+          {error}
         </Alert>
       )}
 
@@ -312,13 +224,7 @@ export default function InboxTab() {
           établissement. Sans cet encadré, un email de prospect dort sans que
           personne ne le sache. Réservé à l'administrateur. */}
       {isAdmin && unassigned.length > 0 && (
-        <Box
-          sx={{
-            ...cardSx,
-            bgcolor: T.warnBg,
-            borderColor: T.goldSoft,
-          }}
-        >
+        <Box sx={{ ...cardSx, bgcolor: T.warnBg, borderColor: T.goldSoft }}>
           <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.ink, mb: 0.5 }}>
             {unassigned.length} message(s) sans établissement
           </Typography>
@@ -327,7 +233,6 @@ export default function InboxTab() {
             réponse, ni un fil existant. Ils n'apparaissent chez aucun
             gestionnaire tant qu'ils ne sont pas rattachés.
           </Typography>
-
           <Stack spacing={1.25}>
             {unassigned.map((u) => (
               <Box
@@ -385,83 +290,241 @@ export default function InboxTab() {
           </Stack>
         </Box>
       )}
-      {error && (
-        <Alert severity="error" sx={{ fontSize: 13 }}>
-          {error}
-        </Alert>
-      )}
 
-      {threads.length === 0 && !error && (
-        <Box sx={{ ...cardSx, textAlign: "center", py: 6 }}>
-          <Typography sx={{ ...kickerSx, mb: 1 }}>Aucun message</Typography>
-          <Typography sx={{ fontSize: 14, color: T.ink2, maxWidth: 480, mx: "auto" }}>
-            Les réponses de vos prospects apparaîtront ici. Elles sont rattachées
-            automatiquement grâce à l'adresse de réponse de chaque relance.
-          </Typography>
-        </Box>
-      )}
+      {/* ───────────── Deux colonnes : liste à gauche, fil à droite ───────────── */}
+      <Box
+        sx={{
+          display: { xs: "block", md: "grid" },
+          gridTemplateColumns: { md: "minmax(280px, 360px) 1fr" },
+          gap: 2,
+          alignItems: "start",
+        }}
+      >
+        {/* Liste */}
+        <Box sx={{ ...cardSx, p: 0, overflow: "hidden" }}>
+          {loading && threads.length === 0 && (
+            <Stack alignItems="center" sx={{ py: 5 }} spacing={1.5}>
+              <CircularProgress size={20} sx={{ color: T.gold }} />
+            </Stack>
+          )}
 
-      {threads.map((t) => (
-        <Box
-          key={t.id}
-          onClick={() => void open(t.id)}
-          sx={{
-            ...cardSx,
-            cursor: "pointer",
-            "&:hover": { borderColor: T.gold },
-          }}
-        >
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="flex-start"
-            spacing={1.5}
-            flexWrap="wrap"
-            useFlexGap
-          >
-            <Box sx={{ minWidth: 0, flex: "1 1 300px" }}>
-              <Stack direction="row" spacing={1} alignItems="center" mb={0.5} flexWrap="wrap" useFlexGap>
-                <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>
-                  {t.contactName ?? t.contactAddress}
-                </Typography>
-                {t.unreadCount > 0 && (
-                  <Chip
-                    size="small"
-                    label={t.unreadCount}
-                    sx={{
-                      bgcolor: T.gold,
-                      color: "#fff",
-                      fontWeight: 700,
-                      fontSize: 11,
-                      height: 20,
-                    }}
-                  />
-                )}
-              </Stack>
-              {t.subject && (
-                <Typography sx={{ fontSize: 13, color: T.ink2, fontWeight: 600 }}>
-                  {t.subject}
-                </Typography>
-              )}
-              <Typography
-                sx={{
-                  fontSize: 12.5,
-                  color: T.mut,
-                  mt: 0.25,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {t.lastPreview ?? ""}
+          {!loading && threads.length === 0 && (
+            <Box sx={{ textAlign: "center", py: 5, px: 2.5 }}>
+              <Typography sx={{ ...kickerSx, mb: 1 }}>
+                {q || unreadOnly ? "Aucun résultat" : "Aucun message"}
+              </Typography>
+              <Typography sx={{ fontSize: 13, color: T.ink2, lineHeight: 1.6 }}>
+                {q || unreadOnly
+                  ? "Aucune conversation ne correspond."
+                  : "Les réponses de vos prospects apparaîtront ici."}
               </Typography>
             </Box>
-            <Typography sx={{ fontSize: 12, color: T.mut, whiteSpace: "nowrap" }}>
-              {when(t.lastMessageAt)}
-            </Typography>
+          )}
+
+          <Stack divider={<Box sx={{ borderBottom: `1px solid ${T.line2}` }} />}>
+            {threads.map((t) => {
+              const active = t.id === selectedId;
+              return (
+                <Box
+                  key={t.id}
+                  onClick={() => void open(t.id)}
+                  sx={{
+                    p: 1.5,
+                    cursor: "pointer",
+                    bgcolor: active ? T.goldBg : "transparent",
+                    borderLeft: `3px solid ${active ? T.gold : "transparent"}`,
+                    "&:hover": { bgcolor: active ? T.goldBg : T.bg },
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="baseline"
+                    spacing={1}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: 13.5,
+                        fontWeight: t.unreadCount > 0 ? 750 : 600,
+                        color: T.ink,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t.contactName ?? t.contactAddress}
+                    </Typography>
+                    <Typography sx={{ fontSize: 11, color: T.mut, whiteSpace: "nowrap" }}>
+                      {when(t.lastMessageAt)}
+                    </Typography>
+                  </Stack>
+                  {t.subject && (
+                    <Typography
+                      sx={{
+                        fontSize: 12.5,
+                        color: T.ink2,
+                        fontWeight: t.unreadCount > 0 ? 650 : 400,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t.subject}
+                    </Typography>
+                  )}
+                  <Stack direction="row" spacing={1} alignItems="center" mt={0.25}>
+                    <Typography
+                      sx={{
+                        fontSize: 12,
+                        color: T.mut,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        flex: 1,
+                      }}
+                    >
+                      {t.lastPreview ?? ""}
+                    </Typography>
+                    {t.unreadCount > 0 && (
+                      <Chip
+                        size="small"
+                        label={t.unreadCount}
+                        sx={{
+                          height: 18,
+                          minWidth: 18,
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          bgcolor: T.gold,
+                          color: "#fff",
+                        }}
+                      />
+                    )}
+                  </Stack>
+                </Box>
+              );
+            })}
           </Stack>
         </Box>
-      ))}
+
+        {/* Conversation */}
+        <Box sx={{ minWidth: 0 }}>
+          {!openThread && (
+            <Box sx={{ ...cardSx, textAlign: "center", py: 8 }}>
+              <Typography sx={{ ...kickerSx, mb: 1 }}>Conversation</Typography>
+              <Typography sx={{ fontSize: 14, color: T.ink2 }}>
+                Choisissez une conversation à gauche pour la lire et y répondre.
+              </Typography>
+            </Box>
+          )}
+
+          {openThread && (
+            <Stack spacing={2}>
+              <Box sx={cardSx}>
+                <Typography sx={kickerSx}>{openThread.channel}</Typography>
+                <Typography sx={{ fontSize: 17, fontWeight: 700, color: T.ink }}>
+                  {openThread.contactName ?? openThread.contactAddress}
+                </Typography>
+                <Typography sx={{ fontSize: 12.5, color: T.mut }}>
+                  {openThread.contactAddress}
+                </Typography>
+              </Box>
+
+              <Stack spacing={1.5}>
+                {openThread.messages.map((m) => (
+                  <Box
+                    key={m.id}
+                    sx={{
+                      ...cardSx,
+                      bgcolor: m.direction === "outbound" ? T.goldBg : T.card,
+                      borderColor: m.direction === "outbound" ? T.goldSoft : T.line,
+                      ml: m.direction === "outbound" ? { xs: 0, sm: 4 } : 0,
+                      mr: m.direction === "outbound" ? 0 : { xs: 0, sm: 4 },
+                    }}
+                  >
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="baseline"
+                      mb={0.75}
+                      flexWrap="wrap"
+                      useFlexGap
+                    >
+                      <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: T.ink2 }}>
+                        {m.direction === "outbound" ? `Nous → ${m.to}` : m.from}
+                      </Typography>
+                      <Typography sx={{ fontSize: 12, color: T.mut }}>
+                        {when(m.sentAt)}
+                      </Typography>
+                    </Stack>
+                    {m.subject && (
+                      <Typography
+                        sx={{ fontSize: 13, fontWeight: 700, color: T.ink, mb: 0.5 }}
+                      >
+                        {m.subject}
+                      </Typography>
+                    )}
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        color: T.ink2,
+                        whiteSpace: "pre-wrap",
+                        lineHeight: 1.65,
+                      }}
+                    >
+                      {m.body}
+                    </Typography>
+                    {m.error && (
+                      <Alert severity="error" sx={{ mt: 1.5, fontSize: 12 }}>
+                        Ce message n'est pas parti : {m.error}
+                      </Alert>
+                    )}
+                  </Box>
+                ))}
+              </Stack>
+
+              <Box sx={cardSx}>
+                <Typography sx={{ ...kickerSx, mb: 1 }}>Répondre</Typography>
+                <TextField
+                  multiline
+                  minRows={4}
+                  fullWidth
+                  placeholder="Votre réponse…"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  sx={{ mb: 1.5 }}
+                />
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  alignItems="center"
+                  flexWrap="wrap"
+                  useFlexGap
+                >
+                  <Button
+                    variant="contained"
+                    disabled={!draft.trim() || sending}
+                    onClick={() => void send()}
+                    startIcon={
+                      sending ? <CircularProgress size={14} color="inherit" /> : undefined
+                    }
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 700,
+                      bgcolor: T.gold,
+                      "&:hover": { bgcolor: T.goldPure },
+                    }}
+                  >
+                    {sending ? "Envoi…" : "Envoyer au client"}
+                  </Button>
+                  <Typography sx={{ fontSize: 12.5, color: T.mut }}>
+                    Part immédiatement depuis <strong>b2b@sojori.com</strong>.
+                  </Typography>
+                </Stack>
+              </Box>
+            </Stack>
+          )}
+        </Box>
+      </Box>
     </Stack>
   );
 }

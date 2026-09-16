@@ -179,13 +179,27 @@ export interface InboxThreadDetail {
   messages: InboxMessage[];
 }
 
-export async function fetchInboxThreads(ownerId: string): Promise<InboxThread[]> {
+export interface ThreadQuery {
+  q?: string;
+  /** `1` = seulement les fils avec des messages non lus. */
+  unread?: "1";
+  page?: number;
+  limit?: number;
+}
+
+export async function fetchInboxThreads(
+  ownerId: string,
+  query: ThreadQuery = {},
+): Promise<Paged<InboxThread>> {
   try {
-    const { data } = await apiClient.get<{ success: boolean; data: InboxThread[] }>(
-      `${INBOX_BASE}/threads`,
-      { params: { ownerId, tenantId: ownerId } },
-    );
-    return data.data;
+    const { data } = await apiClient.get<{
+      success: boolean;
+      data: InboxThread[];
+      total: number;
+    }>(`${INBOX_BASE}/threads`, {
+      params: { ownerId, tenantId: ownerId, ...query },
+    });
+    return { rows: data.data, total: data.total ?? data.data.length };
   } catch (error) {
     throw readable(error, "Chargement de la messagerie impossible.");
   }
