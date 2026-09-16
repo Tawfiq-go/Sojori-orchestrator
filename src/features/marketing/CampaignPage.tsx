@@ -580,9 +580,28 @@ export default function CampaignPage() {
                     ...detail.days.map((x) => x.spendMad),
                     1,
                   );
+                  // La collecte tourne à 4 h UTC : la ligne du jour ne couvre
+                  // que les premières heures. Sans le dire, une dépense de
+                  // 23 MAD face à 500 la veille se lit comme un effondrement
+                  // de la campagne — alors que la journée commence à peine.
+                  const isToday = d.day === new Date().toISOString().slice(0, 10);
                   return (
-                    <Box component="tr" key={d.day}>
-                      <Td>{d.day.slice(5)}</Td>
+                    <Box
+                      component="tr"
+                      key={d.day}
+                      sx={isToday ? { opacity: 0.55 } : undefined}
+                    >
+                      <Td>
+                        {d.day.slice(5)}
+                        {isToday && (
+                          <Box
+                            component="span"
+                            sx={{ fontSize: 10.5, color: T.mut, ml: 0.75 }}
+                          >
+                            en cours
+                          </Box>
+                        )}
+                      </Td>
                       <Td num>{nf.format(Math.round(d.spendMad))}</Td>
                       <Td num color={T.mut}>
                         {nf.format(d.clicks)}

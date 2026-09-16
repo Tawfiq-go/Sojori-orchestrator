@@ -43,7 +43,12 @@ const VERDICT: Record<
   accelerate: { label: "Accélérer", fg: T.ok, bg: T.okBg },
   keep: { label: "Maintenir", fg: T.warn, bg: T.warnBg },
   stop: { label: "Arrêter", fg: T.crit, bg: T.critBg },
-  inconclusive: { label: "Trop peu de données", fg: T.mut, bg: T.line2 },
+  // « Trop peu de données » se lit comme un jugement définitif sur une
+  // campagne terminée. Or celles qui portent ce verdict diffusent encore : le
+  // signal est simplement trop faible POUR L'INSTANT. Dire « en cours » décrit
+  // la situation réelle et n'invite pas à couper une campagne qui n'a pas
+  // encore eu le temps de produire.
+  inconclusive: { label: "Signal en cours", fg: T.mut, bg: T.line2 },
 };
 
 /** Trois niveaux plutôt qu'un intervalle : le lecteur décide, il n'estime pas. */
@@ -229,6 +234,14 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
           <Box component="tbody">
             {data.campaigns.map((c) => {
               const v = VERDICT[c.verdict];
+              // ⚠️ Paniers, Résa, OTA et « Sans pub » décrivent le MARCHÉ, pas
+              // la campagne. Quand deux campagnes visent le même pays, elles
+              // affichent les mêmes chiffres — et un lecteur les additionne :
+              // 3 + 3 = 6 réservations alors qu'il n'y en a que 3, partagées.
+              // La mention rend le partage visible au lieu de le laisser
+              // deviner.
+              const sharesMarket =
+                data.campaigns.filter((x) => x.country === c.country).length > 1;
               return (
                 <Box
                   component="tr"
@@ -287,7 +300,18 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
                       ? `${c.marketAddToCartRate.toFixed(2)} %`
                       : "—"}
                   </Cell>
-                  <Cell num>{c.reservations}</Cell>
+                  <Cell num>
+                    {c.reservations}
+                    {sharesMarket && (
+                      <Box
+                        component="span"
+                        sx={{ fontSize: 10, color: T.mut, ml: 0.4 }}
+                        title={`Réservations du marché ${c.country}, partagées avec les autres campagnes de ce pays — ne pas additionner.`}
+                      >
+                        ◈
+                      </Box>
+                    )}
+                  </Cell>
                   <Cell num color={T.mut}>
                     {c.otaReservations}
                   </Cell>
@@ -374,6 +398,20 @@ export default function CampaignScores({ data }: { data: MarketingDashboard }) {
           la décimale ne l'est pas — la pastille au bout de chaque nom indique
           ce que la ligne vaut.
         </Typography>
+        {data.campaigns.some(
+          (c) =>
+            data.campaigns.filter((x) => x.country === c.country).length > 1,
+        ) && (
+          <Typography
+            sx={{ fontSize: 12, color: T.warn, lineHeight: 1.7, mt: 0.8 }}
+          >
+            <b>◈ Chiffres de marché, à ne pas additionner.</b> Plusieurs
+            campagnes visent le même pays : les réservations affichées sont
+            celles du marché entier, identiques sur chaque ligne. Les
+            additionner compterait deux fois les mêmes séjours. La dépense et le
+            CTR, eux, appartiennent bien à chaque campagne.
+          </Typography>
+        )}
       </Box>
     </Box>
   );
