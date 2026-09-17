@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Box, CircularProgress, Stack, TextField, Typography } from '@mui/material';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import {
   fetchPricingV2Portfolio,
   type PricingV2Portfolio,
@@ -109,6 +110,7 @@ export default function PricingV2Portfolio({
   initialData,
 }: { initialData?: PricingV2Portfolio } = {}) {
   const navigate = useNavigate();
+  const { scopeFetchReady, requestOwnerId, ownerScopeAll } = useAdminOwnerApiScope();
   const [data, setData] = useState<PricingV2Portfolio | null>(initialData ?? null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!initialData);
@@ -118,9 +120,14 @@ export default function PricingV2Portfolio({
 
   useEffect(() => {
     if (initialData) return; // données déjà fournies : pas d'appel réseau
+    if (!scopeFetchReady) return;
     let alive = true;
+    setLoading(true);
+    setError(null);
     void (async () => {
       try {
+        // ownerId posé par l'interceptor via resolvePricingV2OwnerId()
+        // (filtre chrome / simulation / compte Owner) — pas getPersistedUser().id.
         const r = await fetchPricingV2Portfolio();
         if (!alive) return;
         if (!r.data.success) throw new Error(r.data.error || 'portefeuille indisponible');
@@ -134,7 +141,7 @@ export default function PricingV2Portfolio({
     return () => {
       alive = false;
     };
-  }, [initialData]);
+  }, [initialData, scopeFetchReady, requestOwnerId, ownerScopeAll]);
 
   // ⚠️ Les villes en base contiennent du bruit réel : « N/A », et « Marrakesh »
   // en doublon de « Marrakech ». On nettoie à l'affichage sans toucher la donnée.

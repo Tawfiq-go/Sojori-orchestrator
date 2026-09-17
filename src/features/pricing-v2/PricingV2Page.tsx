@@ -33,6 +33,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useAuth } from '../../hooks/useAuth';
+import { useAdminOwnerApiScope } from '../../hooks/useAdminOwnerApiScope';
 import { hasAdminAccess } from '../../utils/rbac.utils';
 import CompsTable from './CompsTable';
 import PublishPanel from './PublishPanel';
@@ -120,15 +121,24 @@ export default function PricingV2Page() {
   const anchorRef = useRef<string | null>(null);
   /** Sur les nuits VENDUES : afficher le prix payé (figé) ou le prix du moteur. */
   const [showBookedPrices, setShowBookedPrices] = useState(false);
-  /** Liste { listingId, name } pour le sélecteur — chargée UNE fois, jamais
-   *  reliée à `reload()` : changer de bien ne doit ni re-fetcher le portfolio
-   *  ni naviguer vers /pricing-v2 (l'atterrissage), juste changer l'URL. */
+  /** Liste { listingId, name } pour le sélecteur — rechargée quand le filtre
+   *  PM du chrome change (sinon un admin « Tous » gardait une liste vide). */
   const [allListings, setAllListings] = useState<PricingV2PortfolioRow[]>([]);
+  const { scopeFetchReady, requestOwnerId, ownerScopeAll } = useAdminOwnerApiScope();
   useEffect(() => {
+    if (!scopeFetchReady) return;
+    let alive = true;
     void fetchPricingV2Portfolio()
-      .then((r) => setAllListings(r.data.success ? r.data.rows : []))
-      .catch(() => setAllListings([]));
-  }, []);
+      .then((r) => {
+        if (alive) setAllListings(r.data.success ? r.data.rows : []);
+      })
+      .catch(() => {
+        if (alive) setAllListings([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [scopeFetchReady, requestOwnerId, ownerScopeAll]);
   const currentListingName =
     allListings.find(
       (r) => r.listingId === listingId && (r.roomTypeId ?? null) === (roomTypeId ?? null),
@@ -155,11 +165,11 @@ export default function PricingV2Page() {
           setNeedsRoomTypeSelection(true);
           return;
         }
-        // Prix de marché périmé : état métier, pas panne. On garde le détail
-        // pour l'afficher franchement au PM plutôt qu'un « indisponible ».
+        // Prix de marché périmé : état métier — écran dédié (pas le message axios 422).
         if (p.data.code === 'SNAPSHOT_STALE') {
           setStale({ ageDays: p.data.ageDays ?? null, maxAgeDays: p.data.maxAgeDays ?? 7 });
-          throw new Error(p.data.error || 'prix de marché obsolète');
+          setConfig(c.data?.config ?? null);
+          return;
         }
         throw new Error(p.data.error || 'preview indisponible');
       }
