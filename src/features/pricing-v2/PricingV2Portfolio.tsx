@@ -218,12 +218,14 @@ export default function PricingV2Portfolio({
         <Stack direction="row" sx={{ alignItems: 'baseline', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
           <Typography sx={{ fontWeight: 750, fontSize: 20, color: T.ink }}>
             Prix dynamiques
-            <Box component="span" sx={{ ml: 1, ...kickerSx, color: T.gold }}>v2 · bêta</Box>
+            <Box component="span" sx={{ ml: 1, ...kickerSx, color: T.gold }}>
+              v2 · lecture seule
+            </Box>
           </Typography>
           <Typography sx={{ fontSize: 13, color: T.mut }}>
             {data.scope
-              ? '· vos biens — cliquez une ligne pour ouvrir son pricing'
-              : '· cliquez une ligne pour ouvrir son pricing'}
+              ? '· vos biens — publication auto désactivée'
+              : '· publication auto désactivée — cliquez une ligne pour ouvrir'}
           </Typography>
           {/* Vue admin = parc de TOUS les propriétaires. On l'affiche : sans ça,
               on présenterait les biens d'autrui comme « vos biens ». */}

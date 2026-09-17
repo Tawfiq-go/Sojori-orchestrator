@@ -468,7 +468,8 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         id: "pricing/portfolio",
         label: "Prix dynamique",
         iconType: "trending",
-        iconColor: "#93C47D",
+        iconColor: "#B8881A",
+        description: "Moteur v2 — calcul shadow, publication auto désactivée",
       },
       {
         id: "pricing/audit",
