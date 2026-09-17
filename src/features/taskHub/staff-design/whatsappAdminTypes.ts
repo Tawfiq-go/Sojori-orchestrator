@@ -151,6 +151,8 @@ export const WA_TASK_NOTIFY_CANCELLED: typeof WA_TASK_NOTIFY_CREATED = [];
 export const WA_ADMIN_NOTIFICATION_GROUPS: {
   title: string;
   hint?: string;
+  /** Si true : pastille allumée seulement quand === true (opt-in, défaut off). */
+  optIn?: boolean;
   items: { key: string; label: string }[];
 }[] = [
   {
@@ -163,9 +165,18 @@ export const WA_ADMIN_NOTIFICATION_GROUPS: {
       { key: 'review_new', label: 'Avis OTA' },
     ],
   },
+  {
+    title: 'Rapports matin',
+    hint: 'Opt-in — seuls les admins cochés reçoivent le cron ~07h.',
+    optIn: true,
+    items: [
+      { key: 'daily_rapport', label: 'Rapport (images)' },
+      { key: 'debrief_ai', label: 'Debrief AI' },
+    ],
+  },
 ];
 
-/** Clés retirées de l’UI — forcées à false à la sauvegarde. */
+/** @deprecated — section UI retirée. */
 export const WA_ADMIN_NOTIFICATION_KEYS_REMOVED = [
   'message_automated_sent',
   'registration_started',
@@ -181,7 +192,9 @@ export const WA_ADMIN_NOTIFICATION_KEYS = [
 export function defaultAdminNotifications(): Record<string, boolean> {
   return {
     ...Object.fromEntries(
-      WA_ADMIN_NOTIFICATION_GROUPS.flatMap((g) => g.items).map((i) => [i.key, true]),
+      WA_ADMIN_NOTIFICATION_GROUPS.flatMap((g) =>
+        g.items.map((i) => [i.key, g.optIn ? false : true]),
+      ),
     ),
     ...defaultTaskNotifyFlags(),
   };
