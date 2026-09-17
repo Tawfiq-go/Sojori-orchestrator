@@ -258,6 +258,10 @@ export type ScoredCampaign = {
   expectedWithoutAds: number;
   attributed: number;
   attributedShare: number;
+  /** Observé ÷ attendu. Afficher celui-ci, pas `attributed` seul. */
+  lift?: number | null;
+  /** Même écart en % : `+155` ou `-79`. */
+  liftPercent?: number | null;
 
   costPerReservationMad: number;
   costPerAttributedMad: number | null;

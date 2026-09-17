@@ -96,15 +96,17 @@ export function resolveNavIdFromPath(pathname: string, search = ''): string {
   }
   if (path.startsWith('/catalogue/channels')) return 'channels';
 
-  // Aligné navConfig / grants : pricing/portfolio & pricing/audit (pas dynamic-pricing/*)
-  if (path.startsWith('/dynamic-pricing/bien/')) return 'pricing/portfolio';
+  // Prix dynamique : entrée principale = v2 (/pricing-v2).
+  // La v1 (/dynamic-pricing) reste pour Estimation Sojori / audit — id nav `pricing/v2` (legacy).
+  if (path.startsWith('/pricing-v2')) return 'pricing/portfolio';
+  if (path.startsWith('/dynamic-pricing/bien/')) return 'pricing/v2';
   if (path.startsWith('/dynamic-pricing/audit')) return 'pricing/audit';
   if (path.startsWith('/dynamic-pricing/portefeuille') || path === '/dynamic-pricing') {
-    return 'pricing/portfolio';
+    return 'pricing/v2';
   }
   if (path.startsWith('/catalogue/dynamic-pricing')) {
     if (path.includes('/audit')) return 'pricing/audit';
-    return 'pricing/portfolio';
+    return 'pricing/v2';
   }
 
   if (path.startsWith('/admin/owner-monitor')) return 'admin/owner-monitor';

@@ -139,20 +139,23 @@ export function useDashboardChrome() {
       return 'channels';
     }
 
-    // Aligné navConfig / pathToNavId : pricing/portfolio & pricing/audit
-    if (path.startsWith('/dynamic-pricing/bien/')) {
+    // Prix dynamique : v2 = entrée principale ; v1 = Estimation Sojori (legacy)
+    if (path.startsWith('/pricing-v2')) {
       return 'pricing/portfolio';
+    }
+    if (path.startsWith('/dynamic-pricing/bien/')) {
+      return 'pricing/v2';
     }
     if (path.startsWith('/dynamic-pricing/audit')) {
       return 'pricing/audit';
     }
     if (path.startsWith('/dynamic-pricing/portefeuille') || path === '/dynamic-pricing') {
-      return 'pricing/portfolio';
+      return 'pricing/v2';
     }
     if (path.startsWith('/catalogue/dynamic-pricing')) {
       if (path.includes('/audit')) return 'pricing/audit';
-      if (path.includes('/bien/') || path.includes('/bien')) return 'pricing/portfolio';
-      return 'pricing/portfolio';
+      if (path.includes('/bien/') || path.includes('/bien')) return 'pricing/v2';
+      return 'pricing/v2';
     }
 
     // Monitor hub (onglets via ?tab=)

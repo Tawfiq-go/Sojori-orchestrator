@@ -45,6 +45,7 @@ import {
 } from '../../features/registration/formSchema';
 import { downloadFichePolicePdf } from '../../features/registration/fichePolicePdf';
 import { GuestContractSection } from './GuestContractSection';
+import { GuestPartySection } from './GuestPartySection';
 import { EnregistrementStatusBanner, type EnregistrementStatus } from './EnregistrementStatusBanner';
 import { fetchDefaultPmReportHeader } from '../../features/finances/financesApi';
 import { normalizeProfitReportHeader } from '../../features/finances/utils/profitReportHeader';
@@ -589,6 +590,7 @@ export function RegistrationTab({
   return (
     <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: T.bg0, minHeight: 320 }}>
       {enregistrementStatus ? <EnregistrementStatusBanner status={enregistrementStatus} /> : null}
+      <GuestPartySection guestParty={r?.guestParty} adults={Number(r?.adults ?? regTotal) || 0} />
       {enabledFields(formSchema).some((f) => f.scope === 'per_stay') ? (
         <Paper
           sx={{

@@ -17,24 +17,44 @@
 import apiClient from '../../services/apiClient';
 import { MICROSERVICE_BASE_URL } from '../../config/authConfig';
 import { getPersistedUser } from '../../data/mockAuth';
+import { readPersistedAdminScope } from '../../utils/adminOwnerFilter.utils';
+import { getPmSimulationOwnerId } from '../../utils/pmSimulationSession';
+import { getRequestOwnerIdParam } from '../../utils/taskScope.utils';
 
 const BASE = `${MICROSERVICE_BASE_URL.SRV_ADMIN}/pricing-v2`;
 
-// ⚠️ Le proxy srv-admin exige `ownerId` sur chaque appel pricing-v2 (voir
-// apps/srv-admin/src/routes/pricingV2Dashboard/index.ts pour l'historique
-// complet) : tant que DISABLE_AUTH=true reste actif en prod, `req.user` côté
-// serveur ne peut JAMAIS porter le vrai JWT — c'est toujours un utilisateur
-// factice. Le front est donc la seule source fiable de « qui est connecté »,
-// exactement comme fulltaskApi.ts le fait déjà avec son paramètre `ownerId`.
-//
-// Un intercepteur local (pas sur `apiClient` global, qui sert tout le
-// dashboard) pose `ownerId` sur CHAQUE requête pricing-v2 — en query pour un
-// GET/DELETE, dans le corps sinon. Ça évite de faire porter ce paramètre à
-// chacun des ~15 appels ci-dessous et à leurs appelants.
+/**
+ * Portée owner pour pricing-v2 — alignée sur le chrome admin (filtre PM).
+ *
+ * Régression 2026-08-07 (db31a56 / b0266e749) : l'interceptor envoyait
+ * `getPersistedUser().id` brut. Pour un SuperAdmin/Admin, cet id n'est PAS un
+ * `listings.ownerId` → portfolio vide (0 biens). On résout comme le reste du
+ * dashboard : simulation PM > filtre chrome > compte Owner.
+ *
+ * `null` = vue « Tous » (parc entier) — le proxy n'envoie alors pas
+ * `x-owner-scope`.
+ */
+export function resolvePricingV2OwnerId(): string | null {
+  const simulated = getPmSimulationOwnerId();
+  if (simulated) return simulated;
+  const user = getPersistedUser();
+  if (!user) return null;
+  const scope = readPersistedAdminScope();
+  const selected = scope.mode === 'owner' ? scope.ownerId : '';
+  return getRequestOwnerIdParam(user, selected);
+}
+
+// Tant que DISABLE_AUTH=true reste actif sur srv-admin, `req.user` serveur est
+// un stub — le front reste la source de la portée (comme fulltaskApi).
 apiClient.interceptors.request.use((config) => {
   if (!config.url?.includes('/pricing-v2/')) return config;
-  const ownerId = getPersistedUser()?.id;
-  if (!ownerId) return config; // le backend renverra 400 OWNER_ID_REQUIRED, explicite
+  // Ne pas écraser un ownerId déjà posé explicitement par l'appelant.
+  const existing =
+    (config.params as { ownerId?: string } | undefined)?.ownerId ||
+    (config.data as { ownerId?: string } | undefined)?.ownerId;
+  if (existing) return config;
+  const ownerId = resolvePricingV2OwnerId();
+  if (!ownerId) return config; // admin « Tous » → pas de filtre
   if (config.method?.toUpperCase() === 'GET' || config.method?.toUpperCase() === 'DELETE') {
     config.params = { ...config.params, ownerId };
   } else {
@@ -268,6 +288,7 @@ export type MultiRoomTypeRequiredError = {
 export async function fetchPricingV2Market(listingId: string, roomTypeId?: string) {
   return apiClient.get<PricingV2Market>(`${BASE}/market/${listingId}`, {
     params: roomTypeId ? { roomTypeId } : undefined,
+    validateStatus: (s) => s === 200 || s === 403 || s === 409 || s === 422,
   });
 }
 export async function fetchPricingV2Shadow(listingId: string, roomTypeId?: string) {
@@ -292,7 +313,12 @@ export async function fetchPricingV2Preview(listingId: string, roomTypeId?: stri
         ageDays?: number | null;
         maxAgeDays?: number;
       }
-  >(`${BASE}/preview/${listingId}`, { params: roomTypeId ? { roomTypeId } : undefined });
+  >(`${BASE}/preview/${listingId}`, {
+    params: roomTypeId ? { roomTypeId } : undefined,
+    // 409 ROOMTYPE_REQUIRED / 422 SNAPSHOT_STALE = états métier, pas panne réseau :
+    // axios ne doit pas throw avant que PricingV2Page lise `code`.
+    validateStatus: (s) => s === 200 || s === 403 || s === 409 || s === 422,
+  });
 }
 export async function fetchPricingV2Config(listingId: string, roomTypeId?: string) {
   return apiClient.get<{ success: boolean; config: PricingV2Config }>(`${BASE}/config/${listingId}`, {

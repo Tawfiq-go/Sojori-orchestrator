@@ -18,6 +18,7 @@ import { toast } from 'react-toastify';
 import { useSearchParams } from 'react-router-dom';
 import { ReservationRegistrationActions } from '../reservations/ReservationRegistrationActions';
 import RevealContactRow from './RevealContactRow';
+import { GuestPartySection } from './GuestPartySection';
 
 moment.locale('fr');
 
@@ -578,6 +579,8 @@ export function GuestInfoTab({
               <Row label="Voyageurs" value={`${r.adults || 0}A · ${r.children || 0}E · ${r.infants || 0}B`} bold mono />
             )}
           </SectionCard>
+
+          <GuestPartySection guestParty={r?.guestParty} adults={Number(r?.adults ?? regTotal) || 0} />
 
           {(regTotal > 0 || members.length > 0 || resaId) && (
             <SectionCard

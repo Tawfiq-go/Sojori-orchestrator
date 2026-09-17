@@ -14,14 +14,10 @@ import { fetchCampaignDays, fetchMarketingDashboard } from "./api";
 import { T, cardSx, kickerSx } from "./tokens";
 
 // ════════════════════════════════════════════════════════════════════════════
-// PAGE D'UNE CAMPAGNE
+// PAGE D'UNE CAMPAGNE — 2 cartes
 // ────────────────────────────────────────────────────────────────────────────
-// Une page plutôt qu'un panneau qui se déplie : il y a trop de matière — la
-// diffusion, l'activité du site, les réservations, la journée par journée — et
-// un accordéon oblige à tout relire pour comparer deux campagnes.
-//
-// Le sélecteur en tête permet de passer de l'une à l'autre sans repasser par
-// la liste, ce qui est le geste réel quand on arbitre un budget.
+// 1. Résumé dashboard : Meta | GA4 | Sojori | Estimé
+// 2. Veille jour par jour, colonnes groupées par source
 // ════════════════════════════════════════════════════════════════════════════
 
 const NOMMOS = {
@@ -53,55 +49,6 @@ const VERDICT: Record<
   inconclusive: { label: "Trop peu de données", fg: T.mut, bg: T.line2 },
 };
 
-function Kpi({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: "ok" | "crit";
-}) {
-  const fg = tone === "ok" ? T.ok : tone === "crit" ? T.crit : T.ink;
-  const bg = tone === "ok" ? T.okBg : tone === "crit" ? T.critBg : T.card;
-  return (
-    <Box
-      sx={{
-        ...cardSx,
-        flex: "1 1 150px",
-        bgcolor: bg,
-        ...(tone ? { borderLeft: `3px solid ${fg}` } : {}),
-      }}
-    >
-      <Typography
-        sx={{ fontSize: 22, fontWeight: 650, fontFamily: T.mono, color: fg }}
-      >
-        {value}
-      </Typography>
-      <Typography sx={kickerSx}>{label}</Typography>
-      {hint && (
-        <Typography sx={{ fontSize: 11.5, color: T.mut, mt: 0.4 }}>
-          {hint}
-        </Typography>
-      )}
-    </Box>
-  );
-}
-
-/**
- * Une ligne libellé / valeur.
- *
- * Une grille à deux colonnes plutôt qu'un `Stack` en ligne : ce dernier passe
- * à la ligne quand la largeur manque, et le libellé se retrouve seul au-dessus
- * de son chiffre. La lecture se perd — on ne sait plus quelle valeur appartient
- * à quoi. La grille garde les deux côte à côte à toute largeur, le libellé
- * passant sur deux lignes s'il le faut.
- *
- * Le filet pointillé entre les deux guide l'œil jusqu'au chiffre, comme dans
- * un relevé.
- */
 function Row({ k, v, bold }: { k: string; v: string; bold?: boolean }) {
   return (
     <Box
@@ -154,7 +101,49 @@ function Row({ k, v, bold }: { k: string; v: string; bold?: boolean }) {
   );
 }
 
-function Th({ children, num }: { children: React.ReactNode; num?: boolean }) {
+function SourcePanel({
+  title,
+  estimated,
+  children,
+}: {
+  title: string;
+  estimated?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Box
+      sx={{
+        p: 1.75,
+        borderRadius: "8px",
+        border: `1px solid ${T.line2}`,
+        bgcolor: T.bg,
+        minWidth: 0,
+      }}
+    >
+      <Typography
+        sx={{
+          ...kickerSx,
+          mb: 1,
+          color: estimated ? T.warn : T.mut,
+          fontStyle: estimated ? "italic" : "normal",
+        }}
+      >
+        {title}
+      </Typography>
+      {children}
+    </Box>
+  );
+}
+
+function Th({
+  children,
+  num,
+  src,
+}: {
+  children: React.ReactNode;
+  num?: boolean;
+  src?: string;
+}) {
   return (
     <Box
       component="th"
@@ -172,6 +161,20 @@ function Th({ children, num }: { children: React.ReactNode; num?: boolean }) {
       }}
     >
       {children}
+      {src && (
+        <Box
+          sx={{
+            fontSize: 8.5,
+            fontWeight: 600,
+            letterSpacing: "0.02em",
+            textTransform: "none",
+            color: T.mut,
+            mt: 0.15,
+          }}
+        >
+          {src}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -181,13 +184,11 @@ function Td({
   num,
   bold,
   color,
-  width,
 }: {
   children: React.ReactNode;
   num?: boolean;
   bold?: boolean;
   color?: string;
-  width?: string;
 }) {
   return (
     <Box
@@ -201,8 +202,7 @@ function Td({
         fontFamily: num ? T.mono : "inherit",
         fontWeight: bold ? 650 : 400,
         color: color ?? T.ink,
-        whiteSpace: num ? "nowrap" : "normal",
-        width,
+        whiteSpace: "nowrap",
       }}
     >
       {children}
@@ -218,8 +218,6 @@ export default function CampaignPage() {
   const [detail, setDetail] = useState<CampaignDays | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Le tableau de bord sert deux choses : les chiffres de la campagne, et la
-  // liste des autres pour le sélecteur. Une seule lecture pour les deux.
   useEffect(() => {
     let alive = true;
     fetchMarketingDashboard({
@@ -235,9 +233,6 @@ export default function CampaignPage() {
     };
   }, []);
 
-  // Sans identifiant dans l'URL — entrée par « Campagnes » dans le menu — on
-  // ouvre la plus contributive : elle est en tête de liste, et c'est celle
-  // qu'on regarde en premier.
   const campaignId = fromUrl || dash?.campaigns[0]?.campaignId || "";
 
   useEffect(() => {
@@ -251,8 +246,7 @@ export default function CampaignPage() {
     })
       .then((d) => alive && setDetail(d))
       .catch(() => {
-        // Le détail quotidien est un complément : son absence laisse les
-        // chiffres de synthèse lisibles.
+        // Le détail quotidien est un complément.
       });
     return () => {
       alive = false;
@@ -292,7 +286,7 @@ export default function CampaignPage() {
   const normal = detail?.dailyNormal ?? null;
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1240, mx: "auto" }}>
+    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1100, mx: "auto" }}>
       <Stack
         direction="row"
         alignItems="center"
@@ -343,51 +337,11 @@ export default function CampaignPage() {
       >
         {FLAG[campaign.country] ?? ""} {campaign.campaignName}
       </Typography>
-      <Typography sx={{ fontSize: 13, color: T.mut, mb: 2 }}>
-        Marché {campaign.country} · fenêtre du {campaign.windowFrom} au{" "}
-        {campaign.windowTo} · relevé du {campaign.day}
+      <Typography sx={{ fontSize: 13, color: T.mut, mb: 1.5 }}>
+        Marché {campaign.country} · {campaign.windowFrom.slice(5)} →{" "}
+        {campaign.windowTo.slice(5)} · {mad(campaign.spendMad)} · relevé du{" "}
+        {campaign.day}
       </Typography>
-
-      <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", mb: 2.5 }}>
-        <Kpi
-          label="Dépense"
-          value={nf.format(Math.round(campaign.spendMad))}
-          hint="MAD"
-        />
-        <Kpi label="Taux de clic" value={`${campaign.ctr.toFixed(1)} %`} />
-        <Kpi
-          label="Écart à la normale"
-          value={campaign.lift == null ? "—" : `×${campaign.lift.toFixed(1)}`}
-          hint={
-            campaign.lift == null
-              ? `${campaign.reservations} réservations observées`
-              : `${(campaign.liftPercent ?? 0) > 0 ? "+" : ""}${campaign.liftPercent} % · ${campaign.reservations} observées contre ${campaign.expectedWithoutAds.toFixed(1)} attendues`
-          }
-          tone={
-            campaign.lift == null
-              ? undefined
-              : campaign.lift > 1
-                ? "ok"
-                : "crit"
-          }
-        />
-        <Kpi
-          label="Coût sur CA généré"
-          value={
-            campaign.costShareOfRevenue === null
-              ? "—"
-              : `${campaign.costShareOfRevenue} %`
-          }
-          hint="commission OTA : 15–18 %"
-          tone={
-            campaign.costShareOfRevenue === null
-              ? undefined
-              : campaign.costShareOfRevenue < 15
-                ? "ok"
-                : "crit"
-          }
-        />
-      </Box>
 
       <Box
         sx={{
@@ -395,6 +349,7 @@ export default function CampaignPage() {
           bgcolor: v.bg,
           borderLeft: `3px solid ${v.fg}`,
           mb: 2.5,
+          py: 1.5,
         }}
       >
         <Typography sx={{ fontSize: 15, fontWeight: 650, color: v.fg }}>
@@ -405,140 +360,148 @@ export default function CampaignPage() {
         </Typography>
       </Box>
 
-      <Box
-        sx={{
-          display: "grid",
-          // Trois colonnes quand la place le permet, deux puis une sinon —
-          // jamais de colonne si étroite que le libellé passe sous sa valeur.
-          gridTemplateColumns: "repeat(auto-fit, minmax(270px, 1fr))",
-          gap: 2,
-          mb: 2.5,
-        }}
-      >
-        <Box sx={{ ...cardSx }}>
-          <Typography sx={{ ...kickerSx, mb: 1 }}>Diffusion</Typography>
-          <Row k="Dépense" v={mad(campaign.spendMad)} bold />
-          <Row k="Impressions" v={nf.format(campaign.impressions)} />
-          <Row k="Portée" v={nf.format(campaign.reach)} />
-          <Row k="Clics" v={nf.format(campaign.clicks)} />
-          <Row k="Taux de clic" v={`${campaign.ctr.toFixed(2)} %`} bold />
-          <Row k="Coût par clic" v={`${campaign.cpc.toFixed(2)} MAD`} />
-          <Row k="Coût pour mille" v={`${campaign.cpm.toFixed(1)} MAD`} />
-        </Box>
+      {/* Carte 1 — résumé Meta | GA4 | Sojori | Estimé */}
+      <Box sx={{ ...cardSx, mb: 2.5 }}>
+        <Typography sx={{ ...kickerSx, mb: 0.5 }}>Résumé</Typography>
+        <Typography sx={{ fontSize: 12.5, color: T.ink2, mb: 1.75 }}>
+          Quatre sources, une lecture. Meta facture ; GA4 mesure le site ;
+          Sojori compte les réservations ; l'estimé relie les deux.
+        </Typography>
 
-        <Box sx={{ ...cardSx }}>
-          <Typography sx={{ ...kickerSx, mb: 1 }}>
-            Réservations {FLAG[campaign.country] ?? ""} {campaign.country}
-          </Typography>
-          <Row
-            k="Observées sur la fenêtre"
-            v={String(campaign.reservations)}
-            bold
-          />
-          <Row
-            k="dont plateforme externe"
-            v={String(campaign.otaReservations)}
-          />
-          <Row k="dont direct" v={String(campaign.directReservations)} />
-          <Row
-            k="Estimé sans publicité"
-            v={campaign.expectedWithoutAds.toFixed(1)}
-          />
-          <Row
-            k="Écart à la normale"
-            v={
-              campaign.lift == null
-                ? "—"
-                : `×${campaign.lift.toFixed(1)}  (${(campaign.liftPercent ?? 0) > 0 ? "+" : ""}${campaign.liftPercent} %)`
-            }
-            bold
-          />
-          <Row k="Chiffre d'affaires" v={mad(campaign.revenueMad)} />
-          <Row k="Panier moyen" v={mad(campaign.averageBasketMad)} />
-        </Box>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "1fr 1fr",
+              md: "repeat(4, 1fr)",
+            },
+            gap: 1.5,
+          }}
+        >
+          <SourcePanel title="Meta">
+            <Row k="Dépense" v={mad(campaign.spendMad)} bold />
+            <Row k="Impressions" v={nf.format(campaign.impressions)} />
+            <Row k="Portée" v={nf.format(campaign.reach)} />
+            <Row k="Clics" v={nf.format(campaign.clicks)} />
+            <Row k="CTR" v={`${campaign.ctr.toFixed(2)} %`} bold />
+            <Row k="CPC" v={`${campaign.cpc.toFixed(2)} MAD`} />
+            <Row k="CPM" v={`${campaign.cpm.toFixed(1)} MAD`} />
+          </SourcePanel>
 
-        <Box sx={{ ...cardSx }}>
-          <Typography sx={{ ...kickerSx, mb: 1 }}>Activité du site</Typography>
-          {campaign.ga4Sessions !== undefined ? (
-            <>
-              <Row k="Sessions" v={nf.format(campaign.ga4Sessions)} bold />
-              <Row
-                k="Sessions engagées"
-                v={nf.format(campaign.ga4EngagedSessions ?? 0)}
-              />
-              <Row
-                k="Durée moyenne"
-                v={`${Math.round(campaign.ga4AverageSessionDuration ?? 0)} s`}
-                bold
-              />
-              <Row
-                k="Sessions investies"
-                v={`${campaign.ga4EngagementRate ?? 0} %`}
-              />
-              <Row
-                k="Ajouts au panier"
-                v={String(campaign.ga4AddToCarts ?? 0)}
-              />
-              <Row
-                k="Achats sur le site"
-                v={String(campaign.ga4Purchases ?? 0)}
-              />
-              {typeof campaign.marketAddToCarts === "number" && (
-                <>
-                  <Box sx={{ height: 12 }} />
-                  <Typography sx={{ ...kickerSx, mb: 0.5 }}>
-                    Marché {campaign.country}, tous canaux
-                  </Typography>
-                  <Row
-                    k="Paniers pendant la diffusion"
-                    v={String(campaign.marketAddToCarts)}
-                    bold
-                  />
-                  <Row
-                    k="Taux (paniers / sessions)"
-                    v={`${(campaign.marketAddToCartRate ?? 0).toFixed(2)} %`}
-                    bold
-                  />
-                  <Row
-                    k="Paniers période de référence"
-                    v={String(campaign.marketAddToCartsBefore ?? 0)}
-                  />
-                  <Row
-                    k="Taux période de référence"
-                    v={`${(campaign.marketAddToCartRateBefore ?? 0).toFixed(2)} %`}
-                  />
-                </>
-              )}
-              <Typography
-                sx={{ fontSize: 11.5, color: T.mut, mt: 1, lineHeight: 1.5 }}
-              >
-                Le site ne mesure pas les réservations — la plupart passent par
-                une plateforme externe. Un ajout au panier dit en revanche que
-                le visiteur a choisi ses dates et sa villa : c'est l'intention
-                la plus proche d'une réservation que le site sache mesurer.
+          <SourcePanel title="GA4">
+            {campaign.ga4Sessions !== undefined ? (
+              <>
+                <Row k="Sessions" v={nf.format(campaign.ga4Sessions)} bold />
+                <Row
+                  k="Engagées"
+                  v={nf.format(campaign.ga4EngagedSessions ?? 0)}
+                />
+                <Row
+                  k="Durée moy."
+                  v={`${Math.round(campaign.ga4AverageSessionDuration ?? 0)} s`}
+                  bold
+                />
+                <Row
+                  k="Engagement"
+                  v={`${campaign.ga4EngagementRate ?? 0} %`}
+                />
+                <Row
+                  k="Paniers camp."
+                  v={String(campaign.ga4AddToCarts ?? 0)}
+                />
+                <Row
+                  k="Achats site"
+                  v={String(campaign.ga4Purchases ?? 0)}
+                />
+                {typeof campaign.marketAddToCarts === "number" && (
+                  <>
+                    <Row
+                      k={`Paniers ${campaign.country}`}
+                      v={String(campaign.marketAddToCarts)}
+                      bold
+                    />
+                    <Row
+                      k="Taux marché"
+                      v={`${(campaign.marketAddToCartRate ?? 0).toFixed(2)} %`}
+                      bold
+                    />
+                  </>
+                )}
+              </>
+            ) : (
+              <Typography sx={{ fontSize: 12.5, color: T.mut, lineHeight: 1.5 }}>
+                Pas de paramètre d'URL exploitable — trafic non isolé sur le
+                site.
               </Typography>
-            </>
-          ) : (
-            <Typography sx={{ fontSize: 13, color: T.mut, lineHeight: 1.6 }}>
-              Cette campagne ne porte pas de paramètre d'URL exploitable : son
-              trafic n'a pas pu être identifié sur le site.
+            )}
+          </SourcePanel>
+
+          <SourcePanel title="Sojori">
+            <Row
+              k={`Résa ${FLAG[campaign.country] ?? ""} ${campaign.country}`}
+              v={String(campaign.reservations)}
+              bold
+            />
+            <Row k="OTA" v={String(campaign.otaReservations)} />
+            <Row k="Direct" v={String(campaign.directReservations)} />
+            <Row k="CA" v={mad(campaign.revenueMad)} />
+            <Row k="Panier moy." v={mad(campaign.averageBasketMad)} />
+          </SourcePanel>
+
+          <SourcePanel title="Estimé" estimated>
+            <Row
+              k="Sans pub"
+              v={campaign.expectedWithoutAds.toFixed(1)}
+            />
+            <Row
+              k="Écart"
+              v={
+                campaign.lift == null
+                  ? "—"
+                  : `×${campaign.lift.toFixed(1)}  (${(campaign.liftPercent ?? 0) > 0 ? "+" : ""}${campaign.liftPercent} %)`
+              }
+              bold
+            />
+            <Row
+              k="Coût / résa est."
+              v={
+                campaign.costPerAttributedMad === null
+                  ? "—"
+                  : mad(campaign.costPerAttributedMad)
+              }
+            />
+            <Row
+              k="% du CA"
+              v={
+                campaign.costShareOfRevenue === null
+                  ? "—"
+                  : `${campaign.costShareOfRevenue} %`
+              }
+              bold
+            />
+            <Typography
+              sx={{ fontSize: 11, color: T.mut, mt: 1, lineHeight: 1.45 }}
+            >
+              Commission OTA de référence : 15–18 %.
             </Typography>
-          )}
+          </SourcePanel>
         </Box>
       </Box>
 
+      {/* Carte 2 — Veille jour par jour */}
       <Box sx={{ ...cardSx, p: 0, overflow: "hidden" }}>
         <Box sx={{ px: 2.5, pt: 2.5, pb: 1 }}>
-          <Typography sx={kickerSx}>Jour par jour</Typography>
+          <Typography sx={kickerSx}>Veille</Typography>
           <Typography sx={{ fontSize: 12.5, color: T.ink2, mt: 0.4 }}>
             {normal !== null ? (
               <>
                 Hors publicité, ce marché réserve{" "}
-                <b>{normal.toFixed(2)} fois par jour</b> en moyenne — c'est la
-                référence pour lire la colonne « Résa ».
+                <b>{normal.toFixed(2)} fois par jour</b> en moyenne — référence
+                pour lire Sojori.
               </>
             ) : (
-              "Dépense, activité du site et réservations du marché, jour après jour."
+              "Dépense Meta, activité GA4 et réservations Sojori, jour après jour."
             )}
           </Typography>
         </Box>
@@ -559,32 +522,38 @@ export default function CampaignPage() {
           <Box sx={{ overflowX: "auto" }}>
             <Box
               component="table"
-              sx={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}
+              sx={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}
             >
               <Box component="thead">
                 <Box component="tr">
                   <Th>Jour</Th>
-                  <Th num>Dépense</Th>
-                  <Th num>Clics</Th>
-                  <Th num>CTR</Th>
-                  <Th num>Sessions</Th>
-                  <Th num>Durée</Th>
-                  <Th num>Résa</Th>
-                  <Th num>OTA</Th>
-                  <Th>&nbsp;</Th>
+                  <Th num src="Meta">
+                    Dépense
+                  </Th>
+                  <Th num src="Meta">
+                    Clics
+                  </Th>
+                  <Th num src="Meta">
+                    CTR
+                  </Th>
+                  <Th num src="GA4">
+                    Sessions
+                  </Th>
+                  <Th num src="GA4">
+                    Durée
+                  </Th>
+                  <Th num src="Sojori">
+                    Résa
+                  </Th>
+                  <Th num src="Sojori">
+                    OTA
+                  </Th>
                 </Box>
               </Box>
               <Box component="tbody">
                 {detail.days.map((d) => {
-                  const max = Math.max(
-                    ...detail.days.map((x) => x.spendMad),
-                    1,
-                  );
-                  // La collecte tourne à 4 h UTC : la ligne du jour ne couvre
-                  // que les premières heures. Sans le dire, une dépense de
-                  // 23 MAD face à 500 la veille se lit comme un effondrement
-                  // de la campagne — alors que la journée commence à peine.
-                  const isToday = d.day === new Date().toISOString().slice(0, 10);
+                  const isToday =
+                    d.day === new Date().toISOString().slice(0, 10);
                   return (
                     <Box
                       component="tr"
@@ -625,8 +594,6 @@ export default function CampaignPage() {
                       <Td
                         num
                         bold
-                        // Une journée au double de la normale se remarque ; à
-                        // zéro, l'absence mérite aussi l'œil.
                         color={
                           normal && (d.reservations ?? 0) >= normal * 2
                             ? T.ok
@@ -643,24 +610,6 @@ export default function CampaignPage() {
                         {typeof d.otaReservations === "number"
                           ? d.otaReservations
                           : "—"}
-                      </Td>
-                      <Td width="22%">
-                        <Box
-                          sx={{
-                            height: 6,
-                            borderRadius: "3px",
-                            bgcolor: T.line2,
-                            overflow: "hidden",
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              height: "100%",
-                              width: `${(d.spendMad / max) * 100}%`,
-                              bgcolor: T.gold,
-                            }}
-                          />
-                        </Box>
                       </Td>
                     </Box>
                   );
@@ -681,7 +630,7 @@ export default function CampaignPage() {
           <Typography sx={{ fontSize: 12, color: T.mut, lineHeight: 1.7 }}>
             La diffusion se lit au jour — c'est ce que la régie facture. La
             contribution, non : sur ces volumes, l'écart d'une seule journée
-            reste du bruit. Celle affichée en tête porte sur la semaine.
+            reste du bruit. Celle du résumé porte sur la semaine.
           </Typography>
         </Box>
       </Box>

@@ -200,10 +200,16 @@ export default function WhatsappAdminPageView({
   };
 
   const toggleNotification = (key: string) => {
+    const optIn = WA_ADMIN_NOTIFICATION_GROUPS.some(
+      (g) => g.optIn && g.items.some((i) => i.key === key),
+    );
+    const currentlyOn = optIn
+      ? form.notifications[key] === true
+      : form.notifications[key] !== false;
     patchForm({
       notifications: {
         ...form.notifications,
-        [key]: form.notifications[key] === false,
+        [key]: !currentlyOn,
       },
     });
   };
@@ -450,17 +456,39 @@ export default function WhatsappAdminPageView({
               <div className="form-section-h">Notifications</div>
               {WA_ADMIN_NOTIFICATION_GROUPS.map((group) => (
                 <div key={group.title} style={{ marginBottom: 10 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 650,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color: '#736B5F',
+                      marginBottom: 6,
+                    }}
+                  >
+                    {group.title}
+                    {group.hint ? (
+                      <span style={{ fontWeight: 400, textTransform: 'none', marginLeft: 8 }}>
+                        — {group.hint}
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="pill-group">
-                    {group.items.map((item) => (
-                      <button
-                        key={item.key}
-                        type="button"
-                        className={`pill-toggle${form.notifications[item.key] !== false ? ' on' : ''}`}
-                        onClick={() => toggleNotification(item.key)}
-                      >
-                        {form.notifications[item.key] !== false ? '🔔' : '🔕'} {item.label}
-                      </button>
-                    ))}
+                    {group.items.map((item) => {
+                      const on = group.optIn
+                        ? form.notifications[item.key] === true
+                        : form.notifications[item.key] !== false;
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          className={`pill-toggle${on ? ' on' : ''}`}
+                          onClick={() => toggleNotification(item.key)}
+                        >
+                          {on ? '🔔' : '🔕'} {item.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -472,7 +500,8 @@ export default function WhatsappAdminPageView({
                     className={`pill-toggle${form.notifications[item.key] !== false ? ' on' : ''}`}
                     onClick={() => toggleNotification(item.key)}
                   >
-                    {form.notifications[item.key] !== false ? '🔔' : '🔕'} {item.emoji} {item.label}
+                    {form.notifications[item.key] !== false ? '🔔' : '🔕'} {item.emoji}{' '}
+                    {item.label}
                   </button>
                 ))}
               </div>
