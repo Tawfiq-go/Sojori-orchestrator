@@ -230,6 +230,7 @@ const NAV_ICON_BY_ID = {
   'listings/mapping': HubOutlined,
   'listings/orchestration-model': HubOutlined,
   'pricing/portfolio': InsightsOutlined,
+  'pricing/v2': InsightsOutlined,
   'pricing/audit': HistoryOutlined,
   staff: GroupsOutlined,
   'equipe/onboarding': AssignmentOutlined,

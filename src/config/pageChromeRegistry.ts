@@ -44,6 +44,7 @@ const TITLE_OVERRIDES: Record<string, string> = {
   'tasks/extras/configuration': 'Catalogue',
   'tasks/extras/minibar': 'Mini-bar',
   'pricing/portfolio': 'Prix dynamique',
+  'pricing/v2': 'Estimation Sojori (v1)',
   'pricing/audit': 'Audit prix',
   'comms/guests': 'WhatsApp',
   'comms/owner-inbox': 'Resa Proprio',
