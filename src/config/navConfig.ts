@@ -476,13 +476,6 @@ export const OWNER_NAV_GROUPS: NavGroupConfig[] = [
         iconType: "trending",
         iconColor: "#93C47D",
       },
-      {
-        id: "pricing/v2",
-        label: "Dynamic Price V2",
-        iconType: "trending",
-        iconColor: "#B8881A",
-        badge: "Beta",
-      },
     ],
   },
   {
