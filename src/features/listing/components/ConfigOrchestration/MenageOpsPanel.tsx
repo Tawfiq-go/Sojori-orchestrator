@@ -129,13 +129,17 @@ function TrackBlock({
           onChange={e =>
             onChange({
               ...t,
-              pricingMode: e.target.value === 'monthly_forfait' ? 'monthly_forfait' : 'per_passage',
+              pricingMode:
+                e.target.value === 'monthly_forfait' || e.target.value === 'salaried'
+                  ? e.target.value
+                  : 'per_passage',
             })
           }
           sx={{ minWidth: 220 }}
         >
           <MenuItem value="per_passage">Par passage</MenuItem>
           <MenuItem value="monthly_forfait">Forfait mensuel</MenuItem>
+          <MenuItem value="salaried">Inclus dans les salaires FdM</MenuItem>
         </TextField>
         {isForfait && (
           <TextField
@@ -154,7 +158,7 @@ function TrackBlock({
         )}
       </Stack>
 
-      {!isForfait && (
+      {!isForfait && t.pricingMode !== 'salaried' && (
         <>
           <TextField
             select

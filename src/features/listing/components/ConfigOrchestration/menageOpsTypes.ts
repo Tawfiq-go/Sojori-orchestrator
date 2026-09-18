@@ -26,7 +26,7 @@ export type MenageTrackWithOptions = MenageTrackConfig & {
     sheets: MenageOptionPrice;
   };
   /** Par passage (défaut) ou forfait mensuel */
-  pricingMode: 'per_passage' | 'monthly_forfait';
+  pricingMode: 'per_passage' | 'monthly_forfait' | 'salaried';
   monthlyForfaitAmount: number;
   /** Recouche cadence — true = tous les N jours (hors arrivée / départ). */
   always?: boolean;
@@ -53,7 +53,7 @@ export function normalizeCadenceByRoomType(raw: unknown): Record<string, Cleanin
 }
 
 export type MenageCheckoutConfig = MenageTrackConfig & {
-  pricingMode: 'per_passage' | 'monthly_forfait';
+  pricingMode: 'per_passage' | 'monthly_forfait' | 'salaried';
   monthlyForfaitAmount: number;
   options: {
     towels: MenageOptionPrice;
@@ -175,7 +175,10 @@ export function normalizeMenageOps(raw: unknown): MenageOpsConfig {
         towels: opt(opts.towels, fbOpts.towels),
         sheets: opt(opts.sheets, fbOpts.sheets),
       },
-      pricingMode: t.pricingMode === 'monthly_forfait' ? 'monthly_forfait' : 'per_passage',
+      pricingMode:
+        t.pricingMode === 'monthly_forfait' || t.pricingMode === 'salaried'
+          ? t.pricingMode
+          : 'per_passage',
       monthlyForfaitAmount: Math.max(0, num(t.monthlyForfaitAmount, fb.monthlyForfaitAmount ?? 0)),
       always: bool(t.always, fbTrack.always === true),
       everyNDays: Math.max(1, Math.round(num(t.everyNDays, fbTrack.everyNDays ?? 1))),
