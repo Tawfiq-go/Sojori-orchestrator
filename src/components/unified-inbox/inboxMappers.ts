@@ -11,6 +11,8 @@ import { conversationThreadId } from '../../utils/conversationThreadId';
 import {
   checkInDaysLabel,
   flagFromPhone,
+  inboxVisibleGuestName,
+  inboxVisiblePhone,
   formatReservationCreatedDisplay,
   formatStayDateShort,
   formatThreadWhenExact,
@@ -97,8 +99,8 @@ export function mapConversationToThread(
     Boolean(preview.startsWith('Message auto'));
   return {
     id: conversationThreadId(conv),
-    name: conv.name || conv.phone,
-    phone: conv.phone,
+    name: inboxVisibleGuestName(conv.name, conv.phone, getConversationReservationNumber(conv)),
+    phone: inboxVisiblePhone(conv.phone),
     channel: displayChannel,
     channelColor: displayColor,
     preview: hasQr ? preview : 'Aucun message',

@@ -7,6 +7,27 @@ export function flagFromPhone(phone?: string): string {
   return '';
 }
 
+/** Opaque HMAC/SHA-256 phone key — never show in the inbox UI. */
+export function isOpaqueGuestPhoneKey(value?: string | null): boolean {
+  return /^[a-f0-9]{64}$/i.test(String(value || '').trim());
+}
+
+export function inboxVisibleGuestName(name?: string | null, phone?: string | null, reservationNumber?: string | null): string {
+  const n = String(name || '').trim();
+  if (n && !isOpaqueGuestPhoneKey(n)) return n;
+  const code = String(reservationNumber || '').trim();
+  if (code) return code;
+  const p = String(phone || '').trim();
+  if (p && !isOpaqueGuestPhoneKey(p)) return p;
+  return 'Voyageur';
+}
+
+export function inboxVisiblePhone(phone?: string | null): string {
+  const p = String(phone || '').trim();
+  if (!p || isOpaqueGuestPhoneKey(p)) return '';
+  return p;
+}
+
 export function nightsBetween(checkIn?: string, checkOut?: string): number | undefined {
   if (!checkIn || !checkOut) return undefined;
   const a = new Date(checkIn);
