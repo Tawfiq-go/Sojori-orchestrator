@@ -275,6 +275,7 @@ export default function ConversationThread({
   const [sending, setSending] = useState(false);
   const [inspectedMessage, setInspectedMessage] = useState<Message | null>(null);
   const [comparisonLoadingId, setComparisonLoadingId] = useState<string | null>(null);
+  const [comparisonSending, setComparisonSending] = useState(false);
   const [comparisonDraft, setComparisonDraft] = useState<{
     messageId: string;
     client: string;
@@ -420,6 +421,46 @@ export default function ConversationThread({
       });
     } finally {
       setComparisonLoadingId(null);
+    }
+  };
+
+  /**
+   * Envoie la proposition telle quelle. C'est le SEUL chemin d'envoi ajouté
+   * ici : la génération, elle, n'envoie jamais rien.
+   *
+   * L'envoi est ensuite rattaché à la génération (`linkOtaAiGenerationAudit`),
+   * ce qui classe la réponse en « envoyée sans retouche ». Ce chiffre est le
+   * seul qui décidera du pilote automatique, au seuil des 90 % — sans ce
+   * rattachement, on saurait qu'une réponse est partie, pas si elle venait du
+   * modèle.
+   */
+  const sendComparisonDraft = async () => {
+    if (!comparisonDraft || comparisonSending || !comparisonDraft.client) return;
+    setComparisonSending(true);
+    try {
+      await onSendMessage(comparisonDraft.client);
+      if (comparisonDraft.generationId) {
+        try {
+          const { linkOtaAiGenerationAudit } = await import(
+            '../../services/communicationsAiService'
+          );
+          await linkOtaAiGenerationAudit(comparisonDraft.generationId, {
+            messageId: Number(comparisonDraft.messageId) || 0,
+            finalBody: comparisonDraft.client,
+          });
+        } catch {
+          // L'adoption est une mesure, pas une garantie : un rattachement raté
+          // ne doit surtout pas faire croire que l'envoi a échoué.
+        }
+      }
+      setComparisonDraft(null);
+    } catch (err) {
+      setComparisonDraft({
+        ...comparisonDraft,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setComparisonSending(false);
     }
   };
 
@@ -1478,7 +1519,10 @@ export default function ConversationThread({
                     }}
                   >
                     PROPOSITION IA · NON ENVOYÉE
-                    {comparisonDraft.model ? ` · ${comparisonDraft.model}` : ''}
+                    {/* Le nom du modèle est une information d'ingénierie : utile
+                        en admin pour comparer deux versions, sans objet pour un
+                        owner, à qui il ne dit rien sur la qualité de la réponse. */}
+                    {canInspectAi && comparisonDraft.model ? ` · ${comparisonDraft.model}` : ''}
                   </Typography>
                   {comparisonDraft.error ? (
                     <Typography sx={{ fontSize: 12, color: '#b91c1c' }}>
@@ -1507,6 +1551,35 @@ export default function ConversationThread({
                     </>
                   )}
                   <Stack direction="row" spacing={1.25} sx={{ mt: 1, alignItems: 'center' }}>
+                    {/* Un seul geste pour envoyer la proposition telle quelle.
+                        C'est CE clic qui mesure l'adoption : une réponse envoyée
+                        sans retouche est le signal qui décidera un jour du
+                        pilote automatique, au seuil des 90 %. */}
+                    {!comparisonDraft.error && comparisonDraft.client && !readOnly && (
+                      <Box
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (comparisonSending) return;
+                          void sendComparisonDraft();
+                        }}
+                        sx={{
+                          px: 1.25,
+                          py: 0.5,
+                          fontSize: 11,
+                          fontFamily: '"Geist Mono", monospace',
+                          color: '#fff',
+                          background: comparisonSending
+                            ? 'rgba(13,148,136,0.45)'
+                            : 'rgba(13,148,136,0.95)',
+                          borderRadius: '8px',
+                          cursor: comparisonSending ? 'wait' : 'pointer',
+                          userSelect: 'none',
+                          '&:hover': { background: 'rgba(13,148,136,1)' },
+                        }}
+                      >
+                        {comparisonSending ? 'Envoi…' : '➤ Envoyer cette réponse'}
+                      </Box>
+                    )}
                     {/* Sans ce lien, la proposition est une boîte noire : on lit le
                         texte sans savoir sur quels faits, quel historique et quel
                         profil de PM il a été écrit. */}
