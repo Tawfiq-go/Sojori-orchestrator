@@ -18,6 +18,7 @@ import { isOtaUnreplied } from '../../components/unified-inbox/otaThreadFilters'
 import { isWaUnreplied } from '../../components/unified-inbox/waThreadFilters';
 import { inboxMessagePreview } from '../../components/unified-inbox/formatInboxMessageText';
 import { presenceMetaFromReservation } from '../../utils/reservationPresence';
+import { useAdminOwnerFilter } from '../../context/AdminOwnerFilterContext';
 import { waInboxUrl } from '../../utils/commsDeepLinks';
 
 const UNASSIGNED = 'Non assigné';
@@ -529,6 +530,12 @@ function dateForDay(day: MaJourneeDay): string {
 }
 
 export function useMaJourneeData(day: MaJourneeDay = 'today') {
+  // Le filtre PM du bandeau. Les appels réservations / listings le reçoivent déjà
+  // via leurs services ; les deux appels messages, eux, partaient sans owner et
+  // ramenaient TOUS les PM. « Messages sans réponse » affichait donc le même 16
+  // en vue Moncef qu'en vue plateforme (constat Tawfiq 19/09/2026).
+  const { selectedOwnerId } = useAdminOwnerFilter();
+  const ownerId = String(selectedOwnerId || '').trim();
   const [loading, setLoading] = useState(true);
   const [model, setModel] = useState<MaJourneeModel>(() => ({
     ...EMPTY,
@@ -579,12 +586,22 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
           .getListings({ page: 0, limit: 300, useActiveFilter: true, active: true })
           .catch(() => null),
         messagesService
-          .getConversations({ filter: 'smart', limit: 80, silent: true })
+          .getConversations({
+            filter: 'smart',
+            limit: 80,
+            silent: true,
+            ...(ownerId ? { owner_id: ownerId } : {}),
+          })
           .catch(() => null),
         // Pas unreplied=true seul : le statut Mongo est souvent périmé (hôte a répondu).
         // On charge les fils récents et on classe côté client (otaThreadNeedsReply).
         messagesService
-          .getOTAThreads({ page: 0, limit: 80, sortBy: 'lastMessageAt' })
+          .getOTAThreads({
+            page: 0,
+            limit: 80,
+            sortBy: 'lastMessageAt',
+            ...(ownerId ? { ownerId } : {}),
+          })
           .catch(() => null),
         listTasks({ audience: 'STAFF', limit: 200 }).catch(() => null),
         getDayPlan(date).catch(() => null),
@@ -840,7 +857,7 @@ export function useMaJourneeData(day: MaJourneeDay = 'today') {
     } finally {
       setLoading(false);
     }
-  }, [day]);
+  }, [day, ownerId]);
 
   useEffect(() => {
     void load();

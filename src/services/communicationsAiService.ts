@@ -27,6 +27,8 @@ export interface CommunicationsAiDraftRequest {
   isRatingOnly?: boolean;
   rating?: number;
   regenerate?: boolean;
+  /** Style du PM à imiter — comparer plusieurs PM sur le même message. */
+  pmName?: string;
 }
 
 export interface CommunicationsAiDraftResponse {
@@ -158,6 +160,45 @@ export async function analyzeConversation(
     `${COMMS_AI_BASE}/conversation-analysis`,
     body,
     { timeout: 120_000 },
+  );
+  return data;
+}
+
+/** Profil de style d'un PM, tel que l'IA l'a déduit de ses vraies réponses. */
+export type PmStyleProfile = {
+  pmName: string;
+  sampleSize: number;
+  medianLength: number;
+  longLength: number;
+  dominantLanguage?: 'fr' | 'en' | 'other';
+  answersInOwnLanguage?: boolean;
+  commonOpenings: string[];
+  commonClosings: string[];
+};
+
+export type PmStyleProfilesResponse = {
+  success: boolean;
+  computedAt: string | null;
+  /** `instruction` = le texte exact lu par le modèle, pas un résumé. */
+  profiles: Array<{ profile: PmStyleProfile; instruction: string }>;
+};
+
+export async function fetchPmStyleProfiles(): Promise<PmStyleProfilesResponse> {
+  const { data } = await apiClient.get<PmStyleProfilesResponse>(
+    `${COMMS_AI_BASE}/pm-style-profiles`,
+    { timeout: 30_000 },
+  );
+  return data;
+}
+
+/** Recalcul depuis l'historique : lit des dizaines de fils, donc lent par nature. */
+export async function refreshPmStyleProfiles(
+  body?: { maxThreads?: number; force?: boolean },
+): Promise<PmStyleProfilesResponse> {
+  const { data } = await apiClient.post<PmStyleProfilesResponse>(
+    `${COMMS_AI_BASE}/pm-style-profiles/refresh`,
+    body ?? {},
+    { timeout: 180_000 },
   );
   return data;
 }
