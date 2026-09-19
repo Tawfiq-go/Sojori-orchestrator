@@ -421,6 +421,11 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'Frais · note · devise',
     whatsappHint: 'Option J2 · request_shopping',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Retiré de la conciergerie voyageur : le handler J2 répond « Les courses
+    // ne sont pas proposées en Conciergerie » et renvoie vers navette et
+    // expériences. Aucune ligne J2 dans le menu, et zéro demande en base
+    // depuis toujours. L'activer n'avait donc aucun effet.
+    listingRailHidden: true,
   },
   {
     key: 'concierge',
