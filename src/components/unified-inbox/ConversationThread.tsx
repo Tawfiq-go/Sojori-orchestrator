@@ -274,6 +274,15 @@ export default function ConversationThread({
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [inspectedMessage, setInspectedMessage] = useState<Message | null>(null);
+  const [comparisonLoadingId, setComparisonLoadingId] = useState<string | null>(null);
+  const [comparisonDraft, setComparisonDraft] = useState<{
+    messageId: string;
+    client: string;
+    admin: string;
+    generationId: string;
+    model: string;
+    error: string;
+  } | null>(null);
   const [inspectLoading, setInspectLoading] = useState(false);
   const [expandedTraceSteps, setExpandedTraceSteps] = useState<Record<string, boolean>>({});
   const [inspectTab, setInspectTab] = useState<'process' | 'prompt' | 'cost'>('process');
@@ -355,6 +364,63 @@ export default function ConversationThread({
       return message.from === 'you' || message.from === 'sojori' || Boolean(message.isAI);
     }
     return Boolean(message.processingTrace || message.aiPrompt);
+  };
+
+  /**
+   * Génère une réponse pour COMPARER avec celle du PM — n'envoie jamais rien.
+   * Le résultat s'affiche dans le panneau d'inspection, à côté du prompt et du
+   * profil de style utilisés, pour qu'on voie d'où vient la proposition.
+   */
+  const generateComparisonDraft = async (message: Message) => {
+    if (comparisonLoadingId) return;
+    setComparisonLoadingId(message.id);
+    setComparisonDraft(null);
+    try {
+      const { generateCommunicationsAiDraft } = await import(
+        '../../services/communicationsAiService'
+      );
+      // Pas de cast : les noms de champs doivent être vérifiés par le compilateur,
+      // sinon un `message` au lieu de `currentGuestMessage` partirait vide.
+      // Le fil, mis à plat comme le fait la modale de suggestion : sans lui le
+      // modèle répondait « aucune réservation liée » alors que la réservation
+      // s'affiche à l'écran (constat 19/09/2026).
+      const threadContext = messages
+        .filter((m) => m.type !== 'day-separator' && m.type !== 'system-note' && m.text)
+        .slice(-20)
+        .map((m) => `${m.from === 'guest' ? 'Client' : 'Hôte'}: ${m.text}`)
+        .join('\n');
+
+      const res = await generateCommunicationsAiDraft({
+        kind: 'ota_message',
+        currentGuestMessage: message.text || '',
+        threadContext,
+        threadId: thread.id,
+        reservationId: thread.reservationNumber || '',
+        channelName: thread.channelName || undefined,
+        guestName: thread.guestName || undefined,
+        listingName: thread.listingName || undefined,
+        detectClientLanguage: true,
+      });
+      setComparisonDraft({
+        messageId: message.id,
+        client: res.responseClient || '',
+        admin: res.responseAdmin || '',
+        generationId: res.generationId || '',
+        model: res.model || '',
+        error: res.success === false ? res.message || 'Génération impossible' : '',
+      });
+    } catch (err) {
+      setComparisonDraft({
+        messageId: message.id,
+        client: '',
+        admin: '',
+        generationId: '',
+        model: '',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setComparisonLoadingId(null);
+    }
   };
 
   const openTrace = async (message: Message) => {
@@ -1364,6 +1430,132 @@ export default function ConversationThread({
                   </Typography>
                 )}
               </Box>
+              {canInspectAi && !isOut && message.type !== 'day-separator' && message.type !== 'system-note' && (
+                <Box
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void generateComparisonDraft(message);
+                  }}
+                  sx={{
+                    alignSelf: 'flex-start',
+                    mt: 0.5,
+                    px: 1,
+                    py: 0.375,
+                    fontSize: 10,
+                    fontFamily: '"Geist Mono", monospace',
+                    color: T.text4,
+                    border: '1px solid rgba(20,17,10,0.12)',
+                    borderRadius: '8px',
+                    cursor: comparisonLoadingId === message.id ? 'wait' : 'pointer',
+                    userSelect: 'none',
+                    '&:hover': { background: 'rgba(13,148,136,0.06)', color: T.text2 },
+                  }}
+                >
+                  {comparisonLoadingId === message.id
+                    ? '⏳ Génération…'
+                    : '🤖 Générer une réponse (comparer)'}
+                </Box>
+              )}
+              {comparisonDraft?.messageId === message.id && (
+                <Box
+                  sx={{
+                    alignSelf: 'flex-start',
+                    mt: 0.75,
+                    maxWidth: '86%',
+                    px: 1.5,
+                    py: 1.25,
+                    border: '1px dashed rgba(13,148,136,0.45)',
+                    borderRadius: '12px',
+                    background: 'rgba(13,148,136,0.04)',
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 10,
+                      fontFamily: '"Geist Mono", monospace',
+                      color: T.text4,
+                      mb: 0.75,
+                    }}
+                  >
+                    PROPOSITION IA · NON ENVOYÉE
+                    {comparisonDraft.model ? ` · ${comparisonDraft.model}` : ''}
+                  </Typography>
+                  {comparisonDraft.error ? (
+                    <Typography sx={{ fontSize: 12, color: '#b91c1c' }}>
+                      {comparisonDraft.error}
+                    </Typography>
+                  ) : (
+                    <>
+                      <Typography sx={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                        {comparisonDraft.client}
+                      </Typography>
+                      {comparisonDraft.admin && comparisonDraft.admin !== comparisonDraft.client && (
+                        <Typography
+                          sx={{
+                            mt: 1,
+                            pt: 1,
+                            borderTop: '1px solid rgba(20,17,10,0.08)',
+                            fontSize: 12,
+                            color: T.text3,
+                            lineHeight: 1.6,
+                            whiteSpace: 'pre-wrap',
+                          }}
+                        >
+                          {comparisonDraft.admin}
+                        </Typography>
+                      )}
+                    </>
+                  )}
+                  <Stack direction="row" spacing={1.25} sx={{ mt: 1, alignItems: 'center' }}>
+                    {/* Sans ce lien, la proposition est une boîte noire : on lit le
+                        texte sans savoir sur quels faits, quel historique et quel
+                        profil de PM il a été écrit. */}
+                    {comparisonDraft.generationId && (
+                      <Box
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // `from: 'sojori'` est requis : `isInspectableMessage`
+                          // refuse un message entrant, et le clic serait ignoré
+                          // sans rien afficher. On inspecte la PROPOSITION, pas
+                          // le message du client.
+                          void openTrace({
+                            ...message,
+                            id: `${message.id}-ai-comparison`,
+                            from: 'sojori',
+                            isAI: true,
+                            text: comparisonDraft.client,
+                            generationId: comparisonDraft.generationId,
+                          } as Message);
+                        }}
+                        sx={{
+                          fontSize: 10,
+                          fontFamily: '"Geist Mono", monospace',
+                          color: 'rgba(13,148,136,0.95)',
+                          cursor: 'pointer',
+                          '&:hover': { textDecoration: 'underline' },
+                        }}
+                      >
+                        🔍 Voir le parcours et le prompt
+                      </Box>
+                    )}
+                    <Box
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setComparisonDraft(null);
+                      }}
+                      sx={{
+                        fontSize: 10,
+                        fontFamily: '"Geist Mono", monospace',
+                        color: T.text4,
+                        cursor: 'pointer',
+                        '&:hover': { color: T.text2 },
+                      }}
+                    >
+                      fermer
+                    </Box>
+                  </Stack>
+                </Box>
+              )}
               <Stack
                 direction="row"
                 spacing={0.625}
