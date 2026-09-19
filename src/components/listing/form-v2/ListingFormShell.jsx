@@ -100,53 +100,21 @@ export function getDetailTabs(propertyUnit) {
   return propertyUnit === 'Multi' ? DETAIL_TABS_MULTI : DETAIL_TABS;
 }
 
-/** Onglets Config orchestration (ex-« Config Orch. NEW »). */
-export const CONFIG_NEW_TABS = [
-  { group: 'Services', items: [
-    { id: 'access-config',            icon: '🔐', label: 'Accès' },
-    { id: 'support-config',           icon: '🆘', label: 'Support' },
-    { id: 'concierge-config',         icon: '🛎️', label: 'Conciergerie' },
-    { id: 'cleaning-config',          icon: '🧹', label: 'Ménage' },
-    { id: 'timeslots-config',         icon: '🛬', label: 'Créneaux A/D' },
-    { id: 'transport-config',         icon: '🚗', label: 'Transport' },
-    { id: 'grocery-config',           icon: '🛒', label: 'Courses' },
-    { id: 'messages-config',          icon: '🚪', label: 'Instructions départ' },
-    { id: 'rules-config',             icon: '📋', label: 'Règles propriété' },
-  ]},
-  { group: 'Communication', items: [
-    { id: 'service-client-config', icon: '💌', label: 'Service Client' },
-  ]},
-  { group: 'Orchestration', items: [] },
-];
-
-/** Onglets masqués (ex. transport absent du template Admin global). */
-export function filterConfigTabs(tabs, hiddenIds = []) {
-  const hidden = new Set(hiddenIds);
-  if (!hidden.size) return tabs;
-  return tabs
-    .map(g => ({ ...g, items: g.items.filter(t => !hidden.has(t.id)) }))
-    .filter(g => g.items.length > 0);
-}
-
-/** Nombre d’onglets Config orchestration visibles. */
-export function visibleConfigTabCount(tabs) {
-  return tabs.reduce((n, g) => n + g.items.length, 0);
-}
-
-/** Nombre d’onglets Config orchestration (pill toggle + vérif rail). */
-export const CONFIG_NEW_TAB_COUNT = CONFIG_NEW_TABS.reduce((n, g) => n + g.items.length, 0);
-
-const CONFIG_TAB_IDS = new Set(
-  CONFIG_NEW_TABS.flatMap(g => g.items.map(t => t.id)),
-);
-
-/** Legacy `config` / `config-new` → Orchestration V3 (sauf embed template propriétaire). */
-export function normalizeListingFormLevel(level, { forceConfig = false } = {}) {
-  if (level === 'orchestration-v3') return 'orchestration-v3';
-  if (level === 'config-new' || level === 'config') {
-    return forceConfig ? 'config' : 'orchestration-v3';
+/**
+ * Legacy `config` / `config-new` → Orchestration V3.
+ *
+ * Le niveau `config` portait dix onglets `*-config` réservés au mode template
+ * propriétaire. Son unique point d'entrée (`ListingTemplateForm`, via la prop
+ * `lockLevel`) n'avait plus d'importeur : le niveau était inatteignable, et
+ * `resolveListingFormNavFromSearch` avale de toute façon les `?tab=*-config`.
+ * Le contenu vit maintenant dans les onglets détail et les panneaux de
+ * capacités de l'orchestration V3.
+ */
+export function normalizeListingFormLevel(level) {
+  if (level === 'orchestration-v3' || level === 'config-new' || level === 'config') {
+    return 'orchestration-v3';
   }
-  return level === 'detail' ? 'detail' : 'detail';
+  return 'detail';
 }
 
 /* ─── Helpers UI ───────────────────────────────────────────── */
@@ -254,8 +222,6 @@ export default function ListingFormShell({
   onNavigateLevelTab,         // (nav: { level, tab? }) => void — keep URL in sync
   lockLevel,                  // masque le toggle et fige le niveau (ex. embed chatbot)
   embedded = false,           // rendu dans un panneau (pas pleine page)
-  configNewBadgeLabel = '',   // badge optionnel (ex. « Template » sur page catalogue)
-  hiddenConfigTabIds = [],    // ex. ['transport-config'] sur template Admin global
   onSave,
   onPublish,
   showPublish = false,        // admin only — owner ne doit pas sync RU (import souvent incomplet)
@@ -273,12 +239,8 @@ export default function ListingFormShell({
   listingActive = true,
   onListingActiveChange,
 }) {
-  const resolvedLockLevel = lockLevel
-    ? normalizeListingFormLevel(lockLevel, { forceConfig: lockLevel === 'config' || lockLevel === 'config-new' })
-    : null;
-  const resolvedDefaultLevel = normalizeListingFormLevel(defaultLevel, {
-    forceConfig: resolvedLockLevel === 'config',
-  });
+  const resolvedLockLevel = lockLevel ? normalizeListingFormLevel(lockLevel) : null;
+  const resolvedDefaultLevel = normalizeListingFormLevel(defaultLevel);
   const [level, setLevel] = useState(resolvedLockLevel || resolvedDefaultLevel);
   const [activeTab, setActiveTab] = useState(defaultTab);
   useEffect(() => {
@@ -310,31 +272,9 @@ export default function ListingFormShell({
       return;
     }
     if (defaultTab) {
-      if (nextLevel === 'config' && !CONFIG_TAB_IDS.has(defaultTab)) return;
       setActiveTab(defaultTab);
     }
   }, [resolvedDefaultLevel, resolvedLockLevel, defaultTab, navEpoch]);
-
-  const configTabsFiltered = level === 'config' ? filterConfigTabs(CONFIG_NEW_TABS, hiddenConfigTabIds) : CONFIG_NEW_TABS;
-  const configTabCount = visibleConfigTabCount(configTabsFiltered);
-
-  useEffect(() => {
-    if (level !== 'config' || !hiddenConfigTabIds?.length) return;
-    const visibleIds = new Set(configTabsFiltered.flatMap(g => g.items.map(t => t.id)));
-    if (!visibleIds.has(activeTab)) {
-      const first = configTabsFiltered[0]?.items[0]?.id;
-      if (first) setActiveTab(first);
-    }
-  }, [level, hiddenConfigTabIds, configTabsFiltered, activeTab]);
-
-  useEffect(() => {
-    if (resolvedLockLevel !== 'config' || !hiddenConfigTabIds?.length) return;
-    const visibleIds = new Set(configTabsFiltered.flatMap(g => g.items.map(t => t.id)));
-    if (!visibleIds.has(activeTab)) {
-      const first = configTabsFiltered[0]?.items[0]?.id;
-      if (first) setActiveTab(first);
-    }
-  }, [resolvedLockLevel, hiddenConfigTabIds, configTabsFiltered, activeTab]);
 
   useEffect(() => {
     if (hideRuImportTab && level === 'detail' && activeTab === 'ru-import') {
@@ -364,7 +304,7 @@ export default function ListingFormShell({
   const detailTabsWithImport = importOnboardingActive && level === 'detail'
     ? [{ group: 'Post-import', items: [POST_IMPORT_TAB] }, ...detailTabsBase]
     : detailTabsBase;
-  const tabsConfig = level === 'detail' ? detailTabsWithImport : isOrchV3 ? [] : configTabsFiltered;
+  const tabsConfig = level === 'detail' ? detailTabsWithImport : [];
   const detailTabCount = detailTabsWithImport.reduce((n, g) => n + g.items.length, 0);
   const activeTabMeta = isOrchV3
     ? { id: 'orchestration-v3', icon: '🎯', label: 'Orchestration' }
@@ -372,8 +312,6 @@ export default function ListingFormShell({
   const listingDisplayName = (listing?.name && String(listing.name).trim()) || 'Listing sans nom';
   const locationLine = (listing?.location && String(listing.location).trim()) || '';
   const showListingTitle = Boolean(listing?.name && String(listing.name).trim());
-
-  const lockedConfig = Boolean(resolvedLockLevel === 'config');
 
   return (
     <Box sx={{ bgcolor: T.bg0, minHeight: embedded ? 0 : '100vh' }}>
@@ -484,41 +422,6 @@ export default function ListingFormShell({
           )}
           </Box>
           <Box sx={{ flex: 1, minWidth: 0, pt: { xs: 0, sm: 0.25 } }}>
-            {lockedConfig && configNewBadgeLabel ? (
-              <Box
-                sx={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 0.75,
-                  mb: 0.75,
-                  px: 1.25,
-                  py: 0.5,
-                  borderRadius: 1,
-                  bgcolor: 'rgba(184,133,26,0.10)',
-                  border: `1px solid ${T.primary}`,
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  color: T.primaryDeep,
-                }}
-              >
-                <span>✨</span>
-                {configNewBadgeLabel}
-                <Box
-                  component="span"
-                  sx={{
-                    fontFamily: '"Geist Mono", monospace',
-                    fontSize: 10,
-                    px: 0.75,
-                    py: '1px',
-                    borderRadius: '99px',
-                    bgcolor: T.bg1,
-                    color: T.text3,
-                  }}
-                >
-                  {configTabCount} onglets
-                </Box>
-              </Box>
-            ) : null}
             {showListingTitle ? (
               <>
                 <Typography
