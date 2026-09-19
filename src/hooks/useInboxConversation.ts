@@ -17,7 +17,23 @@ import {
 const waMessagesCache = new Map<string, MessageExchange[]>();
 
 function conversationCacheKey(conv: Conversation): string {
-  return String(conv.phone || '').trim();
+  const phone = String(conv.phone || '').trim();
+  const rid = String(conv.reservation_mongo_id || conv.reservation_id || '').trim();
+  return phone || rid;
+}
+
+function conversationMessagesQuery(conv: Conversation): {
+  phone: string;
+  scope: 'phone' | 'reservation';
+  reservationId?: string;
+} {
+  const phone = String(conv.phone || '').trim();
+  const reservationId = String(conv.reservation_mongo_id || '').trim() || undefined;
+  return {
+    phone: phone || reservationId || 'unknown',
+    scope: phone ? 'phone' : 'reservation',
+    reservationId,
+  };
 }
 
 export function useInboxConversation() {
@@ -84,9 +100,11 @@ export function useInboxConversation() {
     if (!target) return;
     const key = conversationCacheKey(target);
     try {
-      const messagesResponse = await messagesService.getConversationMessages(target.phone, {
+      const q = conversationMessagesQuery(target);
+      const messagesResponse = await messagesService.getConversationMessages(q.phone, {
         limit: 50,
-        scope: 'phone',
+        scope: q.scope,
+        reservationId: q.reservationId,
       });
       if (activeKeyRef.current !== key) return;
       if (messagesResponse.status === 'success') {
@@ -126,12 +144,14 @@ export function useInboxConversation() {
     }
 
     const resaNum = getConversationReservationNumber(conv);
+    const q = conversationMessagesQuery(conv);
 
     try {
       const [messagesResult, tasksResult, reservationResult] = await Promise.allSettled([
-        messagesService.getConversationMessages(conv.phone, {
+        messagesService.getConversationMessages(q.phone, {
           limit: 50,
-          scope: 'phone',
+          scope: q.scope,
+          reservationId: q.reservationId,
         }),
         resaNum
           ? tasksService.getTasksByReservation(resaNum, false)
