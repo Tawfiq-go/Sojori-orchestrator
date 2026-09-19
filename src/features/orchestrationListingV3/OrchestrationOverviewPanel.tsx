@@ -68,7 +68,6 @@ import {
 import type { CatalogMessage, ScheduledOrchestrationMessage } from '../taskHub/staff-design/types';
 import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
 import V3InformSyndicPanel from './V3InformSyndicPanel';
-import { V3ArrivalJourneyPanel } from './V3ArrivalJourneyPanel';
 import CleaningChecklistPanel from '../listing/components/ConfigOrchestration/CleaningChecklistPanel';
 import CleaningDeclarePanel from '../listing/components/ConfigOrchestration/CleaningDeclarePanel';
 import MenageContentRedirectCard from '../serviceMatrix/MenageContentRedirectCard';
@@ -3737,13 +3736,6 @@ export default function OrchestrationOverviewPanel({
                         </Box>
                       );
                     })()
-                  ) : configDef.key === 'arrival_journey' ? (
-                    <V3ArrivalJourneyPanel
-                      receptionMode={
-                        (listingValues as { receptionMode?: string })?.receptionMode ??
-                        (configGestionValues as { receptionMode?: string })?.receptionMode
-                      }
-                    />
                   ) : configDef.key === 'inform_syndic' ? (
                     <V3InformSyndicPanel
                       gestion={configGestionValues}

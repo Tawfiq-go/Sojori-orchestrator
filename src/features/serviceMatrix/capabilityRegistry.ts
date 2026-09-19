@@ -188,6 +188,10 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'Checklist WA · mode entrée · obligatoire/optionnel',
     whatsappHint: 'Option C · Parcours Arrivée',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Le code C n'a plus de contenu propre : son handler ne fait que rediriger
+    // vers D1 (heure d'arrivée) et E (enregistrement), et aucune ligne C n'est
+    // servie dans le menu. Zéro sélection en 180 jours de production.
+    listingRailHidden: true,
   },
   {
     key: 'arrival_choose',
@@ -348,6 +352,11 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'SLA · objets · formulaire',
     whatsappHint: 'Option L · contact_service_client',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Absorbé par Support (K) — décision PM du 2026-08-06 : une seule file
+    // d'entrée. Le code L est un alias vers HELP, son flow Meta n'est pas
+    // déployé, et la prod compte 0 tâche `service_client` sur 12 mois
+    // (contre 12 en `support`).
+    listingRailHidden: true,
   },
   {
     key: 'transport',
