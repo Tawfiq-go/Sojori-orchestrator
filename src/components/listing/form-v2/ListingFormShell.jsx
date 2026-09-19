@@ -29,33 +29,47 @@ const T = {
 /* ─── Onglets ──────────────────────────────────────────────── */
 export const POST_IMPORT_TAB = { id: 'post-import', icon: '🚀', label: 'Lancer orchestration' };
 
+/**
+ * Onglets détail, groupés par question métier plutôt que par nature technique.
+ *
+ * L'ancien groupe « Inventaire » mélangeait les chambres avec le petit
+ * déjeuner, le ménage et les documents — qui ne sont pas des inventaires mais
+ * des services rendus au voyageur ou des opérations internes. Un PM hésitait
+ * entre deux onglets ; un agent MCP, lui, se tromperait à tous les coups.
+ *
+ * La règle est désormais : ici vit le CONTENU (ce qu'on propose, à quel prix,
+ * avec quel texte) ; l'Orchestration ne garde que les INTERRUPTEURS et les
+ * décisions (WhatsApp / tâche / relance / staff / escalade).
+ */
 export const DETAIL_TABS = [
-  { group: 'Identité', items: [
+  { group: 'Le bien', items: [
     { id: 'general',      icon: '🏠', label: 'General Information' },
     { id: 'location',     icon: '📍', label: 'Location & Address' },
     { id: 'photos',       icon: '📸', label: 'Photos & Media' },
     { id: 'amenities',    icon: '', label: 'Équipements' },
+    { id: 'rooms',        icon: '🛏️', label: 'Rooms & Beds' },
   ]},
-  { group: 'Commercial', items: [
+  { group: 'Le prix', items: [
     { id: 'pricing',      icon: '💰', label: 'Pricing' },
     { id: 'availability', icon: '📅', label: 'Disponibilité & séjour' },
     { id: 'fees',         icon: '💳', label: 'Fees & Deposits' },
   ]},
-  { group: 'Canaux', items: [
+  { group: 'La vente', items: [
     { id: 'direct-booking', icon: '🌐', label: 'Direct booking' },
     { id: 'ota',            icon: '📡', label: 'OTA' },
+    { id: 'license',        icon: '📄', label: 'License' },
   ]},
-  { group: 'Inventaire', items: [
-    { id: 'rooms',        icon: '🛏️', label: 'Rooms & Beds' },
-    { id: 'experiences',  icon: '✨', label: 'Expériences' },
-    { id: 'stay-options', icon: '🌞', label: 'Options séjour' },
+  { group: 'Le séjour', items: [
     { id: 'room-service', icon: '🥐', label: 'PDJ Inclus' },
     { id: 'room-service-card', icon: '🍴', label: 'Room service' },
+    { id: 'experiences',  icon: '✨', label: 'Expériences' },
+    { id: 'stay-options', icon: '🌞', label: 'Options séjour' },
+    { id: 'documents',    icon: '📋', label: 'Documents voyageurs' },
+  ]},
+  { group: 'Les opérations', items: [
     { id: 'menage',       icon: '🧹', label: 'Ménage' },
     { id: 'stay-verify',  icon: '🏠', label: 'Vérifier logement' },
     { id: 'departure',    icon: '🚪', label: 'Instructions départ' },
-    { id: 'documents',    icon: '📋', label: 'Documents voyageurs' },
-    { id: 'license',      icon: '📄', label: 'License' },
     { id: 'ru-import',    icon: '🗄️', label: 'Trace import RU' },
   ]},
 ];
