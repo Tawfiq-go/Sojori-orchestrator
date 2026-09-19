@@ -271,6 +271,11 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     durationKind: 'na',
     gestionHint: 'WA + Relance Flow · pas une tâche staff',
     whatsappHint: 'Menu ⏰ Heures arr./départ · déclarer arrivée',
+    // Le voyageur ne déclare jamais : les 25 tâches créées sur 30 jours
+    // restent toutes au statut `new`. La case ne pilotait donc rien d'utile.
+    // ⚠️ La création de tâche est conservée : `declareArrival` est le SEUL
+    // déclencheur qui passe le logement en « occupé » (guestActionService).
+    listingRailHidden: true,
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
@@ -319,6 +324,10 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     durationKind: 'na',
     gestionHint: 'WA + Relance Flow · pas une tâche staff',
     whatsappHint: 'Menu ⏰ Heures arr./départ · déclarer départ',
+    // Idem arrivée : jamais déclaré par le voyageur. ⚠️ La création reste,
+    // c'est le seul chemin qui marque le logement « sale » au départ — sans
+    // lui, le ménage ne saurait plus qu'un logement doit être nettoyé.
+    listingRailHidden: true,
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
