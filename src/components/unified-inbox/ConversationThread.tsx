@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInboxMessageScroll } from './useInboxMessageScroll';
 import { highlightInboxKeyword, messageMatchesKeyword } from './highlightInboxKeyword';
 import { Box, Stack, Typography, CircularProgress, Tooltip, Dialog, DialogTitle, DialogContent, IconButton } from '@mui/material';
@@ -463,6 +463,64 @@ export default function ConversationThread({
       setComparisonSending(false);
     }
   };
+
+  /**
+   * Le dernier message du client, s'il attend encore une réponse.
+   *
+   * On ne pré-génère que pour CELUI-LÀ : générer pour tous les messages d'un
+   * fil coûterait un appel par message et n'a aucun sens, seul le dernier
+   * appelle une réponse. Si le PM a déjà répondu après, il n'y a plus rien à
+   * proposer.
+   */
+  const lastUnansweredGuestMessage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.type === 'day-separator' || m.type === 'system-note') continue;
+      if (!m.text?.trim()) continue;
+      // Une réponse de notre côté après le dernier message client : rien à proposer.
+      if (m.from === 'you' || m.from === 'sojori') return null;
+      if (m.from === 'guest') return m;
+    }
+    return null;
+  }, [messages]);
+
+  /**
+   * Pré-génération à l'ouverture du fil. Le PM lit une proposition au lieu de
+   * la demander puis d'attendre.
+   *
+   * Trois garde-fous :
+   * - admin seulement, comme le reste de cette fonctionnalité ;
+   * - une seule fois par message : `autoDraftedRef` empêche de relancer à
+   *   chaque rendu, ce qui coûterait un appel modèle par frappe clavier ;
+   * - jamais si une proposition est déjà affichée ou en cours.
+   */
+  const autoDraftedRef = useRef<string | null>(null);
+
+  /**
+   * Changement de fil : on jette la proposition précédente.
+   *
+   * Sans cela, la réponse écrite pour un client restait affichée sur la
+   * conversation d'un autre — et le bouton Envoyer l'aurait envoyée au mauvais
+   * destinataire (constat 19/09/2026, en test).
+   */
+  useEffect(() => {
+    setComparisonDraft(null);
+    setComparisonLoadingId(null);
+    autoDraftedRef.current = null;
+  }, [thread.id]);
+
+  useEffect(() => {
+    if (!canInspectAi) return;
+    const target = lastUnansweredGuestMessage;
+    if (!target) return;
+    if (autoDraftedRef.current === target.id) return;
+    if (comparisonLoadingId || comparisonDraft) return;
+    autoDraftedRef.current = target.id;
+    void generateComparisonDraft(target);
+    // `generateComparisonDraft` est recréée à chaque rendu : la mettre en
+    // dépendance relancerait la génération en boucle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canInspectAi, lastUnansweredGuestMessage, comparisonLoadingId, comparisonDraft]);
 
   const openTrace = async (message: Message) => {
     if (onSelectMessage) {
