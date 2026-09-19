@@ -282,6 +282,23 @@ export default function ConversationThread({
    */
   const canUseAiDraft =
     canInspectAi || normalizedRole === 'owner' || normalizedRole === 'worker';
+
+  const isOta =
+    threadMode === 'ota'
+      ? true
+      : threadMode === 'whatsapp'
+        ? false
+        : isOtaChannelType(thread.channel);
+
+  /**
+   * La proposition IA n'existe QUE sur les fils OTA.
+   *
+   * Sur WhatsApp, le chatbot voyageur répond déjà tout seul : proposer une
+   * réponse humaine par-dessus est inutile au mieux, et dangereux au pire — un
+   * PM enverrait un doublon derrière une réponse automatique déjà partie
+   * (constat Tawfiq, 19/09/2026).
+   */
+  const aiDraftEnabled = canUseAiDraft && isOta;
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [internalComposerValue, setInternalComposerValue] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
@@ -523,7 +540,7 @@ export default function ConversationThread({
   }, [thread.id]);
 
   useEffect(() => {
-    if (!canUseAiDraft) return;
+    if (!aiDraftEnabled) return;
     const target = lastUnansweredGuestMessage;
     if (!target) return;
     if (autoDraftedRef.current === target.id) return;
@@ -533,7 +550,7 @@ export default function ConversationThread({
     // `generateComparisonDraft` est recréée à chaque rendu : la mettre en
     // dépendance relancerait la génération en boucle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canUseAiDraft, lastUnansweredGuestMessage, comparisonLoadingId, comparisonDraft]);
+  }, [aiDraftEnabled, lastUnansweredGuestMessage, comparisonLoadingId, comparisonDraft]);
 
   const openTrace = async (message: Message) => {
     if (onSelectMessage) {
@@ -595,12 +612,6 @@ export default function ConversationThread({
     }
   };
 
-  const isOta =
-    threadMode === 'ota'
-      ? true
-      : threadMode === 'whatsapp'
-        ? false
-        : isOtaChannelType(thread.channel);
   const otaTheme = getOtaTheme(thread.channel, otaPlatform);
   const flag = thread.guestFlag || flagFromPhone(thread.phone);
   const platformLabel = otaPlatform || otaTheme.label;
@@ -1542,7 +1553,7 @@ export default function ConversationThread({
                   </Typography>
                 )}
               </Box>
-              {canUseAiDraft && !isOut && message.type !== 'day-separator' && message.type !== 'system-note' && (
+              {aiDraftEnabled && !isOut && message.type !== 'day-separator' && message.type !== 'system-note' && (
                 <Box
                   onClick={(e) => {
                     e.stopPropagation();
