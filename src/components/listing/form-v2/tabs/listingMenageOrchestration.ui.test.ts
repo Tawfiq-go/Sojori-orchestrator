@@ -38,10 +38,23 @@ describe('Ménage lives in Orchestration only', () => {
     assert.match(cards, /showCheckout/);
     assert.match(tab, /MenageEditorFocus/);
   });
-  it('points journalier and mini-bar Contenu to the real editors', () => {
+  it('keeps journalier and mini-bar off the listing rail', () => {
+    // Aucune capacité correspondante côté srv-listing : leur activation n'était
+    // jamais relue. Elles sortent du rail, et les renvois « Contenu » qui les
+    // accompagnaient — du texte sans navigation — disparaissent avec elles.
+    const registry = read('../../../../features/serviceMatrix/capabilityRegistry.ts');
+    for (const key of ['stay_cleaning', 'welcome_package', 'minibar_check']) {
+      const block = registry.slice(registry.indexOf(`key: '${key}'`));
+      assert.match(
+        block.slice(0, block.indexOf('\n  },')),
+        /listingRailHidden: true/,
+        `${key} doit rester masqué du rail listing`,
+      );
+    }
+
     const overview = read('../../../../features/orchestrationListingV3/OrchestrationOverviewPanel.tsx');
-    assert.match(overview, /→ Ménage séjour/);
-    assert.match(overview, /→ Extras mini-bar/);
+    assert.doesNotMatch(overview, /→ Ménage séjour/);
+    assert.doesNotMatch(overview, /→ Extras mini-bar/);
   });
   it('keeps Contenu read-only and Éditer as the sole config opener', () => {
     const overview = read('../../../../features/orchestrationListingV3/OrchestrationOverviewPanel.tsx');

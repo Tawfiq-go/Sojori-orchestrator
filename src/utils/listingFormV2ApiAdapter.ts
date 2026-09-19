@@ -359,6 +359,13 @@ export function cleanListingImagesForPayload(images: unknown): UnknownRecord[] {
         sortOrder: sortOrder ?? 0,
         url,
       };
+      // updateProperty reconstruit chaque image à partir du seul payload reçu :
+      // un champ non renvoyé est effacé en base. Les légendes n'ont pas d'UI de
+      // saisie — les omettre les détruisait à chaque save de l'onglet Photos.
+      for (const key of ['caption', 'bookingEngineCaption', 'airbnbCaption', 'vrboCaption']) {
+        if (row[key] !== undefined) out[key] = row[key];
+      }
+      if (row.id !== undefined) out.id = row.id;
       // ObjectId only — never send "" (CastError on create-property)
       if (isMongoObjectId(imageTypeId)) {
         out.imageTypeId = imageTypeId;
