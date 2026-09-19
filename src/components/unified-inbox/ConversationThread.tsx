@@ -264,11 +264,24 @@ export default function ConversationThread({
   const { user } = useAuth();
   const { readOnly } = useWriteAccess();
   const normalizedRole = String(user?.role || '').toLowerCase();
+  /**
+   * Inspecter le PROMPT reste admin : il expose l'historique complet du
+   * voyageur, le contexte WhatsApp et les faits de sa réservation. Ce n'est pas
+   * une donnée à ouvrir largement.
+   */
   const canInspectAi =
     user?.role === Roles.Admin ||
     user?.role === Roles.SuperAdmin ||
     normalizedRole === 'admin' ||
     normalizedRole === 'superadmin';
+
+  /**
+   * UTILISER la proposition (la lire, l'envoyer) est le travail quotidien d'un
+   * PM : un owner y a droit sur ses propres fils, qu'il voit déjà en entier.
+   * Le droit d'écriture (`readOnly`) reste la seule barrière à l'envoi.
+   */
+  const canUseAiDraft =
+    canInspectAi || normalizedRole === 'owner' || normalizedRole === 'worker';
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [internalComposerValue, setInternalComposerValue] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
@@ -510,7 +523,7 @@ export default function ConversationThread({
   }, [thread.id]);
 
   useEffect(() => {
-    if (!canInspectAi) return;
+    if (!canUseAiDraft) return;
     const target = lastUnansweredGuestMessage;
     if (!target) return;
     if (autoDraftedRef.current === target.id) return;
@@ -520,7 +533,7 @@ export default function ConversationThread({
     // `generateComparisonDraft` est recréée à chaque rendu : la mettre en
     // dépendance relancerait la génération en boucle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canInspectAi, lastUnansweredGuestMessage, comparisonLoadingId, comparisonDraft]);
+  }, [canUseAiDraft, lastUnansweredGuestMessage, comparisonLoadingId, comparisonDraft]);
 
   const openTrace = async (message: Message) => {
     if (onSelectMessage) {
@@ -1529,7 +1542,7 @@ export default function ConversationThread({
                   </Typography>
                 )}
               </Box>
-              {canInspectAi && !isOut && message.type !== 'day-separator' && message.type !== 'system-note' && (
+              {canUseAiDraft && !isOut && message.type !== 'day-separator' && message.type !== 'system-note' && (
                 <Box
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1641,7 +1654,10 @@ export default function ConversationThread({
                     {/* Sans ce lien, la proposition est une boîte noire : on lit le
                         texte sans savoir sur quels faits, quel historique et quel
                         profil de PM il a été écrit. */}
-                    {comparisonDraft.generationId && (
+                    {/* Inspection réservée admin : le panneau expose le prompt
+                        entier, donc l'historique complet du voyageur. Un owner
+                        peut utiliser la proposition sans voir ces données. */}
+                    {canInspectAi && comparisonDraft.generationId && (
                       <Box
                         onClick={(e) => {
                           e.stopPropagation();
