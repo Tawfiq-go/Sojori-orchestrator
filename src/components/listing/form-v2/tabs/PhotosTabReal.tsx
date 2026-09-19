@@ -47,8 +47,6 @@ interface PhotosTabProps {
   listingImages: ListingImage[];
   onChange: (images: ListingImage[]) => void;
   onImagesPersisted?: (images: ListingImage[]) => void;
-  airbnbHeroOrder?: string;
-  onAirbnbOrderChange?: (order: string) => void;
   propertyUnit?: string;
   roomTypes?: Array<Record<string, unknown>>;
   onRoomTypesChange?: (roomTypes: Array<Record<string, unknown>>) => void;
@@ -237,8 +235,6 @@ export const PhotosTabReal = memo(function PhotosTabReal({
   listingImages = [],
   onChange,
   onImagesPersisted,
-  airbnbHeroOrder = '',
-  onAirbnbOrderChange,
   propertyUnit,
   roomTypes = [],
   onRoomTypesChange,
@@ -248,7 +244,6 @@ export const PhotosTabReal = memo(function PhotosTabReal({
     [listingImages],
   );
   const [helpOpen, setHelpOpen] = useState(false);
-  const [airbnbOpen, setAirbnbOpen] = useState(false);
   const isMulti = propertyUnit === 'Multi';
   const typePhotoCount = useMemo(
     () =>
@@ -300,17 +295,6 @@ export const PhotosTabReal = memo(function PhotosTabReal({
         >
           Aide
         </Button>
-        {!isMulti && (
-          <Button
-            size="small"
-            variant="text"
-            endIcon={airbnbOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            onClick={() => setAirbnbOpen((v) => !v)}
-            sx={{ textTransform: 'none', fontWeight: 600, color: T.text2 }}
-          >
-            Ordre Airbnb
-          </Button>
-        )}
       </Stack>
 
       <Collapse in={helpOpen}>
@@ -373,34 +357,12 @@ export const PhotosTabReal = memo(function PhotosTabReal({
         )}
       </LegacyReduxProvider>
 
-      <Collapse in={airbnbOpen}>
-        <Box
-          sx={{
-            mt: 1.5,
-            p: 1.5,
-            borderRadius: 1,
-            bgcolor: T.bg1,
-            border: `1px solid ${T.border}`,
-          }}
-        >
-          <Typography sx={{ fontSize: 12, color: T.text3, mb: 1 }}>
-            Ordre des photos spécifique Airbnb (optionnel).
-          </Typography>
-          <Stack direction="row" gap={1} sx={{ alignItems: 'center' }}>
-            <Typography sx={{ fontSize: 11, fontFamily: 'monospace', color: T.text3, flexShrink: 0 }}>
-              airbnbHeroOrder
-            </Typography>
-            <TextField
-              size="small"
-              fullWidth
-              value={airbnbHeroOrder}
-              onChange={(e) => onAirbnbOrderChange?.(e.target.value)}
-              placeholder="1, 3, 5, 7, 9"
-              sx={{ '& .MuiOutlinedInput-root': { fontSize: 12.5, bgcolor: T.bg2 } }}
-            />
-          </Stack>
-        </Box>
-      </Collapse>
+      {/*
+        Le panneau « Ordre Airbnb » (airbnbHeroOrder) a été retiré : aucun ordre
+        propre à Airbnb n'existe en base, l'adaptateur ne l'envoyait pas et
+        `updateProperty` ne l'accepte pas. Seul `sortOrder`, l'ordre global,
+        est persisté — il s'ajuste par glisser-déposer sur la grille.
+      */}
     </Box>
   );
 });
