@@ -1293,6 +1293,19 @@ export default function MessagesOTATabV2() {
           <>
             <ConversationThread
               thread={activeThread}
+              /* Identifiant Mongo de la réservation : sans lui, la génération IA
+                 recevait « aucune réservation liée » et inventait — elle a
+                 affirmé à un client qu'il n'y avait pas de lave-linge, fait
+                 absent des données (constat 19/09/2026, fil Veysel). */
+              reservationMongoId={
+                inbox.rawReservation
+                  ? String(
+                      (inbox.rawReservation as { _id?: string })._id ||
+                        (inbox.rawReservation as { id?: string }).id ||
+                        '',
+                    )
+                  : ''
+              }
               messages={inbox.messages}
               loadingMessages={inbox.loadingMessages}
               messagesLoadError={inbox.messagesLoadError}

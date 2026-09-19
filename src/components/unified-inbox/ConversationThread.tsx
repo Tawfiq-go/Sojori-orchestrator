@@ -182,6 +182,9 @@ function OtaTranslatedBody({
 interface ConversationThreadProps {
   thread: Thread;
   messages: Message[];
+  /** Identifiant Mongo de la réservation — requis pour que l'IA charge les faits
+   *  vérifiés. Le numéro de réservation seul ne permet pas de la retrouver. */
+  reservationMongoId?: string;
   quickTemplates: QuickTemplate[];
   /** Réponses rapides OTA (pilules, entre messages et templates) */
   quickReplies?: QuickTemplate[];
@@ -231,6 +234,7 @@ interface ConversationThreadProps {
 export default function ConversationThread({
   thread,
   messages,
+  reservationMongoId,
   quickTemplates,
   quickActions = [],
   guestMenuDispatch = [],
@@ -427,6 +431,9 @@ export default function ConversationThread({
         threadContext,
         threadId: thread.id,
         reservationId: thread.reservationNumber || '',
+        // Sans cet identifiant, `loadVerifiedFactsForOtaAi` ne retrouve pas la
+        // réservation : le modèle reçoit « aucune réservation liée » et invente.
+        reservationMongoId: reservationMongoId || '',
         channelName: thread.channelName || undefined,
         guestName: thread.guestName || undefined,
         listingName: thread.listingName || undefined,
