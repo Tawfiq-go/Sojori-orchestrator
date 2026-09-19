@@ -359,6 +359,13 @@ export function cleanListingImagesForPayload(images: unknown): UnknownRecord[] {
         sortOrder: sortOrder ?? 0,
         url,
       };
+      // updateProperty reconstruit chaque image à partir du seul payload reçu :
+      // un champ non renvoyé est effacé en base. Les légendes n'ont pas d'UI de
+      // saisie — les omettre les détruisait à chaque save de l'onglet Photos.
+      for (const key of ['caption', 'bookingEngineCaption', 'airbnbCaption', 'vrboCaption']) {
+        if (row[key] !== undefined) out[key] = row[key];
+      }
+      if (row.id !== undefined) out.id = row.id;
       // ObjectId only — never send "" (CastError on create-property)
       if (isMongoObjectId(imageTypeId)) {
         out.imageTypeId = imageTypeId;
@@ -994,31 +1001,10 @@ export function mergeFormV2ToUpdatePropertyPayload(
     payload.listingImages = cleanListingImagesForPayload(values.listingImages);
   }
 
-  const orchKeys = [
-    'orchestrationEnabled',
-    'orchestration_choose_arrival',
-    'orchestration_choose_departure',
-    'orchestration_declare_arrival',
-    'orchestration_declare_departure',
-    'orchestration_receive_arrival',
-    'orchestration_receive_departure',
-    'orchestration_registration',
-    'orchestration_cleaning_free',
-    'orchestration_cleaning_paid',
-    'orchestration_cleaning_sojori',
-    'orchestration_stay_cleaning',
-    'orchestration_welcome_package',
-    'orchestration_minibar_check',
-    'orchestration_transport',
-    'orchestration_grocery',
-    'orchestration_room_service',
-    'orchestration_custom',
-    'orchestration_support',
-    'orchestration_service_client',
-  ] as const;
-  for (const k of orchKeys) {
-    if (values[k] !== undefined) payload[k] = values[k];
-  }
+  // Les flags `orchestration_*` ne transitent plus par updateProperty : ils sont
+  // une projection de `serviceActivation`, recalculée par srv-listing. Les
+  // écrire ici les désynchroniserait sans que rien ne les relise.
+  // L'activation passe par PUT /listings/:id/service-activation.
   if (values.cleaningOrchestration !== undefined) {
     payload.cleaningOrchestration = values.cleaningOrchestration;
   }

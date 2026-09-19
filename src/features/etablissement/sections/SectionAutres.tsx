@@ -63,9 +63,6 @@ const GROUPS: Array<{ title: string; hint: string; items: Entry[] }> = [
     hint: "obligations légales et rattachement de l'établissement",
     items: [
       { label: "Autorisation d'exploitation", where: 'License' },
-      { label: 'Commune de rattachement', where: 'License', broken: true },
-      { label: 'Référent administratif', where: 'License', broken: true },
-      { label: 'Enregistrement des voyageurs', where: 'License', broken: true },
       { label: 'Propriétaire', where: 'Direct booking · OTA' },
     ],
   },

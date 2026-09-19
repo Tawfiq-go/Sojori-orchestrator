@@ -131,6 +131,9 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'Hôtel / Multi — ménage pendant le séjour',
     whatsappHint: 'M — ménage',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Aucune capacité correspondante côté srv-listing : l'activation n'était
+    // jamais lue. La cadence se règle dans Ménage séjour.
+    listingRailHidden: true,
   },
   {
     key: 'welcome_package',
@@ -147,6 +150,9 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'Hôtel / Multi — pack à l’arrivée',
     whatsappHint: 'W — welcome',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Aucune capacité correspondante côté srv-listing : l'activation n'était
+    // jamais lue. La tâche reste pilotable depuis Tâches.
+    listingRailHidden: true,
   },
   {
     key: 'minibar_check',
@@ -163,6 +169,9 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'Hôtel / Multi — contrôle mini-bar jour du départ',
     whatsappHint: 'N — mini-bar',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Aucune capacité correspondante côté srv-listing : l'activation n'était
+    // jamais lue. Le catalogue se gère dans Tâches → Extras → Mini-bar.
+    listingRailHidden: true,
   },
   {
     key: 'arrival_journey',
@@ -179,6 +188,10 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'Checklist WA · mode entrée · obligatoire/optionnel',
     whatsappHint: 'Option C · Parcours Arrivée',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Le code C n'a plus de contenu propre : son handler ne fait que rediriger
+    // vers D1 (heure d'arrivée) et E (enregistrement), et aucune ligne C n'est
+    // servie dans le menu. Zéro sélection en 180 jours de production.
+    listingRailHidden: true,
   },
   {
     key: 'arrival_choose',
@@ -193,7 +206,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
     durationKind: 'na',
     gestionHint: 'Créneaux TS_CHECKIN — pas une tâche staff',
-    whatsappHint: 'Option D1 · fenêtre',
+    whatsappHint: 'Menu ⏰ Heures arr./départ · choisir arrivée',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
@@ -257,7 +270,12 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
     durationKind: 'na',
     gestionHint: 'WA + Relance Flow · pas une tâche staff',
-    whatsappHint: 'Option D3 · guest declare',
+    whatsappHint: 'Menu ⏰ Heures arr./départ · déclarer arrivée',
+    // Le voyageur ne déclare jamais : les 25 tâches créées sur 30 jours
+    // restent toutes au statut `new`. La case ne pilotait donc rien d'utile.
+    // ⚠️ La création de tâche est conservée : `declareArrival` est le SEUL
+    // déclencheur qui passe le logement en « occupé » (guestActionService).
+    listingRailHidden: true,
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
@@ -273,7 +291,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
     durationKind: 'na',
     gestionHint: 'Créneaux TS_CHECKOUT — pas une tâche staff',
-    whatsappHint: 'Option D2 · fenêtre',
+    whatsappHint: 'Menu ⏰ Heures arr./départ · choisir départ',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
@@ -305,7 +323,11 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
     durationKind: 'na',
     gestionHint: 'WA + Relance Flow · pas une tâche staff',
-    whatsappHint: 'Option D4 · guest declare',
+    whatsappHint: 'Menu ⏰ Heures arr./départ · déclarer départ',
+    // Idem arrivée : jamais déclaré par le voyageur. ⚠️ La création reste,
+    // c'est le seul chemin qui marque le logement « sale » au départ — sans
+    // lui, le ménage ne saurait plus qu'un logement doit être nettoyé.
+    listingRailHidden: true,
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
@@ -339,6 +361,11 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'SLA · objets · formulaire',
     whatsappHint: 'Option L · contact_service_client',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Absorbé par Support (K) — décision PM du 2026-08-06 : une seule file
+    // d'entrée. Le code L est un alias vers HELP, son flow Meta n'est pas
+    // déployé, et la prod compte 0 tâche `service_client` sur 12 mois
+    // (contre 12 en `support`).
+    listingRailHidden: true,
   },
   {
     key: 'transport',
@@ -403,6 +430,11 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'Frais · note · devise',
     whatsappHint: 'Option J2 · request_shopping',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Retiré de la conciergerie voyageur : le handler J2 répond « Les courses
+    // ne sont pas proposées en Conciergerie » et renvoie vers navette et
+    // expériences. Aucune ligne J2 dans le menu, et zéro demande en base
+    // depuis toujours. L'activer n'avait donc aucun effet.
+    listingRailHidden: true,
   },
   {
     key: 'concierge',

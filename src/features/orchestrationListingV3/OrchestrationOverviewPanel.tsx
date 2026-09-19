@@ -68,7 +68,6 @@ import {
 import type { CatalogMessage, ScheduledOrchestrationMessage } from '../taskHub/staff-design/types';
 import V3ReceiveChecklistPanel from './V3ReceiveChecklistPanel';
 import V3InformSyndicPanel from './V3InformSyndicPanel';
-import { V3ArrivalJourneyPanel } from './V3ArrivalJourneyPanel';
 import CleaningChecklistPanel from '../listing/components/ConfigOrchestration/CleaningChecklistPanel';
 import CleaningDeclarePanel from '../listing/components/ConfigOrchestration/CleaningDeclarePanel';
 import MenageContentRedirectCard from '../serviceMatrix/MenageContentRedirectCard';
@@ -2689,10 +2688,6 @@ export default function OrchestrationOverviewPanel({
         return 'À la demande (durées / prix Normal & Grand) — puis Enregistrer.';
       case 'cleaning_sojori':
         return 'Turnover À blanc (durées / prix) + déclenchement auto après checkout — puis Enregistrer.';
-      case 'stay_cleaning':
-        return 'Flow hôtel : décisions ici ; cadence journalière = Recouche dans Ménage séjour.';
-      case 'minibar_check':
-        return 'Décisions ici ; catalogue / suivi mini-bar → Tâches → Extras → Mini-bar.';
       case 'transport':
         return 'Suivi du vol : activez-le et choisissez les vérifications. Destinations et prix → onglet Expériences.';
       case 'concierge':
@@ -2928,11 +2923,7 @@ export default function OrchestrationOverviewPanel({
                         ? 'Expériences (J3) — onglet listing Expériences'
                         : r.key === 'transport'
                           ? 'Résumé : suivi du vol (ouvrir Éditer). Destinations et prix → Expériences'
-                          : r.key === 'stay_cleaning'
-                            ? 'Cadence journalière = Recouche dans Ménage séjour'
-                            : r.key === 'minibar_check'
-                              ? 'Catalogue / suivi → Tâches → Extras → Mini-bar'
-                              : 'Résumé du contenu — ouvrir Éditer pour configurer'
+                          : 'Résumé du contenu — ouvrir Éditer pour configurer'
                     }
                   >
                     {r.key === 'concierge' ? (
@@ -2942,14 +2933,6 @@ export default function OrchestrationOverviewPanel({
                     ) : r.key === 'transport' ? (
                       <Typography sx={{ ...cell, color: V3.t3, fontSize: 11.5, fontWeight: 700 }}>
                         Suivi du vol
-                      </Typography>
-                    ) : r.key === 'stay_cleaning' ? (
-                      <Typography sx={{ ...cell, color: V3.t3, fontSize: 11.5, fontWeight: 700 }}>
-                        → Ménage séjour
-                      </Typography>
-                    ) : r.key === 'minibar_check' ? (
-                      <Typography sx={{ ...cell, color: V3.t3, fontSize: 11.5, fontWeight: 700 }}>
-                        → Extras mini-bar
                       </Typography>
                     ) : r.hints.length === 0 ? (
                       <Typography sx={{ ...cell, color: V3.t3, fontSize: 11.5, fontWeight: 700 }}>
@@ -3753,13 +3736,6 @@ export default function OrchestrationOverviewPanel({
                         </Box>
                       );
                     })()
-                  ) : configDef.key === 'arrival_journey' ? (
-                    <V3ArrivalJourneyPanel
-                      receptionMode={
-                        (listingValues as { receptionMode?: string })?.receptionMode ??
-                        (configGestionValues as { receptionMode?: string })?.receptionMode
-                      }
-                    />
                   ) : configDef.key === 'inform_syndic' ? (
                     <V3InformSyndicPanel
                       gestion={configGestionValues}

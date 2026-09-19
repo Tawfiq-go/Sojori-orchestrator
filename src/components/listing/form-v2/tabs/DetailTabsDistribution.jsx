@@ -609,27 +609,16 @@ export function LicenseTab({ values = {}, onChange }) {
         )}
       </Card>
 
-      {!values.licenceIsExempt && (
-        <>
-          <Card title="🏛 Mairie & autorités">
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
-              <Field label="Mairie de rattachement">
-                <TextField size="small" value={values.cityHall || ''} onChange={(e) => upd('cityHall', e.target.value)} placeholder="ex: Mairie de Nice" sx={sxInput} />
-              </Field>
-              <Field label="Référent administratif">
-                <TextField size="small" value={values.adminContact || ''} onChange={(e) => upd('adminContact', e.target.value)} sx={sxInput} />
-              </Field>
-            </Box>
-          </Card>
-
-          <Card title="🛂 Enregistrement police / hôtelière">
-            <ToggleRow title="Enregistrement obligatoire" desc="Transmission automatique des fiches voyageurs aux autorités" checked={!!values.policeRegistrationRequired} onChange={(v) => upd('policeRegistrationRequired', v)} />
-            <Box sx={{ mt: 1.5 }}>
-              <Field label="Endpoint API police"><TextField size="small" fullWidth value={values.policeApiEndpoint || ''} onChange={(e) => upd('policeApiEndpoint', e.target.value)} placeholder="ex: https://api.police.gov.fr/v1/registration" sx={sxInput} /></Field>
-            </Box>
-          </Card>
-        </>
-      )}
+      {/*
+        « Mairie & autorités » et « Enregistrement police » ont été retirés : ces
+        quatre champs (cityHall, adminContact, policeRegistrationRequired,
+        policeApiEndpoint) n'existent pas au schéma Listing, l'adaptateur ne les
+        envoie pas, et updateProperty les supprime explicitement (dropKeys). Le
+        client saisissait une valeur qui disparaissait au rechargement.
+        La transmission aux autorités promise par le libellé n'existe nulle part
+        dans le code : la fiche de police est générée et signée, jamais transmise.
+        La rétablir suppose de créer la fonctionnalité, pas de recâbler un champ.
+      */}
     </Box>
   );
 }

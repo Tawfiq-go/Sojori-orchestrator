@@ -202,8 +202,6 @@ export default function ListingFormV2({
                                                             listingImages={values.listingImages || []}
                                                             onChange={imgs => setValues(v => ({ ...v, listingImages: imgs }))}
                                                             onImagesPersisted={onImagesPersisted}
-                                                            airbnbHeroOrder={values.airbnbHeroOrder}
-                                                            onAirbnbOrderChange={v => setValues(s => ({ ...s, airbnbHeroOrder: v }))}
                                                             propertyUnit={values.propertyUnit}
                                                             roomTypes={values.roomTypes || []}
                                                             onRoomTypesChange={(rts) => setValues((v) => ({ ...v, roomTypes: rts }))} />;

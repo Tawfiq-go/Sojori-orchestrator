@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => fs.readFileSync(path.join(here, rel), 'utf8');
 const shell = read('../ListingFormShell.jsx');
-const hub = read('../../../../features/listing/components/ConfigOrchestration/CleaningHubTab.tsx');
 const cards = read('../../../../features/orchestrationListingV3/V3MenageTypeCards.tsx');
 const types = read('../../../../features/listing/components/ConfigOrchestration/menageOpsTypes.ts');
 const tab = read('ListingMenageTab.tsx');
@@ -16,8 +15,10 @@ describe('Ménage lives in Orchestration only', () => {
   it('keeps a Ménage and an Instructions départ tab that open the same editors as Orchestration', () => {
     assert.equal((shell.match(/id: 'menage'/g) || []).length, 2);
     assert.equal((shell.match(/id: 'departure'/g) || []).length, 2);
-    assert.match(shell, /id: 'cleaning-config'/);
-    assert.match(shell, /id: 'messages-config'/);
+    // Les onglets `*-config` du mode template propriétaire ont été supprimés :
+    // le contenu ménage / instructions départ vit dans les onglets détail.
+    assert.doesNotMatch(shell, /id: 'cleaning-config'/);
+    assert.doesNotMatch(shell, /id: 'messages-config'/);
   });
   it('edits the cleaning content inside the V3 orchestration page instead of redirecting', () => {
     const card = read('../../../../features/serviceMatrix/MenageContentRedirectCard.tsx');
@@ -38,10 +39,23 @@ describe('Ménage lives in Orchestration only', () => {
     assert.match(cards, /showCheckout/);
     assert.match(tab, /MenageEditorFocus/);
   });
-  it('points journalier and mini-bar Contenu to the real editors', () => {
+  it('keeps journalier and mini-bar off the listing rail', () => {
+    // Aucune capacité correspondante côté srv-listing : leur activation n'était
+    // jamais relue. Elles sortent du rail, et les renvois « Contenu » qui les
+    // accompagnaient — du texte sans navigation — disparaissent avec elles.
+    const registry = read('../../../../features/serviceMatrix/capabilityRegistry.ts');
+    for (const key of ['stay_cleaning', 'welcome_package', 'minibar_check']) {
+      const block = registry.slice(registry.indexOf(`key: '${key}'`));
+      assert.match(
+        block.slice(0, block.indexOf('\n  },')),
+        /listingRailHidden: true/,
+        `${key} doit rester masqué du rail listing`,
+      );
+    }
+
     const overview = read('../../../../features/orchestrationListingV3/OrchestrationOverviewPanel.tsx');
-    assert.match(overview, /→ Ménage séjour/);
-    assert.match(overview, /→ Extras mini-bar/);
+    assert.doesNotMatch(overview, /→ Ménage séjour/);
+    assert.doesNotMatch(overview, /→ Extras mini-bar/);
   });
   it('keeps Contenu read-only and Éditer as the sole config opener', () => {
     const overview = read('../../../../features/orchestrationListingV3/OrchestrationOverviewPanel.tsx');
@@ -59,11 +73,6 @@ describe('Ménage lives in Orchestration only', () => {
       overview,
       /Résumé du contenu[\s\S]{0,200}onClick=\{/,
     );
-  });
-  it('opens Orchestration → Ménage on types, team and scale', () => {
-    assert.match(hub, /id: 'types', label: 'Types, équipe & barème'/);
-    assert.match(hub, /<ListingMenageTab listingId=\{listingId\} embedded \/>/);
-    assert.match(hub, /useState<HubTab>\('types'\)/);
   });
   it('lets a hotel set the included cadence per room type', () => {
     assert.match(cards, /Par type de chambre \(hôtel\)/);
