@@ -131,6 +131,9 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'Hôtel / Multi — ménage pendant le séjour',
     whatsappHint: 'M — ménage',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Aucune capacité correspondante côté srv-listing : l'activation n'était
+    // jamais lue. La cadence se règle dans Ménage séjour.
+    listingRailHidden: true,
   },
   {
     key: 'welcome_package',
@@ -147,6 +150,9 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'Hôtel / Multi — pack à l’arrivée',
     whatsappHint: 'W — welcome',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Aucune capacité correspondante côté srv-listing : l'activation n'était
+    // jamais lue. La tâche reste pilotable depuis Tâches.
+    listingRailHidden: true,
   },
   {
     key: 'minibar_check',
@@ -163,6 +169,9 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     gestionHint: 'Hôtel / Multi — contrôle mini-bar jour du départ',
     whatsappHint: 'N — mini-bar',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
+    // Aucune capacité correspondante côté srv-listing : l'activation n'était
+    // jamais lue. Le catalogue se gère dans Tâches → Extras → Mini-bar.
+    listingRailHidden: true,
   },
   {
     key: 'arrival_journey',
