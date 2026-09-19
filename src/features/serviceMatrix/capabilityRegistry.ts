@@ -206,7 +206,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
     durationKind: 'na',
     gestionHint: 'Créneaux TS_CHECKIN — pas une tâche staff',
-    whatsappHint: 'Option D1 · fenêtre',
+    whatsappHint: 'Menu ⏰ Heures arr./départ · choisir arrivée',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
@@ -270,7 +270,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
     durationKind: 'na',
     gestionHint: 'WA + Relance Flow · pas une tâche staff',
-    whatsappHint: 'Option D3 · guest declare',
+    whatsappHint: 'Menu ⏰ Heures arr./départ · déclarer arrivée',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
@@ -286,7 +286,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
     durationKind: 'na',
     gestionHint: 'Créneaux TS_CHECKOUT — pas une tâche staff',
-    whatsappHint: 'Option D2 · fenêtre',
+    whatsappHint: 'Menu ⏰ Heures arr./départ · choisir départ',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
@@ -318,7 +318,7 @@ export const CAPABILITY_REGISTRY: CapabilityDefinition[] = [
     columns: { managed: 'yes', client: 'yes', orchestrated: 'yes', task: 'na', execution: 'na' },
     durationKind: 'na',
     gestionHint: 'WA + Relance Flow · pas une tâche staff',
-    whatsappHint: 'Option D4 · guest declare',
+    whatsappHint: 'Menu ⏰ Heures arr./départ · déclarer départ',
     orchestrationExpertPath: '/orchestration/config?tab=messages',
   },
   {
